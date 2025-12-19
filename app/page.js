@@ -254,7 +254,7 @@ export default function Home() {
             <div className="fixed inset-0 z-50 flex items-center justify-center glass-bg-pattern p-4">
                 <div className="glass p-8 rounded-2xl w-full max-w-md shadow-2xl border border-white/10">
                     <div className="flex justify-center mb-6">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg"><Sparkles size={24} className="text-white" /></div>
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(99,102,241,0.4)]"><Sparkles size={28} className="text-white" /></div>
                     </div>
                     <h2 className="text-2xl font-bold text-center mb-6 text-white">{authMode === 'login' ? '欢迎回来' : '创建账号'}</h2>
                     <form onSubmit={handleAuth} className="space-y-4">
@@ -315,9 +315,9 @@ export default function Home() {
                             <button onClick={startNewChat} className="flex-1 flex items-center gap-2 bg-white/5 hover:bg-white/10 p-2 rounded-lg text-sm transition-colors border border-white/5"><Plus size={16} /> 新对话</button>
                             <button onClick={() => setSidebarOpen(false)} className="md:hidden p-2 text-gray-400"><X size={18} /></button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                             {conversations.map(conv => (
-                                <button key={conv._id} onClick={() => loadConversation(conv._id)} className={`w-full text-left p-3 rounded-lg text-sm truncate transition-colors ${currentConversationId === conv._id ? 'bg-purple-600/20 text-purple-200 border border-purple-500/30' : 'text-gray-400 hover:bg-white/5'}`}>{conv.title}</button>
+                                <button key={conv._id} onClick={() => loadConversation(conv._id)} className={`w-full text-left p-3 rounded-xl text-sm truncate transition-all duration-200 ${currentConversationId === conv._id ? 'bg-purple-600/20 text-purple-200 border border-purple-500/40 shadow-sm' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}>{conv.title}</button>
                             ))}
                         </div>
                         <div className="p-4 border-t border-white/5 bg-black/20">
@@ -364,7 +364,7 @@ export default function Home() {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth mobile-scroll">
+                <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth custom-scrollbar mobile-scroll">
                     {messages.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center opacity-40">
                             <Sparkles size={40} className="mb-4 text-purple-500" /><p>开始新对话</p>
@@ -409,8 +409,8 @@ export default function Home() {
                                     <button onClick={removeImage} className="text-red-400"><X size={12} /></button>
                                 </div>
                             )}
-                            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="输入消息..." className="w-full bg-[#1a1a20] border border-white/10 rounded-2xl pl-4 pr-12 py-3 text-sm text-gray-200 focus:outline-none focus:border-purple-500/50 resize-none" rows={1} style={{ minHeight: '48px' }} />
-                            <button onClick={handleSend} disabled={loading || (!input.trim() && !selectedImage)} className="absolute right-2 bottom-2 p-2 rounded-xl bg-purple-600 text-white disabled:opacity-50 hover:bg-purple-500"><Send size={18} /></button>
+                            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="输入消息..." className="w-full bg-[#121218] border border-white/10 rounded-2xl pl-4 pr-12 py-3.5 text-sm text-gray-200 focus:outline-none focus:border-purple-500/50 resize-none transition-all shadow-inner" rows={1} style={{ minHeight: '52px' }} />
+                            <button onClick={handleSend} disabled={loading || (!input.trim() && !selectedImage)} className="absolute right-2 bottom-2 p-2.5 rounded-xl bg-purple-600 text-white disabled:opacity-50 hover:bg-purple-500 shadow-lg shadow-purple-900/20 active:scale-95 transition-all"><Send size={18} /></button>
                         </div>
                     </div>
                 </div>

@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --background: #050507;
   --surface: #0e0e12;
   --foreground: #e0e0e2;
@@ -6,11 +7,11 @@
   --primary-foreground: #ffffff;
   --secondary: #0ea5e9;
   --accent: #f43f5e;
-  
+
   --glass-bg: rgba(20, 20, 30, 0.6);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-highlight: rgba(255, 255, 255, 0.03);
-  
+
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 20px;
@@ -29,7 +30,7 @@ body {
   font-family: var(--font-sans);
   overflow-x: hidden;
   min-height: 100vh;
-  background-image: 
+  background-image:
     radial-gradient(circle at 15% 50%, rgba(109, 40, 217, 0.15), transparent 25%),
     radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.15), transparent 25%);
 }
@@ -60,7 +61,12 @@ a {
 }
 
 /* Typography */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-weight: 600;
   letter-spacing: -0.02em;
   color: #fff;
@@ -68,8 +74,15 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -80,13 +93,16 @@ h1, h2, h3, h4, h5, h6 {
 ::-webkit-scrollbar {
   width: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }

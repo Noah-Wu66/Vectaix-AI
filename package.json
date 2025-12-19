@@ -23,5 +23,9 @@
   },
   "engines": {
     "node": "24.x"
+  },
+  "overrides": {
+    "react": "^18",
+    "react-dom": "^18"
   }
 }
