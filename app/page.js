@@ -353,11 +353,13 @@ export default function Home() {
                                             <input type="range" min="0" max="20" step="2" value={historyLimit} onChange={(e) => setHistoryLimit(Number(e.target.value))} className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full" />
                                             <span className="text-xs text-right block mt-1 text-zinc-600">{historyLimit || '无限制'} 条</span>
                                         </div>
-                                        {model !== "gemini-3-pro-image-preview" ? (
-                                            <div><label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label><select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"><option value="high">深度</option><option value="low">快速</option></select></div>
+                                        {model === "gemini-3-pro-image-preview" ? (
+                                            <div><label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">宽高比</label><select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"><option value="16:9">16:9</option><option value="1:1">1:1</option><option value="9:16">9:16</option><option value="4:3">4:3</option><option value="3:4">3:4</option></select></div>
+                                        ) : model === "gemini-3-flash-preview" ? (
+                                            <div><label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label><select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"><option value="high">深度 (High)</option><option value="medium">平衡 (Medium)</option><option value="low">快速 (Low)</option><option value="minimal">最小 (Minimal)</option></select></div>
                                         ) : (
-                                            <div><label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">宽高比</label><select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"><option value="16:9">16:9</option><option value="1:1">1:1</option></select></div>
-                                        )}
+                                            <div><label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label><select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"><option value="high">深度 (High)</option><option value="low">快速 (Low)</option></select></div>
+                                        )
                                     </motion.div>
                                 </>
                             )}
@@ -402,7 +404,9 @@ export default function Home() {
                     </div>
                     <div className="relative max-w-3xl mx-auto flex items-end gap-2">
                         <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
-                        <button onClick={() => fileInputRef.current?.click()} className={`p-3 rounded-xl border transition-colors ${selectedImage ? 'border-zinc-400 text-zinc-600 bg-zinc-100' : 'border-zinc-200 text-zinc-400 hover:bg-zinc-50'}`}><Paperclip size={18} /></button>
+                        {model !== "gemini-3-pro-image-preview" && (
+                            <button onClick={() => fileInputRef.current?.click()} className={`p-3 rounded-xl border transition-colors ${selectedImage ? 'border-zinc-400 text-zinc-600 bg-zinc-100' : 'border-zinc-200 text-zinc-400 hover:bg-zinc-50'}`}><Paperclip size={18} /></button>
+                        )}
                         <div className="flex-1 relative">
                             {selectedImage && (
                                 <div className="absolute -top-12 left-0 bg-white p-2 rounded-lg border border-zinc-200 shadow-sm flex items-center gap-2">
