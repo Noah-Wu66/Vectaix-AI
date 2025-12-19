@@ -1,16 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
-  color-scheme: dark;
-  --background: #050507;
-  --surface: #0e0e12;
-  --foreground: #e0e0e2;
-  --primary: #6d28d9;
+  color-scheme: light;
+  --background: #ffffff;
+  --surface: #f3f4f6;
+  --foreground: #111827;
+  --primary: #7c3aed;
   --primary-foreground: #ffffff;
   --secondary: #0ea5e9;
   --accent: #f43f5e;
 
-  --glass-bg: rgba(20, 20, 30, 0.6);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-highlight: rgba(255, 255, 255, 0.03);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.5);
 
   --radius-sm: 8px;
   --radius-md: 12px;
