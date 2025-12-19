@@ -120,7 +120,7 @@ export default function Home() {
     const handleChangePassword = async (e) => {
         e.preventDefault();
         setPwMsg('');
-        if (newPassword !== confirmNewPassword) return setPwMsg("New passwords don't match");
+        if (newPassword !== confirmNewPassword) return setPwMsg("两次输入的新密码不一致");
 
         const res = await fetch('/api/auth/change-password', {
             method: 'POST',
@@ -129,11 +129,11 @@ export default function Home() {
         });
         const data = await res.json();
         if (data.success) {
-            setPwMsg("Password changed successfully.");
+            setPwMsg("密码修改成功");
             setOldPassword(''); setNewPassword(''); setConfirmNewPassword('');
             setTimeout(() => setPwMsg(''), 3000);
         } else {
-            setPwMsg(data.error || "Failed to change password");
+            setPwMsg(data.error || "密码修改失败");
         }
     };
 
@@ -256,18 +256,18 @@ export default function Home() {
                     <div className="flex justify-center mb-6">
                         <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg"><Sparkles size={24} className="text-white" /></div>
                     </div>
-                    <h2 className="text-2xl font-bold text-center mb-6 text-white">{authMode === 'login' ? 'Welcome Back' : 'Create Account'}</h2>
+                    <h2 className="text-2xl font-bold text-center mb-6 text-white">{authMode === 'login' ? '欢迎回来' : '创建账号'}</h2>
                     <form onSubmit={handleAuth} className="space-y-4">
-                        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500" required />
-                        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500" required />
+                        <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500" required />
+                        <input type="password" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500" required />
                         {authMode === 'register' && (
-                            <input type="password" placeholder="Confirm Password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500" required />
+                            <input type="password" placeholder="确认密码" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500" required />
                         )}
-                        <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-900/40">{authMode === 'login' ? 'Sign In' : 'Sign Up'}</button>
+                        <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-900/40">{authMode === 'login' ? '登录' : '注册'}</button>
                     </form>
                     <p className="text-center mt-6 text-gray-400 text-sm">
-                        {authMode === 'login' ? "Don't have an account? " : "Already have an account? "}
-                        <button onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} className="text-purple-400 hover:text-purple-300 font-semibold">{authMode === 'login' ? 'Sign Up' : 'Sign In'}</button>
+                        {authMode === 'login' ? "还没有账号？" : "已有账号？"}
+                        <button onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} className="text-purple-400 hover:text-purple-300 font-semibold">{authMode === 'login' ? '立即注册' : '立即登录'}</button>
                     </p>
                 </div>
             </div>
@@ -287,20 +287,20 @@ export default function Home() {
                             <div className="text-center mb-6">
                                 <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 mx-auto flex items-center justify-center text-2xl font-bold mb-3 shadow-lg">{user?.email?.[0].toUpperCase()}</div>
                                 <h2 className="text-xl font-bold text-white">{user?.email}</h2>
-                                <p className="text-sm text-gray-400">Personal Center</p>
+                                <p className="text-sm text-gray-400">个人中心</p>
                             </div>
 
                             <div className="space-y-4">
                                 <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                                    <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Lock size={14} /> Change Password</h3>
+                                    <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Lock size={14} /> 修改密码</h3>
                                     <form onSubmit={handleChangePassword} className="space-y-3">
-                                        <input type="password" placeholder="Current Password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-purple-500 outline-none" required />
-                                        <input type="password" placeholder="New Password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-purple-500 outline-none" required />
-                                        <input type="password" placeholder="Confirm New Password" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-purple-500 outline-none" required />
+                                        <input type="password" placeholder="当前密码" value={oldPassword} onChange={e => setOldPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-purple-500 outline-none" required />
+                                        <input type="password" placeholder="新密码" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-purple-500 outline-none" required />
+                                        <input type="password" placeholder="确认新密码" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-purple-500 outline-none" required />
 
-                                        <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-2.5 rounded-lg text-sm transition-colors shadow">Update Password</button>
+                                        <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-2.5 rounded-lg text-sm transition-colors shadow">更新密码</button>
                                     </form>
-                                    {pwMsg && <p className={`text-xs mt-3 text-center ${pwMsg.includes('success') ? 'text-green-400' : 'text-red-400'}`}>{pwMsg}</p>}
+                                    {pwMsg && <p className={`text-xs mt-3 text-center ${pwMsg.includes('成功') ? 'text-green-400' : 'text-red-400'}`}>{pwMsg}</p>}
                                 </div>
                             </div>
                         </motion.div>
@@ -312,7 +312,7 @@ export default function Home() {
                 {(sidebarOpen || window.innerWidth >= 768) && (
                     <motion.div initial={{ x: -280, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -280, opacity: 0 }} className={`fixed md:relative z-30 w-72 h-full glass border-r border-white/10 flex flex-col transition-all ${!sidebarOpen && 'hidden md:flex'}`}>
                         <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                            <button onClick={startNewChat} className="flex-1 flex items-center gap-2 bg-white/5 hover:bg-white/10 p-2 rounded-lg text-sm transition-colors border border-white/5"><Plus size={16} /> New Chat</button>
+                            <button onClick={startNewChat} className="flex-1 flex items-center gap-2 bg-white/5 hover:bg-white/10 p-2 rounded-lg text-sm transition-colors border border-white/5"><Plus size={16} /> 新对话</button>
                             <button onClick={() => setSidebarOpen(false)} className="md:hidden p-2 text-gray-400"><X size={18} /></button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -346,16 +346,16 @@ export default function Home() {
                                 <>
                                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={() => setShowSettings(false)} />
                                     <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }} className="absolute right-4 top-14 w-72 p-5 glass rounded-xl z-50 flex flex-col gap-5 shadow-2xl bg-[#0e0e12] border border-white/10">
-                                        <div className="flex justify-between items-center md:hidden mb-2"><span className="font-bold text-white">Settings</span><button onClick={() => setShowSettings(false)}><X size={18} /></button></div>
+                                        <div className="flex justify-between items-center md:hidden mb-2"><span className="font-bold text-white">设置</span><button onClick={() => setShowSettings(false)}><X size={18} /></button></div>
                                         <div className="text-white">
-                                            <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">History Limit</label>
+                                            <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">历史限制</label>
                                             <input type="range" min="0" max="20" step="2" value={historyLimit} onChange={(e) => setHistoryLimit(Number(e.target.value))} className="w-full accent-purple-500 h-1 bg-white/10" />
-                                            <span className="text-xs text-right block mt-1 text-purple-400">{historyLimit || 'Infinite'} msgs</span>
+                                            <span className="text-xs text-right block mt-1 text-purple-400">{historyLimit || '无限制'} 条</span>
                                         </div>
                                         {model !== "gemini-3-pro-image-preview" ? (
-                                            <div><label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">Thinking Level</label><select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-black/40 border-white/10 rounded-lg p-2 text-sm text-white"><option value="high">High</option><option value="low">Low</option></select></div>
+                                            <div><label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">思考深度</label><select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-black/40 border-white/10 rounded-lg p-2 text-sm text-white"><option value="high">深度</option><option value="low">快速</option></select></div>
                                         ) : (
-                                            <div><label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">Aspect Ratio</label><select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="w-full bg-black/40 border-white/10 rounded-lg p-2 text-sm text-white"><option value="16:9">16:9</option><option value="1:1">1:1</option></select></div>
+                                            <div><label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">宽高比</label><select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="w-full bg-black/40 border-white/10 rounded-lg p-2 text-sm text-white"><option value="16:9">16:9</option><option value="1:1">1:1</option></select></div>
                                         )}
                                     </motion.div>
                                 </>
@@ -367,7 +367,7 @@ export default function Home() {
                 <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth mobile-scroll">
                     {messages.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center opacity-40">
-                            <Sparkles size={40} className="mb-4 text-purple-500" /><p>Start a new conversation</p>
+                            <Sparkles size={40} className="mb-4 text-purple-500" /><p>开始新对话</p>
                         </div>
                     ) : (
                         messages.map((msg, i) => (
@@ -389,7 +389,7 @@ export default function Home() {
                             </motion.div>
                         ))
                     )}
-                    {loading && <div className="flex gap-2 items-center text-gray-500 text-sm ml-10"><Loader2 size={14} className="animate-spin" /> Thinking...</div>}
+                    {loading && <div className="flex gap-2 items-center text-gray-500 text-sm ml-10"><Loader2 size={14} className="animate-spin" /> 思考中...</div>}
                     <div ref={chatEndRef} />
                 </div>
 
@@ -409,7 +409,7 @@ export default function Home() {
                                     <button onClick={removeImage} className="text-red-400"><X size={12} /></button>
                                 </div>
                             )}
-                            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="Message..." className="w-full bg-[#1a1a20] border border-white/10 rounded-2xl pl-4 pr-12 py-3 text-sm text-gray-200 focus:outline-none focus:border-purple-500/50 resize-none" rows={1} style={{ minHeight: '48px' }} />
+                            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="输入消息..." className="w-full bg-[#1a1a20] border border-white/10 rounded-2xl pl-4 pr-12 py-3 text-sm text-gray-200 focus:outline-none focus:border-purple-500/50 resize-none" rows={1} style={{ minHeight: '48px' }} />
                             <button onClick={handleSend} disabled={loading || (!input.trim() && !selectedImage)} className="absolute right-2 bottom-2 p-2 rounded-xl bg-purple-600 text-white disabled:opacity-50 hover:bg-purple-500"><Send size={18} /></button>
                         </div>
                     </div>
@@ -427,7 +427,7 @@ function ThinkingBlock({ thought, isStreaming }) {
 
     return (
         <div className="mb-2 w-full max-w-full">
-            <button onClick={() => setCollapsed(!collapsed)} className="flex items-center gap-2 text-[10px] font-bold text-gray-500 hover:text-gray-300 mb-1 uppercase tracking-wider bg-white/5 px-2 py-1 rounded"><BrainCircuit size={12} /> Thinking Process {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}</button>
+            <button onClick={() => setCollapsed(!collapsed)} className="flex items-center gap-2 text-[10px] font-bold text-gray-500 hover:text-gray-300 mb-1 uppercase tracking-wider bg-white/5 px-2 py-1 rounded"><BrainCircuit size={12} /> 思考过程 {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}</button>
             <AnimatePresence>
                 {!collapsed && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 150, opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-black/30 border border-white/10 rounded-lg p-3 overflow-y-auto w-full text-xs text-gray-400 font-mono">
