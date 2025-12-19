@@ -16,9 +16,9 @@
     "jose": "^5.2.0",
     "lucide-react": "^0.300.0",
     "mongoose": "^8.0.0",
-    "next": "15.0.5",
-    "react": "^19",
-    "react-dom": "^19",
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18",
     "react-markdown": "^9.0.0"
   },
   "engines": {
