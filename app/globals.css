@@ -5,20 +5,13 @@
 :root {
   color-scheme: light;
   --background: #ffffff;
-  --surface: #f3f4f6;
-  --foreground: #111827;
-  --primary: #7c3aed;
-  --primary-foreground: #ffffff;
-  --secondary: #0ea5e9;
-  --accent: #f43f5e;
-
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(0, 0, 0, 0.08);
-  --glass-highlight: rgba(255, 255, 255, 0.5);
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
+  --surface: #fafafa;
+  --foreground: #18181b;
+  --muted: #71717a;
+  --border: #e4e4e7;
+  --border-light: #f4f4f5;
+  --primary: #18181b;
+  --radius: 12px;
   --font-sans: 'Inter', system-ui, sans-serif;
 }
 
@@ -28,40 +21,22 @@
   margin: 0;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   overflow-x: hidden;
   min-height: 100vh;
-  background-image:
-    radial-gradient(circle at 15% 50%, rgba(109, 40, 217, 0.15), transparent 25%),
-    radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.15), transparent 25%);
 }
 
 a {
   color: inherit;
   text-decoration: none;
-}
-
-/* Utilities */
-.glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-.glass:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(30, 30, 45, 0.7);
-}
-
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
 }
 
 /* Typography */
@@ -73,29 +48,13 @@ h5,
 h6 {
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: #fff;
-}
-
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.5s ease-out forwards;
+  color: var(--foreground);
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -103,53 +62,71 @@ h6 {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  background: #d4d4d8;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: #a1a1aa;
 }
 
-/* Custom Components */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 20px;
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  background: var(--surface);
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+/* Mobile Safe Area */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+.mobile-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Prose for Markdown */
+.prose {
   color: var(--foreground);
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  color: white;
-  box-shadow: 0 0 20px rgba(109, 40, 217, 0.3);
+.prose p {
+  margin-bottom: 0.75em;
 }
 
-.btn-primary:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-  box-shadow: 0 0 25px rgba(109, 40, 217, 0.4);
+.prose code {
+  background: #f4f4f5;
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
 }
 
-.input-field {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--glass-border);
-  color: white;
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
-  width: 100%;
-  outline: none;
-  transition: all 0.2s;
+.prose pre {
+  background: #18181b;
+  color: #fafafa;
+  padding: 1em;
+  border-radius: var(--radius);
+  overflow-x: auto;
 }
 
-.input-field:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(109, 40, 217, 0.2);
+.prose pre code {
+  background: transparent;
+  padding: 0;
+}
+
+/* Glass fallback for modals */
+.glass {
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
+.glass-bg-pattern {
+  background-color: var(--background);
 }

@@ -251,23 +251,24 @@ export default function Home() {
 
     if (showAuthModal) {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center glass-bg-pattern p-4">
-                <div className="glass p-8 rounded-2xl w-full max-w-md shadow-2xl border border-white/10">
-                    <div className="flex justify-center mb-6">
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(99,102,241,0.4)]"><Sparkles size={28} className="text-white" /></div>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-white p-4">
+                <div className="w-full max-w-sm">
+                    <div className="flex justify-center mb-8">
+                        <div className="w-12 h-12 rounded-xl bg-zinc-900 flex items-center justify-center"><Sparkles size={24} className="text-white" /></div>
                     </div>
-                    <h2 className="text-2xl font-bold text-center mb-6 text-white">{authMode === 'login' ? '欢迎回来' : '创建账号'}</h2>
-                    <form onSubmit={handleAuth} className="space-y-4">
-                        <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500" required />
-                        <input type="password" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500" required />
+                    <h2 className="text-xl font-semibold text-center mb-1 text-zinc-900">{authMode === 'login' ? '欢迎回来' : '创建账号'}</h2>
+                    <p className="text-center text-zinc-500 mb-8 text-sm">登录以继续使用 Vectaix AI</p>
+                    <form onSubmit={handleAuth} className="space-y-3">
+                        <input type="email" placeholder="邮箱" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors" required />
+                        <input type="password" placeholder="密码" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors" required />
                         {authMode === 'register' && (
-                            <input type="password" placeholder="确认密码" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500" required />
+                            <input type="password" placeholder="确认密码" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors" required />
                         )}
-                        <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-purple-900/40">{authMode === 'login' ? '登录' : '注册'}</button>
+                        <button className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-3 rounded-lg transition-colors">{authMode === 'login' ? '登录' : '注册'}</button>
                     </form>
-                    <p className="text-center mt-6 text-gray-400 text-sm">
+                    <p className="text-center mt-6 text-zinc-500 text-sm">
                         {authMode === 'login' ? "还没有账号？" : "已有账号？"}
-                        <button onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} className="text-purple-400 hover:text-purple-300 font-semibold">{authMode === 'login' ? '立即注册' : '立即登录'}</button>
+                        <button onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} className="text-zinc-900 hover:underline font-medium ml-1">{authMode === 'login' ? '立即注册' : '立即登录'}</button>
                     </p>
                 </div>
             </div>
@@ -275,32 +276,32 @@ export default function Home() {
     }
 
     return (
-        <div className="flex h-[100dvh] text-gray-100 font-sans glass-bg-pattern overflow-hidden">
+        <div className="flex h-[100dvh] text-zinc-800 font-sans bg-white overflow-hidden">
 
             {/* Profile Modal */}
             <AnimatePresence>
                 {showProfileModal && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowProfileModal(false)}>
-                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="glass p-6 md:p-8 rounded-2xl w-full max-w-md shadow-2xl border border-white/10 relative" onClick={e => e.stopPropagation()}>
-                            <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X size={20} /></button>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4" onClick={() => setShowProfileModal(false)}>
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-md shadow-xl border border-zinc-200 relative" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600"><X size={20} /></button>
 
                             <div className="text-center mb-6">
-                                <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 mx-auto flex items-center justify-center text-2xl font-bold mb-3 shadow-lg">{user?.email?.[0].toUpperCase()}</div>
-                                <h2 className="text-xl font-bold text-white">{user?.email}</h2>
-                                <p className="text-sm text-gray-400">个人中心</p>
+                                <div className="w-14 h-14 rounded-xl bg-zinc-900 mx-auto flex items-center justify-center text-xl font-semibold text-white mb-3">{user?.email?.[0].toUpperCase()}</div>
+                                <h2 className="text-lg font-semibold text-zinc-900">{user?.email}</h2>
+                                <p className="text-sm text-zinc-500">个人中心</p>
                             </div>
 
                             <div className="space-y-4">
-                                <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-                                    <h3 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2"><Lock size={14} /> 修改密码</h3>
+                                <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100">
+                                    <h3 className="text-sm font-medium text-zinc-700 mb-3 flex items-center gap-2"><Lock size={14} /> 修改密码</h3>
                                     <form onSubmit={handleChangePassword} className="space-y-3">
-                                        <input type="password" placeholder="当前密码" value={oldPassword} onChange={e => setOldPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-purple-500 outline-none" required />
-                                        <input type="password" placeholder="新密码" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-purple-500 outline-none" required />
-                                        <input type="password" placeholder="确认新密码" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-purple-500 outline-none" required />
+                                        <input type="password" placeholder="当前密码" value={oldPassword} onChange={e => setOldPassword(e.target.value)} className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-800 focus:border-zinc-400 outline-none" required />
+                                        <input type="password" placeholder="新密码" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-800 focus:border-zinc-400 outline-none" required />
+                                        <input type="password" placeholder="确认新密码" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-800 focus:border-zinc-400 outline-none" required />
 
-                                        <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-2.5 rounded-lg text-sm transition-colors shadow">更新密码</button>
+                                        <button className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">更新密码</button>
                                     </form>
-                                    {pwMsg && <p className={`text-xs mt-3 text-center ${pwMsg.includes('成功') ? 'text-green-400' : 'text-red-400'}`}>{pwMsg}</p>}
+                                    {pwMsg && <p className={`text-xs mt-3 text-center ${pwMsg.includes('成功') ? 'text-green-600' : 'text-red-500'}`}>{pwMsg}</p>}
                                 </div>
                             </div>
                         </motion.div>
@@ -310,23 +311,23 @@ export default function Home() {
 
             <AnimatePresence mode="wait">
                 {(sidebarOpen || window.innerWidth >= 768) && (
-                    <motion.div initial={{ x: -280, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -280, opacity: 0 }} className={`fixed md:relative z-30 w-72 h-full glass border-r border-white/10 flex flex-col transition-all ${!sidebarOpen && 'hidden md:flex'}`}>
-                        <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                            <button onClick={startNewChat} className="flex-1 flex items-center gap-2 bg-white/5 hover:bg-white/10 p-2 rounded-lg text-sm transition-colors border border-white/5"><Plus size={16} /> 新对话</button>
-                            <button onClick={() => setSidebarOpen(false)} className="md:hidden p-2 text-gray-400"><X size={18} /></button>
+                    <motion.div initial={{ x: -280, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -280, opacity: 0 }} className={`fixed md:relative z-30 w-64 h-full bg-zinc-50 border-r border-zinc-200 flex flex-col transition-all ${!sidebarOpen && 'hidden md:flex'}`}>
+                        <div className="p-4 border-b border-zinc-200 flex items-center justify-between">
+                            <button onClick={startNewChat} className="flex-1 flex items-center gap-2 bg-white hover:bg-zinc-100 border border-zinc-200 text-zinc-700 p-2.5 rounded-lg text-sm font-medium transition-colors"><Plus size={16} /> 新对话</button>
+                            <button onClick={() => setSidebarOpen(false)} className="md:hidden p-2 text-zinc-400 ml-2"><X size={18} /></button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto p-2 space-y-0.5 custom-scrollbar">
                             {conversations.map(conv => (
-                                <button key={conv._id} onClick={() => loadConversation(conv._id)} className={`w-full text-left p-3 rounded-xl text-sm truncate transition-all duration-200 ${currentConversationId === conv._id ? 'bg-purple-600/20 text-purple-200 border border-purple-500/40 shadow-sm' : 'text-gray-400 hover:bg-white/5 border border-transparent'}`}>{conv.title}</button>
+                                <button key={conv._id} onClick={() => loadConversation(conv._id)} className={`w-full text-left p-3 rounded-lg text-sm truncate transition-colors ${currentConversationId === conv._id ? 'bg-white border border-zinc-200 text-zinc-900 font-medium' : 'text-zinc-600 hover:bg-white'}`}>{conv.title}</button>
                             ))}
                         </div>
-                        <div className="p-4 border-t border-white/5 bg-black/20">
+                        <div className="p-4 border-t border-zinc-200">
                             <div className="flex items-center justify-between">
-                                <button onClick={() => setShowProfileModal(true)} className="flex items-center gap-2 flex-1 hover:bg-white/5 p-2 rounded-lg transition-colors -ml-2 text-left mr-2">
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-xs font-bold">{user?.email?.[0].toUpperCase()}</div>
-                                    <div className="text-xs truncate max-w-[100px] text-gray-300 font-medium">{user?.email}</div>
+                                <button onClick={() => setShowProfileModal(true)} className="flex items-center gap-2 flex-1 hover:bg-white p-2 rounded-lg transition-colors -ml-2 text-left mr-2">
+                                    <div className="w-8 h-8 rounded-lg bg-zinc-900 flex items-center justify-center text-xs font-semibold text-white">{user?.email?.[0].toUpperCase()}</div>
+                                    <div className="text-xs truncate max-w-[100px] text-zinc-600 font-medium">{user?.email}</div>
                                 </button>
-                                <button onClick={handleLogout} className="text-gray-500 hover:text-red-400 transition-colors p-2"><LogOut size={16} /></button>
+                                <button onClick={handleLogout} className="text-zinc-400 hover:text-red-500 transition-colors p-2"><LogOut size={16} /></button>
                             </div>
                         </div>
                     </motion.div>
@@ -334,28 +335,28 @@ export default function Home() {
             </AnimatePresence>
 
             <div className="flex-1 flex flex-col w-full h-full relative">
-                <header className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-black/20 backdrop-blur-md z-10">
+                <header className="px-4 py-3 border-b border-zinc-200 flex items-center justify-between bg-white z-10">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 -ml-2 text-gray-400 hover:text-white md:hidden"><Menu size={20} /></button>
-                        <div className="flex items-center gap-2"><Sparkles size={18} className="text-purple-400" /><h1 className="font-bold text-lg tracking-tight hidden md:block">Vectaix AI</h1></div>
+                        <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 -ml-2 text-zinc-500 hover:text-zinc-700 md:hidden"><Menu size={20} /></button>
+                        <div className="flex items-center gap-2"><Sparkles size={18} className="text-zinc-900" /><h1 className="font-semibold text-lg tracking-tight text-zinc-900 hidden md:block">Vectaix AI</h1></div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-full transition-colors ${showSettings ? 'bg-white/10 text-white' : 'hover:bg-white/5 text-gray-400'}`}><Settings2 size={20} /></button>
+                        <button onClick={() => setShowSettings(!showSettings)} className={`p-2 rounded-lg transition-colors ${showSettings ? 'bg-zinc-100 text-zinc-700' : 'hover:bg-zinc-100 text-zinc-500'}`}><Settings2 size={20} /></button>
                         <AnimatePresence>
                             {showSettings && (
                                 <>
-                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={() => setShowSettings(false)} />
-                                    <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }} className="absolute right-4 top-14 w-72 p-5 glass rounded-xl z-50 flex flex-col gap-5 shadow-2xl bg-[#0e0e12] border border-white/10">
-                                        <div className="flex justify-between items-center md:hidden mb-2"><span className="font-bold text-white">设置</span><button onClick={() => setShowSettings(false)}><X size={18} /></button></div>
-                                        <div className="text-white">
-                                            <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">历史限制</label>
-                                            <input type="range" min="0" max="20" step="2" value={historyLimit} onChange={(e) => setHistoryLimit(Number(e.target.value))} className="w-full accent-purple-500 h-1 bg-white/10" />
-                                            <span className="text-xs text-right block mt-1 text-purple-400">{historyLimit || '无限制'} 条</span>
+                                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/20 z-40 md:hidden" onClick={() => setShowSettings(false)} />
+                                    <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }} className="absolute right-4 top-14 w-64 p-4 bg-white rounded-xl z-50 flex flex-col gap-4 shadow-lg border border-zinc-200">
+                                        <div className="flex justify-between items-center md:hidden"><span className="font-medium text-zinc-900">设置</span><button onClick={() => setShowSettings(false)} className="text-zinc-400"><X size={18} /></button></div>
+                                        <div>
+                                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">历史限制</label>
+                                            <input type="range" min="0" max="20" step="2" value={historyLimit} onChange={(e) => setHistoryLimit(Number(e.target.value))} className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full" />
+                                            <span className="text-xs text-right block mt-1 text-zinc-600">{historyLimit || '无限制'} 条</span>
                                         </div>
                                         {model !== "gemini-3-pro-image-preview" ? (
-                                            <div><label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">思考深度</label><select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-black/40 border-white/10 rounded-lg p-2 text-sm text-white"><option value="high">深度</option><option value="low">快速</option></select></div>
+                                            <div><label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label><select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"><option value="high">深度</option><option value="low">快速</option></select></div>
                                         ) : (
-                                            <div><label className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2 block">宽高比</label><select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="w-full bg-black/40 border-white/10 rounded-lg p-2 text-sm text-white"><option value="16:9">16:9</option><option value="1:1">1:1</option></select></div>
+                                            <div><label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">宽高比</label><select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"><option value="16:9">16:9</option><option value="1:1">1:1</option></select></div>
                                         )}
                                     </motion.div>
                                 </>
@@ -364,53 +365,53 @@ export default function Home() {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth custom-scrollbar mobile-scroll">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll">
                     {messages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center opacity-40">
-                            <Sparkles size={40} className="mb-4 text-purple-500" /><p>开始新对话</p>
+                        <div className="h-full flex flex-col items-center justify-center text-zinc-400">
+                            <Sparkles size={40} className="mb-4 text-zinc-300" /><p className="font-medium">开始新对话</p>
                         </div>
                     ) : (
                         messages.map((msg, i) => (
                             <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-white text-black' : 'bg-purple-600 text-white'}`}>
-                                    {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-600'}`}>
+                                    {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
                                 </div>
-                                <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start w-full'}`}>
+                                <div className={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start w-full'}`}>
                                     {msg.role === 'model' && msg.thought && <ThinkingBlock thought={msg.thought} isStreaming={msg.isStreaming} />}
-                                    <div className={`px-4 py-3 rounded-2xl ${msg.role === 'user' ? 'bg-white text-black' : 'bg-white/5 border border-white/10 text-gray-200'}`}>
-                                        {msg.image && <img src={msg.image} className="mb-2 max-h-48 rounded" />}
+                                    <div className={`px-4 py-3 rounded-2xl ${msg.role === 'user' ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-800'}`}>
+                                        {msg.image && <img src={msg.image} className="mb-2 max-h-48 rounded-lg" />}
                                         {msg.type === 'image' ? (
-                                            <img src={`data:${msg.mimeType};base64,${msg.content}`} className="max-w-full h-auto rounded" />
+                                            <img src={`data:${msg.mimeType};base64,${msg.content}`} className="max-w-full h-auto rounded-lg" />
                                         ) : (
-                                            <div className="prose prose-invert prose-sm"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
+                                            <div className="prose prose-sm max-w-none"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
                                         )}
                                     </div>
                                 </div>
                             </motion.div>
                         ))
                     )}
-                    {loading && <div className="flex gap-2 items-center text-gray-500 text-sm ml-10"><Loader2 size={14} className="animate-spin" /> 思考中...</div>}
+                    {loading && <div className="flex gap-2 items-center text-zinc-500 text-sm ml-11"><Loader2 size={14} className="animate-spin" /> 思考中...</div>}
                     <div ref={chatEndRef} />
                 </div>
 
-                <div className="p-3 md:p-4 bg-black/40 backdrop-blur-xl border-t border-white/5 z-20 shrink-0 pb-safe">
+                <div className="p-3 md:p-4 bg-white border-t border-zinc-200 z-20 shrink-0 pb-safe">
                     <div className="flex overflow-x-auto pb-2 gap-2 no-scrollbar md:justify-center">
                         {models.map((m) => (
-                            <button key={m.id} onClick={() => setModel(m.id)} className={`px-4 py-2 rounded-full text-xs font-medium border flex items-center gap-2 whitespace-nowrap ${model === m.id ? 'bg-white/10 border-white/20 text-white' : 'border-transparent text-gray-500'}`}><m.icon size={14} className={m.color} /> {m.name}</button>
+                            <button key={m.id} onClick={() => setModel(m.id)} className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center gap-1.5 whitespace-nowrap transition-colors ${model === m.id ? 'bg-zinc-900 border-zinc-900 text-white' : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'}`}><m.icon size={12} /> {m.shortName}</button>
                         ))}
                     </div>
-                    <div className="relative max-w-4xl mx-auto flex items-end gap-2">
+                    <div className="relative max-w-3xl mx-auto flex items-end gap-2">
                         <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
-                        <button onClick={() => fileInputRef.current?.click()} className={`p-3 md:p-4 rounded-2xl border border-white/10 transition-colors ${selectedImage ? 'text-purple-400' : 'text-gray-400 hover:bg-white/5'}`}><Paperclip size={20} /></button>
+                        <button onClick={() => fileInputRef.current?.click()} className={`p-3 rounded-xl border transition-colors ${selectedImage ? 'border-zinc-400 text-zinc-600 bg-zinc-100' : 'border-zinc-200 text-zinc-400 hover:bg-zinc-50'}`}><Paperclip size={18} /></button>
                         <div className="flex-1 relative">
                             {selectedImage && (
-                                <div className="absolute -top-16 left-0 bg-black/80 p-2 rounded border border-white/10 flex items-center gap-2">
-                                    <span className="text-xs text-white truncate max-w-[100px]">{selectedImage.name}</span>
-                                    <button onClick={removeImage} className="text-red-400"><X size={12} /></button>
+                                <div className="absolute -top-12 left-0 bg-white p-2 rounded-lg border border-zinc-200 shadow-sm flex items-center gap-2">
+                                    <span className="text-xs text-zinc-600 truncate max-w-[100px]">{selectedImage.name}</span>
+                                    <button onClick={removeImage} className="text-zinc-400 hover:text-red-500"><X size={12} /></button>
                                 </div>
                             )}
-                            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="输入消息..." className="w-full bg-[#121218] border border-white/10 rounded-2xl pl-4 pr-12 py-3.5 text-sm text-gray-200 focus:outline-none focus:border-purple-500/50 resize-none transition-all shadow-inner" rows={1} style={{ minHeight: '52px' }} />
-                            <button onClick={handleSend} disabled={loading || (!input.trim() && !selectedImage)} className="absolute right-2 bottom-2 p-2.5 rounded-xl bg-purple-600 text-white disabled:opacity-50 hover:bg-purple-500 shadow-lg shadow-purple-900/20 active:scale-95 transition-all"><Send size={18} /></button>
+                            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="输入消息..." className="w-full bg-zinc-50 border border-zinc-200 rounded-xl pl-4 pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors" rows={1} style={{ minHeight: '48px' }} />
+                            <button onClick={handleSend} disabled={loading || (!input.trim() && !selectedImage)} className="absolute right-2 bottom-2 p-2 rounded-lg bg-zinc-900 text-white disabled:opacity-40 hover:bg-zinc-800 transition-colors"><Send size={16} /></button>
                         </div>
                     </div>
                 </div>
@@ -427,11 +428,11 @@ function ThinkingBlock({ thought, isStreaming }) {
 
     return (
         <div className="mb-2 w-full max-w-full">
-            <button onClick={() => setCollapsed(!collapsed)} className="flex items-center gap-2 text-[10px] font-bold text-gray-500 hover:text-gray-300 mb-1 uppercase tracking-wider bg-white/5 px-2 py-1 rounded"><BrainCircuit size={12} /> 思考过程 {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}</button>
+            <button onClick={() => setCollapsed(!collapsed)} className="flex items-center gap-2 text-[10px] font-medium text-zinc-500 hover:text-zinc-700 mb-1 uppercase tracking-wider bg-zinc-100 px-2 py-1 rounded-md transition-colors"><BrainCircuit size={12} /> 思考过程 {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}</button>
             <AnimatePresence>
                 {!collapsed && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 150, opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-black/30 border border-white/10 rounded-lg p-3 overflow-y-auto w-full text-xs text-gray-400 font-mono">
-                        {thought}{isStreaming && <span className="animate-pulse">_</span>}
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 150, opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-y-auto w-full text-xs text-zinc-600 font-mono">
+                        {thought}{isStreaming && <span className="animate-pulse">|</span>}
                         <div ref={endRef} />
                     </motion.div>
                 )}
