@@ -130,3 +130,99 @@ h6 {
 .glass-bg-pattern {
   background-color: var(--background);
 }
+
+/* KaTeX Math Styles */
+.prose .katex-display {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5em 0;
+}
+
+.prose .katex {
+  font-size: 1.1em;
+}
+
+.prose .katex-display > .katex {
+  display: inline-block;
+  white-space: nowrap;
+  max-width: 100%;
+  text-align: center;
+}
+
+/* Enhanced Markdown Table */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.9em;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--border);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.prose th {
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.prose tr:nth-child(even) {
+  background: var(--surface);
+}
+
+/* Task Lists */
+.prose ul li input[type="checkbox"] {
+  margin-right: 0.5em;
+  accent-color: var(--primary);
+}
+
+/* Blockquote */
+.prose blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1em;
+  margin: 1em 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Horizontal Rule */
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+/* Links */
+.prose a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.prose a:hover {
+  color: #2563eb;
+}
+
+/* Lists */
+.prose ul,
+.prose ol {
+  padding-left: 1.5em;
+  margin: 0.75em 0;
+}
+
+.prose li {
+  margin: 0.25em 0;
+}
+
+/* Code Block Header (for language indicator) */
+.prose pre {
+  position: relative;
+}
+
+.prose pre code.hljs {
+  padding: 1em;
+  background: transparent;
+}

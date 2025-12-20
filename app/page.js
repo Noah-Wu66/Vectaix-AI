@@ -25,6 +25,12 @@ import {
     Trash2
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
+import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github-dark.css';
 
 // Helper to parse thinking content
 const parseContent = (text) => {
@@ -397,7 +403,24 @@ export default function Home() {
                                         {msg.type === 'image' ? (
                                             <img src={`data:${msg.mimeType};base64,${msg.content}`} className="max-w-full h-auto rounded-lg" />
                                         ) : (
-                                            <div className="prose prose-sm max-w-none"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
+                                            <div className="prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none">
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkMath, remarkGfm]}
+                                                    rehypePlugins={[rehypeKatex, rehypeHighlight]}
+                                                    components={{
+                                                        code: ({ node, inline, className, children, ...props }) => {
+                                                            return inline ? (
+                                                                <code className="px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-800 text-sm font-mono" {...props}>{children}</code>
+                                                            ) : (
+                                                                <code className={className} {...props}>{children}</code>
+                                                            );
+                                                        },
+                                                        pre: ({ children }) => (
+                                                            <pre className="rounded-lg overflow-x-auto p-4 my-3">{children}</pre>
+                                                        )
+                                                    }}
+                                                >{msg.content}</ReactMarkdown>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
