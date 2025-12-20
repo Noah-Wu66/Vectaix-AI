@@ -857,7 +857,19 @@ export default function Home() {
                             </motion.div>
                         ))
                     )}
-                    {loading && <div className="flex gap-2 items-center text-zinc-500 text-sm ml-11"><Loader2 size={14} className="animate-spin" /> 思考中...</div>}
+                    {/* 只在加载中且没有正在流式输出的消息时显示加载指示器 */}
+                    {loading && !messages.some(m => m.isStreaming) && (
+                        <div className="flex gap-2 sm:gap-3 items-start">
+                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0 bg-zinc-100 text-zinc-600">
+                                <Bot size={14} />
+                            </div>
+                            <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
+                                <span className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce" style={{ animationDelay: '0ms' }}></span>
+                                <span className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce" style={{ animationDelay: '150ms' }}></span>
+                                <span className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce" style={{ animationDelay: '300ms' }}></span>
+                            </div>
+                        </div>
+                    )}
                     <div ref={chatEndRef} />
                 </div>
 
@@ -1150,7 +1162,22 @@ function ThinkingBlock({ thought, isStreaming }) {
 
     return (
         <div className="mb-2 w-full max-w-full">
-            <button onClick={() => setCollapsed(!collapsed)} className="flex items-center gap-2.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 mb-1.5 uppercase tracking-wider bg-zinc-100 px-3 py-2 rounded-lg transition-colors"><BrainCircuit size={16} /> 思考过程 {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}</button>
+            <button onClick={() => setCollapsed(!collapsed)} className="thinking-btn flex items-center gap-1.5 sm:gap-2.5 text-[11px] sm:text-xs font-medium text-zinc-500 hover:text-zinc-700 mb-1.5 uppercase tracking-wider bg-zinc-100 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-colors">
+                <BrainCircuit size={14} className="sm:w-4 sm:h-4" />
+                {isStreaming ? (
+                    <span className="flex items-center gap-1 sm:gap-1.5">
+                        思考中
+                        <span className="flex gap-0.5">
+                            <span className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce" style={{ animationDelay: '0ms' }}></span>
+                            <span className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce" style={{ animationDelay: '100ms' }}></span>
+                            <span className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce" style={{ animationDelay: '200ms' }}></span>
+                        </span>
+                    </span>
+                ) : (
+                    '思考过程'
+                )}
+                {collapsed ? <ChevronDown size={12} className="sm:w-3.5 sm:h-3.5" /> : <ChevronUp size={12} className="sm:w-3.5 sm:h-3.5" />}
+            </button>
             <AnimatePresence>
                 {!collapsed && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 200, opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-y-auto w-full text-xs text-zinc-600">

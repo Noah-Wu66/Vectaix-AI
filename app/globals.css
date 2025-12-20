@@ -392,3 +392,42 @@ h6 {
 .prose hr {
   animation: fadeInContent 0.3s ease-out;
 }
+
+/* Custom bounce animation for loading dots */
+@keyframes dotBounce {
+
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+  }
+
+  40% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-dot-bounce {
+  animation: dotBounce 1.2s ease-in-out infinite;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 640px) {
+
+  /* Smaller loading dots on mobile */
+  .loading-dot {
+    width: 6px;
+    height: 6px;
+  }
+
+  /* Thinking block button adjustments */
+  .thinking-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.7rem;
+  }
+
+  /* Message container adjustments */
+  .message-container {
+    max-width: 90%;
+  }
+}
