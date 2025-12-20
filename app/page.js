@@ -277,7 +277,7 @@ export default function Home() {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-white p-4">
                 <div className="w-full max-w-sm">
                     <div className="flex justify-center mb-8">
-                        <div className="w-12 h-12 rounded-xl bg-zinc-900 flex items-center justify-center"><Sparkles size={24} className="text-white" /></div>
+                        <div className="w-12 h-12 rounded-xl bg-zinc-500 flex items-center justify-center"><Sparkles size={24} className="text-white" /></div>
                     </div>
                     <h2 className="text-xl font-semibold text-center mb-1 text-zinc-900">{authMode === 'login' ? '欢迎回来' : '创建账号'}</h2>
                     <p className="text-center text-zinc-500 mb-8 text-sm">登录以继续使用 Vectaix AI</p>
@@ -287,7 +287,7 @@ export default function Home() {
                         {authMode === 'register' && (
                             <input type="password" placeholder="确认密码" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors" required />
                         )}
-                        <button className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-3 rounded-lg transition-colors">{authMode === 'login' ? '登录' : '注册'}</button>
+                        <button className="w-full bg-zinc-600 hover:bg-zinc-500 text-white font-medium py-3 rounded-lg transition-colors">{authMode === 'login' ? '登录' : '注册'}</button>
                     </form>
                     <p className="text-center mt-6 text-zinc-500 text-sm">
                         {authMode === 'login' ? "还没有账号？" : "已有账号？"}
@@ -309,7 +309,7 @@ export default function Home() {
                             <button onClick={() => setShowProfileModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600"><X size={20} /></button>
 
                             <div className="text-center mb-6">
-                                <div className="w-14 h-14 rounded-xl bg-zinc-900 mx-auto flex items-center justify-center text-xl font-semibold text-white mb-3">{user?.email?.[0].toUpperCase()}</div>
+                                <div className="w-14 h-14 rounded-xl bg-zinc-500 mx-auto flex items-center justify-center text-xl font-semibold text-white mb-3">{user?.email?.[0].toUpperCase()}</div>
                                 <h2 className="text-lg font-semibold text-zinc-900">{user?.email}</h2>
                                 <p className="text-sm text-zinc-500">个人中心</p>
                             </div>
@@ -336,7 +336,7 @@ export default function Home() {
                                                     <input type="password" placeholder="当前密码" value={oldPassword} onChange={e => setOldPassword(e.target.value)} className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-800 focus:border-zinc-400 outline-none" required />
                                                     <input type="password" placeholder="新密码" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-800 focus:border-zinc-400 outline-none" required />
                                                     <input type="password" placeholder="确认新密码" value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-800 focus:border-zinc-400 outline-none" required />
-                                                    <button type="submit" className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">更新密码</button>
+                                                    <button type="submit" className="w-full bg-zinc-600 hover:bg-zinc-500 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">更新密码</button>
                                                 </form>
                                                 {pwMsg && <p className={`text-xs mt-3 text-center ${pwMsg.includes('成功') ? 'text-green-600' : 'text-red-500'}`}>{pwMsg}</p>}
                                             </div>
@@ -367,7 +367,7 @@ export default function Home() {
                         <div className="p-4 border-t border-zinc-200">
                             <div className="flex items-center justify-between">
                                 <button onClick={() => setShowProfileModal(true)} className="flex items-center gap-2 flex-1 hover:bg-white p-2 rounded-lg transition-colors -ml-2 text-left mr-2">
-                                    <div className="w-8 h-8 rounded-lg bg-zinc-900 flex items-center justify-center text-xs font-semibold text-white">{user?.email?.[0].toUpperCase()}</div>
+                                    <div className="w-8 h-8 rounded-lg bg-zinc-500 flex items-center justify-center text-xs font-semibold text-white">{user?.email?.[0].toUpperCase()}</div>
                                     <div className="text-xs truncate max-w-[100px] text-zinc-600 font-medium">{user?.email}</div>
                                 </button>
                                 <button onClick={handleLogout} className="text-zinc-400 hover:text-red-500 transition-colors p-2"><LogOut size={16} /></button>
@@ -432,135 +432,145 @@ export default function Home() {
                 </div>
 
                 <div className="p-3 md:p-4 bg-white border-t border-zinc-200 z-20 shrink-0 pb-safe">
-                    <div className="relative max-w-3xl mx-auto flex items-center gap-2">
-                        {/* Model Selector Button & Menu */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setShowModelMenu(!showModelMenu)}
-                                className="p-3 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors flex items-center gap-1.5"
-                            >
-                                {(() => {
-                                    const currentModel = models.find(m => m.id === model);
-                                    return currentModel ? <currentModel.icon size={18} /> : <Sparkles size={18} />;
-                                })()}
-                                <ChevronUp size={14} className={`transition-transform ${showModelMenu ? 'rotate-180' : ''}`} />
-                            </button>
-                            <AnimatePresence>
-                                {showModelMenu && (
-                                    <>
-                                        <motion.div
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            className="fixed inset-0 z-40"
-                                            onClick={() => setShowModelMenu(false)}
-                                        />
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                            className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px]"
-                                        >
-                                            {models.map((m) => (
-                                                <button
-                                                    key={m.id}
-                                                    onClick={() => { setModel(m.id); setShowModelMenu(false); }}
-                                                    className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}
-                                                >
-                                                    <m.icon size={16} className={model === m.id ? '' : m.color} />
-                                                    {m.name}
-                                                </button>
-                                            ))}
-                                        </motion.div>
-                                    </>
-                                )}
-                            </AnimatePresence>
-                        </div>
+                    <div className="max-w-3xl mx-auto space-y-2">
+                        {/* Top Row: Model Selector, Settings, Attachment */}
+                        <div className="flex items-center gap-2">
+                            {/* Model Selector Button & Menu */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowModelMenu(!showModelMenu)}
+                                    className="px-3 py-1.5 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors flex items-center gap-1.5 text-sm"
+                                >
+                                    {(() => {
+                                        const currentModel = models.find(m => m.id === model);
+                                        return currentModel ? <currentModel.icon size={14} /> : <Sparkles size={14} />;
+                                    })()}
+                                    <span className="hidden sm:inline">{models.find(m => m.id === model)?.shortName}</span>
+                                    <ChevronUp size={12} className={`transition-transform ${showModelMenu ? 'rotate-180' : ''}`} />
+                                </button>
+                                <AnimatePresence>
+                                    {showModelMenu && (
+                                        <>
+                                            <motion.div
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                className="fixed inset-0 z-40"
+                                                onClick={() => setShowModelMenu(false)}
+                                            />
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px]"
+                                            >
+                                                {models.map((m) => (
+                                                    <button
+                                                        key={m.id}
+                                                        onClick={() => { setModel(m.id); setShowModelMenu(false); }}
+                                                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id ? 'bg-zinc-600 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}
+                                                    >
+                                                        <m.icon size={16} className={model === m.id ? '' : m.color} />
+                                                        {m.name}
+                                                    </button>
+                                                ))}
+                                            </motion.div>
+                                        </>
+                                    )}
+                                </AnimatePresence>
+                            </div>
 
-                        {/* Settings Button & Menu */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setShowSettings(!showSettings)}
-                                className={`p-3 rounded-xl border transition-colors ${showSettings ? 'bg-zinc-100 border-zinc-300 text-zinc-700' : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'}`}
-                            >
-                                <Settings2 size={18} />
-                            </button>
-                            <AnimatePresence>
-                                {showSettings && (
-                                    <>
-                                        <motion.div
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            className="fixed inset-0 z-40"
-                                            onClick={() => setShowSettings(false)}
-                                        />
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                            className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-4 z-50 w-64"
-                                        >
-                                            <div className="flex justify-between items-center mb-3">
-                                                <span className="font-medium text-zinc-900 text-sm">设置</span>
-                                                <button onClick={() => setShowSettings(false)} className="text-zinc-400 hover:text-zinc-600"><X size={16} /></button>
-                                            </div>
-                                            <div className="space-y-4">
-                                                <div>
-                                                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">历史限制</label>
-                                                    <input type="range" min="0" max="20" step="2" value={historyLimit} onChange={(e) => setHistoryLimit(Number(e.target.value))} className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full" />
-                                                    <span className="text-xs text-right block mt-1 text-zinc-600">{historyLimit || '无限制'} 条</span>
+                            {/* Settings Button & Menu */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 text-sm ${showSettings ? 'bg-zinc-100 border-zinc-300 text-zinc-700' : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'}`}
+                                >
+                                    <Settings2 size={14} />
+                                    <span className="hidden sm:inline">设置</span>
+                                </button>
+                                <AnimatePresence>
+                                    {showSettings && (
+                                        <>
+                                            <motion.div
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                className="fixed inset-0 z-40"
+                                                onClick={() => setShowSettings(false)}
+                                            />
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-4 z-50 w-64"
+                                            >
+                                                <div className="flex justify-between items-center mb-3">
+                                                    <span className="font-medium text-zinc-900 text-sm">设置</span>
+                                                    <button onClick={() => setShowSettings(false)} className="text-zinc-400 hover:text-zinc-600"><X size={16} /></button>
                                                 </div>
-                                                {model === "gemini-3-pro-image-preview" ? (
+                                                <div className="space-y-4">
                                                     <div>
-                                                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">宽高比</label>
-                                                        <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
-                                                            <option value="16:9">16:9</option>
-                                                            <option value="1:1">1:1</option>
-                                                            <option value="9:16">9:16</option>
-                                                            <option value="4:3">4:3</option>
-                                                            <option value="3:4">3:4</option>
-                                                        </select>
+                                                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">历史限制</label>
+                                                        <input type="range" min="0" max="20" step="2" value={historyLimit} onChange={(e) => setHistoryLimit(Number(e.target.value))} className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full" />
+                                                        <span className="text-xs text-right block mt-1 text-zinc-600">{historyLimit || '无限制'} 条</span>
                                                     </div>
-                                                ) : model === "gemini-3-flash-preview" ? (
-                                                    <div>
-                                                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label>
-                                                        <select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
-                                                            <option value="high">深度 (High)</option>
-                                                            <option value="medium">平衡 (Medium)</option>
-                                                            <option value="low">快速 (Low)</option>
-                                                            <option value="minimal">最小 (Minimal)</option>
-                                                        </select>
-                                                    </div>
-                                                ) : (
-                                                    <div>
-                                                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label>
-                                                        <select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
-                                                            <option value="high">深度 (High)</option>
-                                                            <option value="low">快速 (Low)</option>
-                                                        </select>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </motion.div>
-                                    </>
-                                )}
-                            </AnimatePresence>
-                        </div>
+                                                    {model === "gemini-3-pro-image-preview" ? (
+                                                        <div>
+                                                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">宽高比</label>
+                                                            <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
+                                                                <option value="16:9">16:9</option>
+                                                                <option value="1:1">1:1</option>
+                                                                <option value="9:16">9:16</option>
+                                                                <option value="4:3">4:3</option>
+                                                                <option value="3:4">3:4</option>
+                                                            </select>
+                                                        </div>
+                                                    ) : model === "gemini-3-flash-preview" ? (
+                                                        <div>
+                                                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label>
+                                                            <select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
+                                                                <option value="high">深度 (High)</option>
+                                                                <option value="medium">平衡 (Medium)</option>
+                                                                <option value="low">快速 (Low)</option>
+                                                                <option value="minimal">最小 (Minimal)</option>
+                                                            </select>
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label>
+                                                            <select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
+                                                                <option value="high">深度 (High)</option>
+                                                                <option value="low">快速 (Low)</option>
+                                                            </select>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        </>
+                                    )}
+                                </AnimatePresence>
+                            </div>
 
-                        <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
-                        {model !== "gemini-3-pro-image-preview" && (
-                            <button onClick={() => fileInputRef.current?.click()} className={`p-3 rounded-xl border transition-colors ${selectedImage ? 'border-zinc-400 text-zinc-600 bg-zinc-100' : 'border-zinc-200 text-zinc-400 hover:bg-zinc-50'}`}><Paperclip size={18} /></button>
-                        )}
-                        <div className="flex-1 relative">
+                            {/* Selected Image Indicator */}
                             {selectedImage && (
-                                <div className="absolute -top-12 left-0 bg-white p-2 rounded-lg border border-zinc-200 shadow-sm flex items-center gap-2">
-                                    <span className="text-xs text-zinc-600 truncate max-w-[100px]">{selectedImage.name}</span>
+                                <div className="flex items-center gap-2 px-2 py-1 bg-zinc-100 rounded-lg border border-zinc-200">
+                                    <span className="text-xs text-zinc-600 truncate max-w-[80px]">{selectedImage.name}</span>
                                     <button onClick={removeImage} className="text-zinc-400 hover:text-red-500"><X size={12} /></button>
                                 </div>
                             )}
-                            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="输入消息..." className="w-full bg-zinc-50 border border-zinc-200 rounded-xl pl-4 pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors" rows={1} style={{ minHeight: '48px' }} />
-                            <button onClick={handleSend} disabled={loading || (!input.trim() && !selectedImage)} className="absolute right-2 bottom-2 p-2 rounded-lg bg-zinc-900 text-white disabled:opacity-40 hover:bg-zinc-800 transition-colors"><Send size={16} /></button>
+                        </div>
+
+                        {/* Bottom Row: Input & Send */}
+                        <div className="relative flex items-center">
+                            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+                            {model !== "gemini-3-pro-image-preview" && (
+                                <button onClick={() => fileInputRef.current?.click()} className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedImage ? 'text-zinc-600 bg-zinc-200' : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200'}`}>
+                                    <Paperclip size={16} />
+                                </button>
+                            )}
+                            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder="输入消息..." className={`flex-1 bg-zinc-50 border border-zinc-200 rounded-xl ${model !== "gemini-3-pro-image-preview" ? 'pl-11' : 'pl-4'} pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors`} rows={1} style={{ minHeight: '48px' }} />
+                            <button onClick={handleSend} disabled={loading || (!input.trim() && !selectedImage)} className="absolute right-2 bottom-2 p-2 rounded-lg bg-zinc-600 text-white disabled:opacity-40 hover:bg-zinc-500 transition-colors"><Send size={16} /></button>
                         </div>
                     </div>
                 </div>

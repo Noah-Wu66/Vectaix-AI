@@ -10,7 +10,7 @@
   --muted: #71717a;
   --border: #e4e4e7;
   --border-light: #f4f4f5;
-  --primary: #18181b;
+  --primary: #52525b;
   --radius: 12px;
   --font-sans: 'Inter', system-ui, sans-serif;
 }
@@ -109,7 +109,7 @@ h6 {
 }
 
 .prose pre {
-  background: #18181b;
+  background: #52525b;
   color: #fafafa;
   padding: 1em;
   border-radius: var(--radius);
@@ -143,7 +143,7 @@ h6 {
   font-size: 1.1em;
 }
 
-.prose .katex-display > .katex {
+.prose .katex-display>.katex {
   display: inline-block;
   white-space: nowrap;
   max-width: 100%;
