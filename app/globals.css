@@ -226,3 +226,87 @@ h6 {
   padding: 1em;
   background: transparent;
 }
+
+/* Theme Colors */
+.theme-zinc {
+  --accent: #52525b;
+  --accent-hover: #3f3f46;
+}
+
+.theme-blue {
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+}
+
+.theme-purple {
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+}
+
+.theme-green {
+  --accent: #22c55e;
+  --accent-hover: #16a34a;
+}
+
+.theme-rose {
+  --accent: #f43f5e;
+  --accent-hover: #e11d48;
+}
+
+/* Apply theme to interactive elements */
+.theme-zinc .bg-zinc-600,
+.theme-blue .bg-zinc-600,
+.theme-purple .bg-zinc-600,
+.theme-green .bg-zinc-600,
+.theme-rose .bg-zinc-600 {
+  background-color: var(--accent) !important;
+}
+
+.theme-zinc .bg-zinc-600:hover,
+.theme-blue .bg-zinc-600:hover,
+.theme-purple .bg-zinc-600:hover,
+.theme-green .bg-zinc-600:hover,
+.theme-rose .bg-zinc-600:hover {
+  background-color: var(--accent-hover) !important;
+}
+
+.theme-zinc .bg-zinc-500,
+.theme-blue .bg-zinc-500,
+.theme-purple .bg-zinc-500,
+.theme-green .bg-zinc-500,
+.theme-rose .bg-zinc-500 {
+  background-color: var(--accent) !important;
+}
+
+/* Font Size Classes */
+.text-size-small {
+  font-size: 13px;
+}
+
+.text-size-medium {
+  font-size: 14px;
+}
+
+.text-size-large {
+  font-size: 16px;
+}
+
+.text-size-small .prose {
+  font-size: 0.85rem;
+}
+
+.text-size-medium .prose {
+  font-size: 0.925rem;
+}
+
+.text-size-large .prose {
+  font-size: 1rem;
+}
+
+.text-size-small .text-sm {
+  font-size: 0.8rem;
+}
+
+.text-size-large .text-sm {
+  font-size: 0.95rem;
+}

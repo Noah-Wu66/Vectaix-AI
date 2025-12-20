@@ -22,7 +22,9 @@ import {
     Menu,
     UserCog,
     Lock,
-    Trash2
+    Trash2,
+    Palette,
+    Type
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
@@ -94,6 +96,11 @@ export default function Home() {
     const [newPromptName, setNewPromptName] = useState("");
     const [newPromptContent, setNewPromptContent] = useState("");
 
+    // --- Appearance State ---
+    const [themeColor, setThemeColor] = useState("zinc");
+    const [fontSize, setFontSize] = useState("medium");
+    const [showAppearance, setShowAppearance] = useState(false);
+
     // --- Upload State ---
     const [selectedImage, setSelectedImage] = useState(null);
     const fileInputRef = useRef(null);
@@ -114,6 +121,8 @@ export default function Home() {
                 setAspectRatio(data.settings.aspectRatio || "16:9");
                 setSystemPrompts(data.settings.systemPrompts || []);
                 setActivePromptId(data.settings.activeSystemPromptId || null);
+                setThemeColor(data.settings.themeColor || "zinc");
+                setFontSize(data.settings.fontSize || "medium");
             }
         } catch (e) { console.error(e); }
     };
@@ -353,8 +362,23 @@ export default function Home() {
         )
     }
 
+    // 主题颜色映射
+    const themeClasses = {
+        zinc: 'theme-zinc',
+        blue: 'theme-blue',
+        purple: 'theme-purple',
+        green: 'theme-green',
+        rose: 'theme-rose'
+    };
+
+    const fontSizeClasses = {
+        small: 'text-size-small',
+        medium: 'text-size-medium',
+        large: 'text-size-large'
+    };
+
     return (
-        <div className="flex h-[100dvh] text-zinc-800 font-sans bg-white overflow-hidden">
+        <div className={`flex h-[100dvh] font-sans bg-white overflow-hidden ${themeClasses[themeColor] || ''} ${fontSizeClasses[fontSize] || ''}`}>
 
             {/* Profile Modal */}
             <AnimatePresence>
@@ -394,6 +418,67 @@ export default function Home() {
                                                     <button type="submit" className="w-full bg-zinc-600 hover:bg-zinc-500 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">更新密码</button>
                                                 </form>
                                                 {pwMsg && <p className={`text-xs mt-3 text-center ${pwMsg.includes('成功') ? 'text-green-600' : 'text-red-500'}`}>{pwMsg}</p>}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+
+                                {/* 外观设置 */}
+                                <button
+                                    onClick={() => setShowAppearance(!showAppearance)}
+                                    className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
+                                >
+                                    <span className="text-sm font-medium text-zinc-700 flex items-center gap-2"><Palette size={14} /> 外观设置</span>
+                                    <ChevronDown size={16} className={`text-zinc-400 transition-transform ${showAppearance ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                <AnimatePresence>
+                                    {showAppearance && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
+                                                {/* 主题颜色 */}
+                                                <div>
+                                                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block flex items-center gap-1"><Palette size={12} /> 主题颜色</label>
+                                                    <div className="flex gap-2">
+                                                        {[
+                                                            { id: 'zinc', color: 'bg-zinc-500' },
+                                                            { id: 'blue', color: 'bg-blue-500' },
+                                                            { id: 'purple', color: 'bg-purple-500' },
+                                                            { id: 'green', color: 'bg-green-500' },
+                                                            { id: 'rose', color: 'bg-rose-500' }
+                                                        ].map(t => (
+                                                            <button
+                                                                key={t.id}
+                                                                onClick={() => { setThemeColor(t.id); saveSettings({ themeColor: t.id }); }}
+                                                                className={`w-8 h-8 rounded-lg ${t.color} transition-all ${themeColor === t.id ? 'ring-2 ring-offset-2 ring-zinc-400 scale-110' : 'hover:scale-105'}`}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                {/* 字体大小 */}
+                                                <div>
+                                                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block flex items-center gap-1"><Type size={12} /> 字体大小</label>
+                                                    <div className="flex gap-2">
+                                                        {[
+                                                            { id: 'small', label: '小', size: 'text-xs' },
+                                                            { id: 'medium', label: '中', size: 'text-sm' },
+                                                            { id: 'large', label: '大', size: 'text-base' }
+                                                        ].map(f => (
+                                                            <button
+                                                                key={f.id}
+                                                                onClick={() => { setFontSize(f.id); saveSettings({ fontSize: f.id }); }}
+                                                                className={`flex-1 py-2 rounded-lg border transition-colors ${fontSize === f.id ? 'bg-zinc-600 text-white border-zinc-600' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100'} ${f.size}`}
+                                                            >
+                                                                {f.label}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </motion.div>
                                     )}
