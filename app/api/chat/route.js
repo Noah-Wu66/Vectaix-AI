@@ -85,13 +85,14 @@ export async function POST(req) {
         });
 
         // 2. Prepare Payload
+        const systemText = config?.systemPrompt || "You are a helpful AI assistant.";
         const payload = {
             model: model,
             contents: contents,
             config: {
                 ...(model !== 'gemini-3-pro-image-preview' ? {
                     systemInstruction: {
-                        parts: [{ text: "You are a helpful AI. When solving problems, you may display your internal thought process. If you do, please enclose the thinking process within <thinking> and </thinking> tags." }]
+                        parts: [{ text: systemText }]
                     }
                 } : {}),
                 ...config?.generationConfig
@@ -100,7 +101,10 @@ export async function POST(req) {
 
         if (config?.thinkingLevel) {
             if (!payload.config) payload.config = {};
-            payload.config.thinkingConfig = { thinkingLevel: config.thinkingLevel };
+            payload.config.thinkingConfig = {
+                thinkingLevel: config.thinkingLevel,
+                includeThoughts: true  // 获取思考过程摘要
+            };
         }
 
         // 为所有模型启用 Google Search 联网功能
@@ -188,24 +192,33 @@ export async function POST(req) {
             const stream = new ReadableStream({
                 async start(controller) {
                     let fullText = "";
+                    let fullThought = "";
                     try {
                         for await (const chunk of streamResult) {
-                            const chunkText = chunk.text;
-                            if (chunkText) {
-                                fullText += chunkText;
-                                controller.enqueue(new TextEncoder().encode(chunkText));
+                            // 从 candidates 中提取 parts
+                            const parts = chunk.candidates?.[0]?.content?.parts || [];
+
+                            for (const part of parts) {
+                                if (part.thought && part.text) {
+                                    // 这是思考内容
+                                    fullThought += part.text;
+                                    const data = JSON.stringify({ type: 'thought', content: part.text }) + '\n';
+                                    controller.enqueue(new TextEncoder().encode(data));
+                                } else if (part.text) {
+                                    // 这是正文内容
+                                    fullText += part.text;
+                                    const data = JSON.stringify({ type: 'text', content: part.text }) + '\n';
+                                    controller.enqueue(new TextEncoder().encode(data));
+                                }
                             }
                         }
                         if (user && currentConversationId) {
-                            const thinkingMatch = fullText.match(/<thinking>([\s\S]*?)<\/thinking>/);
-                            const thought = thinkingMatch ? thinkingMatch[1] : null;
-
                             await Conversation.findByIdAndUpdate(currentConversationId, {
                                 $push: {
                                     messages: {
                                         role: 'model',
                                         content: fullText,
-                                        thought: thought,
+                                        thought: fullThought || null,
                                         type: 'text'
                                     }
                                 },
@@ -216,7 +229,7 @@ export async function POST(req) {
                     } catch (err) { controller.error(err); }
                 }
             });
-            const headers = { 'Content-Type': 'text/plain; charset=utf-8' };
+            const headers = { 'Content-Type': 'application/x-ndjson; charset=utf-8' };
             if (currentConversationId) { headers['X-Conversation-Id'] = currentConversationId; }
             return new Response(stream, { headers });
         }

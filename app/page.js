@@ -86,6 +86,7 @@ export default function Home() {
     const [historyLimit, setHistoryLimit] = useState(0);
     const [showSettings, setShowSettings] = useState(false);
     const [aspectRatio, setAspectRatio] = useState("16:9");
+    const [systemPrompt, setSystemPrompt] = useState("");
 
     // --- Upload State ---
     const [selectedImage, setSelectedImage] = useState(null);
@@ -216,6 +217,7 @@ export default function Home() {
             if (model !== "gemini-3-pro-image-preview") {
                 config.thinkingLevel = thinkingLevel;
                 if (imageUrl) { config.image = { url: imageUrl }; config.mediaResolution = mediaResolution; }
+                if (systemPrompt.trim()) config.systemPrompt = systemPrompt.trim();
             } else { config.imageConfig = { aspectRatio: aspectRatio, imageSize: "4K" }; }
 
             const historyPayload = messages.map(m => ({ role: m.role, content: m.content, image: null }));
@@ -248,16 +250,34 @@ export default function Home() {
 
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
-                let done = false; let fullText = "";
+                let done = false;
+                let fullText = "";
+                let fullThought = "";
+                let buffer = "";
 
                 while (!done) {
                     const { value, done: doneReading } = await reader.read();
                     done = doneReading;
                     if (value) {
-                        const chunk = decoder.decode(value, { stream: true });
-                        fullText += chunk;
-                        const { thought, content } = parseContent(fullText);
-                        setMessages(prev => prev.map(msg => msg.id === streamMsgId ? { ...msg, content, thought } : msg));
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || ""; // 保留未完成的行
+
+                        for (const line of lines) {
+                            if (!line.trim()) continue;
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.type === 'thought') {
+                                    fullThought += data.content;
+                                } else if (data.type === 'text') {
+                                    fullText += data.content;
+                                }
+                            } catch (e) {
+                                // 如果解析失败，当作纯文本处理（兼容旧格式）
+                                fullText += line;
+                            }
+                        }
+                        setMessages(prev => prev.map(msg => msg.id === streamMsgId ? { ...msg, content: fullText, thought: fullThought } : msg));
                     }
                 }
                 setMessages(prev => prev.map(msg => msg.id === streamMsgId ? { ...msg, isStreaming: false } : msg));
@@ -510,6 +530,16 @@ export default function Home() {
                                                     <button onClick={() => setShowSettings(false)} className="text-zinc-400 hover:text-zinc-600"><X size={16} /></button>
                                                 </div>
                                                 <div className="space-y-4">
+                                                    <div>
+                                                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">系统提示词</label>
+                                                        <textarea
+                                                            value={systemPrompt}
+                                                            onChange={(e) => setSystemPrompt(e.target.value)}
+                                                            placeholder="自定义 AI 的行为和角色..."
+                                                            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700 resize-none focus:outline-none focus:border-zinc-400"
+                                                            rows={3}
+                                                        />
+                                                    </div>
                                                     <div>
                                                         <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">历史限制</label>
                                                         <input type="range" min="0" max="20" step="2" value={historyLimit} onChange={(e) => setHistoryLimit(Number(e.target.value))} className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full" />
