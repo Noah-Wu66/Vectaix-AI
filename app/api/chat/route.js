@@ -103,9 +103,11 @@ export async function POST(req) {
             payload.config.thinkingConfig = { thinkingLevel: config.thinkingLevel };
         }
 
+        // 为所有模型启用 Google Search 联网功能
+        if (!payload.config) payload.config = {};
+        payload.config.tools = [{ googleSearch: {} }];
+
         if (model === 'gemini-3-pro-image-preview') {
-            if (!payload.config) payload.config = {};
-            payload.config.tools = [{ googleSearch: {} }];
             if (config?.imageConfig) payload.config.imageConfig = config.imageConfig;
         }
 
