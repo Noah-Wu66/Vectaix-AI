@@ -227,55 +227,103 @@ h6 {
   background: transparent;
 }
 
-/* Theme Colors */
-.theme-zinc {
-  --accent: #52525b;
-  --accent-hover: #3f3f46;
+/* Light Mode (default) */
+.light-mode {
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f4f4f5;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+  --border-color: #e4e4e7;
+  --border-light: #f4f4f5;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
-.theme-blue {
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
+/* Dark Mode */
+.dark-mode {
+  --bg-primary: #18181b;
+  --bg-secondary: #27272a;
+  --bg-tertiary: #3f3f46;
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d8;
+  --text-muted: #a1a1aa;
+  --border-color: #3f3f46;
+  --border-light: #27272a;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
-.theme-purple {
-  --accent: #8b5cf6;
-  --accent-hover: #7c3aed;
+/* Apply dark mode to common elements */
+.dark-mode .bg-white {
+  background-color: var(--bg-secondary) !important;
 }
 
-.theme-green {
-  --accent: #22c55e;
-  --accent-hover: #16a34a;
+.dark-mode .bg-zinc-50 {
+  background-color: var(--bg-tertiary) !important;
 }
 
-.theme-rose {
-  --accent: #f43f5e;
-  --accent-hover: #e11d48;
+.dark-mode .bg-zinc-100 {
+  background-color: var(--bg-tertiary) !important;
 }
 
-/* Apply theme to interactive elements */
-.theme-zinc .bg-zinc-600,
-.theme-blue .bg-zinc-600,
-.theme-purple .bg-zinc-600,
-.theme-green .bg-zinc-600,
-.theme-rose .bg-zinc-600 {
-  background-color: var(--accent) !important;
+.dark-mode .text-zinc-900 {
+  color: var(--text-primary) !important;
 }
 
-.theme-zinc .bg-zinc-600:hover,
-.theme-blue .bg-zinc-600:hover,
-.theme-purple .bg-zinc-600:hover,
-.theme-green .bg-zinc-600:hover,
-.theme-rose .bg-zinc-600:hover {
-  background-color: var(--accent-hover) !important;
+.dark-mode .text-zinc-800 {
+  color: var(--text-primary) !important;
 }
 
-.theme-zinc .bg-zinc-500,
-.theme-blue .bg-zinc-500,
-.theme-purple .bg-zinc-500,
-.theme-green .bg-zinc-500,
-.theme-rose .bg-zinc-500 {
-  background-color: var(--accent) !important;
+.dark-mode .text-zinc-700 {
+  color: var(--text-secondary) !important;
+}
+
+.dark-mode .text-zinc-600 {
+  color: var(--text-secondary) !important;
+}
+
+.dark-mode .text-zinc-500 {
+  color: var(--text-muted) !important;
+}
+
+.dark-mode .text-zinc-400 {
+  color: var(--text-muted) !important;
+}
+
+.dark-mode .border-zinc-200 {
+  border-color: var(--border-color) !important;
+}
+
+.dark-mode .border-zinc-100 {
+  border-color: var(--border-light) !important;
+}
+
+.dark-mode .placeholder-zinc-400::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Dark mode for prose/markdown */
+.dark-mode .prose {
+  color: var(--text-primary);
+}
+
+.dark-mode .prose code {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.dark-mode .prose pre {
+  background: #1e1e1e;
+}
+
+.dark-mode .prose th {
+  background: var(--bg-tertiary);
+}
+
+.dark-mode .prose tr:nth-child(even) {
+  background: var(--bg-secondary);
 }
 
 /* Font Size Classes */

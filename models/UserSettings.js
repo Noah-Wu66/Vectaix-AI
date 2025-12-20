@@ -33,9 +33,9 @@ const UserSettingsSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         default: null
     },
-    themeColor: {
+    themeMode: {
         type: String,
-        default: 'zinc'  // zinc, blue, purple, green, rose
+        default: 'system'  // light, dark, system
     },
     fontSize: {
         type: String,

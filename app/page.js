@@ -97,7 +97,8 @@ export default function Home() {
     const [newPromptContent, setNewPromptContent] = useState("");
 
     // --- Appearance State ---
-    const [themeColor, setThemeColor] = useState("zinc");
+    const [themeMode, setThemeMode] = useState("system"); // light, dark, system
+    const [isDark, setIsDark] = useState(false);
     const [fontSize, setFontSize] = useState("medium");
     const [showAppearance, setShowAppearance] = useState(false);
 
@@ -121,7 +122,7 @@ export default function Home() {
                 setAspectRatio(data.settings.aspectRatio || "16:9");
                 setSystemPrompts(data.settings.systemPrompts || []);
                 setActivePromptId(data.settings.activeSystemPromptId || null);
-                setThemeColor(data.settings.themeColor || "zinc");
+                setThemeMode(data.settings.themeMode || "system");
                 setFontSize(data.settings.fontSize || "medium");
             }
         } catch (e) { console.error(e); }
@@ -137,6 +138,24 @@ export default function Home() {
             });
         } catch (e) { console.error(e); }
     };
+
+    // 监听主题模式变化
+    useEffect(() => {
+        const updateTheme = () => {
+            if (themeMode === 'system') {
+                setIsDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
+            } else {
+                setIsDark(themeMode === 'dark');
+            }
+        };
+
+        updateTheme();
+
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handler = () => { if (themeMode === 'system') updateTheme(); };
+        mediaQuery.addEventListener('change', handler);
+        return () => mediaQuery.removeEventListener('change', handler);
+    }, [themeMode]);
 
     useEffect(() => {
         fetch('/api/auth/me').then(res => res.json()).then(data => {
@@ -362,15 +381,6 @@ export default function Home() {
         )
     }
 
-    // 主题颜色映射
-    const themeClasses = {
-        zinc: 'theme-zinc',
-        blue: 'theme-blue',
-        purple: 'theme-purple',
-        green: 'theme-green',
-        rose: 'theme-rose'
-    };
-
     const fontSizeClasses = {
         small: 'text-size-small',
         medium: 'text-size-medium',
@@ -378,7 +388,7 @@ export default function Home() {
     };
 
     return (
-        <div className={`flex h-[100dvh] font-sans bg-white overflow-hidden ${themeClasses[themeColor] || ''} ${fontSizeClasses[fontSize] || ''}`}>
+        <div className={`flex h-[100dvh] font-sans overflow-hidden ${isDark ? 'dark-mode' : 'light-mode'} ${fontSizeClasses[fontSize] || ''}`}>
 
             {/* Profile Modal */}
             <AnimatePresence>
@@ -441,22 +451,22 @@ export default function Home() {
                                             className="overflow-hidden"
                                         >
                                             <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
-                                                {/* 主题颜色 */}
+                                                {/* 主题模式 */}
                                                 <div>
-                                                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block flex items-center gap-1"><Palette size={12} /> 主题颜色</label>
+                                                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block flex items-center gap-1"><Palette size={12} /> 主题模式</label>
                                                     <div className="flex gap-2">
                                                         {[
-                                                            { id: 'zinc', color: 'bg-zinc-500' },
-                                                            { id: 'blue', color: 'bg-blue-500' },
-                                                            { id: 'purple', color: 'bg-purple-500' },
-                                                            { id: 'green', color: 'bg-green-500' },
-                                                            { id: 'rose', color: 'bg-rose-500' }
+                                                            { id: 'light', label: '浅色' },
+                                                            { id: 'dark', label: '深色' },
+                                                            { id: 'system', label: '跟随系统' }
                                                         ].map(t => (
                                                             <button
                                                                 key={t.id}
-                                                                onClick={() => { setThemeColor(t.id); saveSettings({ themeColor: t.id }); }}
-                                                                className={`w-8 h-8 rounded-lg ${t.color} transition-all ${themeColor === t.id ? 'ring-2 ring-offset-2 ring-zinc-400 scale-110' : 'hover:scale-105'}`}
-                                                            />
+                                                                onClick={() => { setThemeMode(t.id); saveSettings({ themeMode: t.id }); }}
+                                                                className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${themeMode === t.id ? 'bg-zinc-600 text-white border-zinc-600' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100'}`}
+                                                            >
+                                                                {t.label}
+                                                            </button>
                                                         ))}
                                                     </div>
                                                 </div>
