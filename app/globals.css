@@ -101,6 +101,14 @@ h6 {
   margin-bottom: 0.75em;
 }
 
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+.prose p:first-child {
+  margin-top: 0;
+}
+
 .prose code {
   background: #f4f4f5;
   padding: 0.2em 0.4em;
