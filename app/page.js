@@ -24,7 +24,10 @@ import {
     Lock,
     Trash2,
     Palette,
-    Type
+    Type,
+    Copy,
+    RotateCcw,
+    Edit3
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
@@ -109,6 +112,11 @@ export default function Home() {
 
     // --- Model Menu State ---
     const [showModelMenu, setShowModelMenu] = useState(false);
+
+    // --- Message Actions State ---
+    const [editingMsgIndex, setEditingMsgIndex] = useState(null);
+    const [editingContent, setEditingContent] = useState("");
+    const [showEditConfirm, setShowEditConfirm] = useState(null); // { index, hasFollowing }
 
     // 加载用户设置
     const fetchSettings = async () => {
@@ -349,10 +357,210 @@ export default function Home() {
     };
 
     const handleKeyDown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } };
+
+    // --- 消息操作函数 ---
+    const copyMessage = async (content) => {
+        try {
+            await navigator.clipboard.writeText(content);
+        } catch (e) { console.error("复制失败", e); }
+    };
+
+    const deleteModelMessage = async (index) => {
+        const newMessages = messages.filter((_, i) => i !== index);
+        setMessages(newMessages);
+        // 同步到数据库
+        if (currentConversationId) {
+            try {
+                await fetch(`/api/conversations/${currentConversationId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: newMessages })
+                });
+            } catch (e) { console.error(e); }
+        }
+    };
+
+    const deleteUserMessage = async (index) => {
+        // 删除用户消息及其后面的模型回复
+        const newMessages = messages.filter((_, i) => i !== index && i !== index + 1);
+        setMessages(newMessages);
+        if (currentConversationId) {
+            try {
+                await fetch(`/api/conversations/${currentConversationId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: newMessages })
+                });
+            } catch (e) { console.error(e); }
+        }
+    };
+
+    const regenerateModelMessage = async (index) => {
+        if (loading) return;
+        // 找到对应的用户消息（前一条）
+        const userMsgIndex = index - 1;
+        if (userMsgIndex < 0 || messages[userMsgIndex]?.role !== 'user') return;
+
+        const userMsg = messages[userMsgIndex];
+        // 删除当前模型回复
+        const historyMessages = messages.slice(0, index);
+        setMessages(historyMessages);
+        setLoading(true);
+
+        try {
+            const config = {};
+            if (model !== "gemini-3-pro-image-preview") {
+                config.thinkingLevel = thinkingLevel;
+                const activePrompt = systemPrompts.find(p => p._id === activePromptId);
+                if (activePrompt) config.systemPrompt = activePrompt.content;
+            } else { config.imageConfig = { aspectRatio: aspectRatio, imageSize: "4K" }; }
+
+            const historyPayload = historyMessages.slice(0, -1).map(m => ({ role: m.role, content: m.content, image: null }));
+            const payload = {
+                prompt: userMsg.content, model, config, history: historyPayload, historyLimit, conversationId: currentConversationId
+            };
+
+            if (model === "gemini-3-pro-image-preview") {
+                const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                if (data.type === 'image') {
+                    setMessages(prev => [...prev, { role: "model", content: data.data, mimeType: data.mimeType, type: "image" }]);
+                } else {
+                    setMessages(prev => [...prev, { role: "model", content: data.content, type: "text" }]);
+                }
+            } else {
+                const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                if (!res.ok) throw new Error(res.statusText);
+                const streamMsgId = Date.now();
+                setMessages(prev => [...prev, { role: "model", content: "", type: "text", id: streamMsgId, isStreaming: true, thought: "" }]);
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let done = false, fullText = "", fullThought = "", buffer = "";
+                while (!done) {
+                    const { value, done: doneReading } = await reader.read();
+                    done = doneReading;
+                    if (value) {
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || "";
+                        for (const line of lines) {
+                            if (!line.trim()) continue;
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.type === 'thought') fullThought += data.content;
+                                else if (data.type === 'text') fullText += data.content;
+                            } catch (e) { fullText += line; }
+                        }
+                        setMessages(prev => prev.map(msg => msg.id === streamMsgId ? { ...msg, content: fullText, thought: fullThought } : msg));
+                    }
+                }
+                setMessages(prev => prev.map(msg => msg.id === streamMsgId ? { ...msg, isStreaming: false } : msg));
+            }
+        } catch (err) { console.error(err); setMessages(prev => [...prev, { role: "model", content: "Error: " + err.message, type: "error" }]); }
+        finally { setLoading(false); }
+    };
+
+    const handleEditAndRegenerate = (index, onlyThis) => {
+        const userMsg = messages[index];
+        const hasFollowing = index + 2 < messages.length;
+
+        if (hasFollowing && !onlyThis) {
+            // 需要确认：仅重新生成本条 or 抛弃后续所有
+            setShowEditConfirm({ index, content: userMsg.content });
+        } else {
+            // 直接进入编辑模式
+            setEditingMsgIndex(index);
+            setEditingContent(userMsg.content);
+        }
+    };
+
+    const confirmEditRegenerate = async (discardFollowing) => {
+        if (!showEditConfirm) return;
+        const { index } = showEditConfirm;
+
+        if (discardFollowing) {
+            // 抛弃后续所有内容
+            setMessages(messages.slice(0, index));
+        }
+        setEditingMsgIndex(index);
+        setEditingContent(messages[index].content);
+        setShowEditConfirm(null);
+    };
+
+    const submitEditAndRegenerate = async () => {
+        if (loading || editingMsgIndex === null) return;
+        const index = editingMsgIndex;
+        const newContent = editingContent.trim();
+        if (!newContent) return;
+
+        // 更新用户消息并删除其后的模型回复
+        const newMessages = messages.slice(0, index);
+        const userMsg = { ...messages[index], content: newContent };
+        newMessages.push(userMsg);
+        setMessages(newMessages);
+        setEditingMsgIndex(null);
+        setEditingContent("");
+        setLoading(true);
+
+        try {
+            const config = {};
+            if (model !== "gemini-3-pro-image-preview") {
+                config.thinkingLevel = thinkingLevel;
+                const activePrompt = systemPrompts.find(p => p._id === activePromptId);
+                if (activePrompt) config.systemPrompt = activePrompt.content;
+            } else { config.imageConfig = { aspectRatio: aspectRatio, imageSize: "4K" }; }
+
+            const historyPayload = newMessages.slice(0, -1).map(m => ({ role: m.role, content: m.content, image: null }));
+            const payload = {
+                prompt: newContent, model, config, history: historyPayload, historyLimit, conversationId: currentConversationId
+            };
+
+            if (model === "gemini-3-pro-image-preview") {
+                const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                if (data.type === 'image') {
+                    setMessages(prev => [...prev, { role: "model", content: data.data, mimeType: data.mimeType, type: "image" }]);
+                } else {
+                    setMessages(prev => [...prev, { role: "model", content: data.content, type: "text" }]);
+                }
+            } else {
+                const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                if (!res.ok) throw new Error(res.statusText);
+                const streamMsgId = Date.now();
+                setMessages(prev => [...prev, { role: "model", content: "", type: "text", id: streamMsgId, isStreaming: true, thought: "" }]);
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let done = false, fullText = "", fullThought = "", buffer = "";
+                while (!done) {
+                    const { value, done: doneReading } = await reader.read();
+                    done = doneReading;
+                    if (value) {
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || "";
+                        for (const line of lines) {
+                            if (!line.trim()) continue;
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.type === 'thought') fullThought += data.content;
+                                else if (data.type === 'text') fullText += data.content;
+                            } catch (e) { fullText += line; }
+                        }
+                        setMessages(prev => prev.map(msg => msg.id === streamMsgId ? { ...msg, content: fullText, thought: fullThought } : msg));
+                    }
+                }
+                setMessages(prev => prev.map(msg => msg.id === streamMsgId ? { ...msg, isStreaming: false } : msg));
+            }
+        } catch (err) { console.error(err); setMessages(prev => [...prev, { role: "model", content: "Error: " + err.message, type: "error" }]); }
+        finally { setLoading(false); }
+    };
+
     const models = [
-        { id: "gemini-3-pro-preview", name: "Gemini 3 Pro", icon: Sparkles, color: "text-purple-400", shortName: "Pro" },
-        { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", icon: Zap, color: "text-yellow-400", shortName: "Flash" },
-        { id: "gemini-3-pro-image-preview", name: "Gemini 3 Image", icon: ImageIcon, color: "text-pink-400", shortName: "Image" },
+        { id: "gemini-3-flash-preview", name: "快速", icon: Zap, color: "text-yellow-400", shortName: "快速" },
+        { id: "gemini-3-pro-preview", name: "思考", icon: Sparkles, color: "text-purple-400", shortName: "思考" },
+        { id: "gemini-3-pro-image-preview", name: "图片", icon: ImageIcon, color: "text-pink-400", shortName: "图片" },
     ];
 
     if (showAuthModal) {
@@ -548,31 +756,95 @@ export default function Home() {
                                 </div>
                                 <div className={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start w-full'}`}>
                                     {msg.role === 'model' && msg.thought && <ThinkingBlock thought={msg.thought} isStreaming={msg.isStreaming} />}
-                                    <div className={`px-4 py-3 rounded-2xl ${msg.role === 'user' ? 'bg-white border border-zinc-200 text-zinc-800' : 'bg-zinc-100 text-zinc-800'}`}>
-                                        {msg.image && <img src={msg.image} className="mb-2 max-h-48 rounded-lg" />}
-                                        {msg.type === 'image' ? (
-                                            <img src={`data:${msg.mimeType};base64,${msg.content}`} className="max-w-full h-auto rounded-lg" />
-                                        ) : (
-                                            <div className="prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none">
-                                                <ReactMarkdown
-                                                    remarkPlugins={[remarkMath, remarkGfm]}
-                                                    rehypePlugins={[rehypeKatex, rehypeHighlight]}
-                                                    components={{
-                                                        code: ({ node, inline, className, children, ...props }) => {
-                                                            return inline ? (
-                                                                <code className="px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-800 text-sm font-mono" {...props}>{children}</code>
-                                                            ) : (
-                                                                <code className={className} {...props}>{children}</code>
-                                                            );
-                                                        },
-                                                        pre: ({ children }) => (
-                                                            <pre className="rounded-lg overflow-x-auto p-4 my-3">{children}</pre>
-                                                        )
-                                                    }}
-                                                >{msg.content}</ReactMarkdown>
+
+                                    {/* 编辑模式 */}
+                                    {editingMsgIndex === i && msg.role === 'user' ? (
+                                        <div className="w-full space-y-2">
+                                            <textarea
+                                                value={editingContent}
+                                                onChange={(e) => setEditingContent(e.target.value)}
+                                                className="w-full bg-white border border-zinc-300 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400 resize-none min-h-[80px]"
+                                                autoFocus
+                                            />
+                                            <div className="flex gap-2 justify-end">
+                                                <button
+                                                    onClick={() => { setEditingMsgIndex(null); setEditingContent(""); }}
+                                                    className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
+                                                >取消</button>
+                                                <button
+                                                    onClick={submitEditAndRegenerate}
+                                                    disabled={loading || !editingContent.trim()}
+                                                    className="px-3 py-1.5 text-xs text-white bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 rounded-lg transition-colors"
+                                                >提交并重新生成</button>
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className={`px-4 py-3 rounded-2xl ${msg.role === 'user' ? 'bg-white border border-zinc-200 text-zinc-800' : 'bg-zinc-100 text-zinc-800'}`}>
+                                                {msg.image && <img src={msg.image} className="mb-2 max-h-48 rounded-lg" />}
+                                                {msg.type === 'image' ? (
+                                                    <img src={`data:${msg.mimeType};base64,${msg.content}`} className="max-w-full h-auto rounded-lg" />
+                                                ) : (
+                                                    <div className="prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none">
+                                                        <ReactMarkdown
+                                                            remarkPlugins={[remarkMath, remarkGfm]}
+                                                            rehypePlugins={[rehypeKatex, rehypeHighlight]}
+                                                            components={{
+                                                                code: ({ node, inline, className, children, ...props }) => {
+                                                                    return inline ? (
+                                                                        <code className="px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-800 text-sm font-mono" {...props}>{children}</code>
+                                                                    ) : (
+                                                                        <code className={className} {...props}>{children}</code>
+                                                                    );
+                                                                },
+                                                                pre: ({ children }) => (
+                                                                    <pre className="rounded-lg overflow-x-auto p-4 my-3">{children}</pre>
+                                                                )
+                                                            }}
+                                                        >{msg.content}</ReactMarkdown>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {/* 消息操作按钮 */}
+                                            {!msg.isStreaming && (
+                                                <div className={`flex gap-1 mt-1 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                                                    <button
+                                                        onClick={() => copyMessage(msg.content)}
+                                                        className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                                                        title="复制"
+                                                    ><Copy size={14} /></button>
+                                                    {msg.role === 'user' ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => deleteUserMessage(i)}
+                                                                className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
+                                                                title="删除"
+                                                            ><Trash2 size={14} /></button>
+                                                            <button
+                                                                onClick={() => handleEditAndRegenerate(i)}
+                                                                className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                                                                title="编辑并重新生成"
+                                                            ><Edit3 size={14} /></button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button
+                                                                onClick={() => deleteModelMessage(i)}
+                                                                className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
+                                                                title="删除"
+                                                            ><Trash2 size={14} /></button>
+                                                            <button
+                                                                onClick={() => regenerateModelMessage(i)}
+                                                                disabled={loading}
+                                                                className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
+                                                                title="重新生成"
+                                                            ><RotateCcw size={14} /></button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                             </motion.div>
                         ))
@@ -580,6 +852,44 @@ export default function Home() {
                     {loading && <div className="flex gap-2 items-center text-zinc-500 text-sm ml-11"><Loader2 size={14} className="animate-spin" /> 思考中...</div>}
                     <div ref={chatEndRef} />
                 </div>
+
+                {/* 编辑确认对话框 */}
+                <AnimatePresence>
+                    {showEditConfirm && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
+                            onClick={() => setShowEditConfirm(null)}
+                        >
+                            <motion.div
+                                initial={{ scale: 0.95, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.95, opacity: 0 }}
+                                className="bg-white p-6 rounded-2xl w-full max-w-sm shadow-xl border border-zinc-200"
+                                onClick={e => e.stopPropagation()}
+                            >
+                                <h3 className="text-lg font-semibold text-zinc-900 mb-2">编辑并重新生成</h3>
+                                <p className="text-sm text-zinc-600 mb-4">此消息后面还有其他对话内容，请选择操作方式：</p>
+                                <div className="space-y-2">
+                                    <button
+                                        onClick={() => confirmEditRegenerate(false)}
+                                        className="w-full py-2.5 px-4 text-sm font-medium text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors text-left"
+                                    >仅编辑本条消息（保留后续对话）</button>
+                                    <button
+                                        onClick={() => confirmEditRegenerate(true)}
+                                        className="w-full py-2.5 px-4 text-sm font-medium text-white bg-zinc-600 hover:bg-zinc-500 rounded-lg transition-colors text-left"
+                                    >编辑并抛弃后续所有内容</button>
+                                </div>
+                                <button
+                                    onClick={() => setShowEditConfirm(null)}
+                                    className="w-full mt-3 py-2 text-sm text-zinc-500 hover:text-zinc-700 transition-colors"
+                                >取消</button>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 <div className="p-3 md:p-4 bg-white border-t border-zinc-200 z-20 shrink-0 pb-safe">
                     <div className="max-w-3xl mx-auto space-y-2">
