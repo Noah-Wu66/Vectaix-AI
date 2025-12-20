@@ -366,3 +366,29 @@ h6 {
 .text-size-large .text-sm {
   font-size: 0.95rem;
 }
+
+/* Streaming content fade-in animation */
+@keyframes fadeInContent {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.prose p,
+.prose li,
+.prose pre,
+.prose blockquote,
+.prose table,
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6,
+.prose hr {
+  animation: fadeInContent 0.3s ease-out;
+}
