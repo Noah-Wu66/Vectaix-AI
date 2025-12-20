@@ -86,7 +86,13 @@ export default function Home() {
     const [historyLimit, setHistoryLimit] = useState(0);
     const [showSettings, setShowSettings] = useState(false);
     const [aspectRatio, setAspectRatio] = useState("16:9");
-    const [systemPrompt, setSystemPrompt] = useState("");
+
+    // --- System Prompts State ---
+    const [systemPrompts, setSystemPrompts] = useState([]);
+    const [activePromptId, setActivePromptId] = useState(null);
+    const [showAddPrompt, setShowAddPrompt] = useState(false);
+    const [newPromptName, setNewPromptName] = useState("");
+    const [newPromptContent, setNewPromptContent] = useState("");
 
     // --- Upload State ---
     const [selectedImage, setSelectedImage] = useState(null);
@@ -96,9 +102,36 @@ export default function Home() {
     // --- Model Menu State ---
     const [showModelMenu, setShowModelMenu] = useState(false);
 
+    // 加载用户设置
+    const fetchSettings = async () => {
+        try {
+            const res = await fetch('/api/settings');
+            const data = await res.json();
+            if (data.settings) {
+                setModel(data.settings.model || "gemini-3-pro-preview");
+                setThinkingLevel(data.settings.thinkingLevel || "high");
+                setHistoryLimit(data.settings.historyLimit || 0);
+                setAspectRatio(data.settings.aspectRatio || "16:9");
+                setSystemPrompts(data.settings.systemPrompts || []);
+                setActivePromptId(data.settings.activeSystemPromptId || null);
+            }
+        } catch (e) { console.error(e); }
+    };
+
+    // 保存设置到数据库
+    const saveSettings = async (updates) => {
+        try {
+            await fetch('/api/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+        } catch (e) { console.error(e); }
+    };
+
     useEffect(() => {
         fetch('/api/auth/me').then(res => res.json()).then(data => {
-            if (data.user) { setUser(data.user); fetchConversations(); }
+            if (data.user) { setUser(data.user); fetchConversations(); fetchSettings(); }
             else { setShowAuthModal(true); }
         });
     }, []);
@@ -217,7 +250,9 @@ export default function Home() {
             if (model !== "gemini-3-pro-image-preview") {
                 config.thinkingLevel = thinkingLevel;
                 if (imageUrl) { config.image = { url: imageUrl }; config.mediaResolution = mediaResolution; }
-                if (systemPrompt.trim()) config.systemPrompt = systemPrompt.trim();
+                // 获取当前激活的系统提示词
+                const activePrompt = systemPrompts.find(p => p._id === activePromptId);
+                if (activePrompt) config.systemPrompt = activePrompt.content;
             } else { config.imageConfig = { aspectRatio: aspectRatio, imageSize: "4K" }; }
 
             const historyPayload = messages.map(m => ({ role: m.role, content: m.content, image: null }));
@@ -487,7 +522,7 @@ export default function Home() {
                                                 {models.map((m) => (
                                                     <button
                                                         key={m.id}
-                                                        onClick={() => { setModel(m.id); setShowModelMenu(false); }}
+                                                        onClick={() => { setModel(m.id); setShowModelMenu(false); saveSettings({ model: m.id }); }}
                                                         className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id ? 'bg-zinc-600 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}
                                                     >
                                                         <m.icon size={16} className={model === m.id ? '' : m.color} />
@@ -532,23 +567,108 @@ export default function Home() {
                                                 <div className="space-y-4">
                                                     <div>
                                                         <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">系统提示词</label>
-                                                        <textarea
-                                                            value={systemPrompt}
-                                                            onChange={(e) => setSystemPrompt(e.target.value)}
-                                                            placeholder="自定义 AI 的行为和角色..."
-                                                            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700 resize-none focus:outline-none focus:border-zinc-400"
-                                                            rows={3}
-                                                        />
+                                                        <div className="flex gap-2">
+                                                            <select
+                                                                value={activePromptId || ""}
+                                                                onChange={(e) => {
+                                                                    setActivePromptId(e.target.value);
+                                                                    saveSettings({ activeSystemPromptId: e.target.value });
+                                                                }}
+                                                                className="flex-1 bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
+                                                            >
+                                                                {systemPrompts.map(p => (
+                                                                    <option key={p._id} value={p._id}>{p.name}</option>
+                                                                ))}
+                                                            </select>
+                                                            <button
+                                                                onClick={() => setShowAddPrompt(!showAddPrompt)}
+                                                                className="px-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 rounded-lg text-zinc-600 transition-colors"
+                                                            >
+                                                                <Plus size={16} />
+                                                            </button>
+                                                        </div>
+                                                        <AnimatePresence>
+                                                            {showAddPrompt && (
+                                                                <motion.div
+                                                                    initial={{ height: 0, opacity: 0 }}
+                                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                                    exit={{ height: 0, opacity: 0 }}
+                                                                    className="overflow-hidden"
+                                                                >
+                                                                    <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="名称"
+                                                                            value={newPromptName}
+                                                                            onChange={(e) => setNewPromptName(e.target.value)}
+                                                                            className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm focus:outline-none focus:border-zinc-400"
+                                                                        />
+                                                                        <textarea
+                                                                            placeholder="提示词内容..."
+                                                                            value={newPromptContent}
+                                                                            onChange={(e) => setNewPromptContent(e.target.value)}
+                                                                            className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:border-zinc-400"
+                                                                            rows={2}
+                                                                        />
+                                                                        <div className="flex gap-2">
+                                                                            <button
+                                                                                onClick={async () => {
+                                                                                    if (!newPromptName.trim() || !newPromptContent.trim()) return;
+                                                                                    const res = await fetch('/api/settings', {
+                                                                                        method: 'POST',
+                                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                                        body: JSON.stringify({ name: newPromptName.trim(), content: newPromptContent.trim() })
+                                                                                    });
+                                                                                    const data = await res.json();
+                                                                                    if (data.settings) {
+                                                                                        setSystemPrompts(data.settings.systemPrompts);
+                                                                                        setNewPromptName(""); setNewPromptContent(""); setShowAddPrompt(false);
+                                                                                    }
+                                                                                }}
+                                                                                className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white text-xs py-1.5 rounded-lg transition-colors"
+                                                                            >
+                                                                                添加
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => { setShowAddPrompt(false); setNewPromptName(""); setNewPromptContent(""); }}
+                                                                                className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-600 text-xs py-1.5 rounded-lg transition-colors"
+                                                                            >
+                                                                                取消
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+                                                        {activePromptId && systemPrompts.length > 1 && (
+                                                            <button
+                                                                onClick={async () => {
+                                                                    const res = await fetch('/api/settings', {
+                                                                        method: 'DELETE',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ promptId: activePromptId })
+                                                                    });
+                                                                    const data = await res.json();
+                                                                    if (data.settings) {
+                                                                        setSystemPrompts(data.settings.systemPrompts);
+                                                                        setActivePromptId(data.settings.activeSystemPromptId);
+                                                                    }
+                                                                }}
+                                                                className="mt-2 text-xs text-red-500 hover:text-red-600"
+                                                            >
+                                                                删除当前提示词
+                                                            </button>
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">历史限制</label>
-                                                        <input type="range" min="0" max="20" step="2" value={historyLimit} onChange={(e) => setHistoryLimit(Number(e.target.value))} className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full" />
+                                                        <input type="range" min="0" max="20" step="2" value={historyLimit} onChange={(e) => { setHistoryLimit(Number(e.target.value)); saveSettings({ historyLimit: Number(e.target.value) }); }} className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full" />
                                                         <span className="text-xs text-right block mt-1 text-zinc-600">{historyLimit || '无限制'} 条</span>
                                                     </div>
                                                     {model === "gemini-3-pro-image-preview" ? (
                                                         <div>
                                                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">宽高比</label>
-                                                            <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
+                                                            <select value={aspectRatio} onChange={(e) => { setAspectRatio(e.target.value); saveSettings({ aspectRatio: e.target.value }); }} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
                                                                 <option value="16:9">16:9</option>
                                                                 <option value="1:1">1:1</option>
                                                                 <option value="9:16">9:16</option>
@@ -559,7 +679,7 @@ export default function Home() {
                                                     ) : model === "gemini-3-flash-preview" ? (
                                                         <div>
                                                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label>
-                                                            <select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
+                                                            <select value={thinkingLevel} onChange={(e) => { setThinkingLevel(e.target.value); saveSettings({ thinkingLevel: e.target.value }); }} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
                                                                 <option value="high">深度 (High)</option>
                                                                 <option value="medium">平衡 (Medium)</option>
                                                                 <option value="low">快速 (Low)</option>
@@ -569,7 +689,7 @@ export default function Home() {
                                                     ) : (
                                                         <div>
                                                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">思考深度</label>
-                                                            <select value={thinkingLevel} onChange={(e) => setThinkingLevel(e.target.value)} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
+                                                            <select value={thinkingLevel} onChange={(e) => { setThinkingLevel(e.target.value); saveSettings({ thinkingLevel: e.target.value }); }} className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700">
                                                                 <option value="high">深度 (High)</option>
                                                                 <option value="low">快速 (Low)</option>
                                                             </select>
