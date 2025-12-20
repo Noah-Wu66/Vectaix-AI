@@ -740,8 +740,26 @@ function ThinkingBlock({ thought, isStreaming }) {
             <button onClick={() => setCollapsed(!collapsed)} className="flex items-center gap-2 text-[10px] font-medium text-zinc-500 hover:text-zinc-700 mb-1 uppercase tracking-wider bg-zinc-100 px-2 py-1 rounded-md transition-colors"><BrainCircuit size={12} /> 思考过程 {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}</button>
             <AnimatePresence>
                 {!collapsed && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 150, opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-y-auto w-full text-xs text-zinc-600 font-mono">
-                        {thought}{isStreaming && <span className="animate-pulse">|</span>}
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 200, opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-y-auto w-full text-xs text-zinc-600">
+                        <div className="prose prose-xs max-w-none prose-zinc prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs">
+                            <ReactMarkdown
+                                remarkPlugins={[remarkMath, remarkGfm]}
+                                rehypePlugins={[rehypeKatex, rehypeHighlight]}
+                                components={{
+                                    code: ({ node, inline, className, children, ...props }) => {
+                                        return inline ? (
+                                            <code className="px-1 py-0.5 rounded bg-zinc-200 text-zinc-800 text-xs font-mono" {...props}>{children}</code>
+                                        ) : (
+                                            <code className={className} {...props}>{children}</code>
+                                        );
+                                    },
+                                    pre: ({ children }) => (
+                                        <pre className="rounded-lg overflow-x-auto p-3 my-2 text-xs">{children}</pre>
+                                    )
+                                }}
+                            >{thought}</ReactMarkdown>
+                            {isStreaming && <span className="animate-pulse">|</span>}
+                        </div>
                         <div ref={endRef} />
                     </motion.div>
                 )}
