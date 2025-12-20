@@ -136,7 +136,11 @@ export async function POST(req) {
 
         // 4. Generate Response
         if (model === 'gemini-3-pro-image-preview') {
-            const response = await ai.models.generateContent(payload);
+            const response = await ai.models.generateContent({
+                model: model,
+                contents: contents,
+                config: payload.config
+            });
             const parts = response.candidates?.[0]?.content?.parts || [];
             const imagePart = parts.find(p => p.inlineData);
 
@@ -174,13 +178,17 @@ export async function POST(req) {
 
         } else {
             // Text Stream
-            const streamResult = await ai.models.streamGenerateContent(payload);
+            const streamResult = await ai.models.generateContentStream({
+                model: model,
+                contents: contents,
+                config: payload.config
+            });
             const stream = new ReadableStream({
                 async start(controller) {
                     let fullText = "";
                     try {
-                        for await (const chunk of streamResult.stream) {
-                            const chunkText = chunk.text();
+                        for await (const chunk of streamResult) {
+                            const chunkText = chunk.text;
                             if (chunkText) {
                                 fullText += chunkText;
                                 controller.enqueue(new TextEncoder().encode(chunkText));
