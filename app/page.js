@@ -165,6 +165,22 @@ export default function Home() {
         return () => mediaQuery.removeEventListener('change', handler);
     }, [themeMode]);
 
+    // Apply theme to body and html for global styles (scrollbar, bg color, overscroll)
+    useEffect(() => {
+        const root = document.documentElement;
+        if (isDark) {
+            root.classList.add('dark-mode');
+            document.body.classList.add('dark-mode');
+            root.style.colorScheme = 'dark';
+            root.style.backgroundColor = '#18181b'; // Match --bg-primary
+        } else {
+            root.classList.remove('dark-mode');
+            document.body.classList.remove('dark-mode');
+            root.style.colorScheme = 'light';
+            root.style.backgroundColor = '#ffffff';
+        }
+    }, [isDark]);
+
     useEffect(() => {
         fetch('/api/auth/me').then(res => res.json()).then(data => {
             if (data.user) { setUser(data.user); fetchConversations(); fetchSettings(); }
