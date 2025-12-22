@@ -7,6 +7,7 @@ import {
   Paperclip,
   Plus,
   Send,
+  Square,
   Settings2,
   Sparkles,
   X,
@@ -15,6 +16,7 @@ import { CHAT_MODELS } from "./chatModels";
 
 export default function Composer({
   loading,
+  isStreaming,
   model,
   setModel,
   thinkingLevel,
@@ -29,6 +31,7 @@ export default function Composer({
   setActivePromptId,
   saveSettings,
   onSend,
+  onStop,
 }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -480,17 +483,17 @@ export default function Composer({
           />
 
           <button
-            onClick={handleSend}
-            disabled={loading || (!input.trim() && !selectedImage)}
-            className="absolute right-2 bottom-2 p-2 rounded-lg bg-zinc-600 text-white disabled:opacity-40 hover:bg-zinc-500 transition-colors"
+            onClick={isStreaming ? onStop : handleSend}
+            disabled={!isStreaming && (loading || (!input.trim() && !selectedImage))}
+            className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${
+              isStreaming ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
+            }`}
             type="button"
           >
-            <Send size={16} />
+            {isStreaming ? <Square size={16} /> : <Send size={16} />}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
-

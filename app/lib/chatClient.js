@@ -36,6 +36,7 @@ export async function runChat({
   fetchConversations,
   setMessages,
   setLoading,
+  signal,
 }) {
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
@@ -53,12 +54,14 @@ export async function runChat({
   };
 
   setLoading(true);
+  let streamMsgId = null;
   try {
     if (model === "gemini-3-pro-image-preview") {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal,
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -91,6 +94,7 @@ export async function runChat({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal,
     });
     if (!res.ok) throw new Error(res.statusText);
 
@@ -100,7 +104,7 @@ export async function runChat({
       fetchConversations();
     }
 
-    const streamMsgId = Date.now();
+    streamMsgId = Date.now();
     setMessages((prev) => [
       ...prev,
       {
@@ -125,6 +129,7 @@ export async function runChat({
       done = doneReading;
       if (!value) continue;
 
+      if (signal?.aborted) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
@@ -139,6 +144,7 @@ export async function runChat({
         }
       }
 
+      if (signal?.aborted) break;
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === streamMsgId
@@ -154,12 +160,21 @@ export async function runChat({
       ),
     );
   } catch (err) {
-    console.error(err);
-    setMessages((prev) => [
-      ...prev,
-      { role: "model", content: "Error: " + err.message, type: "error" },
-    ]);
+    if (err?.name !== "AbortError") {
+      console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        { role: "model", content: "Error: " + err.message, type: "error" },
+      ]);
+    }
   } finally {
+    if (streamMsgId !== null) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === streamMsgId ? { ...msg, isStreaming: false } : msg,
+        ),
+      );
+    }
     setLoading(false);
   }
 }

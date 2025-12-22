@@ -21,38 +21,33 @@ export default function ChatApp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
   // --- UI State ---
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
   // --- Chat State ---
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-
   // --- Settings State ---
   const [model, setModel] = useState("gemini-3-pro-preview");
   const [thinkingLevel, setThinkingLevel] = useState("high");
   const [mediaResolution] = useState("media_resolution_high");
   const [historyLimit, setHistoryLimit] = useState(0);
   const [aspectRatio, setAspectRatio] = useState("16:9");
-
   // --- System Prompts State ---
   const [systemPrompts, setSystemPrompts] = useState([]);
   const [activePromptId, setActivePromptId] = useState(null);
-
   // --- Appearance State ---
   const [themeMode, setThemeMode] = useState("system"); // light, dark, system
   const [isDark, setIsDark] = useState(false);
   const [fontSize, setFontSize] = useState("medium"); // small, medium, large
-
   // --- Message Actions State ---
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
 
   const chatEndRef = useRef(null);
+  const chatAbortRef = useRef(null);
 
   // -------- Settings --------
   const fetchSettings = async () => {
@@ -260,6 +255,15 @@ export default function ChatApp() {
     await syncConversationMessages(nextMessages);
   };
 
+  const stopStreaming = () => {
+    chatAbortRef.current?.abort();
+    chatAbortRef.current = null;
+    setLoading(false);
+    setMessages((prev) => prev
+      .filter((m) => !m.isStreaming || (m.content || "").trim() || (m.thought || "").trim())
+      .map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)));
+  };
+
   // -------- Actions: Send / Regenerate / Edit --------
   const handleSendFromComposer = async ({ text, image }) => {
     if ((!text && !image) || loading) return;
@@ -306,7 +310,7 @@ export default function ChatApp() {
         setCurrentConversationId,
         fetchConversations,
         setMessages,
-        setLoading,
+        setLoading, signal: (chatAbortRef.current = new AbortController()).signal,
       });
     } catch (err) {
       console.error(err);
@@ -347,7 +351,7 @@ export default function ChatApp() {
       setCurrentConversationId,
       fetchConversations,
       setMessages,
-      setLoading,
+      setLoading, signal: (chatAbortRef.current = new AbortController()).signal,
     });
   };
 
@@ -392,7 +396,7 @@ export default function ChatApp() {
       setCurrentConversationId,
       fetchConversations,
       setMessages,
-      setLoading,
+      setLoading, signal: (chatAbortRef.current = new AbortController()).signal,
     });
   };
 
@@ -473,7 +477,7 @@ export default function ChatApp() {
         />
 
         <Composer
-          loading={loading}
+          loading={loading} isStreaming={messages.some((m) => m.isStreaming)}
           model={model}
           setModel={setModel}
           thinkingLevel={thinkingLevel}
@@ -487,7 +491,7 @@ export default function ChatApp() {
           activePromptId={activePromptId}
           setActivePromptId={setActivePromptId}
           saveSettings={saveSettings}
-          onSend={handleSendFromComposer}
+          onSend={handleSendFromComposer} onStop={stopStreaming}
         />
       </div>
     </div>

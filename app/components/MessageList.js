@@ -29,7 +29,7 @@ export default function MessageList({
   onStartEdit,
 }) {
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll">
+    <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll">
       {messages.length === 0 ? (
         <div className="h-full flex flex-col items-center justify-center text-zinc-400">
           <Sparkles size={40} className="mb-4 text-zinc-300" />
@@ -56,8 +56,10 @@ export default function MessageList({
             )}
 
             <div
-              className={`flex flex-col max-w-[80%] ${
-                msg.role === "user" ? "items-end" : "items-start w-full"
+              className={`flex flex-col ${
+                msg.role === "user"
+                  ? "items-end max-w-[80%]"
+                  : "items-start w-full max-w-[92%]"
               }`}
             >
               {msg.role === "model" && msg.thought && (
