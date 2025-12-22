@@ -86,7 +86,9 @@ export default function Composer({
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // 移动端/触摸设备不使用 Enter 发送，让用户通过按钮发送
+    const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    if (e.key === "Enter" && !e.shiftKey && !isTouchDevice) {
       e.preventDefault();
       if (!loading) handleSend();
     }
