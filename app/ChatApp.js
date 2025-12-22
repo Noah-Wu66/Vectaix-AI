@@ -428,7 +428,7 @@ export default function ChatApp() {
 
   return (
     <div
-      className={`flex h-[100dvh] font-sans overflow-hidden ${
+      className={`app-root flex h-[100dvh] font-sans overflow-hidden ${
         isDark ? "dark-mode" : "light-mode"
       } ${FONT_SIZE_CLASSES[fontSize] || ""}`}
       style={{ height: "var(--app-height)" }}
