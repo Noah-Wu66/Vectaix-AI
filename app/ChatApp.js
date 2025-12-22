@@ -219,6 +219,21 @@ export default function ChatApp() {
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
+  const renameConversation = async (id, newTitle) => {
+    try {
+      await fetch(`/api/conversations/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      setConversations((prev) =>
+        prev.map((c) => (c._id === id ? { ...c, title: newTitle } : c))
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // -------- Helpers --------
   const copyMessage = async (content) => {
     try {
@@ -430,9 +445,7 @@ export default function ChatApp() {
 
   return (
     <div
-      className={`app-root flex font-sans overflow-hidden ${
-        isDark ? "dark-mode" : "light-mode"
-      } ${FONT_SIZE_CLASSES[fontSize] || ""}`}
+      className={`app-root flex font-sans overflow-hidden ${isDark ? "dark-mode" : "light-mode"}`}
     >
       <ProfileModal
         open={showProfileModal}
@@ -452,6 +465,7 @@ export default function ChatApp() {
         onStartNewChat={startNewChat}
         onLoadConversation={loadConversation}
         onDeleteConversation={deleteConversation}
+        onRenameConversation={renameConversation}
         onOpenProfile={() => setShowProfileModal(true)}
         onLogout={handleLogout}
         onClose={() => setSidebarOpen(false)}
@@ -466,6 +480,7 @@ export default function ChatApp() {
           chatEndRef={chatEndRef}
           editingMsgIndex={editingMsgIndex}
           editingContent={editingContent}
+          fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""}
           onEditingContentChange={setEditingContent}
           onCancelEdit={cancelEdit}
           onSubmitEdit={submitEditAndRegenerate}

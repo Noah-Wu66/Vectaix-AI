@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { LogOut, Plus, Trash2, X } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { LogOut, Pencil, Plus, Trash2, X, Check } from "lucide-react";
 import ConfirmModal from "./ConfirmModal";
 
 export default function Sidebar({
@@ -12,11 +12,22 @@ export default function Sidebar({
   onStartNewChat,
   onLoadConversation,
   onDeleteConversation,
+  onRenameConversation,
   onOpenProfile,
   onLogout,
   onClose,
 }) {
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, title: "" });
+  const [editingId, setEditingId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const editInputRef = useRef(null);
+
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingId]);
 
   const handleDeleteClick = (conv, e) => {
     e.stopPropagation();
@@ -26,6 +37,35 @@ export default function Sidebar({
   const handleConfirmDelete = () => {
     if (deleteConfirm.id) {
       onDeleteConversation(deleteConfirm.id);
+    }
+  };
+
+  const handleEditClick = (conv, e) => {
+    e.stopPropagation();
+    setEditingId(conv._id);
+    setEditingTitle(conv.title);
+  };
+
+  const handleSaveEdit = () => {
+    const trimmed = editingTitle.trim();
+    if (trimmed && trimmed !== conversations.find(c => c._id === editingId)?.title) {
+      onRenameConversation(editingId, trimmed);
+    }
+    setEditingId(null);
+    setEditingTitle("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditingTitle("");
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === "Escape") {
+      handleCancelEdit();
     }
   };
 
@@ -52,25 +92,60 @@ export default function Sidebar({
             <div
               key={conv._id}
               className={`group flex items-center gap-1 rounded-lg transition-colors ${currentConversationId === conv._id
-                  ? "bg-white border border-zinc-200"
-                  : "hover:bg-white"
+                ? "bg-white border border-zinc-200"
+                : "hover:bg-white"
                 }`}
             >
-              <button
-                onClick={() => onLoadConversation(conv._id)}
-                className={`flex-1 text-left p-3 text-sm truncate ${currentConversationId === conv._id
-                    ? "text-zinc-900 font-medium"
-                    : "text-zinc-600"
-                  }`}
-              >
-                {conv.title}
-              </button>
-              <button
-                onClick={(e) => handleDeleteClick(conv, e)}
-                className="p-2 mr-1 text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Trash2 size={14} />
-              </button>
+              {editingId === conv._id ? (
+                <div className="flex-1 flex items-center gap-1 p-1.5">
+                  <input
+                    ref={editInputRef}
+                    type="text"
+                    value={editingTitle}
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    onBlur={handleSaveEdit}
+                    className="flex-1 px-2 py-1.5 text-sm border border-zinc-300 rounded-md focus:outline-none focus:border-zinc-400 bg-white"
+                  />
+                  <button
+                    onClick={handleSaveEdit}
+                    className="p-1.5 text-green-500 hover:bg-zinc-100 rounded transition-colors"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="p-1.5 text-zinc-400 hover:bg-zinc-100 rounded transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => onLoadConversation(conv._id)}
+                    onDoubleClick={(e) => handleEditClick(conv, e)}
+                    className={`flex-1 text-left p-3 text-sm truncate ${currentConversationId === conv._id
+                      ? "text-zinc-900 font-medium"
+                      : "text-zinc-600"
+                      }`}
+                  >
+                    {conv.title}
+                  </button>
+                  <button
+                    onClick={(e) => handleEditClick(conv, e)}
+                    className="p-2 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    onClick={(e) => handleDeleteClick(conv, e)}
+                    className="p-2 mr-1 text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>

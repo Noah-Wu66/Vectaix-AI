@@ -19,6 +19,7 @@ export default function MessageList({
   chatEndRef,
   editingMsgIndex,
   editingContent,
+  fontSizeClass,
   onEditingContentChange,
   onCancelEdit,
   onSubmitEdit,
@@ -29,7 +30,7 @@ export default function MessageList({
   onStartEdit,
 }) {
   return (
-    <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll">
+    <div className={`flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll ${fontSizeClass}`}>
       {messages.length === 0 ? (
         <div className="h-full flex flex-col items-center justify-center text-zinc-400">
           <Sparkles size={40} className="mb-4 text-zinc-300" />
@@ -98,7 +99,7 @@ export default function MessageList({
               ) : (
                 <>
                   <div
-                    className={`px-4 py-3 rounded-2xl ${msg.role === "user"
+                    className={`msg-bubble px-4 py-3 rounded-2xl ${msg.role === "user"
                       ? "bg-white border border-zinc-200 text-zinc-800"
                       : "bg-zinc-100 text-zinc-800"
                       }`}

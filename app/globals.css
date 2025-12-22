@@ -359,19 +359,7 @@ h6 {
   background: var(--bg-secondary);
 }
 
-/* Font Size Classes */
-.text-size-small {
-  font-size: 13px;
-}
-
-.text-size-medium {
-  font-size: 14px;
-}
-
-.text-size-large {
-  font-size: 16px;
-}
-
+/* Font Size Classes - Only affects message content */
 .text-size-small .prose {
   font-size: 0.85rem;
 }
@@ -381,14 +369,18 @@ h6 {
 }
 
 .text-size-large .prose {
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
-.text-size-small .text-sm {
+.text-size-small .msg-bubble {
   font-size: 0.8rem;
 }
 
-.text-size-large .text-sm {
+.text-size-medium .msg-bubble {
+  font-size: 0.875rem;
+}
+
+.text-size-large .msg-bubble {
   font-size: 0.95rem;
 }
 
