@@ -63,7 +63,7 @@ export default function MessageList({
 
             <div
               className={`flex flex-col ${msg.role === "user"
-                ? "items-end max-w-[80%]"
+                ? "items-end w-full max-w-[92%]"
                 : "items-start w-full"
                 }`}
             >

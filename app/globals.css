@@ -70,7 +70,7 @@ a {
 
   .app-root {
     position: fixed;
-    top: 0;
+    top: var(--app-offset-top, 0px);
     left: 0;
     width: 100%;
     height: var(--app-height, 100dvh);

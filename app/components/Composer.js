@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -13,7 +12,6 @@ import {
   X,
 } from "lucide-react";
 import { CHAT_MODELS } from "./chatModels";
-
 export default function Composer({
   loading,
   isStreaming,
@@ -35,23 +33,21 @@ export default function Composer({
 }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-
   const [showAddPrompt, setShowAddPrompt] = useState(false);
   const [newPromptName, setNewPromptName] = useState("");
   const [newPromptContent, setNewPromptContent] = useState("");
-
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
-
   // 移动端键盘弹出时，同步可视高度，避免键盘遮挡输入区（尤其是 iOS Safari）
   useEffect(() => {
     const setAppHeight = () => {
-      const h = window.visualViewport?.height || window.innerHeight;
-      document.documentElement.style.setProperty("--app-height", `${Math.round(h)}px`);
+      const vv = window.visualViewport;
+      document.documentElement.style.setProperty("--app-height", `${Math.round(vv?.height || window.innerHeight)}px`);
+      document.documentElement.style.setProperty("--app-offset-top", `${Math.round(vv?.offsetTop || 0)}px`);
     };
     setAppHeight();
     const vv = window.visualViewport;
@@ -64,6 +60,11 @@ export default function Composer({
       window.removeEventListener("resize", setAppHeight);
     };
   }, []);
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto"; const sh = el.scrollHeight; el.style.height = `${Math.min(sh, 160)}px`; el.style.overflowY = sh > 160 ? "auto" : "hidden";
+  }, [input, model]);
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
