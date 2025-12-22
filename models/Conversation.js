@@ -5,8 +5,12 @@ const MessageSchema = new mongoose.Schema({
     content: { type: String, default: '' },
     thought: { type: String }, // For model thinking blocks
     type: { type: String, default: 'text' }, // 'text' or 'image'
-    image: { type: String }, // Base64 or URL if stored separately, keeping usage simple
+    image: { type: String }, // URL (recommended). Legacy base64 is discouraged.
     mimeType: { type: String },
+    // Gemini multi-turn image editing: persist sanitized content.parts with thoughtSignature
+    // - text parts: { text, thought?, thoughtSignature? }
+    // - image parts: { inlineData: { mimeType, url }, thoughtSignature? }
+    parts: { type: [mongoose.Schema.Types.Mixed] },
     createdAt: { type: Date, default: Date.now }
 });
 

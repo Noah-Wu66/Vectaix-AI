@@ -37,13 +37,15 @@ export default function MessageList({
           <p className="font-medium">开始新对话</p>
         </div>
       ) : (
-        messages.map((msg, i) => (
-          <motion.div
-            key={msg.id ?? i}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
-          >
+        messages.map((msg, i) => {
+          const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
+          return (
+            <motion.div
+              key={msg.id ?? i}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
+            >
             {msg.role === "user" && (
               <div className="flex items-center gap-1.5 flex-row-reverse">
                 <div className="w-6 h-6 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
@@ -52,7 +54,7 @@ export default function MessageList({
                 <span className="text-xs text-zinc-400 font-medium">你</span>
               </div>
             )}
-            {msg.role === "model" && (msg.thought || msg.content || msg.isStreaming) && (
+            {msg.role === "model" && (msg.thought || msg.content || msg.isStreaming || hasParts) && (
               <div className="flex items-center gap-1.5">
                 <div className="w-6 h-6 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
                   <Bot size={12} />
@@ -98,29 +100,53 @@ export default function MessageList({
                 </div>
               ) : (
                 <>
-                  {(msg.content || msg.image || msg.type === "image") && (
+                  {(hasParts || msg.content || msg.image || msg.type === "image") && (
                     <div
                       className={`msg-bubble px-4 py-3 rounded-2xl ${msg.role === "user"
                         ? "bg-white border border-zinc-200 text-zinc-800"
                         : "bg-zinc-100 text-zinc-800"
                         }`}
                     >
-                      {msg.image && (
-                        <img
-                          src={msg.image}
-                          className="mb-2 max-h-48 rounded-lg"
-                          alt=""
-                        />
-                      )}
-
-                      {msg.type === "image" ? (
-                        <img
-                          src={`data:${msg.mimeType};base64,${msg.content}`}
-                          className="max-w-full h-auto rounded-lg"
-                          alt=""
-                        />
+                      {hasParts ? (
+                        <div className="flex flex-col gap-2">
+                          {msg.parts.map((part, idx) => {
+                            if (part && typeof part.text === "string" && part.text.trim()) {
+                              return <Markdown key={idx}>{part.text}</Markdown>;
+                            }
+                            const url = part?.inlineData?.url;
+                            if (typeof url === "string" && url) {
+                              return (
+                                <img
+                                  key={idx}
+                                  src={url}
+                                  className="max-w-full h-auto rounded-lg"
+                                  alt=""
+                                />
+                              );
+                            }
+                            return null;
+                          })}
+                        </div>
                       ) : (
-                        <Markdown>{msg.content}</Markdown>
+                        <>
+                          {msg.image && (
+                            <img
+                              src={msg.image}
+                              className="mb-2 max-h-48 rounded-lg"
+                              alt=""
+                            />
+                          )}
+
+                          {msg.type === "image" ? (
+                            <img
+                              src={`data:${msg.mimeType};base64,${msg.content}`}
+                              className="max-w-full h-auto rounded-lg"
+                              alt=""
+                            />
+                          ) : (
+                            <Markdown>{msg.content}</Markdown>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -180,8 +206,9 @@ export default function MessageList({
                 </>
               )}
             </div>
-          </motion.div>
-        ))
+            </motion.div>
+          );
+        })
       )}
 
       {/* 只在加载中且没有正在流式输出的消息时显示加载指示器 */}

@@ -455,19 +455,17 @@ export default function Composer({
             accept="image/*"
           />
 
-          {model !== "gemini-3-pro-image-preview" && (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${
-                selectedImage
-                  ? "text-zinc-600 bg-zinc-200"
-                  : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
-              }`}
-              type="button"
-            >
-              <Paperclip size={16} />
-            </button>
-          )}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${
+              selectedImage
+                ? "text-zinc-600 bg-zinc-200"
+                : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
+            }`}
+            type="button"
+          >
+            <Paperclip size={16} />
+          </button>
 
           <textarea
             ref={textareaRef}
@@ -475,9 +473,7 @@ export default function Composer({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="输入消息..."
-            className={`flex-1 bg-zinc-50 border border-zinc-200 rounded-xl ${
-              model !== "gemini-3-pro-image-preview" ? "pl-11" : "pl-4"
-            } pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors`}
+            className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl pl-11 pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors"
             rows={1}
             style={{ minHeight: "48px" }}
           />

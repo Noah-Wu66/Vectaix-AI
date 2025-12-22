@@ -7,11 +7,12 @@ export function buildChatConfig({
   activePromptId,
   imageUrl,
 }) {
+  const cfg = {};
   if (model === "gemini-3-pro-image-preview") {
-    return { imageConfig: { aspectRatio: aspectRatio, imageSize: "4K" } };
+    cfg.imageConfig = { aspectRatio: aspectRatio, imageSize: "4K" };
+  } else {
+    cfg.thinkingLevel = thinkingLevel;
   }
-
-  const cfg = { thinkingLevel };
 
   const activePrompt = systemPrompts.find((p) => p._id === activePromptId);
   if (activePrompt) cfg.systemPrompt = activePrompt.content;
@@ -71,7 +72,17 @@ export async function runChat({
         fetchConversations();
       }
 
-      if (data.type === "image") {
+      if (data.type === "parts" && Array.isArray(data.parts)) {
+        const textContent = data.parts
+          .map((p) => (p && typeof p.text === "string" ? p.text : ""))
+          .filter(Boolean)
+          .join("");
+        setMessages((prev) => [
+          ...prev,
+          { role: "model", type: "parts", parts: data.parts, content: textContent },
+        ]);
+      } else if (data.type === "image") {
+        // Legacy fallback
         setMessages((prev) => [
           ...prev,
           {
@@ -82,6 +93,7 @@ export async function runChat({
           },
         ]);
       } else {
+        // Legacy fallback
         setMessages((prev) => [
           ...prev,
           { role: "model", content: data.content, type: "text" },
