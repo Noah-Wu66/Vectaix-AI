@@ -13,6 +13,14 @@
   --primary: #52525b;
   --radius: 12px;
   --font-sans: 'Inter', system-ui, sans-serif;
+  --app-height: 100vh;
+  --app-width: 100vw;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
 }
 
 * {
@@ -31,12 +39,26 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   overflow-x: hidden;
-  min-height: 100vh;
+  min-height: 100%;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* Mobile: lock page scroll (only inner panels like message list should scroll) */
+@media (max-width: 768px) {
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior-y: none;
+  }
+
+  .main-layout {
+    height: 100%;
+    overflow: hidden;
+  }
 }
 
 /* Typography */
