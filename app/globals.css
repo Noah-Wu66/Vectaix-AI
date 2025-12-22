@@ -13,14 +13,6 @@
   --primary: #52525b;
   --radius: 12px;
   --font-sans: 'Inter', system-ui, sans-serif;
-  --app-height: 100vh;
-  --app-width: 100vw;
-}
-
-@supports (height: 100dvh) {
-  :root {
-    --app-height: 100dvh;
-  }
 }
 
 * {
@@ -47,12 +39,27 @@ a {
   text-decoration: none;
 }
 
+/* App root container */
+.app-root {
+  height: 100vh;
+  height: 100dvh;
+}
+
 /* Mobile: lock page scroll (only inner panels like message list should scroll) */
 @media (max-width: 768px) {
-  html,
-  body {
+  html {
+    height: 100%;
     overflow: hidden;
-    overscroll-behavior-y: none;
+    position: fixed;
+    width: 100%;
+  }
+
+  body {
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    overscroll-behavior: none;
   }
 
   .main-layout {
@@ -62,9 +69,8 @@ a {
 
   .app-root {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
+    inset: 0;
+    height: 100%;
   }
 }
 

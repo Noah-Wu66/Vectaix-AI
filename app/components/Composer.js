@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronUp,
@@ -40,8 +40,27 @@ export default function Composer({
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
+
+  // 阻止 iOS Safari 在输入框聚焦时自动滚动页面
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const handleFocus = () => {
+      // 延迟执行，让 Safari 先完成它的滚动，然后我们重置
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.body.scrollTop = 0;
+        document.documentElement.scrollTop = 0;
+      }, 50);
+    };
+
+    textarea.addEventListener("focus", handleFocus);
+    return () => textarea.removeEventListener("focus", handleFocus);
+  }, []);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -448,6 +467,7 @@ export default function Composer({
           )}
 
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}

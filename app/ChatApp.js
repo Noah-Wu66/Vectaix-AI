@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { buildChatConfig, runChat } from "./lib/chatClient";
-import { useAppViewportHeightVar } from "./lib/useAppViewportHeightVar";
 
 import AuthModal from "./components/AuthModal";
 import ChatHeader from "./components/ChatHeader";
@@ -15,7 +14,6 @@ import Sidebar from "./components/Sidebar";
 const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium", large: "text-size-large" };
 
 export default function ChatApp() {
-  useAppViewportHeightVar();
   // --- Auth State ---
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -428,10 +426,9 @@ export default function ChatApp() {
 
   return (
     <div
-      className={`app-root flex h-[100dvh] font-sans overflow-hidden ${
+      className={`app-root flex font-sans overflow-hidden ${
         isDark ? "dark-mode" : "light-mode"
       } ${FONT_SIZE_CLASSES[fontSize] || ""}`}
-      style={{ height: "var(--app-height)" }}
     >
       <ProfileModal
         open={showProfileModal}
