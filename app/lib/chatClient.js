@@ -113,6 +113,7 @@ export async function runChat({
         type: "text",
         id: streamMsgId,
         isStreaming: true,
+        isThinkingStreaming: true,
         thought: "",
       },
     ]);
@@ -123,6 +124,7 @@ export async function runChat({
     let fullText = "";
     let fullThought = "";
     let buffer = "";
+    let thinkingEnded = false;
 
     while (!done) {
       const { value, done: doneReading } = await reader.read();
@@ -141,6 +143,7 @@ export async function runChat({
           fullThought += data.content;
         } else if (data.type === "text") {
           fullText += data.content;
+          if (!thinkingEnded) thinkingEnded = true;
         }
       }
 
@@ -148,7 +151,7 @@ export async function runChat({
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === streamMsgId
-            ? { ...msg, content: fullText, thought: fullThought }
+            ? { ...msg, content: fullText, thought: fullThought, isThinkingStreaming: !thinkingEnded }
             : msg,
         ),
       );

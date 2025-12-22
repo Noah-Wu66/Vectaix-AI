@@ -41,29 +41,33 @@ export default function MessageList({
             key={msg.id ?? i}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+            className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
           >
-            {(msg.role === "model" &&
-              (msg.thought || msg.content || msg.isStreaming)) && (
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-zinc-100 text-zinc-600">
-                <Bot size={14} />
+            {msg.role === "user" && (
+              <div className="flex items-center gap-1.5 flex-row-reverse">
+                <div className="w-6 h-6 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
+                  <User size={12} />
+                </div>
+                <span className="text-xs text-zinc-400 font-medium">你</span>
               </div>
             )}
-            {msg.role === "user" && (
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-zinc-100 text-zinc-600">
-                <User size={14} />
+            {msg.role === "model" && (msg.thought || msg.content || msg.isStreaming) && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-6 h-6 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
+                  <Bot size={12} />
+                </div>
+                <span className="text-xs text-zinc-400 font-medium">AI</span>
               </div>
             )}
 
             <div
-              className={`flex flex-col ${
-                msg.role === "user"
-                  ? "items-end max-w-[80%]"
-                  : "items-start w-full max-w-[92%]"
-              }`}
+              className={`flex flex-col ${msg.role === "user"
+                ? "items-end max-w-[80%]"
+                : "items-start w-full"
+                }`}
             >
               {msg.role === "model" && msg.thought && (
-                <ThinkingBlock thought={msg.thought} isStreaming={msg.isStreaming} />
+                <ThinkingBlock thought={msg.thought} isStreaming={msg.isThinkingStreaming} />
               )}
 
               {/* 编辑模式 */}
@@ -94,11 +98,10 @@ export default function MessageList({
               ) : (
                 <>
                   <div
-                    className={`px-4 py-3 rounded-2xl ${
-                      msg.role === "user"
-                        ? "bg-white border border-zinc-200 text-zinc-800"
-                        : "bg-zinc-100 text-zinc-800"
-                    }`}
+                    className={`px-4 py-3 rounded-2xl ${msg.role === "user"
+                      ? "bg-white border border-zinc-200 text-zinc-800"
+                      : "bg-zinc-100 text-zinc-800"
+                      }`}
                   >
                     {msg.image && (
                       <img
@@ -122,9 +125,8 @@ export default function MessageList({
                   {/* 消息操作按钮 */}
                   {!msg.isStreaming && (
                     <div
-                      className={`flex gap-1 mt-1 ${
-                        msg.role === "user" ? "flex-row-reverse" : ""
-                      }`}
+                      className={`flex gap-1 mt-1 ${msg.role === "user" ? "flex-row-reverse" : ""
+                        }`}
                     >
                       <button
                         onClick={() => onCopy(msg.content)}

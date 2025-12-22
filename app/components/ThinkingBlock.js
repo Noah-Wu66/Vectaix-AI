@@ -10,7 +10,7 @@ export default function ThinkingBlock({ thought, isStreaming }) {
   const endRef = useRef(null);
 
   useEffect(() => {
-    if (isStreaming) setCollapsed(true);
+    setCollapsed(!isStreaming);
   }, [isStreaming]);
 
   useEffect(() => {
