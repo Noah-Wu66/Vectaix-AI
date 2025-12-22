@@ -98,30 +98,32 @@ export default function MessageList({
                 </div>
               ) : (
                 <>
-                  <div
-                    className={`msg-bubble px-4 py-3 rounded-2xl ${msg.role === "user"
-                      ? "bg-white border border-zinc-200 text-zinc-800"
-                      : "bg-zinc-100 text-zinc-800"
-                      }`}
-                  >
-                    {msg.image && (
-                      <img
-                        src={msg.image}
-                        className="mb-2 max-h-48 rounded-lg"
-                        alt=""
-                      />
-                    )}
+                  {(msg.content || msg.image || msg.type === "image") && (
+                    <div
+                      className={`msg-bubble px-4 py-3 rounded-2xl ${msg.role === "user"
+                        ? "bg-white border border-zinc-200 text-zinc-800"
+                        : "bg-zinc-100 text-zinc-800"
+                        }`}
+                    >
+                      {msg.image && (
+                        <img
+                          src={msg.image}
+                          className="mb-2 max-h-48 rounded-lg"
+                          alt=""
+                        />
+                      )}
 
-                    {msg.type === "image" ? (
-                      <img
-                        src={`data:${msg.mimeType};base64,${msg.content}`}
-                        className="max-w-full h-auto rounded-lg"
-                        alt=""
-                      />
-                    ) : (
-                      <Markdown>{msg.content}</Markdown>
-                    )}
-                  </div>
+                      {msg.type === "image" ? (
+                        <img
+                          src={`data:${msg.mimeType};base64,${msg.content}`}
+                          className="max-w-full h-auto rounded-lg"
+                          alt=""
+                        />
+                      ) : (
+                        <Markdown>{msg.content}</Markdown>
+                      )}
+                    </div>
+                  )}
 
                   {/* 消息操作按钮 */}
                   {!msg.isStreaming && (
