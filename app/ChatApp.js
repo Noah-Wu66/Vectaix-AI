@@ -7,55 +7,57 @@ import { buildChatConfig, runChat } from "./lib/chatClient";
 import AuthModal from "./components/AuthModal";
 import ChatHeader from "./components/ChatHeader";
 import Composer from "./components/Composer";
+import ConfirmModal from "./components/ConfirmModal";
 import MessageList from "./components/MessageList";
 import ProfileModal from "./components/ProfileModal";
 import Sidebar from "./components/Sidebar";
 
 const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium", large: "text-size-large" };
+const IMAGE_MODEL_ID = "gemini-3-pro-image-preview";
+const isImageModel = (m) => m === IMAGE_MODEL_ID;
+const isImageConversation = (msgs = []) =>
+  msgs.some((m) => m?.role === "model" && (m.type === "parts" || m.type === "image"));
 
 export default function ChatApp() {
-  // --- Auth State ---
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  // --- UI State ---
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // --- Chat State ---
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-  // --- Settings State ---
   const [model, setModel] = useState("gemini-3-pro-preview");
   const [thinkingLevel, setThinkingLevel] = useState("high");
   const [mediaResolution] = useState("media_resolution_high");
   const [historyLimit, setHistoryLimit] = useState(0);
   const [aspectRatio, setAspectRatio] = useState("16:9");
-  // --- System Prompts State ---
   const [systemPrompts, setSystemPrompts] = useState([]);
   const [activePromptId, setActivePromptId] = useState(null);
-  // --- Appearance State ---
   const [themeMode, setThemeMode] = useState("system"); // light, dark, system
   const [isDark, setIsDark] = useState(false);
   const [fontSize, setFontSize] = useState("medium"); // small, medium, large
-  // --- Message Actions State ---
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
 
   const chatEndRef = useRef(null);
   const chatAbortRef = useRef(null);
+  const lastTextModelRef = useRef("gemini-3-pro-preview");
+  const [switchModelOpen, setSwitchModelOpen] = useState(false);
+  const [pendingModel, setPendingModel] = useState(null);
 
-  // -------- Settings --------
   const fetchSettings = async () => {
     try {
       const res = await fetch("/api/settings");
       const data = await res.json();
       if (data.settings) {
-        setModel(data.settings.model || "gemini-3-pro-preview");
+        const nextModel = data.settings.model || "gemini-3-pro-preview";
+        setModel(nextModel);
+        if (!isImageModel(nextModel)) lastTextModelRef.current = nextModel;
         setThinkingLevel(data.settings.thinkingLevel || "high");
         setHistoryLimit(data.settings.historyLimit || 0);
         setAspectRatio(data.settings.aspectRatio || "16:9");
@@ -81,7 +83,6 @@ export default function ChatApp() {
     }
   };
 
-  // -------- Theme --------
   useEffect(() => {
     const updateTheme = () => {
       if (themeMode === "system") {
@@ -116,7 +117,6 @@ export default function ChatApp() {
     }
   }, [isDark]);
 
-  // -------- Boot --------
   useEffect(() => {
     fetch("/api/auth/me")
       .then((res) => res.json())
@@ -146,7 +146,6 @@ export default function ChatApp() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // -------- Auth --------
   const handleAuth = async (e) => {
     e.preventDefault();
     const endpoint =
@@ -181,15 +180,18 @@ export default function ChatApp() {
     setShowProfileModal(false);
   };
 
-  // -------- Conversations --------
   const loadConversation = async (id) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/conversations/${id}`);
       const data = await res.json();
       if (data.conversation) {
-        setMessages(data.conversation.messages || []);
+        const nextMessages = data.conversation.messages || [];
+        setMessages(nextMessages);
         setCurrentConversationId(id);
+        const convIsImage = isImageConversation(nextMessages);
+        if (convIsImage && model !== IMAGE_MODEL_ID) setModel(IMAGE_MODEL_ID);
+        if (!convIsImage && model === IMAGE_MODEL_ID) setModel(lastTextModelRef.current);
         if (window.innerWidth < 768) setSidebarOpen(false);
       }
     } catch (e) {
@@ -219,6 +221,26 @@ export default function ChatApp() {
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
+  const requestModelChange = (nextModel) => {
+    if (loading || messages.some((m) => m.isStreaming)) return;
+
+    const hasConversation = Boolean(currentConversationId) || messages.length > 0;
+    const currentIsImageConv = currentConversationId
+      ? isImageConversation(messages)
+      : isImageModel(model);
+    const nextIsImage = isImageModel(nextModel);
+
+    if (hasConversation && nextIsImage !== currentIsImageConv) {
+      setPendingModel(nextModel);
+      setSwitchModelOpen(true);
+      return;
+    }
+
+    setModel(nextModel);
+    if (!nextIsImage) lastTextModelRef.current = nextModel;
+    saveSettings({ model: nextModel });
+  };
+
   const renameConversation = async (id, newTitle) => {
     try {
       await fetch(`/api/conversations/${id}`, {
@@ -234,7 +256,6 @@ export default function ChatApp() {
     }
   };
 
-  // -------- Helpers --------
   const copyMessage = async (content) => {
     try {
       await navigator.clipboard.writeText(content);
@@ -279,7 +300,6 @@ export default function ChatApp() {
       .map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)));
   };
 
-  // -------- Actions: Send / Regenerate / Edit --------
   const handleSendFromComposer = async ({ text, image }) => {
     if ((!text && !image) || loading) return;
 
@@ -447,67 +467,13 @@ export default function ChatApp() {
     <div
       className={`app-root flex font-sans overflow-hidden ${isDark ? "dark-mode" : "light-mode"}`}
     >
-      <ProfileModal
-        open={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        user={user}
-        themeMode={themeMode}
-        fontSize={fontSize}
-        onThemeModeChange={updateThemeMode}
-        onFontSizeChange={updateFontSize}
-      />
-
-      <Sidebar
-        isOpen={sidebarOpen}
-        conversations={conversations}
-        currentConversationId={currentConversationId}
-        user={user}
-        onStartNewChat={startNewChat}
-        onLoadConversation={loadConversation}
-        onDeleteConversation={deleteConversation}
-        onRenameConversation={renameConversation}
-        onOpenProfile={() => setShowProfileModal(true)}
-        onLogout={handleLogout}
-        onClose={() => setSidebarOpen(false)}
-      />
-
+      <ProfileModal open={showProfileModal} onClose={() => setShowProfileModal(false)} user={user} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} />
+      <ConfirmModal open={switchModelOpen} onClose={() => { setSwitchModelOpen(false); setPendingModel(null); }} onConfirm={() => { if (!pendingModel) return; startNewChat(); setModel(pendingModel); if (!isImageModel(pendingModel)) lastTextModelRef.current = pendingModel; saveSettings({ model: pendingModel }); }} title="切换模型将新建对话" message="图片模型与快速/思考模型不能出现在同一个会话中。切换将新建对话，当前对话会保留在历史记录中。" confirmText="新建对话并切换" cancelText="取消" />
+      <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onClose={() => setSidebarOpen(false)} />
       <div className="flex-1 flex flex-col w-full h-full relative">
         <ChatHeader onToggleSidebar={() => setSidebarOpen((v) => !v)} />
-
-        <MessageList
-          messages={messages}
-          loading={loading}
-          chatEndRef={chatEndRef}
-          editingMsgIndex={editingMsgIndex}
-          editingContent={editingContent}
-          fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""}
-          onEditingContentChange={setEditingContent}
-          onCancelEdit={cancelEdit}
-          onSubmitEdit={submitEditAndRegenerate}
-          onCopy={copyMessage}
-          onDeleteModelMessage={deleteModelMessage}
-          onDeleteUserMessage={deleteUserMessage}
-          onRegenerateModelMessage={regenerateModelMessage}
-          onStartEdit={startEdit}
-        />
-
-        <Composer
-          loading={loading} isStreaming={messages.some((m) => m.isStreaming)}
-          model={model}
-          setModel={setModel}
-          thinkingLevel={thinkingLevel}
-          setThinkingLevel={setThinkingLevel}
-          historyLimit={historyLimit}
-          setHistoryLimit={setHistoryLimit}
-          aspectRatio={aspectRatio}
-          setAspectRatio={setAspectRatio}
-          systemPrompts={systemPrompts}
-          setSystemPrompts={setSystemPrompts}
-          activePromptId={activePromptId}
-          setActivePromptId={setActivePromptId}
-          saveSettings={saveSettings}
-          onSend={handleSendFromComposer} onStop={stopStreaming}
-        />
+        <MessageList messages={messages} loading={loading} chatEndRef={chatEndRef} editingMsgIndex={editingMsgIndex} editingContent={editingContent} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} />
+        <Composer loading={loading} isStreaming={messages.some((m) => m.isStreaming)} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevel} setThinkingLevel={setThinkingLevel} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} systemPrompts={systemPrompts} setSystemPrompts={setSystemPrompts} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onSend={handleSendFromComposer} onStop={stopStreaming} />
       </div>
     </div>
   );
