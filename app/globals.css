@@ -43,6 +43,7 @@ a {
 .app-root {
   height: 100vh;
   height: 100dvh;
+  height: var(--app-height, 100dvh);
 }
 
 /* Mobile: lock page scroll (only inner panels like message list should scroll) */
@@ -69,8 +70,10 @@ a {
 
   .app-root {
     position: fixed;
-    inset: 0;
-    height: 100%;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--app-height, 100dvh);
   }
 }
 
@@ -284,6 +287,12 @@ h6 {
   --text-muted: #a1a1aa;
   --border-color: #3f3f46;
   --border-light: #27272a;
+  /* 兼容旧变量：Markdown 标题/引用等使用的是 --foreground/--muted/--border */
+  --background: var(--bg-primary);
+  --surface: var(--bg-secondary);
+  --foreground: var(--text-primary);
+  --muted: var(--text-muted);
+  --border: var(--border-color);
   background-color: var(--bg-primary);
   color: var(--text-primary);
 }

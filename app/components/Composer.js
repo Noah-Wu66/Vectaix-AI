@@ -47,24 +47,23 @@ export default function Composer({
 
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
 
-  // 阻止 iOS Safari 在输入框聚焦时自动滚动页面
+  // 移动端键盘弹出时，同步可视高度，避免键盘遮挡输入区（尤其是 iOS Safari）
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const handleFocus = () => {
-      // 延迟执行，让 Safari 先完成它的滚动，然后我们重置
-      setTimeout(() => {
-        window.scrollTo(0, 0);
-        document.body.scrollTop = 0;
-        document.documentElement.scrollTop = 0;
-      }, 50);
+    const setAppHeight = () => {
+      const h = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty("--app-height", `${Math.round(h)}px`);
     };
-
-    textarea.addEventListener("focus", handleFocus);
-    return () => textarea.removeEventListener("focus", handleFocus);
+    setAppHeight();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", setAppHeight);
+    vv?.addEventListener("scroll", setAppHeight);
+    window.addEventListener("resize", setAppHeight);
+    return () => {
+      vv?.removeEventListener("resize", setAppHeight);
+      vv?.removeEventListener("scroll", setAppHeight);
+      window.removeEventListener("resize", setAppHeight);
+    };
   }, []);
-
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
