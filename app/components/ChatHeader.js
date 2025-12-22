@@ -14,7 +14,7 @@ export default function ChatHeader({ onToggleSidebar }) {
         </button>
         <div className="flex items-center gap-2">
           <Sparkles size={18} className="text-zinc-900" />
-          <h1 className="font-semibold text-lg tracking-tight text-zinc-900 hidden md:block">
+          <h1 className="font-semibold tracking-tight text-zinc-900 text-base md:text-lg whitespace-nowrap">
             Vectaix AI
           </h1>
         </div>
