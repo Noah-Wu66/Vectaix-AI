@@ -6,11 +6,11 @@ import { BrainCircuit, ChevronDown, ChevronUp } from "lucide-react";
 import Markdown from "./Markdown";
 
 export default function ThinkingBlock({ thought, isStreaming }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const endRef = useRef(null);
 
   useEffect(() => {
-    if (!isStreaming) setCollapsed(true);
+    if (isStreaming) setCollapsed(true);
   }, [isStreaming]);
 
   useEffect(() => {
@@ -63,7 +63,6 @@ export default function ThinkingBlock({ thought, isStreaming }) {
             <Markdown className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs">
               {thought}
             </Markdown>
-            {isStreaming && <span className="animate-pulse">|</span>}
             <div ref={endRef} />
           </motion.div>
         )}
