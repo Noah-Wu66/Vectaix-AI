@@ -1,30 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
-import { jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
 import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
-
-const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || 'default_secret_key_change_me');
-
-async function getUser() {
-    const token = cookies().get('token')?.value;
-    if (!token) return null;
-    try {
-        const verified = await jwtVerify(token, SECRET_KEY);
-        await dbConnect();
-        const user = await User.findById(verified.payload.userId);
-        return user ? verified.payload : null;
-    } catch {
-        return null;
-    }
-}
+import { getAuthPayload } from '@/lib/auth';
 
 export async function POST(req) {
     try {
         const { prompt, model, config, history = [], historyLimit = 0, conversationId } = await req.json();
 
-        const user = await getUser();
+        const auth = await getAuthPayload();
+        let user = null;
+        if (auth) {
+            await dbConnect();
+            const userDoc = await User.findById(auth.userId);
+            if (userDoc) user = auth;
+        }
         let currentConversationId = conversationId;
 
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -46,37 +36,24 @@ export async function POST(req) {
 
         let currentParts = [{ text: prompt }];
 
-        // Handle Image Input (URL from Blob or Base64 legacy)
+        // Handle Image Input (URL from Blob)
         let dbImageEntry = null;
 
-        if (config?.image) {
-            if (config.image.url) {
-                // Fetch remote image (Vercel Blob)
-                const imgRes = await fetch(config.image.url);
-                if (!imgRes.ok) throw new Error("Failed to fetch image from blob");
-                const arrayBuffer = await imgRes.arrayBuffer();
-                const base64Data = Buffer.from(arrayBuffer).toString('base64');
-                const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
+        if (config?.image?.url) {
+            const imgRes = await fetch(config.image.url);
+            if (!imgRes.ok) throw new Error("Failed to fetch image from blob");
+            const arrayBuffer = await imgRes.arrayBuffer();
+            const base64Data = Buffer.from(arrayBuffer).toString('base64');
+            const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
 
-                currentParts.push({
-                    inlineData: {
-                        mimeType: mimeType,
-                        data: base64Data
-                    },
-                    ...(config.mediaResolution ? { mediaResolution: { level: config.mediaResolution } } : {})
-                });
-                dbImageEntry = config.image.url; // Use URL for DB
-            } else if (config.image.data) {
-                // Legacy Base64
-                currentParts.push({
-                    inlineData: {
-                        mimeType: config.image.mimeType,
-                        data: config.image.data
-                    },
-                    ...(config.mediaResolution ? { mediaResolution: { level: config.mediaResolution } } : {})
-                });
-                dbImageEntry = "Image Attached (Base64)"; // Don't save large base64
-            }
+            currentParts.push({
+                inlineData: {
+                    mimeType: mimeType,
+                    data: base64Data
+                },
+                ...(config.mediaResolution ? { mediaResolution: { level: config.mediaResolution } } : {})
+            });
+            dbImageEntry = config.image.url;
         }
 
         contents.push({
@@ -156,9 +133,7 @@ export async function POST(req) {
                         $push: {
                             messages: {
                                 role: 'model',
-                                content: '[Generated Image]', // Placeholder unless we upload generated image to blob too? 
-                                // For now, text placeholder. Saving generated images persistent requires another upload. 
-                                // User only asked to bypass limit for Request Body (User Upload).
+                                content: '[Generated Image]',
                                 type: 'image'
                             }
                         },

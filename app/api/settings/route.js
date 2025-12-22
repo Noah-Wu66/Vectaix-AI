@@ -1,25 +1,11 @@
-import { jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
 import dbConnect from '@/lib/db';
 import UserSettings from '@/models/UserSettings';
-
-const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || 'default_secret_key_change_me');
-
-async function getUser() {
-    const token = cookies().get('token')?.value;
-    if (!token) return null;
-    try {
-        const verified = await jwtVerify(token, SECRET_KEY);
-        return verified.payload;
-    } catch {
-        return null;
-    }
-}
+import { getAuthPayload } from '@/lib/auth';
 
 // 获取用户设置
 export async function GET() {
     await dbConnect();
-    const user = await getUser();
+    const user = await getAuthPayload();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     let settings = await UserSettings.findOne({ userId: user.userId });
@@ -41,7 +27,7 @@ export async function GET() {
 // 更新用户设置
 export async function PUT(req) {
     await dbConnect();
-    const user = await getUser();
+    const user = await getAuthPayload();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const updates = await req.json();
@@ -64,7 +50,7 @@ export async function PUT(req) {
 // 添加系统提示词
 export async function POST(req) {
     await dbConnect();
-    const user = await getUser();
+    const user = await getAuthPayload();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { name, content } = await req.json();
@@ -94,7 +80,7 @@ export async function POST(req) {
 // 删除系统提示词
 export async function DELETE(req) {
     await dbConnect();
-    const user = await getUser();
+    const user = await getAuthPayload();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { promptId } = await req.json();

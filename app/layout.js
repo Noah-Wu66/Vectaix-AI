@@ -1,4 +1,6 @@
 import './globals.css';
+import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github-dark.css';
 
 export const metadata = {
     title: 'Vectaix AI',

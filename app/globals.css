@@ -129,16 +129,6 @@ h6 {
   padding: 0;
 }
 
-/* Glass fallback for modals */
-.glass {
-  background: var(--background);
-  border: 1px solid var(--border);
-}
-
-.glass-bg-pattern {
-  background-color: var(--background);
-}
-
 /* KaTeX Math Styles */
 .prose .katex-display {
   margin: 1em 0;
@@ -424,10 +414,5 @@ h6 {
   .thinking-btn {
     padding: 0.5rem 0.75rem;
     font-size: 0.7rem;
-  }
-
-  /* Message container adjustments */
-  .message-container {
-    max-width: 90%;
   }
 }

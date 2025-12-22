@@ -1,10 +1,7 @@
-import { SignJWT } from 'jose';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
-import { cookies } from 'next/headers';
-
-const SECRET_KEY = new TextEncoder().encode(process.env.JWT_SECRET || 'default_secret_key_change_me');
+import { signAuthToken, setAuthCookie } from '@/lib/auth';
 
 export async function POST(req) {
     try {
@@ -31,18 +28,8 @@ export async function POST(req) {
         });
 
         // Auto Login: Create Session
-        const token = await new SignJWT({ userId: user._id, email: user.email })
-            .setProtectedHeader({ alg: 'HS256' })
-            .setExpirationTime('7d')
-            .sign(SECRET_KEY);
-
-        cookies().set('token', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 60 * 60 * 24 * 7, // 7 days
-            path: '/'
-        });
+        const token = await signAuthToken({ userId: user._id, email: user.email });
+        setAuthCookie(token);
 
         return Response.json({
             success: true,
