@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Bot,
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
+import ImageLightbox from "./ImageLightbox";
 
 function normalizeCopiedText(text) {
   return (text ?? "")
@@ -50,16 +51,79 @@ export default function MessageList({
   onStartEdit,
 }) {
   const editTextareaRef = useRef(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState(null);
+
+  const openLightbox = (src) => {
+    if (!src) return;
+    setLightboxSrc(src);
+    setLightboxOpen(true);
+  };
+
+  const closeLightbox = () => {
+    setLightboxOpen(false);
+    setLightboxSrc(null);
+  };
+
+  function Thumb({ src, className = "" }) {
+    if (!src) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => openLightbox(src)}
+        className={`block text-left ${className}`}
+        title="点击查看"
+      >
+        <img
+          src={src}
+          alt=""
+          className="block max-w-[240px] max-h-[180px] w-auto h-auto object-cover rounded-lg border border-zinc-200 bg-zinc-50"
+          loading="lazy"
+        />
+      </button>
+    );
+  }
 
   const scrollEditIntoView = () => {
     const el = editTextareaRef.current;
+    const container = listRef?.current;
     if (!el) return;
+    // 优先只滚动消息列表容器，避免移动端键盘弹出时把整个页面滚飞
+    if (container && typeof container.scrollTo === "function") {
+      const elRect = el.getBoundingClientRect();
+      const cRect = container.getBoundingClientRect();
+      const delta = elRect.top - (cRect.top + cRect.height / 2);
+      container.scrollTo({ top: container.scrollTop + delta, behavior: "auto" });
+      return;
+    }
     el.scrollIntoView({ block: "center", behavior: "auto" });
   };
 
   useEffect(() => {
     if (editingMsgIndex === null || editingMsgIndex === undefined) return;
+    const el = editTextareaRef.current;
+    // 用 preventScroll 阻止浏览器为 focus 自己滚动（移动端键盘弹出时最容易乱跳）
+    if (el && typeof el.focus === "function") {
+      try {
+        el.focus({ preventScroll: true });
+      } catch {
+        el.focus();
+      }
+    }
+    // 首次对齐 + 等键盘/viewport 完成一次布局后再对齐一次
     requestAnimationFrame(scrollEditIntoView);
+    const t = setTimeout(scrollEditIntoView, 80);
+    return () => clearTimeout(t);
+  }, [editingMsgIndex]);
+
+  // 键盘弹出会触发 visualViewport resize；编辑中跟随一次，避免“必须按键才回正”
+  useEffect(() => {
+    if (editingMsgIndex === null || editingMsgIndex === undefined) return;
+    const vv = window.visualViewport;
+    if (!vv?.addEventListener) return;
+    const onResize = () => requestAnimationFrame(scrollEditIntoView);
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
   }, [editingMsgIndex]);
 
   const handleBubbleCopy = (e) => {
@@ -80,6 +144,8 @@ export default function MessageList({
       onScroll={onScroll}
       className={`flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll ${fontSizeClass}`}
     >
+      <ImageLightbox open={lightboxOpen} onClose={closeLightbox} src={lightboxSrc} />
+
       {messages.length === 0 ? (
         <div className="h-full flex flex-col items-center justify-center text-zinc-400">
           <Sparkles size={40} className="mb-4 text-zinc-300" />
@@ -131,7 +197,6 @@ export default function MessageList({
                     onChange={(e) => onEditingContentChange(e.target.value)}
                     onFocus={scrollEditIntoView}
                     className="w-full bg-white border border-zinc-300 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400 resize-none min-h-[80px]"
-                    autoFocus
                   />
                   <div className="flex gap-2 justify-end">
                     <button
@@ -168,12 +233,7 @@ export default function MessageList({
                             const url = part?.inlineData?.url;
                             if (typeof url === "string" && url) {
                               return (
-                                <img
-                                  key={idx}
-                                  src={url}
-                                  className="max-w-full h-auto rounded-lg"
-                                  alt=""
-                                />
+                                <Thumb key={idx} src={url} className="w-fit" />
                               );
                             }
                             return null;
@@ -182,11 +242,9 @@ export default function MessageList({
                       ) : (
                         <>
                           {msg.image && (
-                            <img
-                              src={msg.image}
-                              className="mb-2 max-h-48 rounded-lg"
-                              alt=""
-                            />
+                            <div className="mb-2 w-fit">
+                              <Thumb src={msg.image} />
+                            </div>
                           )}
 
                           <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
