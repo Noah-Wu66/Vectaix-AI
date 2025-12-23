@@ -145,17 +145,32 @@ export async function runChat({
 
       if (signal?.aborted) break;
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
+      
+      // SSE 格式: "data: {...}\n\n"
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
 
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const data = JSON.parse(line);
-        if (data.type === "thought") {
-          fullThought += data.content;
-        } else if (data.type === "text") {
-          fullText += data.content;
-          if (!thinkingEnded) thinkingEnded = true;
+      for (const event of events) {
+        const trimmed = event.trim();
+        if (!trimmed) continue;
+        
+        // 提取 data: 后的内容
+        const dataMatch = trimmed.match(/^data:\s*(.+)$/s);
+        if (!dataMatch) continue;
+        
+        const payload = dataMatch[1].trim();
+        if (payload === "[DONE]") continue;
+        
+        try {
+          const data = JSON.parse(payload);
+          if (data.type === "thought") {
+            fullThought += data.content;
+          } else if (data.type === "text") {
+            fullText += data.content;
+            if (!thinkingEnded) thinkingEnded = true;
+          }
+        } catch {
+          // 忽略解析错误（可能是填充空格）
         }
       }
 

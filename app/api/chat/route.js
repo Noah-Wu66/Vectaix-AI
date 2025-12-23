@@ -265,35 +265,46 @@ export async function POST(req) {
             });
 
         } else {
-            // Text Stream
+            // Text Stream - 使用 SSE 格式以解决移动端缓冲问题
             const streamResult = await ai.models.generateContentStream({
                 model: model,
                 contents: contents,
                 config: payload.config
             });
+            
+            const encoder = new TextEncoder();
+            // 填充字符串，用于突破缓冲区阈值（移动端浏览器/CDN 通常有 1KB-4KB 的缓冲）
+            const PADDING = ' '.repeat(256);
+            let paddingSent = false;
+            
             const stream = new ReadableStream({
                 async start(controller) {
                     let fullText = "";
                     let fullThought = "";
                     try {
                         for await (const chunk of streamResult) {
-                            // 从 candidates 中提取 parts
                             const parts = chunk.candidates?.[0]?.content?.parts || [];
 
                             for (const part of parts) {
+                                // 首次发送时附加填充以突破缓冲
+                                const padding = !paddingSent ? PADDING : '';
+                                paddingSent = true;
+                                
                                 if (part.thought && part.text) {
-                                    // 这是思考内容
                                     fullThought += part.text;
-                                    const data = JSON.stringify({ type: 'thought', content: part.text }) + '\n';
-                                    controller.enqueue(new TextEncoder().encode(data));
+                                    const data = `data: ${JSON.stringify({ type: 'thought', content: part.text })}${padding}\n\n`;
+                                    controller.enqueue(encoder.encode(data));
                                 } else if (part.text) {
-                                    // 这是正文内容
                                     fullText += part.text;
-                                    const data = JSON.stringify({ type: 'text', content: part.text }) + '\n';
-                                    controller.enqueue(new TextEncoder().encode(data));
+                                    const data = `data: ${JSON.stringify({ type: 'text', content: part.text })}${padding}\n\n`;
+                                    controller.enqueue(encoder.encode(data));
                                 }
                             }
                         }
+                        
+                        // 发送结束信号
+                        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                        
                         if (user && currentConversationId) {
                             await Conversation.findByIdAndUpdate(currentConversationId, {
                                 $push: {
@@ -311,7 +322,13 @@ export async function POST(req) {
                     } catch (err) { controller.error(err); }
                 }
             });
-            const headers = { 'Content-Type': 'application/x-ndjson; charset=utf-8' };
+            
+            const headers = {
+                'Content-Type': 'text/event-stream; charset=utf-8',
+                'Cache-Control': 'no-cache, no-transform',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no', // 禁用 nginx/反向代理缓冲
+            };
             if (currentConversationId) { headers['X-Conversation-Id'] = currentConversationId; }
             return new Response(stream, { headers });
         }
