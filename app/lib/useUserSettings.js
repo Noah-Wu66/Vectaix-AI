@@ -19,6 +19,7 @@ export function useUserSettings() {
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [imageSize, setImageSize] = useState("2K");
   const [systemPrompts, setSystemPrompts] = useState([]);
+  const [activePromptIds, setActivePromptIds] = useState({});
   const [activePromptId, setActivePromptId] = useState(null);
   const [themeMode, setThemeMode] = useState("system");
   const [fontSize, setFontSize] = useState("medium");
@@ -46,13 +47,18 @@ export function useUserSettings() {
       }
 
       setSettingsError(null);
+      const nextModel = typeof settings.model === "string" ? settings.model : model;
       if (typeof settings.model === "string") setModel(settings.model);
       setThinkingLevels(settings.thinkingLevels);
       if (typeof settings.historyLimit === "number") setHistoryLimit(settings.historyLimit);
       if (typeof settings.aspectRatio === "string") setAspectRatio(settings.aspectRatio);
       if (typeof settings.imageSize === "string") setImageSize(settings.imageSize);
       if (Array.isArray(settings.systemPrompts)) setSystemPrompts(settings.systemPrompts);
-      setActivePromptId(settings.activeSystemPromptId || null);
+      const ids = isPlainObject(settings.activeSystemPromptIds)
+        ? settings.activeSystemPromptIds
+        : (settings.activeSystemPromptId ? { [nextModel]: settings.activeSystemPromptId } : {});
+      setActivePromptIds(ids);
+      setActivePromptId(ids?.[nextModel] || settings.activeSystemPromptId || null);
       if (typeof settings.themeMode === "string") setThemeMode(settings.themeMode);
       if (typeof settings.fontSize === "string") setFontSize(settings.fontSize);
 
@@ -61,7 +67,7 @@ export function useUserSettings() {
       setSettingsError(e?.message || "Settings error");
       return null;
     }
-  }, []);
+  }, [model]);
 
   const saveSettings = useCallback(async (updates) => {
     try {
@@ -115,14 +121,16 @@ export function useUserSettings() {
       const settings = data?.settings;
       if (settings && typeof settings === "object") {
         if (Array.isArray(settings.systemPrompts)) setSystemPrompts(settings.systemPrompts);
-        setActivePromptId(settings.activeSystemPromptId || null);
+        const ids = isPlainObject(settings.activeSystemPromptIds) ? settings.activeSystemPromptIds : (activePromptIds || {});
+        setActivePromptIds(ids);
+        setActivePromptId(ids?.[model] || settings.activeSystemPromptId || null);
       }
       return settings ?? null;
     } catch (e) {
       setSettingsError(e?.message || "Settings error");
       return null;
     }
-  }, []);
+  }, [activePromptIds, model]);
 
   const deletePrompt = useCallback(async (promptId) => {
     try {
@@ -148,14 +156,16 @@ export function useUserSettings() {
       const settings = data?.settings;
       if (settings && typeof settings === "object") {
         if (Array.isArray(settings.systemPrompts)) setSystemPrompts(settings.systemPrompts);
-        setActivePromptId(settings.activeSystemPromptId || null);
+        const ids = isPlainObject(settings.activeSystemPromptIds) ? settings.activeSystemPromptIds : (activePromptIds || {});
+        setActivePromptIds(ids);
+        setActivePromptId(ids?.[model] || settings.activeSystemPromptId || null);
       }
       return settings ?? null;
     } catch (e) {
       setSettingsError(e?.message || "Settings error");
       return null;
     }
-  }, []);
+  }, [activePromptIds, model]);
 
   return {
     model,
@@ -170,6 +180,8 @@ export function useUserSettings() {
     setImageSize,
     systemPrompts,
     setSystemPrompts,
+    activePromptIds,
+    setActivePromptIds,
     activePromptId,
     setActivePromptId,
     themeMode,

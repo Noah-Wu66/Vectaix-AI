@@ -42,6 +42,12 @@ const UserSettingsSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         default: null
     },
+    // 按模型分别保存激活的系统提示词
+    // e.g. { "gemini-3-pro-preview": "<promptObjectId>", "gemini-3-flash-preview": "<promptObjectId>" }
+    activeSystemPromptIds: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({})
+    },
     themeMode: {
         type: String,
         default: 'system'  // light, dark, system

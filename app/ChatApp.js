@@ -46,6 +46,8 @@ export default function ChatApp() {
     imageSize,
     setImageSize,
     systemPrompts,
+    activePromptIds,
+    setActivePromptIds,
     activePromptId,
     setActivePromptId,
     themeMode,
@@ -206,8 +208,17 @@ export default function ChatApp() {
         setMessages(nextMessages);
         setCurrentConversationId(id);
         const convIsImage = isImageConversation(nextMessages);
-        if (convIsImage && model !== IMAGE_MODEL_ID) setModel(IMAGE_MODEL_ID);
-        if (!convIsImage && model === IMAGE_MODEL_ID) setModel(lastTextModelRef.current);
+        if (convIsImage && model !== IMAGE_MODEL_ID) {
+          setModel(IMAGE_MODEL_ID);
+          const remembered = activePromptIds?.[IMAGE_MODEL_ID];
+          if (remembered != null) setActivePromptId(remembered);
+        }
+        if (!convIsImage && model === IMAGE_MODEL_ID) {
+          const nextModel = lastTextModelRef.current;
+          setModel(nextModel);
+          const remembered = activePromptIds?.[nextModel];
+          if (remembered != null) setActivePromptId(remembered);
+        }
         if (window.innerWidth < 768) setSidebarOpen(false);
       }
     } catch (e) {
@@ -254,6 +265,8 @@ export default function ChatApp() {
     }
 
     setModel(nextModel);
+    const rememberedPromptId = activePromptIds?.[nextModel];
+    if (rememberedPromptId != null) setActivePromptId(rememberedPromptId);
     if (!nextIsImage) lastTextModelRef.current = nextModel;
     saveSettings({ model: nextModel });
   };
@@ -498,12 +511,12 @@ export default function ChatApp() {
   return (
     <div className={`app-root flex font-sans overflow-hidden ${isDark ? "dark-mode" : "light-mode"}`}>
       <ProfileModal open={showProfileModal} onClose={() => setShowProfileModal(false)} user={user} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} />
-      <ConfirmModal open={switchModelOpen} onClose={() => { setSwitchModelOpen(false); setPendingModel(null); }} onConfirm={() => { if (!pendingModel) return; startNewChat(); setModel(pendingModel); if (!isImageModel(pendingModel)) lastTextModelRef.current = pendingModel; saveSettings({ model: pendingModel }); }} title="切换模型将新建对话" message="图片模型与快速/思考模型不能出现在同一个会话中。切换将新建对话，当前对话会保留在历史记录中。" confirmText="新建对话并切换" cancelText="取消" />
+      <ConfirmModal open={switchModelOpen} onClose={() => { setSwitchModelOpen(false); setPendingModel(null); }} onConfirm={() => { if (!pendingModel) return; startNewChat(); setModel(pendingModel); const rememberedPromptId = activePromptIds?.[pendingModel]; if (rememberedPromptId != null) setActivePromptId(rememberedPromptId); if (!isImageModel(pendingModel)) lastTextModelRef.current = pendingModel; saveSettings({ model: pendingModel }); }} title="切换模型将新建对话" message="图片模型与快速/思考模型不能出现在同一个会话中。切换将新建对话，当前对话会保留在历史记录中。" confirmText="新建对话并切换" cancelText="取消" />
       <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onClose={() => setSidebarOpen(false)} />
       <div className="flex-1 flex flex-col w-full h-full relative">
         <ChatHeader onToggleSidebar={() => setSidebarOpen((v) => !v)} />
         <MessageList messages={messages} loading={loading} chatEndRef={chatEndRef} listRef={messageListRef} onScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} />
-        <Composer loading={loading} isStreaming={isStreaming} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevels?.[model]} setThinkingLevel={(v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v }))} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} imageSize={imageSize} setImageSize={setImageSize} systemPrompts={systemPrompts} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onAddPrompt={addPrompt} onDeletePrompt={deletePrompt} onSend={handleSendFromComposer} onStop={stopStreaming} />
+        <Composer loading={loading} isStreaming={isStreaming} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevels?.[model]} setThinkingLevel={(v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v }))} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} imageSize={imageSize} setImageSize={setImageSize} systemPrompts={systemPrompts} activePromptIds={activePromptIds} setActivePromptIds={setActivePromptIds} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onAddPrompt={addPrompt} onDeletePrompt={deletePrompt} onSend={handleSendFromComposer} onStop={stopStreaming} />
       </div>
     </div>
   );

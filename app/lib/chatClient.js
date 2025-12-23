@@ -15,7 +15,8 @@ export function buildChatConfig({
     cfg.thinkingLevel = thinkingLevel;
   }
 
-  const activePrompt = systemPrompts.find((p) => p._id === activePromptId);
+  const activeId = activePromptId == null ? null : String(activePromptId);
+  const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
   if (activePrompt) cfg.systemPrompt = activePrompt.content;
 
   if (imageUrl) {

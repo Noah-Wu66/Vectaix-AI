@@ -30,6 +30,7 @@ export async function GET() {
         });
         // 设置默认激活的提示词
         settings.activeSystemPromptId = settings.systemPrompts[0]._id;
+        settings.activeSystemPromptIds = { [settings.model]: settings.systemPrompts[0]._id };
         await settings.save();
     }
 
@@ -56,6 +57,8 @@ export async function PUT(req) {
             ...updates
         });
         settings.activeSystemPromptId = settings.systemPrompts[0]._id;
+        if (!isPlainObject(settings.activeSystemPromptIds)) settings.activeSystemPromptIds = {};
+        settings.activeSystemPromptIds[settings.model] = settings.activeSystemPromptId;
         await settings.save();
     } else {
         const ok = ensureThinkingLevels(settings);
@@ -66,7 +69,12 @@ export async function PUT(req) {
             settings.thinkingLevels = { ...(settings.thinkingLevels || {}), ...updates.thinkingLevels };
         }
 
-        const { thinkingLevels, userId, systemPrompts, updatedAt, ...rest } = updates || {};
+        // activeSystemPromptIds 允许局部更新：{ activeSystemPromptIds: { [modelId]: promptId } }
+        if (isPlainObject(updates?.activeSystemPromptIds)) {
+            settings.activeSystemPromptIds = { ...(settings.activeSystemPromptIds || {}), ...updates.activeSystemPromptIds };
+        }
+
+        const { thinkingLevels, activeSystemPromptIds, userId, systemPrompts, updatedAt, ...rest } = updates || {};
         Object.assign(settings, rest, { updatedAt: Date.now() });
         await settings.save();
     }
@@ -94,6 +102,7 @@ export async function POST(req) {
             systemPrompts: [{ name, content }]
         });
         settings.activeSystemPromptId = settings.systemPrompts[0]._id;
+        settings.activeSystemPromptIds = { [settings.model]: settings.systemPrompts[0]._id };
         await settings.save();
     } else {
         const ok = ensureThinkingLevels(settings);
@@ -131,6 +140,16 @@ export async function DELETE(req) {
     // 如果删除的是当前激活的，切换到第一个
     if (settings.activeSystemPromptId?.toString() === promptId) {
         settings.activeSystemPromptId = settings.systemPrompts[0]._id;
+    }
+
+    // 同步按模型映射：凡是指向被删除提示词的，都切到第一个
+    if (isPlainObject(settings.activeSystemPromptIds)) {
+        const nextDefaultId = settings.systemPrompts[0]?._id;
+        for (const k of Object.keys(settings.activeSystemPromptIds)) {
+            if (String(settings.activeSystemPromptIds[k]) === String(promptId)) {
+                settings.activeSystemPromptIds[k] = nextDefaultId;
+            }
+        }
     }
 
     settings.updatedAt = Date.now();

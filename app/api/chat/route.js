@@ -214,11 +214,9 @@ export async function POST(req) {
             model: model,
             contents: contents,
             config: {
-                ...(model !== 'gemini-3-pro-image-preview' ? {
-                    systemInstruction: {
-                        parts: [{ text: systemText }]
-                    }
-                } : {}),
+                systemInstruction: {
+                    parts: [{ text: systemText }]
+                },
                 ...config?.generationConfig
             }
         };

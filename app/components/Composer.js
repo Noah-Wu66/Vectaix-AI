@@ -26,6 +26,8 @@ export default function Composer({
   imageSize,
   setImageSize,
   systemPrompts,
+  activePromptIds,
+  setActivePromptIds,
   activePromptId,
   setActivePromptId,
   saveSettings,
@@ -241,9 +243,12 @@ export default function Composer({
                           <select
                             value={activePromptId || ""}
                             onChange={(e) => {
-                              setActivePromptId(e.target.value);
+                              const nextId = e.target.value;
+                              setActivePromptId(nextId);
+                              setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
                               saveSettings({
-                                activeSystemPromptId: e.target.value,
+                                activeSystemPromptId: nextId,
+                                activeSystemPromptIds: { [model]: nextId },
                               });
                             }}
                             className="flex-1 bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
