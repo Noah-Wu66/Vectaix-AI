@@ -274,14 +274,28 @@ export async function POST(req) {
             
             const encoder = new TextEncoder();
             // 填充字符串，用于突破缓冲区阈值（移动端浏览器/CDN 通常有 1KB-4KB 的缓冲）
-            const PADDING = ' '.repeat(256);
+            const PADDING = ' '.repeat(2048);
             let paddingSent = false;
+            const HEARTBEAT_INTERVAL_MS = 15000;
+            let heartbeatTimer = null;
             
             const stream = new ReadableStream({
                 async start(controller) {
                     let fullText = "";
                     let fullThought = "";
                     try {
+                        // 心跳：避免移动端/代理层在长时间无输出时断开连接
+                        const sendHeartbeat = () => {
+                            try {
+                                controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
+                            } catch (e) {
+                                // ignore
+                            }
+                        };
+                        heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+                        // 立即发送一次，尽早“打开”流并减少首包缓冲
+                        sendHeartbeat();
+
                         for await (const chunk of streamResult) {
                             const parts = chunk.candidates?.[0]?.content?.parts || [];
 
@@ -319,7 +333,14 @@ export async function POST(req) {
                             });
                         }
                         controller.close();
-                    } catch (err) { controller.error(err); }
+                    } catch (err) {
+                        controller.error(err);
+                    } finally {
+                        if (heartbeatTimer) {
+                            clearInterval(heartbeatTimer);
+                            heartbeatTimer = null;
+                        }
+                    }
                 }
             });
             
