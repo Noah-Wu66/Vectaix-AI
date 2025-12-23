@@ -463,7 +463,21 @@ export default function ChatApp() {
     userInterruptedRef.current = false;
 
     const nextMessages = messages.slice(0, index);
-    nextMessages.push({ ...messages[index], content: newContent });
+    const oldMsg = messages[index];
+    // 同时更新 content 和 parts（如果有），否则气泡会显示旧的 parts 文本
+    const updatedMsg = { ...oldMsg, content: newContent };
+    if (Array.isArray(oldMsg.parts) && oldMsg.parts.length > 0) {
+      // 保留图片等非文本 part，替换纯文本 part
+      const hasNonText = oldMsg.parts.some((p) => p?.inlineData);
+      if (hasNonText) {
+        updatedMsg.parts = oldMsg.parts.map((p) =>
+          p?.text != null && !p?.inlineData ? { ...p, text: newContent } : p
+        );
+      } else {
+        updatedMsg.parts = [{ text: newContent }];
+      }
+    }
+    nextMessages.push(updatedMsg);
     setMessages(nextMessages);
     cancelEdit();
 
