@@ -157,3 +157,31 @@ export async function DELETE(req) {
 
     return Response.json({ settings });
 }
+
+// 编辑系统提示词
+export async function PATCH(req) {
+    await dbConnect();
+    const user = await getAuthPayload();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { promptId, name, content } = await req.json();
+    if (!promptId || !name || !content) {
+        return Response.json({ error: 'promptId, name and content are required' }, { status: 400 });
+    }
+
+    const settings = await UserSettings.findOne({ userId: user.userId });
+    if (!settings) return Response.json({ error: 'Settings not found' }, { status: 404 });
+
+    const ok = ensureThinkingLevels(settings);
+    if (!ok.ok) return Response.json({ error: ok.error }, { status: 409 });
+
+    const p = settings.systemPrompts?.id?.(promptId);
+    if (!p) return Response.json({ error: 'Prompt not found' }, { status: 404 });
+
+    p.name = String(name);
+    p.content = String(content);
+    settings.updatedAt = Date.now();
+    await settings.save();
+
+    return Response.json({ settings });
+}

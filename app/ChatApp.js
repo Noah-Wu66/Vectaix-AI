@@ -60,6 +60,7 @@ export default function ChatApp() {
     saveSettings,
     addPrompt,
     deletePrompt,
+    updatePrompt,
   } = useUserSettings();
   const { isDark } = useThemeMode(themeMode);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -516,7 +517,7 @@ export default function ChatApp() {
       <div className="flex-1 flex flex-col w-full h-full relative">
         <ChatHeader onToggleSidebar={() => setSidebarOpen((v) => !v)} />
         <MessageList messages={messages} loading={loading} chatEndRef={chatEndRef} listRef={messageListRef} onScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} />
-        <Composer loading={loading} isStreaming={isStreaming} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevels?.[model]} setThinkingLevel={(v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v }))} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} imageSize={imageSize} setImageSize={setImageSize} systemPrompts={systemPrompts} activePromptIds={activePromptIds} setActivePromptIds={setActivePromptIds} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onAddPrompt={addPrompt} onDeletePrompt={deletePrompt} onSend={handleSendFromComposer} onStop={stopStreaming} />
+        <Composer loading={loading} isStreaming={isStreaming} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevels?.[model]} setThinkingLevel={(v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v }))} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} imageSize={imageSize} setImageSize={setImageSize} systemPrompts={systemPrompts} activePromptIds={activePromptIds} setActivePromptIds={setActivePromptIds} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onAddPrompt={addPrompt} onDeletePrompt={deletePrompt} onUpdatePrompt={updatePrompt} onSend={handleSendFromComposer} onStop={stopStreaming} />
       </div>
     </div>
   );

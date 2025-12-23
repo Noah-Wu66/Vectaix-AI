@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronUp,
+  Pencil,
   Paperclip,
   Plus,
   Send,
@@ -33,14 +34,18 @@ export default function Composer({
   saveSettings,
   onAddPrompt,
   onDeletePrompt,
+  onUpdatePrompt,
   onSend,
   onStop,
 }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAddPrompt, setShowAddPrompt] = useState(false);
+  const [showEditPrompt, setShowEditPrompt] = useState(false);
   const [newPromptName, setNewPromptName] = useState("");
   const [newPromptContent, setNewPromptContent] = useState("");
+  const [editPromptName, setEditPromptName] = useState("");
+  const [editPromptContent, setEditPromptContent] = useState("");
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const fileInputRef = useRef(null);
@@ -121,6 +126,26 @@ export default function Composer({
   const deleteCurrentPrompt = async () => {
     if (!activePromptId || systemPrompts.length <= 1) return;
     await onDeletePrompt?.(activePromptId);
+  };
+
+  const openEditPrompt = () => {
+    if (!activePromptId) return;
+    const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
+    setEditPromptName(cur?.name || "");
+    setEditPromptContent(cur?.content || "");
+    setShowAddPrompt(false);
+    setNewPromptName("");
+    setNewPromptContent("");
+    setShowEditPrompt((v) => !v);
+  };
+
+  const updateCurrentPrompt = async () => {
+    const name = editPromptName.trim();
+    const content = editPromptContent.trim();
+    if (!activePromptId || !name || !content) return;
+    const settings = await onUpdatePrompt?.({ promptId: activePromptId, name, content });
+    if (!settings) return;
+    setShowEditPrompt(false);
   };
 
   return (
@@ -318,15 +343,74 @@ export default function Composer({
                           )}
                         </AnimatePresence>
 
-                        {activePromptId && systemPrompts.length > 1 && (
-                          <button
-                            onClick={deleteCurrentPrompt}
-                            className="mt-2 text-xs text-red-500 hover:text-red-600"
-                            type="button"
-                          >
-                            删除当前提示词
-                          </button>
+                        {activePromptId && (
+                          <div className="mt-2 flex items-center justify-between gap-2">
+                            {systemPrompts.length > 1 ? (
+                              <button
+                                onClick={deleteCurrentPrompt}
+                                className="text-xs text-red-500 hover:text-red-600"
+                                type="button"
+                              >
+                                删除当前提示词
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-zinc-400">仅剩 1 个提示词不可删除</span>
+                            )}
+
+                            <button
+                              onClick={openEditPrompt}
+                              className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-800"
+                              type="button"
+                            >
+                              <Pencil size={14} />
+                              编辑当前提示词
+                            </button>
+                          </div>
                         )}
+
+                        <AnimatePresence>
+                          {showEditPrompt && activePromptId && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
+                                <input
+                                  type="text"
+                                  placeholder="名称"
+                                  value={editPromptName}
+                                  onChange={(e) => setEditPromptName(e.target.value)}
+                                  className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm focus:outline-none focus:border-zinc-400"
+                                />
+                                <textarea
+                                  placeholder="提示词内容..."
+                                  value={editPromptContent}
+                                  onChange={(e) => setEditPromptContent(e.target.value)}
+                                  className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:border-zinc-400"
+                                  rows={3}
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={updateCurrentPrompt}
+                                    className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white text-xs py-1.5 rounded-lg transition-colors"
+                                    type="button"
+                                  >
+                                    保存
+                                  </button>
+                                  <button
+                                    onClick={() => setShowEditPrompt(false)}
+                                    className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-600 text-xs py-1.5 rounded-lg transition-colors"
+                                    type="button"
+                                  >
+                                    取消
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
 
                       {/* History limit */}

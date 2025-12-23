@@ -167,6 +167,41 @@ export function useUserSettings() {
     }
   }, [activePromptIds, model]);
 
+  const updatePrompt = useCallback(async ({ promptId, name, content }) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ promptId, name, content }),
+      });
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        setSettingsError(data?.error || res.statusText || "Settings error");
+        return null;
+      }
+
+      setSettingsError(null);
+      const settings = data?.settings;
+      if (settings && typeof settings === "object") {
+        if (Array.isArray(settings.systemPrompts)) setSystemPrompts(settings.systemPrompts);
+        const ids = isPlainObject(settings.activeSystemPromptIds) ? settings.activeSystemPromptIds : (activePromptIds || {});
+        setActivePromptIds(ids);
+        setActivePromptId(ids?.[model] || settings.activeSystemPromptId || null);
+      }
+      return settings ?? null;
+    } catch (e) {
+      setSettingsError(e?.message || "Settings error");
+      return null;
+    }
+  }, [activePromptIds, model]);
+
   return {
     model,
     setModel,
@@ -194,6 +229,7 @@ export function useUserSettings() {
     saveSettings,
     addPrompt,
     deletePrompt,
+    updatePrompt,
   };
 }
 
