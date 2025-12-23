@@ -1,25 +1,16 @@
 "use client";
-
 import { useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { buildChatConfig, runChat } from "./lib/chatClient";
 import { useThemeMode } from "./lib/useThemeMode";
 import { useUserSettings } from "./lib/useUserSettings";
-
 import AuthModal from "./components/AuthModal";
-import ChatHeader from "./components/ChatHeader";
-import Composer from "./components/Composer";
-import ConfirmModal from "./components/ConfirmModal";
-import MessageList from "./components/MessageList";
-import ProfileModal from "./components/ProfileModal";
-import Sidebar from "./components/Sidebar";
-
+import ChatLayout from "./components/ChatLayout";
+import SettingsErrorView from "./components/SettingsErrorView";
 const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium", large: "text-size-large" };
 const IMAGE_MODEL_ID = "gemini-3-pro-image-preview";
 const isImageModel = (m) => m === IMAGE_MODEL_ID;
-const isImageConversation = (msgs = []) =>
-  msgs.some((m) => m?.role === "model" && m.type === "parts");
-
+const isImageConversation = (msgs = []) => msgs.some((m) => m?.role === "model" && m.type === "parts");
 export default function ChatApp() {
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -34,34 +25,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const {
-    model,
-    setModel,
-    thinkingLevels,
-    setThinkingLevels,
-    historyLimit,
-    setHistoryLimit,
-    aspectRatio,
-    setAspectRatio,
-    imageSize,
-    setImageSize,
-    systemPrompts,
-    activePromptIds,
-    setActivePromptIds,
-    activePromptId,
-    setActivePromptId,
-    themeMode,
-    setThemeMode,
-    fontSize,
-    setFontSize,
-    settingsError,
-    setSettingsError,
-    fetchSettings,
-    saveSettings,
-    addPrompt,
-    deletePrompt,
-    updatePrompt,
-  } = useUserSettings();
+  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, aspectRatio, setAspectRatio, imageSize, setImageSize, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, settingsError, setSettingsError, fetchSettings, saveSettings, addPrompt, deletePrompt, updatePrompt } = useUserSettings();
   const { isDark } = useThemeMode(themeMode);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
@@ -70,6 +34,9 @@ export default function ChatApp() {
   const messageListRef = useRef(null);
   const userInterruptedRef = useRef(false);
   const wasStreamingRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const lastUserScrollAtRef = useRef(0);
+  const scrollRafRef = useRef(0);
   const chatAbortRef = useRef(null);
   const lastTextModelRef = useRef("gemini-3-pro-preview");
   const [switchModelOpen, setSwitchModelOpen] = useState(false);
@@ -77,16 +44,29 @@ export default function ChatApp() {
   const isStreaming = messages.some((m) => m.isStreaming);
   const SCROLL_BOTTOM_THRESHOLD = 80;
 
-  const isNearBottom = (el) => {
-    if (!el) return true;
-    const distance = el.scrollHeight - (el.scrollTop + el.clientHeight);
-    return distance <= SCROLL_BOTTOM_THRESHOLD;
+  const distanceToBottom = (el) => {
+    if (!el) return 0;
+    const top = Number.isFinite(el.scrollTop) ? el.scrollTop : 0;
+    const height = Number.isFinite(el.clientHeight) ? el.clientHeight : 0;
+    const scrollHeight = Number.isFinite(el.scrollHeight) ? el.scrollHeight : 0;
+    return Math.max(0, scrollHeight - (top + height));
   };
+
+  const isNearBottom = (el) => distanceToBottom(el) <= SCROLL_BOTTOM_THRESHOLD;
 
   const scrollToBottom = () => {
     const el = messageListRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+    const top = Math.max(0, el.scrollHeight - el.clientHeight);
+    el.scrollTop = top;
+  };
+
+  const scheduleScrollToBottom = () => {
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      scrollToBottom();
+    });
   };
 
   useEffect(() => {
@@ -129,18 +109,51 @@ export default function ChatApp() {
 
   useEffect(() => {
     if (userInterruptedRef.current) return;
-    // 让 DOM/Markdown 渲染完成后再滚动，避免桌面端回流导致“看起来没到底”
-    requestAnimationFrame(scrollToBottom);
-  }, [messages]);
+    // 让 DOM/Markdown 渲染完成后再滚动；移动端在键盘/viewport 变化时也更稳定
+    scheduleScrollToBottom();
+    if (!isStreaming) return;
+    const t = setTimeout(() => {
+      if (userInterruptedRef.current) return;
+      scrollToBottom();
+    }, 60);
+    return () => clearTimeout(t);
+  }, [messages, isStreaming]);
 
   const handleMessageListScroll = () => {
     const el = messageListRef.current;
     if (!el) return;
-    // 旧逻辑用 scrollTop 变化判断“用户上滑”，但桌面端渲染回流/图片加载可能造成 scrollTop 轻微回跳，导致误判并永久关闭自动滚动。
     if (isStreaming) {
-      userInterruptedRef.current = !isNearBottom(el);
+      const top = el.scrollTop;
+      const last = lastScrollTopRef.current;
+      lastScrollTopRef.current = top;
+      if (isNearBottom(el)) {
+        userInterruptedRef.current = false;
+        return;
+      }
+      // 只在“用户真实手势导致的上滑”时才中断自动滚动，避免移动端键盘/地址栏/回流引起的误判
+      const recentUserGesture = Date.now() - lastUserScrollAtRef.current < 800;
+      const moved = Math.abs(top - last) > 2;
+      if (recentUserGesture && moved) userInterruptedRef.current = true;
     }
   };
+
+  useEffect(() => {
+    const el = messageListRef.current;
+    if (!el) return;
+    const markUserGesture = () => {
+      lastUserScrollAtRef.current = Date.now();
+    };
+    el.addEventListener("touchstart", markUserGesture, { passive: true });
+    el.addEventListener("touchmove", markUserGesture, { passive: true });
+    el.addEventListener("wheel", markUserGesture, { passive: true });
+    el.addEventListener("mousedown", markUserGesture);
+    return () => {
+      el.removeEventListener("touchstart", markUserGesture);
+      el.removeEventListener("touchmove", markUserGesture);
+      el.removeEventListener("wheel", markUserGesture);
+      el.removeEventListener("mousedown", markUserGesture);
+    };
+  }, []);
 
   useEffect(() => {
     const el = messageListRef.current;
@@ -496,29 +509,7 @@ export default function ChatApp() {
   }
 
   if (settingsError) {
-    return (
-      <div className={`app-root flex font-sans overflow-hidden ${isDark ? "dark-mode" : "light-mode"}`}>
-        <div className="flex-1 flex items-center justify-center px-6">
-          <div className="w-full max-w-md bg-white border border-zinc-200 rounded-2xl p-6 text-center">
-            <div className="text-lg font-semibold text-zinc-900">设置数据不兼容</div>
-            <div className="mt-2 text-sm text-zinc-600 break-words">{settingsError}</div>
-            <button onClick={handleLogout} className="mt-6 w-full px-4 py-2 rounded-xl bg-zinc-600 hover:bg-zinc-500 text-white text-sm font-medium transition-colors" type="button">退出登录</button>
-          </div>
-        </div>
-      </div>
-    );
+    return <SettingsErrorView isDark={isDark} settingsError={settingsError} onLogout={handleLogout} />;
   }
-
-  return (
-    <div className={`app-root flex font-sans overflow-hidden ${isDark ? "dark-mode" : "light-mode"}`}>
-      <ProfileModal open={showProfileModal} onClose={() => setShowProfileModal(false)} user={user} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} />
-      <ConfirmModal open={switchModelOpen} onClose={() => { setSwitchModelOpen(false); setPendingModel(null); }} onConfirm={() => { if (!pendingModel) return; startNewChat(); setModel(pendingModel); const rememberedPromptId = activePromptIds?.[pendingModel]; if (rememberedPromptId != null) setActivePromptId(rememberedPromptId); if (!isImageModel(pendingModel)) lastTextModelRef.current = pendingModel; saveSettings({ model: pendingModel }); }} title="切换模型将新建对话" message="图片模型与快速/思考模型不能出现在同一个会话中。切换将新建对话，当前对话会保留在历史记录中。" confirmText="新建对话并切换" cancelText="取消" />
-      <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onClose={() => setSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col w-full h-full relative">
-        <ChatHeader onToggleSidebar={() => setSidebarOpen((v) => !v)} />
-        <MessageList messages={messages} loading={loading} chatEndRef={chatEndRef} listRef={messageListRef} onScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} />
-        <Composer loading={loading} isStreaming={isStreaming} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevels?.[model]} setThinkingLevel={(v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v }))} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} imageSize={imageSize} setImageSize={setImageSize} systemPrompts={systemPrompts} activePromptIds={activePromptIds} setActivePromptIds={setActivePromptIds} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onAddPrompt={addPrompt} onDeletePrompt={deletePrompt} onUpdatePrompt={updatePrompt} onSend={handleSendFromComposer} onStop={stopStreaming} />
-      </div>
-    </div>
-  );
+  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} switchModelOpen={switchModelOpen} onCloseSwitchModel={() => { setSwitchModelOpen(false); setPendingModel(null); }} onConfirmSwitchModel={() => { if (!pendingModel) return; startNewChat(); setModel(pendingModel); const rememberedPromptId = activePromptIds?.[pendingModel]; if (rememberedPromptId != null) setActivePromptId(rememberedPromptId); if (!isImageModel(pendingModel)) lastTextModelRef.current = pendingModel; saveSettings({ model: pendingModel }); }} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} composerProps={{ loading, isStreaming, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })), historyLimit, setHistoryLimit, aspectRatio, setAspectRatio, imageSize, setImageSize, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, saveSettings, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
 }
