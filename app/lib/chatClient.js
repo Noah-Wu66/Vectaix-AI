@@ -243,7 +243,21 @@ export async function runChat({
             const idx = prev.findIndex((m) => m?.id === streamMsgId);
             // 如果用户已经发了下一条消息，就不要覆盖，避免竞态把新消息“抹掉”
             if (idx !== -1 && idx !== prev.length - 1) return prev;
-            return lastModelLen(serverMessages) >= lastModelLen(prev) ? serverMessages : prev;
+            if (lastModelLen(serverMessages) < lastModelLen(prev)) return prev;
+
+            // 保留流式消息的 id，避免 MessageList key 变化导致整条气泡重新挂载（framer-motion 入场动画 => “闪一下”）
+            if (streamMsgId != null) {
+              const next = serverMessages.slice();
+              for (let i = next.length - 1; i >= 0; i -= 1) {
+                if (next[i]?.role === "model") {
+                  next[i] = { ...next[i], id: streamMsgId };
+                  return next;
+                }
+              }
+              return next;
+            }
+
+            return serverMessages;
           });
         } catch {
           // ignore
