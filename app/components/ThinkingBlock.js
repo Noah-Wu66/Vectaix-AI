@@ -7,14 +7,17 @@ import Markdown from "./Markdown";
 
 export default function ThinkingBlock({ thought, isStreaming }) {
   const [collapsed, setCollapsed] = useState(true);
-  const endRef = useRef(null);
+  const containerRef = useRef(null);
 
   useEffect(() => {
     setCollapsed(!isStreaming);
   }, [isStreaming]);
 
   useEffect(() => {
-    if (!collapsed) endRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (collapsed) return;
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
   }, [thought, collapsed]);
 
   return (
@@ -59,11 +62,11 @@ export default function ThinkingBlock({ thought, isStreaming }) {
             animate={{ height: 200, opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-y-auto w-full text-xs text-zinc-600"
+            ref={containerRef}
           >
             <Markdown className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs">
               {thought}
             </Markdown>
-            <div ref={endRef} />
           </motion.div>
         )}
       </AnimatePresence>

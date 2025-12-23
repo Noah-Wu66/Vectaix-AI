@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   Bot,
@@ -17,6 +18,8 @@ export default function MessageList({
   messages,
   loading,
   chatEndRef,
+  listRef,
+  onScroll,
   editingMsgIndex,
   editingContent,
   fontSizeClass,
@@ -29,8 +32,25 @@ export default function MessageList({
   onRegenerateModelMessage,
   onStartEdit,
 }) {
+  const editTextareaRef = useRef(null);
+
+  const scrollEditIntoView = () => {
+    const el = editTextareaRef.current;
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "auto" });
+  };
+
+  useEffect(() => {
+    if (editingMsgIndex === null || editingMsgIndex === undefined) return;
+    requestAnimationFrame(scrollEditIntoView);
+  }, [editingMsgIndex]);
+
   return (
-    <div className={`flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll ${fontSizeClass}`}>
+    <div
+      ref={listRef}
+      onScroll={onScroll}
+      className={`flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll ${fontSizeClass}`}
+    >
       {messages.length === 0 ? (
         <div className="h-full flex flex-col items-center justify-center text-zinc-400">
           <Sparkles size={40} className="mb-4 text-zinc-300" />
@@ -77,8 +97,10 @@ export default function MessageList({
               {editingMsgIndex === i && msg.role === "user" ? (
                 <div className="w-full space-y-2">
                   <textarea
+                    ref={editTextareaRef}
                     value={editingContent}
                     onChange={(e) => onEditingContentChange(e.target.value)}
+                    onFocus={scrollEditIntoView}
                     className="w-full bg-white border border-zinc-300 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400 resize-none min-h-[80px]"
                     autoFocus
                   />
@@ -103,7 +125,7 @@ export default function MessageList({
                   {(hasParts || msg.content || msg.image || msg.type === "image") && (
                     <div
                       className={`msg-bubble px-4 py-3 rounded-2xl ${msg.role === "user"
-                        ? "bg-white border border-zinc-200 text-zinc-800"
+                        ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
                         : "bg-zinc-100 text-zinc-800"
                         }`}
                     >
