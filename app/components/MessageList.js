@@ -14,6 +14,23 @@ import {
 import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
 
+function normalizeCopiedText(text) {
+  return (text ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\u00A0/g, " ")
+    // 把浏览器从块级元素/段落转换出来的“超多空行”压缩到最多 1 个空行
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function isSelectionFullyInsideElement(el) {
+  const sel = window.getSelection?.();
+  if (!sel || sel.rangeCount === 0) return false;
+  const anchor = sel.anchorNode;
+  const focus = sel.focusNode;
+  if (!anchor || !focus) return false;
+  return el.contains(anchor) && el.contains(focus);
+}
+
 export default function MessageList({
   messages,
   loading,
@@ -44,6 +61,18 @@ export default function MessageList({
     if (editingMsgIndex === null || editingMsgIndex === undefined) return;
     requestAnimationFrame(scrollEditIntoView);
   }, [editingMsgIndex]);
+
+  const handleBubbleCopy = (e) => {
+    const el = e.currentTarget;
+    if (!el) return;
+    if (!isSelectionFullyInsideElement(el)) return;
+
+    const selText = window.getSelection?.()?.toString?.() ?? "";
+    if (!selText) return;
+
+    e.preventDefault();
+    e.clipboardData?.setData("text/plain", normalizeCopiedText(selText));
+  };
 
   return (
     <div
@@ -128,6 +157,7 @@ export default function MessageList({
                         ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
                         : "bg-zinc-100 text-zinc-800"
                         }`}
+                      onCopy={handleBubbleCopy}
                     >
                       {hasParts ? (
                         <div className="flex flex-col gap-2">
