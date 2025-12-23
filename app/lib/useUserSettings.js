@@ -17,6 +17,7 @@ export function useUserSettings() {
   const [thinkingLevels, setThinkingLevels] = useState(DEFAULT_THINKING_LEVELS);
   const [historyLimit, setHistoryLimit] = useState(0);
   const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [imageSize, setImageSize] = useState("2K");
   const [systemPrompts, setSystemPrompts] = useState([]);
   const [activePromptId, setActivePromptId] = useState(null);
   const [themeMode, setThemeMode] = useState("system");
@@ -49,6 +50,7 @@ export function useUserSettings() {
       setThinkingLevels(settings.thinkingLevels);
       if (typeof settings.historyLimit === "number") setHistoryLimit(settings.historyLimit);
       if (typeof settings.aspectRatio === "string") setAspectRatio(settings.aspectRatio);
+      if (typeof settings.imageSize === "string") setImageSize(settings.imageSize);
       if (Array.isArray(settings.systemPrompts)) setSystemPrompts(settings.systemPrompts);
       setActivePromptId(settings.activeSystemPromptId || null);
       if (typeof settings.themeMode === "string") setThemeMode(settings.themeMode);
@@ -164,6 +166,8 @@ export function useUserSettings() {
     setHistoryLimit,
     aspectRatio,
     setAspectRatio,
+    imageSize,
+    setImageSize,
     systemPrompts,
     setSystemPrompts,
     activePromptId,

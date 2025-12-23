@@ -2,6 +2,7 @@ export function buildChatConfig({
   model,
   thinkingLevel,
   aspectRatio,
+  imageSize,
   mediaResolution,
   systemPrompts,
   activePromptId,
@@ -9,7 +10,7 @@ export function buildChatConfig({
 }) {
   const cfg = {};
   if (model === "gemini-3-pro-image-preview") {
-    cfg.imageConfig = { aspectRatio: aspectRatio, imageSize: "4K" };
+    cfg.imageConfig = { aspectRatio: aspectRatio, imageSize: imageSize };
   } else {
     cfg.thinkingLevel = thinkingLevel;
   }
@@ -38,6 +39,8 @@ export async function runChat({
   setMessages,
   setLoading,
   signal,
+  mode,
+  messagesForRegenerate,
 }) {
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
@@ -52,6 +55,8 @@ export async function runChat({
     history: historyPayload,
     historyLimit,
     conversationId,
+    ...(mode ? { mode } : {}),
+    ...(mode === "regenerate" ? { messages: messagesForRegenerate || [] } : {}),
   };
 
   setLoading(true);

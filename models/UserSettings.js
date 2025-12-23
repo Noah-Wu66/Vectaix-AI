@@ -33,6 +33,10 @@ const UserSettingsSchema = new mongoose.Schema({
         type: String,
         default: '16:9'
     },
+    imageSize: {
+        type: String,
+        default: '2K'
+    },
     systemPrompts: [SystemPromptSchema],
     activeSystemPromptId: {
         type: mongoose.Schema.Types.ObjectId,

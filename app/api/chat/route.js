@@ -77,9 +77,29 @@ function mimeTypeToExt(mimeType) {
     return mimeType.split(';')[0].split('/')[1] || 'png';
 }
 
+function sanitizeStoredMessage(msg) {
+    if (!msg || typeof msg !== 'object') return null;
+    if (msg.role !== 'user' && msg.role !== 'model') return null;
+    const out = {
+        role: msg.role,
+        content: typeof msg.content === 'string' ? msg.content : '',
+        type: typeof msg.type === 'string' ? msg.type : 'text',
+    };
+    if (isNonEmptyString(msg.image)) out.image = msg.image;
+    if (isNonEmptyString(msg.mimeType)) out.mimeType = msg.mimeType;
+    if (isNonEmptyString(msg.thought)) out.thought = msg.thought;
+    if (Array.isArray(msg.parts) && msg.parts.length > 0) out.parts = msg.parts;
+    return out;
+}
+
+function sanitizeStoredMessages(messages) {
+    if (!Array.isArray(messages)) return [];
+    return messages.map(sanitizeStoredMessage).filter(Boolean);
+}
+
 export async function POST(req) {
     try {
-        const { prompt, model, config, history = [], historyLimit = 0, conversationId } = await req.json();
+        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages } = await req.json();
 
         const auth = await getAuthPayload();
         let user = null;
@@ -113,32 +133,61 @@ export async function POST(req) {
         // 2) Prepare Request Contents
         let contents = [];
         const limit = Number.parseInt(historyLimit);
+        const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
+        let storedMessagesForRegenerate = null;
+
+        if (isRegenerateMode) {
+            const sanitized = sanitizeStoredMessages(messages);
+            const conv = await Conversation.findOneAndUpdate(
+                { _id: currentConversationId, userId: user.userId },
+                { $set: { messages: sanitized, updatedAt: Date.now() } },
+                { new: true }
+            ).select('messages');
+            if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
+            storedMessagesForRegenerate = conv.messages || [];
+        }
 
         if (isImageModel) {
-            const conv = await Conversation.findOne({ _id: currentConversationId, userId: user.userId }).select('messages');
+            const conv = isRegenerateMode
+                ? { messages: storedMessagesForRegenerate }
+                : await Conversation.findOne({ _id: currentConversationId, userId: user.userId }).select('messages');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
             const msgs = (limit > 0 && Number.isFinite(limit)) ? conv.messages.slice(-limit) : conv.messages;
             contents = await buildGeminiContentsFromMessages(msgs);
         } else {
-            const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
-            effectiveHistory.forEach(msg => {
-                if (msg.role === 'user' || msg.role === 'model') {
-                    // History remains text-only fallback to save bandwidth
-                    contents.push({
-                        role: msg.role,
-                        parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
-                    });
-                }
-            });
+            if (isRegenerateMode) {
+                const msgs = storedMessagesForRegenerate || [];
+                const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
+                effectiveMsgs.forEach(msg => {
+                    if (msg.role === 'user' || msg.role === 'model') {
+                        contents.push({
+                            role: msg.role,
+                            parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
+                        });
+                    }
+                });
+            } else {
+                const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
+                effectiveHistory.forEach(msg => {
+                    if (msg.role === 'user' || msg.role === 'model') {
+                        // History remains text-only fallback to save bandwidth
+                        contents.push({
+                            role: msg.role,
+                            parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
+                        });
+                    }
+                });
+            }
         }
 
-        let currentParts = [{ text: prompt }];
+        // regenerate 模式：最后一条用户消息已经在 messages 里了，这里不再追加“新用户消息”
+        let currentParts = isRegenerateMode ? null : [{ text: prompt }];
 
         // Handle Image Input (URL from Blob)
         let dbImageEntry = null;
         let dbImageMimeType = null;
 
-        if (config?.image?.url) {
+        if (!isRegenerateMode && config?.image?.url) {
             const { base64Data, mimeType } = await fetchImageAsBase64(config.image.url);
 
             currentParts.push({
@@ -152,10 +201,12 @@ export async function POST(req) {
             dbImageMimeType = mimeType;
         }
 
-        contents.push({
-            role: "user",
-            parts: currentParts
-        });
+        if (!isRegenerateMode) {
+            contents.push({
+                role: "user",
+                parts: currentParts
+            });
+        }
 
         // 2. Prepare Payload
         const systemText = config?.systemPrompt || "You are a helpful AI assistant.";
@@ -190,7 +241,7 @@ export async function POST(req) {
         }
 
         // 3. Database Logic
-        if (user) {
+        if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
             if (isNonEmptyString(dbImageEntry)) {

@@ -43,6 +43,8 @@ export default function ChatApp() {
     setHistoryLimit,
     aspectRatio,
     setAspectRatio,
+    imageSize,
+    setImageSize,
     systemPrompts,
     activePromptId,
     setActivePromptId,
@@ -64,13 +66,25 @@ export default function ChatApp() {
   const chatEndRef = useRef(null);
   const messageListRef = useRef(null);
   const userInterruptedRef = useRef(false);
-  const lastScrollTopRef = useRef(0);
   const wasStreamingRef = useRef(false);
   const chatAbortRef = useRef(null);
   const lastTextModelRef = useRef("gemini-3-pro-preview");
   const [switchModelOpen, setSwitchModelOpen] = useState(false);
   const [pendingModel, setPendingModel] = useState(null);
   const isStreaming = messages.some((m) => m.isStreaming);
+  const SCROLL_BOTTOM_THRESHOLD = 80;
+
+  const isNearBottom = (el) => {
+    if (!el) return true;
+    const distance = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    return distance <= SCROLL_BOTTOM_THRESHOLD;
+  };
+
+  const scrollToBottom = () => {
+    const el = messageListRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+  };
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -106,30 +120,39 @@ export default function ChatApp() {
   useEffect(() => {
     if (!wasStreamingRef.current && isStreaming) {
       userInterruptedRef.current = false;
-      const el = messageListRef.current;
-      if (el) lastScrollTopRef.current = el.scrollTop;
     }
     wasStreamingRef.current = isStreaming;
   }, [isStreaming]);
 
   useEffect(() => {
     if (userInterruptedRef.current) return;
-    const el = messageListRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
-    lastScrollTopRef.current = el.scrollTop;
+    // 让 DOM/Markdown 渲染完成后再滚动，避免桌面端回流导致“看起来没到底”
+    requestAnimationFrame(scrollToBottom);
   }, [messages]);
 
   const handleMessageListScroll = () => {
     const el = messageListRef.current;
     if (!el) return;
-    const currentTop = el.scrollTop;
-    const prevTop = lastScrollTopRef.current;
-    if (isStreaming && currentTop < prevTop) {
-      userInterruptedRef.current = true;
+    // 旧逻辑用 scrollTop 变化判断“用户上滑”，但桌面端渲染回流/图片加载可能造成 scrollTop 轻微回跳，导致误判并永久关闭自动滚动。
+    if (isStreaming) {
+      userInterruptedRef.current = !isNearBottom(el);
     }
-    lastScrollTopRef.current = currentTop;
   };
+
+  useEffect(() => {
+    const el = messageListRef.current;
+    if (!el) return;
+    if (typeof ResizeObserver === "undefined") return;
+
+    const ro = new ResizeObserver(() => {
+      if (!isStreaming) return;
+      if (userInterruptedRef.current) return;
+      scrollToBottom();
+    });
+
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isStreaming]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -325,6 +348,7 @@ export default function ChatApp() {
         model,
         thinkingLevel: thinkingLevels?.[model],
         aspectRatio,
+        imageSize,
         mediaResolution,
         systemPrompts,
         activePromptId,
@@ -370,6 +394,7 @@ export default function ChatApp() {
       model,
       thinkingLevel: thinkingLevels?.[model],
       aspectRatio,
+      imageSize,
       mediaResolution,
       systemPrompts,
       activePromptId,
@@ -387,6 +412,7 @@ export default function ChatApp() {
       fetchConversations,
       setMessages,
       setLoading, signal: (chatAbortRef.current = new AbortController()).signal,
+      ...(isImageModel(model) ? {} : { mode: "regenerate", messagesForRegenerate: historyWithUser }),
     });
   };
 
@@ -418,6 +444,7 @@ export default function ChatApp() {
       model,
       thinkingLevel: thinkingLevels?.[model],
       aspectRatio,
+      imageSize,
       mediaResolution,
       systemPrompts,
       activePromptId,
@@ -435,6 +462,7 @@ export default function ChatApp() {
       fetchConversations,
       setMessages,
       setLoading, signal: (chatAbortRef.current = new AbortController()).signal,
+      ...(isImageModel(model) ? {} : { mode: "regenerate", messagesForRegenerate: nextMessages }),
     });
   };
 
@@ -474,25 +502,8 @@ export default function ChatApp() {
       <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onClose={() => setSidebarOpen(false)} />
       <div className="flex-1 flex flex-col w-full h-full relative">
         <ChatHeader onToggleSidebar={() => setSidebarOpen((v) => !v)} />
-        <MessageList
-          messages={messages}
-          loading={loading}
-          chatEndRef={chatEndRef}
-          listRef={messageListRef}
-          onScroll={handleMessageListScroll}
-          editingMsgIndex={editingMsgIndex}
-          editingContent={editingContent}
-          fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""}
-          onEditingContentChange={setEditingContent}
-          onCancelEdit={cancelEdit}
-          onSubmitEdit={submitEditAndRegenerate}
-          onCopy={copyMessage}
-          onDeleteModelMessage={deleteModelMessage}
-          onDeleteUserMessage={deleteUserMessage}
-          onRegenerateModelMessage={regenerateModelMessage}
-          onStartEdit={startEdit}
-        />
-        <Composer loading={loading} isStreaming={isStreaming} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevels?.[model]} setThinkingLevel={(v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v }))} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} systemPrompts={systemPrompts} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onAddPrompt={addPrompt} onDeletePrompt={deletePrompt} onSend={handleSendFromComposer} onStop={stopStreaming} />
+        <MessageList messages={messages} loading={loading} chatEndRef={chatEndRef} listRef={messageListRef} onScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} />
+        <Composer loading={loading} isStreaming={isStreaming} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevels?.[model]} setThinkingLevel={(v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v }))} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} imageSize={imageSize} setImageSize={setImageSize} systemPrompts={systemPrompts} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onAddPrompt={addPrompt} onDeletePrompt={deletePrompt} onSend={handleSendFromComposer} onStop={stopStreaming} />
       </div>
     </div>
   );

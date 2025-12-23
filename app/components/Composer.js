@@ -23,6 +23,8 @@ export default function Composer({
   setHistoryLimit,
   aspectRatio,
   setAspectRatio,
+  imageSize,
+  setImageSize,
   systemPrompts,
   activePromptId,
   setActivePromptId,
@@ -87,9 +89,8 @@ export default function Composer({
   };
 
   const handleKeyDown = (e) => {
-    // 移动端/触摸设备不使用 Enter 发送，让用户通过按钮发送
-    const isTouchDevice = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-    if (e.key === "Enter" && !e.shiftKey && !isTouchDevice) {
+    // 全设备统一：Enter 换行，Shift + Enter 发送
+    if (e.key === "Enter" && e.shiftKey) {
       e.preventDefault();
       if (!loading) handleSend();
     }
@@ -370,6 +371,21 @@ export default function Composer({
                             <option value="3:4">3:4</option>
                             <option value="4:5">4:5</option>
                             <option value="5:4">5:4</option>
+                          </select>
+                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mt-3 mb-2 block">
+                            分辨率
+                          </label>
+                          <select
+                            value={imageSize || "2K"}
+                            onChange={(e) => {
+                              setImageSize(e.target.value);
+                              saveSettings({ imageSize: e.target.value });
+                            }}
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
+                          >
+                            <option value="1K">1K</option>
+                            <option value="2K">2K</option>
+                            <option value="4K">4K</option>
                           </select>
                         </div>
                       ) : model === "gemini-3-flash-preview" ? (
