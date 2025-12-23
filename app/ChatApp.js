@@ -334,6 +334,9 @@ export default function ChatApp() {
   const handleSendFromComposer = async ({ text, image }) => {
     if ((!text && !image) || loading) return;
 
+    // 发送消息时重置滚动中断标记，确保自动滚动到底部
+    userInterruptedRef.current = false;
+
     const userMsg = {
       role: "user",
       content: text,
@@ -393,6 +396,9 @@ export default function ChatApp() {
     const userMsgIndex = index - 1;
     if (userMsgIndex < 0 || messages[userMsgIndex]?.role !== "user") return;
 
+    // 重新生成时重置滚动中断标记
+    userInterruptedRef.current = false;
+
     const userMsg = messages[userMsgIndex];
     const historyWithUser = messages.slice(0, index);
     setMessages(historyWithUser);
@@ -436,6 +442,9 @@ export default function ChatApp() {
     if (loading || editingMsgIndex === null) return;
     const newContent = editingContent.trim();
     if (!newContent) return;
+
+    // 编辑提交时重置滚动中断标记
+    userInterruptedRef.current = false;
 
     const nextMessages = messages.slice(0, index);
     nextMessages.push({ ...messages[index], content: newContent });
