@@ -5,6 +5,9 @@ import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 async function fetchImageAsBase64(url) {
     const imgRes = await fetch(url);
     if (!imgRes.ok) throw new Error("Failed to fetch image from blob");
@@ -18,20 +21,15 @@ function isNonEmptyString(value) {
     return typeof value === 'string' && value.trim().length > 0;
 }
 
+function createHttpError(status, message) {
+    const err = new Error(message);
+    err.status = status;
+    return err;
+}
+
 function getStoredPartsFromMessage(msg) {
     if (Array.isArray(msg?.parts) && msg.parts.length > 0) return msg.parts;
-
-    const parts = [];
-    if (isNonEmptyString(msg?.content)) parts.push({ text: msg.content });
-    if (isNonEmptyString(msg?.image)) {
-        parts.push({
-            inlineData: {
-                url: msg.image,
-                ...(isNonEmptyString(msg?.mimeType) ? { mimeType: msg.mimeType } : {}),
-            },
-        });
-    }
-    return parts;
+    return null;
 }
 
 async function storedPartToRequestPart(part) {
@@ -61,6 +59,9 @@ async function buildGeminiContentsFromMessages(messages) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
         const storedParts = getStoredPartsFromMessage(msg);
+        if (!storedParts) {
+            throw createHttpError(409, 'Outdated conversation: missing message parts');
+        }
         const parts = [];
         for (const storedPart of storedParts) {
             const p = await storedPartToRequestPart(storedPart);
@@ -356,6 +357,7 @@ export async function POST(req) {
 
     } catch (error) {
         console.error("Gemini API Error:", error);
-        return Response.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+        const status = typeof error?.status === 'number' ? error.status : 500;
+        return Response.json({ error: error.message || "Internal Server Error" }, { status });
     }
 }

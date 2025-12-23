@@ -64,7 +64,7 @@ export default function ThinkingBlock({ thought, isStreaming }) {
             className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-y-auto w-full text-xs text-zinc-600"
             ref={containerRef}
           >
-            <Markdown className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs">
+            <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs">
               {thought}
             </Markdown>
           </motion.div>

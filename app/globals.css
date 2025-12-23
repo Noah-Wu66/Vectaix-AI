@@ -4,11 +4,13 @@
 
 :root {
   color-scheme: light;
-  --background: #ffffff;
-  --surface: #fafafa;
-  --foreground: #18181b;
-  --muted: #71717a;
-  --border: #e4e4e7;
+  --bg-primary: #ffffff;
+  --bg-secondary: #fafafa;
+  --bg-tertiary: #f4f4f5;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+  --border-color: #e4e4e7;
   --border-light: #f4f4f5;
   --primary: #52525b;
   --radius: 12px;
@@ -27,8 +29,8 @@ body {
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
   font-family: var(--font-sans);
   overflow-x: hidden;
   min-height: 100%;
@@ -86,7 +88,7 @@ h5,
 h6 {
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--foreground);
+  color: var(--text-primary);
 }
 
 /* Scrollbar */
@@ -132,7 +134,7 @@ h6 {
 
 /* Prose for Markdown */
 .prose {
-  color: var(--foreground);
+  color: var(--text-primary);
 }
 
 .prose p {
@@ -196,18 +198,18 @@ h6 {
 
 .prose th,
 .prose td {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-color);
   padding: 0.5em 0.75em;
   text-align: left;
 }
 
 .prose th {
-  background: var(--surface);
+  background: var(--bg-secondary);
   font-weight: 600;
 }
 
 .prose tr:nth-child(even) {
-  background: var(--surface);
+  background: var(--bg-secondary);
 }
 
 /* Task Lists */
@@ -218,17 +220,17 @@ h6 {
 
 /* Blockquote */
 .prose blockquote {
-  border-left: 3px solid var(--border);
+  border-left: 3px solid var(--border-color);
   padding-left: 1em;
   margin: 1em 0;
-  color: var(--muted);
+  color: var(--text-muted);
   font-style: italic;
 }
 
 /* Horizontal Rule */
 .prose hr {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-color);
   margin: 1.5em 0;
 }
 
@@ -287,12 +289,6 @@ h6 {
   --text-muted: #a1a1aa;
   --border-color: #3f3f46;
   --border-light: #27272a;
-  /* 兼容旧变量：Markdown 标题/引用等使用的是 --foreground/--muted/--border */
-  --background: var(--bg-primary);
-  --surface: var(--bg-secondary);
-  --foreground: var(--text-primary);
-  --muted: var(--text-muted);
-  --border: var(--border-color);
   background-color: var(--bg-primary);
   color: var(--text-primary);
 }

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { buildChatConfig, runChat } from "./lib/chatClient";
+import { useThemeMode } from "./lib/useThemeMode";
+import { useUserSettings } from "./lib/useUserSettings";
 
 import AuthModal from "./components/AuthModal";
 import ChatHeader from "./components/ChatHeader";
@@ -16,7 +18,7 @@ const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium"
 const IMAGE_MODEL_ID = "gemini-3-pro-image-preview";
 const isImageModel = (m) => m === IMAGE_MODEL_ID;
 const isImageConversation = (msgs = []) =>
-  msgs.some((m) => m?.role === "model" && (m.type === "parts" || m.type === "image"));
+  msgs.some((m) => m?.role === "model" && m.type === "parts");
 
 export default function ChatApp() {
   const [user, setUser] = useState(null);
@@ -31,16 +33,31 @@ export default function ChatApp() {
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState("gemini-3-pro-preview");
-  const [thinkingLevel, setThinkingLevel] = useState("high");
-  const [mediaResolution] = useState("media_resolution_high");
-  const [historyLimit, setHistoryLimit] = useState(0);
-  const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [systemPrompts, setSystemPrompts] = useState([]);
-  const [activePromptId, setActivePromptId] = useState(null);
-  const [themeMode, setThemeMode] = useState("system"); // light, dark, system
-  const [isDark, setIsDark] = useState(false);
-  const [fontSize, setFontSize] = useState("medium"); // small, medium, large
+  const mediaResolution = "media_resolution_high";
+  const {
+    model,
+    setModel,
+    thinkingLevels,
+    setThinkingLevels,
+    historyLimit,
+    setHistoryLimit,
+    aspectRatio,
+    setAspectRatio,
+    systemPrompts,
+    activePromptId,
+    setActivePromptId,
+    themeMode,
+    setThemeMode,
+    fontSize,
+    setFontSize,
+    settingsError,
+    setSettingsError,
+    fetchSettings,
+    saveSettings,
+    addPrompt,
+    deletePrompt,
+  } = useUserSettings();
+  const { isDark } = useThemeMode(themeMode);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
 
@@ -55,73 +72,6 @@ export default function ChatApp() {
   const [pendingModel, setPendingModel] = useState(null);
   const isStreaming = messages.some((m) => m.isStreaming);
 
-  const fetchSettings = async () => {
-    try {
-      const res = await fetch("/api/settings");
-      const data = await res.json();
-      if (data.settings) {
-        const nextModel = data.settings.model || "gemini-3-pro-preview";
-        setModel(nextModel);
-        if (!isImageModel(nextModel)) lastTextModelRef.current = nextModel;
-        setThinkingLevel(data.settings.thinkingLevel || "high");
-        setHistoryLimit(data.settings.historyLimit || 0);
-        setAspectRatio(data.settings.aspectRatio || "16:9");
-        setSystemPrompts(data.settings.systemPrompts || []);
-        setActivePromptId(data.settings.activeSystemPromptId || null);
-        setThemeMode(data.settings.themeMode || "system");
-        setFontSize(data.settings.fontSize || "medium");
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const saveSettings = async (updates) => {
-    try {
-      await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useEffect(() => {
-    const updateTheme = () => {
-      if (themeMode === "system") {
-        setIsDark(window.matchMedia("(prefers-color-scheme: dark)").matches);
-      } else {
-        setIsDark(themeMode === "dark");
-      }
-    };
-
-    updateTheme();
-
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => {
-      if (themeMode === "system") updateTheme();
-    };
-    mediaQuery.addEventListener("change", handler);
-    return () => mediaQuery.removeEventListener("change", handler);
-  }, [themeMode]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (isDark) {
-      root.classList.add("dark-mode");
-      document.body.classList.add("dark-mode");
-      root.style.colorScheme = "dark";
-      root.style.backgroundColor = "#18181b";
-    } else {
-      root.classList.remove("dark-mode");
-      document.body.classList.remove("dark-mode");
-      root.style.colorScheme = "light";
-      root.style.backgroundColor = "#ffffff";
-    }
-  }, [isDark]);
-
   useEffect(() => {
     fetch("/api/auth/me")
       .then((res) => res.json())
@@ -129,7 +79,13 @@ export default function ChatApp() {
         if (data.user) {
           setUser(data.user);
           fetchConversations();
-          fetchSettings();
+          (async () => {
+            const s = await fetchSettings();
+            const nextModel = s?.model;
+            if (typeof nextModel === "string" && !isImageModel(nextModel)) {
+              lastTextModelRef.current = nextModel;
+            }
+          })();
         } else {
           setShowAuthModal(true);
         }
@@ -193,7 +149,13 @@ export default function ChatApp() {
       setUser(data.user);
       setShowAuthModal(false);
       fetchConversations();
-      fetchSettings();
+      (async () => {
+        const s = await fetchSettings();
+        const nextModel = s?.model;
+        if (typeof nextModel === "string" && !isImageModel(nextModel)) {
+          lastTextModelRef.current = nextModel;
+        }
+      })();
     } else {
       alert(data.error);
     }
@@ -205,6 +167,7 @@ export default function ChatApp() {
     setMessages([]);
     setConversations([]);
     setCurrentConversationId(null);
+    setSettingsError(null);
     setShowAuthModal(true);
     setShowProfileModal(false);
   };
@@ -213,7 +176,7 @@ export default function ChatApp() {
     setLoading(true);
     try {
       const res = await fetch(`/api/conversations/${id}`);
-      const data = await res.json();
+      const data = await res.json(); if (!res.ok) throw new Error(data?.error || res.statusText);
       if (data.conversation) {
         const nextMessages = data.conversation.messages || [];
         userInterruptedRef.current = false;
@@ -225,7 +188,7 @@ export default function ChatApp() {
         if (window.innerWidth < 768) setSidebarOpen(false);
       }
     } catch (e) {
-      console.error(e);
+      console.error(e); alert(e?.message || "会话数据不兼容");
     } finally {
       setLoading(false);
     }
@@ -360,7 +323,7 @@ export default function ChatApp() {
 
       const config = buildChatConfig({
         model,
-        thinkingLevel,
+        thinkingLevel: thinkingLevels?.[model],
         aspectRatio,
         mediaResolution,
         systemPrompts,
@@ -405,7 +368,7 @@ export default function ChatApp() {
 
     const config = buildChatConfig({
       model,
-      thinkingLevel,
+      thinkingLevel: thinkingLevels?.[model],
       aspectRatio,
       mediaResolution,
       systemPrompts,
@@ -453,7 +416,7 @@ export default function ChatApp() {
 
     const config = buildChatConfig({
       model,
-      thinkingLevel,
+      thinkingLevel: thinkingLevels?.[model],
       aspectRatio,
       mediaResolution,
       systemPrompts,
@@ -484,29 +447,28 @@ export default function ChatApp() {
     setFontSize(size);
     saveSettings({ fontSize: size });
   };
-
   if (showAuthModal) {
     return (
-      <AuthModal
-        authMode={authMode}
-        email={email}
-        password={password}
-        confirmPassword={confirmPassword}
-        onEmailChange={setEmail}
-        onPasswordChange={setPassword}
-        onConfirmPasswordChange={setConfirmPassword}
-        onSubmit={handleAuth}
-        onToggleMode={() =>
-          setAuthMode((m) => (m === "login" ? "register" : "login"))
-        }
-      />
+      <AuthModal authMode={authMode} email={email} password={password} confirmPassword={confirmPassword} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onSubmit={handleAuth} onToggleMode={() => setAuthMode((m) => (m === "login" ? "register" : "login"))} />
+    );
+  }
+
+  if (settingsError) {
+    return (
+      <div className={`app-root flex font-sans overflow-hidden ${isDark ? "dark-mode" : "light-mode"}`}>
+        <div className="flex-1 flex items-center justify-center px-6">
+          <div className="w-full max-w-md bg-white border border-zinc-200 rounded-2xl p-6 text-center">
+            <div className="text-lg font-semibold text-zinc-900">设置数据不兼容</div>
+            <div className="mt-2 text-sm text-zinc-600 break-words">{settingsError}</div>
+            <button onClick={handleLogout} className="mt-6 w-full px-4 py-2 rounded-xl bg-zinc-600 hover:bg-zinc-500 text-white text-sm font-medium transition-colors" type="button">退出登录</button>
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <div
-      className={`app-root flex font-sans overflow-hidden ${isDark ? "dark-mode" : "light-mode"}`}
-    >
+    <div className={`app-root flex font-sans overflow-hidden ${isDark ? "dark-mode" : "light-mode"}`}>
       <ProfileModal open={showProfileModal} onClose={() => setShowProfileModal(false)} user={user} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} />
       <ConfirmModal open={switchModelOpen} onClose={() => { setSwitchModelOpen(false); setPendingModel(null); }} onConfirm={() => { if (!pendingModel) return; startNewChat(); setModel(pendingModel); if (!isImageModel(pendingModel)) lastTextModelRef.current = pendingModel; saveSettings({ model: pendingModel }); }} title="切换模型将新建对话" message="图片模型与快速/思考模型不能出现在同一个会话中。切换将新建对话，当前对话会保留在历史记录中。" confirmText="新建对话并切换" cancelText="取消" />
       <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onClose={() => setSidebarOpen(false)} />
@@ -530,7 +492,7 @@ export default function ChatApp() {
           onRegenerateModelMessage={regenerateModelMessage}
           onStartEdit={startEdit}
         />
-        <Composer loading={loading} isStreaming={isStreaming} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevel} setThinkingLevel={setThinkingLevel} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} systemPrompts={systemPrompts} setSystemPrompts={setSystemPrompts} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onSend={handleSendFromComposer} onStop={stopStreaming} />
+        <Composer loading={loading} isStreaming={isStreaming} model={model} onModelChange={requestModelChange} thinkingLevel={thinkingLevels?.[model]} setThinkingLevel={(v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v }))} historyLimit={historyLimit} setHistoryLimit={setHistoryLimit} aspectRatio={aspectRatio} setAspectRatio={setAspectRatio} systemPrompts={systemPrompts} activePromptId={activePromptId} setActivePromptId={setActivePromptId} saveSettings={saveSettings} onAddPrompt={addPrompt} onDeletePrompt={deletePrompt} onSend={handleSendFromComposer} onStop={stopStreaming} />
       </div>
     </div>
   );

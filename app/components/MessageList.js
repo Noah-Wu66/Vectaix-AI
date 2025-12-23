@@ -122,7 +122,7 @@ export default function MessageList({
                 </div>
               ) : (
                 <>
-                  {(hasParts || msg.content || msg.image || msg.type === "image") && (
+                  {(hasParts || msg.content || msg.image) && (
                     <div
                       className={`msg-bubble px-4 py-3 rounded-2xl ${msg.role === "user"
                         ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
@@ -133,7 +133,7 @@ export default function MessageList({
                         <div className="flex flex-col gap-2">
                           {msg.parts.map((part, idx) => {
                             if (part && typeof part.text === "string" && part.text.trim()) {
-                              return <Markdown key={idx}>{part.text}</Markdown>;
+                              return <Markdown key={idx} enableHighlight={!msg.isStreaming}>{part.text}</Markdown>;
                             }
                             const url = part?.inlineData?.url;
                             if (typeof url === "string" && url) {
@@ -159,15 +159,7 @@ export default function MessageList({
                             />
                           )}
 
-                          {msg.type === "image" ? (
-                            <img
-                              src={`data:${msg.mimeType};base64,${msg.content}`}
-                              className="max-w-full h-auto rounded-lg"
-                              alt=""
-                            />
-                          ) : (
-                            <Markdown>{msg.content}</Markdown>
-                          )}
+                          <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
                         </>
                       )}
                     </div>

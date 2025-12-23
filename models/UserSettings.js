@@ -16,9 +16,14 @@ const UserSettingsSchema = new mongoose.Schema({
         type: String,
         default: 'gemini-3-pro-preview'
     },
-    thinkingLevel: {
-        type: String,
-        default: 'high'
+    // 按模型分别保存思考深度（不兼容旧 thinkingLevel 字段）
+    // e.g. { "gemini-3-flash-preview": "medium", "gemini-3-pro-preview": "high" }
+    thinkingLevels: {
+        type: mongoose.Schema.Types.Mixed,
+        default: () => ({
+            'gemini-3-flash-preview': 'high',
+            'gemini-3-pro-preview': 'high'
+        })
     },
     historyLimit: {
         type: Number,

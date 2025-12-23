@@ -24,10 +24,11 @@ export default function Composer({
   aspectRatio,
   setAspectRatio,
   systemPrompts,
-  setSystemPrompts,
   activePromptId,
   setActivePromptId,
   saveSettings,
+  onAddPrompt,
+  onDeletePrompt,
   onSend,
   onStop,
 }) {
@@ -104,43 +105,25 @@ export default function Composer({
 
   const addPrompt = async () => {
     if (!newPromptName.trim() || !newPromptContent.trim()) return;
-    const res = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: newPromptName.trim(),
-        content: newPromptContent.trim(),
-      }),
+    const settings = await onAddPrompt?.({
+      name: newPromptName.trim(),
+      content: newPromptContent.trim(),
     });
-    const data = await res.json();
-    if (data.settings) {
-      setSystemPrompts(data.settings.systemPrompts);
-      setNewPromptName("");
-      setNewPromptContent("");
-      setShowAddPrompt(false);
-    }
+    if (!settings) return;
+    setNewPromptName("");
+    setNewPromptContent("");
+    setShowAddPrompt(false);
   };
 
   const deleteCurrentPrompt = async () => {
     if (!activePromptId || systemPrompts.length <= 1) return;
-    const res = await fetch("/api/settings", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ promptId: activePromptId }),
-    });
-    const data = await res.json();
-    if (data.settings) {
-      setSystemPrompts(data.settings.systemPrompts);
-      setActivePromptId(data.settings.activeSystemPromptId);
-    }
+    await onDeletePrompt?.(activePromptId);
   };
 
   return (
     <div className="p-3 md:p-4 bg-white border-t border-zinc-200 z-20 shrink-0 pb-safe">
       <div className="max-w-3xl mx-auto space-y-2">
-        {/* Top Row */}
         <div className="flex items-center gap-2">
-          {/* Model Selector */}
           <div className="relative">
             <button
               onClick={() => setShowModelMenu(!showModelMenu)}
@@ -204,7 +187,6 @@ export default function Composer({
             </AnimatePresence>
           </div>
 
-          {/* Settings */}
           <div className="relative">
             <button
               onClick={() => setShowSettings(!showSettings)}
@@ -399,7 +381,7 @@ export default function Composer({
                             value={thinkingLevel}
                             onChange={(e) => {
                               setThinkingLevel(e.target.value);
-                              saveSettings({ thinkingLevel: e.target.value });
+                              saveSettings({ thinkingLevels: { [model]: e.target.value } });
                             }}
                             className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
                           >
@@ -418,7 +400,7 @@ export default function Composer({
                             value={thinkingLevel}
                             onChange={(e) => {
                               setThinkingLevel(e.target.value);
-                              saveSettings({ thinkingLevel: e.target.value });
+                              saveSettings({ thinkingLevels: { [model]: e.target.value } });
                             }}
                             className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
                           >
@@ -434,7 +416,6 @@ export default function Composer({
             </AnimatePresence>
           </div>
 
-          {/* Selected Image */}
           {selectedImage && (
             <div className="flex items-center gap-2 px-2 py-1 bg-zinc-100 rounded-lg border border-zinc-200">
               <span className="text-xs text-zinc-600 truncate max-w-[80px]">
@@ -451,7 +432,6 @@ export default function Composer({
           )}
         </div>
 
-        {/* Bottom Row: Input & Send */}
         <div className="relative flex items-center">
           <input
             type="file"

@@ -6,14 +6,15 @@ import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 
-export default function Markdown({ children, className = "" }) {
+export default function Markdown({ children, className = "", enableHighlight = true }) {
+  const rehypePlugins = enableHighlight ? [rehypeKatex, rehypeHighlight] : [rehypeKatex];
   return (
     <div
       className={`prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none ${className}`}
     >
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
-        rehypePlugins={[rehypeKatex, rehypeHighlight]}
+        rehypePlugins={rehypePlugins}
         components={{
           code: ({ inline, className, children, ...props }) => {
             if (inline) {

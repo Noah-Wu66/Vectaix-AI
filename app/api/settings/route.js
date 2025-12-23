@@ -2,6 +2,18 @@ import dbConnect from '@/lib/db';
 import UserSettings from '@/models/UserSettings';
 import { getAuthPayload } from '@/lib/auth';
 
+function isPlainObject(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function ensureThinkingLevels(settings) {
+    const levels = settings?.thinkingLevels;
+    if (!isPlainObject(levels)) {
+        return { ok: false, error: 'Outdated settings: missing thinkingLevels' };
+    }
+    return { ok: true };
+}
+
 // 获取用户设置
 export async function GET() {
     await dbConnect();
@@ -21,6 +33,9 @@ export async function GET() {
         await settings.save();
     }
 
+    const ok = ensureThinkingLevels(settings);
+    if (!ok.ok) return Response.json({ error: ok.error }, { status: 409 });
+
     return Response.json({ settings });
 }
 
@@ -37,10 +52,22 @@ export async function PUT(req) {
     if (!settings) {
         settings = await UserSettings.create({
             userId: user.userId,
+            systemPrompts: [{ name: '默认助手', content: 'You are a helpful AI assistant.' }],
             ...updates
         });
+        settings.activeSystemPromptId = settings.systemPrompts[0]._id;
+        await settings.save();
     } else {
-        Object.assign(settings, updates, { updatedAt: Date.now() });
+        const ok = ensureThinkingLevels(settings);
+        if (!ok.ok) return Response.json({ error: ok.error }, { status: 409 });
+
+        // thinkingLevels 允许局部更新：{ thinkingLevels: { [modelId]: level } }
+        if (isPlainObject(updates?.thinkingLevels)) {
+            settings.thinkingLevels = { ...(settings.thinkingLevels || {}), ...updates.thinkingLevels };
+        }
+
+        const { thinkingLevels, userId, systemPrompts, updatedAt, ...rest } = updates || {};
+        Object.assign(settings, rest, { updatedAt: Date.now() });
         await settings.save();
     }
 
@@ -69,6 +96,9 @@ export async function POST(req) {
         settings.activeSystemPromptId = settings.systemPrompts[0]._id;
         await settings.save();
     } else {
+        const ok = ensureThinkingLevels(settings);
+        if (!ok.ok) return Response.json({ error: ok.error }, { status: 409 });
+
         settings.systemPrompts.push({ name, content });
         settings.updatedAt = Date.now();
         await settings.save();
@@ -87,6 +117,9 @@ export async function DELETE(req) {
 
     const settings = await UserSettings.findOne({ userId: user.userId });
     if (!settings) return Response.json({ error: 'Settings not found' }, { status: 404 });
+
+    const ok = ensureThinkingLevels(settings);
+    if (!ok.ok) return Response.json({ error: ok.error }, { status: 409 });
 
     // 防止删除最后一个提示词
     if (settings.systemPrompts.length <= 1) {

@@ -4,8 +4,8 @@ const MessageSchema = new mongoose.Schema({
     role: { type: String, required: true }, // 'user' or 'model'
     content: { type: String, default: '' },
     thought: { type: String }, // For model thinking blocks
-    type: { type: String, default: 'text' }, // 'text' or 'image'
-    image: { type: String }, // URL (recommended). Legacy base64 is discouraged.
+    type: { type: String, default: 'text', enum: ['text', 'parts', 'error'] },
+    image: { type: String }, // URL
     mimeType: { type: String },
     // Gemini multi-turn image editing: persist sanitized content.parts with thoughtSignature
     // - text parts: { text, thought?, thoughtSignature? }

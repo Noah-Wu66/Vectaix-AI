@@ -72,33 +72,18 @@ export async function runChat({
         fetchConversations();
       }
 
-      if (data.type === "parts" && Array.isArray(data.parts)) {
-        const textContent = data.parts
-          .map((p) => (p && typeof p.text === "string" ? p.text : ""))
-          .filter(Boolean)
-          .join("");
-        setMessages((prev) => [
-          ...prev,
-          { role: "model", type: "parts", parts: data.parts, content: textContent },
-        ]);
-      } else if (data.type === "image") {
-        // Legacy fallback
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "model",
-            content: data.data,
-            mimeType: data.mimeType,
-            type: "image",
-          },
-        ]);
-      } else {
-        // Legacy fallback
-        setMessages((prev) => [
-          ...prev,
-          { role: "model", content: data.content, type: "text" },
-        ]);
+      if (data.type !== "parts" || !Array.isArray(data.parts)) {
+        throw new Error("Unexpected response");
       }
+
+      const textContent = data.parts
+        .map((p) => (p && typeof p.text === "string" ? p.text : ""))
+        .filter(Boolean)
+        .join("");
+      setMessages((prev) => [
+        ...prev,
+        { role: "model", type: "parts", parts: data.parts, content: textContent },
+      ]);
       return;
     }
 
@@ -139,6 +124,36 @@ export async function runChat({
     let thinkingEnded = false;
     let sawDone = false;
     const convIdForSync = newConvId || currentConversationId || conversationId;
+
+    let flushScheduled = false;
+    const flushStreamingMessage = () => {
+      flushScheduled = false;
+      setMessages((prev) => {
+        if (!Array.isArray(prev) || prev.length === 0) return prev;
+
+        const lastIdx = prev.length - 1;
+        const isLast = prev[lastIdx]?.id === streamMsgId;
+        const idx = isLast ? lastIdx : prev.findIndex((m) => m?.id === streamMsgId);
+        if (idx < 0) return prev;
+
+        const base = prev[idx] || {};
+        const nextMsg = { ...base, content: fullText, thought: fullThought, isThinkingStreaming: !thinkingEnded };
+        if (base.content === nextMsg.content && base.thought === nextMsg.thought && base.isThinkingStreaming === nextMsg.isThinkingStreaming) {
+          return prev;
+        }
+
+        const next = prev.slice();
+        next[idx] = nextMsg;
+        return next;
+      });
+    };
+
+    const scheduleFlush = () => {
+      if (flushScheduled) return;
+      flushScheduled = true;
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(flushStreamingMessage);
+      else setTimeout(flushStreamingMessage, 0);
+    };
 
     const applyEventPayload = (payload) => {
       const p = (payload ?? "").trim();
@@ -193,31 +208,13 @@ export async function runChat({
       consumeSseBuffer(false);
 
       if (signal?.aborted) break;
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === streamMsgId
-            ? { ...msg, content: fullText, thought: fullThought, isThinkingStreaming: !thinkingEnded }
-            : msg,
-        ),
-      );
+      scheduleFlush();
     }
 
     // flush TextDecoder / 最后一段 buffer（避免最后一个事件未以空行结尾时被漏掉）
     buffer += decoder.decode();
     consumeSseBuffer(true);
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === streamMsgId
-          ? { ...msg, content: fullText, thought: fullThought, isThinkingStreaming: !thinkingEnded }
-          : msg,
-      ),
-    );
-
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === streamMsgId ? { ...msg, isStreaming: false } : msg,
-      ),
-    );
+    flushStreamingMessage();
 
     // 流式结束后做一次“最终对齐”：移动端偶发断流/缓冲时，避免必须刷新才能看到完整内容
     if (!signal?.aborted && sawDone && convIdForSync) {
