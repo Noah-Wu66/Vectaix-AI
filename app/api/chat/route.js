@@ -233,7 +233,7 @@ export async function POST(req) {
             };
         }
 
-        // 为所有模型启用 Google Search 联网功能
+        // 启用 Google Search 工具（所有模型均可联网）
         if (!payload.config) payload.config = {};
         payload.config.tools = [{ googleSearch: {} }];
 
