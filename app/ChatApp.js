@@ -109,7 +109,7 @@ export default function ChatApp() {
 
   useEffect(() => {
     if (userInterruptedRef.current) return;
-    // 让 DOM/Markdown 渲染完成后再滚动；移动端在键盘/viewport 变化时也更稳定
+    // 等待 DOM/Markdown 渲染完毕后执行滚动，提升移动端键盘弹出时的体验稳定性
     scheduleScrollToBottom();
     if (!isStreaming) return;
     const t = setTimeout(() => {
