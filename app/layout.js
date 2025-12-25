@@ -5,6 +5,16 @@ import 'highlight.js/styles/github-dark.css';
 export const metadata = {
     title: 'Vectaix AI',
     description: 'Experience the next generation of AI with Gemini 3 Pro, Flash, and Image models.',
+    manifest: '/manifest.webmanifest',
+    icons: {
+        icon: '/icon.svg',
+        apple: '/apple-icon',
+    },
+    appleWebApp: {
+        capable: true,
+        title: 'Vectaix AI',
+        statusBarStyle: 'default',
+    },
 };
 
 export const viewport = {
