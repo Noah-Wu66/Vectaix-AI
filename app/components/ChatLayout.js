@@ -38,8 +38,13 @@ export default function ChatLayout({
   onMessageListScroll,
   editingMsgIndex,
   editingContent,
+  editingImageAction,
+  editingImage,
   fontSizeClass,
   onEditingContentChange,
+  onEditingImageSelect,
+  onEditingImageRemove,
+  onEditingImageKeep,
   onCancelEdit,
   onSubmitEdit,
   onCopy,
@@ -56,7 +61,29 @@ export default function ChatLayout({
       <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} onStartNewChat={onStartNewChat} onLoadConversation={onLoadConversation} onDeleteConversation={onDeleteConversation} onRenameConversation={onRenameConversation} onOpenProfile={onOpenProfile} onLogout={onLogout} onClose={onCloseSidebar} />
       <div className="flex-1 flex flex-col w-full h-full relative">
         <ChatHeader onToggleSidebar={onToggleSidebar} />
-        <MessageList messages={messages} loading={loading} chatEndRef={chatEndRef} listRef={messageListRef} onScroll={onMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} fontSizeClass={fontSizeClass} onEditingContentChange={onEditingContentChange} onCancelEdit={onCancelEdit} onSubmitEdit={onSubmitEdit} onCopy={onCopy} onDeleteModelMessage={onDeleteModelMessage} onDeleteUserMessage={onDeleteUserMessage} onRegenerateModelMessage={onRegenerateModelMessage} onStartEdit={onStartEdit} />
+        <MessageList
+          messages={messages}
+          loading={loading}
+          chatEndRef={chatEndRef}
+          listRef={messageListRef}
+          onScroll={onMessageListScroll}
+          editingMsgIndex={editingMsgIndex}
+          editingContent={editingContent}
+          editingImageAction={editingImageAction}
+          editingImage={editingImage}
+          fontSizeClass={fontSizeClass}
+          onEditingContentChange={onEditingContentChange}
+          onEditingImageSelect={onEditingImageSelect}
+          onEditingImageRemove={onEditingImageRemove}
+          onEditingImageKeep={onEditingImageKeep}
+          onCancelEdit={onCancelEdit}
+          onSubmitEdit={onSubmitEdit}
+          onCopy={onCopy}
+          onDeleteModelMessage={onDeleteModelMessage}
+          onDeleteUserMessage={onDeleteUserMessage}
+          onRegenerateModelMessage={onRegenerateModelMessage}
+          onStartEdit={onStartEdit}
+        />
         <Composer {...composerProps} />
       </div>
     </div>

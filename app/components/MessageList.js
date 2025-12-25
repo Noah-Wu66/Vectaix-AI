@@ -6,10 +6,12 @@ import {
   Bot,
   Copy,
   Edit3,
+  Paperclip,
   RotateCcw,
   Sparkles,
   Trash2,
   User,
+  X,
 } from "lucide-react";
 import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
@@ -40,8 +42,13 @@ export default function MessageList({
   onScroll,
   editingMsgIndex,
   editingContent,
+  editingImageAction,
+  editingImage,
   fontSizeClass,
   onEditingContentChange,
+  onEditingImageSelect,
+  onEditingImageRemove,
+  onEditingImageKeep,
   onCancelEdit,
   onSubmitEdit,
   onCopy,
@@ -51,6 +58,7 @@ export default function MessageList({
   onStartEdit,
 }) {
   const editTextareaRef = useRef(null);
+  const editFileInputRef = useRef(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState(null);
 
@@ -78,11 +86,52 @@ export default function MessageList({
           src={src}
           alt=""
           className="block max-w-[240px] max-h-[180px] w-auto h-auto object-cover rounded-lg border border-zinc-200 bg-zinc-50"
-          loading="lazy"
+          // 聊天里的图片应该优先显示；lazy 会在列表更新/重排时明显变慢
+          loading="eager"
+          decoding="async"
         />
       </button>
     );
   }
+
+  const getMessageImageSrc = (msg) => {
+    if (msg && typeof msg.image === "string" && msg.image) return msg.image;
+    if (Array.isArray(msg?.parts)) {
+      for (const p of msg.parts) {
+        const url = p?.inlineData?.url;
+        if (typeof url === "string" && url) return url;
+      }
+    }
+    return null;
+  };
+
+  const isHttpUrl = (src) => typeof src === "string" && /^https?:\/\//i.test(src);
+  const isDataImageUrl = (src) => typeof src === "string" && /^data:image\//i.test(src);
+  const isKeepableImageSrc = (src) => isHttpUrl(src) || isDataImageUrl(src);
+
+  const handleEditFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      onEditingImageSelect?.({
+        file,
+        preview: ev.target?.result,
+        name: file.name,
+        mimeType: file.type,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const hasEditingImage = () => {
+    if (editingImageAction === "new") return Boolean(editingImage?.preview);
+    if (editingImageAction === "keep") {
+      const msg = messages?.[editingMsgIndex];
+      return isKeepableImageSrc(getMessageImageSrc(msg));
+    }
+    return false;
+  };
 
   const scrollEditIntoView = () => {
     const el = editTextareaRef.current;
@@ -191,6 +240,29 @@ export default function MessageList({
               {/* 编辑模式 */}
               {editingMsgIndex === i && msg.role === "user" ? (
                 <div className="w-full space-y-2">
+                  <input
+                    type="file"
+                    ref={editFileInputRef}
+                    onChange={handleEditFileSelect}
+                    className="hidden"
+                    accept="image/*"
+                  />
+
+                  {(() => {
+                    const existing = getMessageImageSrc(msg);
+                    const showSrc =
+                      editingImageAction === "new"
+                        ? editingImage?.preview
+                        : editingImageAction === "keep"
+                          ? existing
+                          : null;
+                    return showSrc ? (
+                      <div className="w-fit">
+                        <Thumb src={showSrc} />
+                      </div>
+                    ) : null;
+                  })()}
+
                   <textarea
                     ref={editTextareaRef}
                     value={editingContent}
@@ -200,6 +272,45 @@ export default function MessageList({
                   />
                   <div className="flex gap-2 justify-end">
                     <button
+                      type="button"
+                      onClick={() => editFileInputRef.current?.click()}
+                      className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors inline-flex items-center gap-1"
+                      title="添加/更换图片"
+                    >
+                      <Paperclip size={14} />
+                      图片
+                    </button>
+
+                    {(() => {
+                      const existing = getMessageImageSrc(msg);
+                      const hasExisting = isKeepableImageSrc(existing);
+                      const hasNew = editingImageAction === "new" && Boolean(editingImage?.preview);
+                      const showToggle =
+                        editingImageAction === "remove" ? hasExisting : hasExisting || hasNew;
+                      if (!showToggle) return null;
+
+                      const label = editingImageAction === "remove" ? "恢复图片" : "移除图片";
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (editingImageAction === "remove") {
+                              if (hasExisting) onEditingImageKeep?.();
+                            } else {
+                              onEditingImageRemove?.();
+                            }
+                            if (editFileInputRef.current) editFileInputRef.current.value = "";
+                          }}
+                          className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors inline-flex items-center gap-1"
+                          title={label}
+                        >
+                          <X size={14} />
+                          {label}
+                        </button>
+                      );
+                    })()}
+
+                    <button
                       onClick={onCancelEdit}
                       className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
                     >
@@ -207,7 +318,7 @@ export default function MessageList({
                     </button>
                     <button
                       onClick={() => onSubmitEdit(i)}
-                      disabled={loading || !editingContent.trim()}
+                      disabled={loading || (!editingContent.trim() && !hasEditingImage())}
                       className="px-3 py-1.5 text-xs text-white bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 rounded-lg transition-colors"
                     >
                       提交并重新生成
@@ -226,18 +337,33 @@ export default function MessageList({
                     >
                       {hasParts ? (
                         <div className="flex flex-col gap-2">
-                          {msg.parts.map((part, idx) => {
-                            if (part && typeof part.text === "string" && part.text.trim()) {
-                              return <Markdown key={idx} enableHighlight={!msg.isStreaming}>{part.text}</Markdown>;
-                            }
-                            const url = part?.inlineData?.url;
-                            if (typeof url === "string" && url) {
-                              return (
-                                <Thumb key={idx} src={url} className="w-fit" />
-                              );
-                            }
-                            return null;
-                          })}
+                          {(() => {
+                            const entries = msg.parts.map((part, idx) => ({ part, idx }));
+                            const isUser = msg.role === "user";
+                            const imageEntries = entries.filter(({ part }) => {
+                              const url = part?.inlineData?.url;
+                              return typeof url === "string" && url;
+                            });
+                            const textEntries = entries.filter(({ part }) => {
+                              return part && typeof part.text === "string" && part.text.trim();
+                            });
+                            const ordered = isUser ? [...imageEntries, ...textEntries] : entries;
+
+                            return ordered.map(({ part, idx }) => {
+                              const url = part?.inlineData?.url;
+                              if (typeof url === "string" && url) {
+                                return <Thumb key={idx} src={url} className="w-fit" />;
+                              }
+                              if (part && typeof part.text === "string" && part.text.trim()) {
+                                return (
+                                  <Markdown key={idx} enableHighlight={!msg.isStreaming}>
+                                    {part.text}
+                                  </Markdown>
+                                );
+                              }
+                              return null;
+                            });
+                          })()}
                         </div>
                       ) : (
                         <>
@@ -277,7 +403,7 @@ export default function MessageList({
                             <Trash2 size={14} />
                           </button>
                           <button
-                            onClick={() => onStartEdit(i, msg.content)}
+                            onClick={() => onStartEdit(i, msg)}
                             className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
                             title="编辑并重新生成"
                           >

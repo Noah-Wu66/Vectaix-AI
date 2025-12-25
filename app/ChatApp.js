@@ -29,6 +29,12 @@ export default function ChatApp() {
   const { isDark } = useThemeMode(themeMode);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
+  // 编辑并重新生成：图片编辑状态
+  // - keep: 保留原图（如有）
+  // - remove: 移除图片
+  // - new: 选择了新图片（替换/新增）
+  const [editingImageAction, setEditingImageAction] = useState("keep");
+  const [editingImage, setEditingImage] = useState(null);
 
   const chatEndRef = useRef(null);
   const messageListRef = useRef(null);
@@ -38,6 +44,8 @@ export default function ChatApp() {
   const lastUserScrollAtRef = useRef(0);
   const scrollRafRef = useRef(0);
   const chatAbortRef = useRef(null);
+  // 同步互斥锁：避免移动端/快速连点在 loading 状态更新前触发多次请求，导致“一次操作两条回复”
+  const chatRequestLockRef = useRef(false);
   const lastTextModelRef = useRef("gemini-3-pro-preview");
   const [switchModelOpen, setSwitchModelOpen] = useState(false);
   const [pendingModel, setPendingModel] = useState(null);
@@ -338,14 +346,45 @@ export default function ChatApp() {
   const stopStreaming = () => {
     chatAbortRef.current?.abort();
     chatAbortRef.current = null;
+    chatRequestLockRef.current = false;
     setLoading(false);
     setMessages((prev) => prev
       .filter((m) => !m.isStreaming || (m.content || "").trim() || (m.thought || "").trim())
       .map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)));
   };
 
+  const isHttpUrl = (src) => typeof src === "string" && /^https?:\/\//i.test(src);
+  const isDataImageUrl = (src) => typeof src === "string" && /^data:image\//i.test(src);
+
+  const getMessageImageSrc = (msg) => {
+    if (msg && typeof msg.image === "string" && msg.image) return msg.image;
+    if (Array.isArray(msg?.parts)) {
+      for (const p of msg.parts) {
+        const url = p?.inlineData?.url;
+        if (typeof url === "string" && url) return url;
+      }
+    }
+    return null;
+  };
+
+  const onEditingImageSelect = (img) => {
+    setEditingImageAction("new");
+    setEditingImage(img || null);
+  };
+
+  const onEditingImageRemove = () => {
+    setEditingImageAction("remove");
+    setEditingImage(null);
+  };
+
+  const onEditingImageKeep = () => {
+    setEditingImageAction("keep");
+    setEditingImage(null);
+  };
+
   const handleSendFromComposer = async ({ text, image }) => {
-    if ((!text && !image) || loading) return;
+    if ((!text && !image) || loading || chatRequestLockRef.current) return;
+    chatRequestLockRef.current = true;
 
     // 发送消息时重置滚动中断标记，确保自动滚动到底部
     userInterruptedRef.current = false;
@@ -369,6 +408,26 @@ export default function ChatApp() {
           handleUploadUrl: "/api/upload",
         });
         imageUrl = blob.url;
+      }
+
+      // 将本地预览 dataURL 替换为可持久化的 Blob URL，避免后续编辑/同步时 data: 导致图片丢失
+      if (imageUrl && image?.preview) {
+        const mimeType = image?.mimeType || image?.file?.type || null;
+        setMessages((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i -= 1) {
+            const m = next[i];
+            if (m?.role === "user" && m?.image === image.preview) {
+              next[i] = {
+                ...m,
+                image: imageUrl,
+                ...(mimeType ? { mimeType } : {}),
+              };
+              break;
+            }
+          }
+          return next;
+        });
       }
 
       const config = buildChatConfig({
@@ -402,13 +461,19 @@ export default function ChatApp() {
         { role: "model", content: "Error: " + err.message, type: "error" },
       ]);
       setLoading(false);
+    } finally {
+      chatRequestLockRef.current = false;
     }
   };
 
   const regenerateModelMessage = async (index) => {
-    if (loading) return;
+    if (loading || chatRequestLockRef.current) return;
+    chatRequestLockRef.current = true;
     const userMsgIndex = index - 1;
-    if (userMsgIndex < 0 || messages[userMsgIndex]?.role !== "user") return;
+    if (userMsgIndex < 0 || messages[userMsgIndex]?.role !== "user") {
+      chatRequestLockRef.current = false;
+      return;
+    }
 
     // 重新生成时重置滚动中断标记
     userInterruptedRef.current = false;
@@ -427,55 +492,129 @@ export default function ChatApp() {
       activePromptId,
     });
 
-    await runChat({
-      prompt: userMsg.content,
-      historyMessages: historyWithUser.slice(0, -1),
-      conversationId: currentConversationId,
-      model,
-      config,
-      historyLimit,
-      currentConversationId,
-      setCurrentConversationId,
-      fetchConversations,
-      setMessages,
-      setLoading, signal: (chatAbortRef.current = new AbortController()).signal,
-      ...(isImageModel(model) ? {} : { mode: "regenerate", messagesForRegenerate: historyWithUser }),
-    });
+    try {
+      await runChat({
+        prompt: userMsg.content,
+        historyMessages: historyWithUser.slice(0, -1),
+        conversationId: currentConversationId,
+        model,
+        config,
+        historyLimit,
+        currentConversationId,
+        setCurrentConversationId,
+        fetchConversations,
+        setMessages,
+        setLoading,
+        signal: (chatAbortRef.current = new AbortController()).signal,
+        // 图片模型也必须走 regenerate：否则服务端会当作“新用户消息”追加，历史图片/签名带不上
+        mode: "regenerate",
+        messagesForRegenerate: historyWithUser,
+      });
+    } finally {
+      chatRequestLockRef.current = false;
+    }
   };
 
   const startEdit = (index, content) => {
     if (loading) return;
     setEditingMsgIndex(index);
-    setEditingContent(content);
+    // 兼容旧调用（只传 content）与新调用（传 msg 对象）
+    if (content && typeof content === "object") {
+      setEditingContent(content.content || "");
+    } else {
+      setEditingContent(content || "");
+    }
+    setEditingImageAction("keep");
+    setEditingImage(null);
   };
 
   const cancelEdit = () => {
     setEditingMsgIndex(null);
     setEditingContent("");
+    setEditingImageAction("keep");
+    setEditingImage(null);
   };
 
   const submitEditAndRegenerate = async (index) => {
-    if (loading || editingMsgIndex === null) return;
+    if (loading || editingMsgIndex === null || chatRequestLockRef.current) return;
+    chatRequestLockRef.current = true;
     const newContent = editingContent.trim();
-    if (!newContent) return;
+    const oldMsg = messages[index];
+    const existingImageSrc = getMessageImageSrc(oldMsg);
+    const canKeepExistingImage = isHttpUrl(existingImageSrc) || isDataImageUrl(existingImageSrc);
+    const hasImageAfterEdit =
+      (editingImageAction === "new" && editingImage?.file) ||
+      (editingImageAction === "keep" && canKeepExistingImage);
+    if (!newContent && !hasImageAfterEdit) {
+      chatRequestLockRef.current = false;
+      return;
+    }
 
     // 编辑提交时重置滚动中断标记
     userInterruptedRef.current = false;
 
     const nextMessages = messages.slice(0, index);
-    const oldMsg = messages[index];
-    // 同时更新 content 和 parts（如果有），否则气泡会显示旧的 parts 文本
     const updatedMsg = { ...oldMsg, content: newContent };
-    if (Array.isArray(oldMsg.parts) && oldMsg.parts.length > 0) {
-      // 保留图片等非文本 part，替换纯文本 part
-      const hasNonText = oldMsg.parts.some((p) => p?.inlineData);
-      if (hasNonText) {
-        updatedMsg.parts = oldMsg.parts.map((p) =>
-          p?.text != null && !p?.inlineData ? { ...p, text: newContent } : p
-        );
-      } else {
-        updatedMsg.parts = [{ text: newContent }];
+
+    let nextImageUrl = null;
+    let nextMimeType = null;
+    try {
+      if (editingImageAction === "remove") {
+        nextImageUrl = null;
+      } else if (editingImageAction === "new" && editingImage?.file) {
+        const blob = await upload(editingImage.file.name, editingImage.file, {
+          access: "public",
+          handleUploadUrl: "/api/upload",
+        });
+        nextImageUrl = blob.url;
+        nextMimeType = editingImage.mimeType || editingImage.file.type || null;
+      } else if (editingImageAction === "keep") {
+        if (typeof oldMsg?.mimeType === "string" && oldMsg.mimeType) nextMimeType = oldMsg.mimeType;
+
+        if (isHttpUrl(existingImageSrc)) {
+          nextImageUrl = existingImageSrc;
+        } else if (isDataImageUrl(existingImageSrc)) {
+          // 兼容：历史消息里如果残留 data:image（本地预览），这里自动上传到 Blob，避免提交后“静默丢图”
+          const resp = await fetch(existingImageSrc);
+          const b = await resp.blob();
+          const mime = b.type || nextMimeType || "image/png";
+          const ext = (mime.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "") || "png";
+          const file = new File([b], `edit-${Date.now()}.${ext}`, { type: mime });
+          const uploaded = await upload(file.name, file, {
+            access: "public",
+            handleUploadUrl: "/api/upload",
+          });
+          nextImageUrl = uploaded.url;
+          nextMimeType = mime;
+        } else {
+          nextImageUrl = null;
+        }
       }
+
+      const parts = [];
+      if (newContent) parts.push({ text: newContent });
+      if (nextImageUrl) {
+        const inlineData = { url: nextImageUrl };
+        if (nextMimeType) inlineData.mimeType = nextMimeType;
+        parts.push({ inlineData });
+      }
+
+      if (parts.length > 0) updatedMsg.parts = parts;
+      else delete updatedMsg.parts;
+
+      if (nextImageUrl) updatedMsg.image = nextImageUrl;
+      else delete updatedMsg.image;
+
+      if (nextMimeType) updatedMsg.mimeType = nextMimeType;
+      else if (editingImageAction === "remove") delete updatedMsg.mimeType;
+    } catch (e) {
+      console.error(e);
+      chatRequestLockRef.current = false;
+      setMessages((prev) => [
+        ...prev,
+        { role: "model", content: "Error: " + (e?.message || "图片处理失败"), type: "error" },
+      ]);
+      return;
     }
     nextMessages.push(updatedMsg);
     setMessages(nextMessages);
@@ -491,20 +630,27 @@ export default function ChatApp() {
       activePromptId,
     });
 
-    await runChat({
-      prompt: newContent,
-      historyMessages: nextMessages.slice(0, -1),
-      conversationId: currentConversationId,
-      model,
-      config,
-      historyLimit,
-      currentConversationId,
-      setCurrentConversationId,
-      fetchConversations,
-      setMessages,
-      setLoading, signal: (chatAbortRef.current = new AbortController()).signal,
-      ...(isImageModel(model) ? {} : { mode: "regenerate", messagesForRegenerate: nextMessages }),
-    });
+    try {
+      await runChat({
+        prompt: newContent,
+        historyMessages: nextMessages.slice(0, -1),
+        conversationId: currentConversationId,
+        model,
+        config,
+        historyLimit,
+        currentConversationId,
+        setCurrentConversationId,
+        fetchConversations,
+        setMessages,
+        setLoading,
+        signal: (chatAbortRef.current = new AbortController()).signal,
+        // 图片模型也要走 regenerate，否则编辑后的“图片对话上下文”会丢
+        mode: "regenerate",
+        messagesForRegenerate: nextMessages,
+      });
+    } finally {
+      chatRequestLockRef.current = false;
+    }
   };
 
   const updateThemeMode = (mode) => {
@@ -525,5 +671,5 @@ export default function ChatApp() {
   if (settingsError) {
     return <SettingsErrorView isDark={isDark} settingsError={settingsError} onLogout={handleLogout} />;
   }
-  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} switchModelOpen={switchModelOpen} onCloseSwitchModel={() => { setSwitchModelOpen(false); setPendingModel(null); }} onConfirmSwitchModel={() => { if (!pendingModel) return; startNewChat(); setModel(pendingModel); const rememberedPromptId = activePromptIds?.[pendingModel]; if (rememberedPromptId != null) setActivePromptId(rememberedPromptId); if (!isImageModel(pendingModel)) lastTextModelRef.current = pendingModel; saveSettings({ model: pendingModel }); }} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} composerProps={{ loading, isStreaming, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })), historyLimit, setHistoryLimit, aspectRatio, setAspectRatio, imageSize, setImageSize, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, saveSettings, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
+  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} switchModelOpen={switchModelOpen} onCloseSwitchModel={() => { setSwitchModelOpen(false); setPendingModel(null); }} onConfirmSwitchModel={() => { if (!pendingModel) return; startNewChat(); setModel(pendingModel); const rememberedPromptId = activePromptIds?.[pendingModel]; if (rememberedPromptId != null) setActivePromptId(rememberedPromptId); if (!isImageModel(pendingModel)) lastTextModelRef.current = pendingModel; saveSettings({ model: pendingModel }); }} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} editingImageAction={editingImageAction} editingImage={editingImage} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onEditingImageSelect={onEditingImageSelect} onEditingImageRemove={onEditingImageRemove} onEditingImageKeep={onEditingImageKeep} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} composerProps={{ loading, isStreaming, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })), historyLimit, setHistoryLimit, aspectRatio, setAspectRatio, imageSize, setImageSize, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, saveSettings, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
 }
