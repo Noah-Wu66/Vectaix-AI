@@ -89,5 +89,3 @@ export default function ChatLayout({
     </div>
   );
 }
-
-

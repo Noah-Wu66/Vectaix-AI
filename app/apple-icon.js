@@ -32,9 +32,3 @@ export default function AppleIcon() {
     );
 }
 
-
-
-
-
-
-

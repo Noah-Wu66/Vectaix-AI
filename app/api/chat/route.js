@@ -130,10 +130,6 @@ export async function POST(req) {
             );
         }
 
-        // 区域日志
-        const region = process.env.VERCEL_REGION || 'unknown';
-        console.log(`[Chat Request] Model: ${model} | Region: ${region} | Time: ${new Date().toISOString()}`);
-
         const auth = await getAuthPayload();
         let user = null;
         if (auth) {

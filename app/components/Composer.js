@@ -12,7 +12,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { CHAT_MODELS } from "./chatModels";
+import { CHAT_MODELS } from "./ChatModels";
 export default function Composer({
   loading,
   isStreaming,
