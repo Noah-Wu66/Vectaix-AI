@@ -16,6 +16,7 @@ import {
 import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
 import ImageLightbox from "./ImageLightbox";
+import ConfirmModal from "./ConfirmModal";
 
 function normalizeCopiedText(text) {
   return (text ?? "")
@@ -61,6 +62,7 @@ export default function MessageList({
   const editFileInputRef = useRef(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, index: null, role: null });
 
   const openLightbox = (src) => {
     if (!src) return;
@@ -71,6 +73,21 @@ export default function MessageList({
   const closeLightbox = () => {
     setLightboxOpen(false);
     setLightboxSrc(null);
+  };
+
+  const handleDeleteClick = (index, role) => {
+    setDeleteConfirm({ open: true, index, role });
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirm.index !== null) {
+      if (deleteConfirm.role === "user") {
+        onDeleteUserMessage(deleteConfirm.index);
+      } else {
+        onDeleteModelMessage(deleteConfirm.index);
+      }
+    }
+    setDeleteConfirm({ open: false, index: null, role: null });
   };
 
   function Thumb({ src, className = "" }) {
@@ -194,6 +211,16 @@ export default function MessageList({
       className={`flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll ${fontSizeClass}`}
     >
       <ImageLightbox open={lightboxOpen} onClose={closeLightbox} src={lightboxSrc} />
+
+      <ConfirmModal
+        open={deleteConfirm.open}
+        onClose={() => setDeleteConfirm({ open: false, index: null, role: null })}
+        onConfirm={handleConfirmDelete}
+        title="删除消息"
+        message={`确定要删除这条${deleteConfirm.role === "user" ? "你的" : "AI"}消息吗？此操作无法撤销。`}
+        confirmText="删除"
+        danger
+      />
 
       {messages.length === 0 ? (
         <div className="h-full flex flex-col items-center justify-center text-zinc-400">
@@ -396,7 +423,7 @@ export default function MessageList({
                       {msg.role === "user" ? (
                         <>
                           <button
-                            onClick={() => onDeleteUserMessage(i)}
+                            onClick={() => handleDeleteClick(i, "user")}
                             className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
                             title="删除"
                           >
@@ -413,7 +440,7 @@ export default function MessageList({
                       ) : (
                         <>
                           <button
-                            onClick={() => onDeleteModelMessage(i)}
+                            onClick={() => handleDeleteClick(i, "model")}
                             className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
                             title="删除"
                           >
