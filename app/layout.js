@@ -10,10 +10,8 @@ export const metadata = {
         icon: '/icon.svg',
         apple: '/apple-icon',
     },
-    appleWebApp: {
-        capable: true,
-        title: 'Vectaix AI',
-        statusBarStyle: 'default',
+    other: {
+        'mobile-web-app-capable': 'yes',
     },
 };
 
