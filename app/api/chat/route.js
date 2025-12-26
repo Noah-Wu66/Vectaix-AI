@@ -99,7 +99,36 @@ function sanitizeStoredMessages(messages) {
 
 export async function POST(req) {
     try {
-        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages } = await req.json();
+        // Validate request body
+        let body;
+        try {
+            body = await req.json();
+        } catch (jsonError) {
+            console.error("Invalid JSON in request body:", jsonError);
+            return Response.json(
+                { error: 'Invalid JSON in request body' },
+                { status: 400 }
+            );
+        }
+
+        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages } = body;
+
+        // Validate required fields
+        if (!model || typeof model !== 'string') {
+            console.error("Missing or invalid model field");
+            return Response.json(
+                { error: 'Model is required and must be a string' },
+                { status: 400 }
+            );
+        }
+
+        if (!prompt || typeof prompt !== 'string') {
+            console.error("Missing or invalid prompt field");
+            return Response.json(
+                { error: 'Prompt is required and must be a string' },
+                { status: 400 }
+            );
+        }
 
         // 区域日志
         const region = process.env.VERCEL_REGION || 'unknown';
@@ -108,9 +137,17 @@ export async function POST(req) {
         const auth = await getAuthPayload();
         let user = null;
         if (auth) {
-            await dbConnect();
-            const userDoc = await User.findById(auth.userId);
-            if (userDoc) user = auth;
+            try {
+                await dbConnect();
+                const userDoc = await User.findById(auth.userId);
+                if (userDoc) user = auth;
+            } catch (dbError) {
+                console.error("Database connection error:", dbError);
+                return Response.json(
+                    { error: 'Database connection failed' },
+                    { status: 500 }
+                );
+            }
         }
         const isImageModel = model === 'gemini-3-pro-image-preview';
 
@@ -409,8 +446,35 @@ export async function POST(req) {
         }
 
     } catch (error) {
-        console.error("Gemini API Error:", error);
+        // Log detailed error information
+        console.error("Chat API Error:", {
+            message: error?.message,
+            status: error?.status,
+            stack: error?.stack,
+            name: error?.name,
+            code: error?.code
+        });
+
         const status = typeof error?.status === 'number' ? error.status : 500;
-        return Response.json({ error: error.message || "Internal Server Error" }, { status });
+
+        // Provide user-friendly error messages
+        let errorMessage = error?.message || "Internal Server Error";
+
+        // Add context for common errors
+        if (error?.message?.includes('API_KEY')) {
+            errorMessage = "API configuration error. Please check your API keys.";
+        } else if (error?.message?.includes('ECONNREFUSED')) {
+            errorMessage = "Failed to connect to external service.";
+        } else if (error?.message?.includes('fetch')) {
+            errorMessage = "Failed to fetch external resource.";
+        }
+
+        return Response.json(
+            {
+                error: errorMessage,
+                details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+            },
+            { status }
+        );
     }
 }
