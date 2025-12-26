@@ -145,16 +145,10 @@ export async function POST(req) {
                 );
             }
         }
-        const isImageModel = model === 'gemini-3-pro-image-preview';
 
         let currentConversationId = conversationId;
 
         const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-        // Image multi-turn requires persistent history (signatures + images)
-        if (isImageModel && !user) {
-            return Response.json({ error: 'Unauthorized' }, { status: 401 });
-        }
 
         // 1) Ensure Conversation exists (for logged-in users)
         if (user && !currentConversationId) {
@@ -184,37 +178,28 @@ export async function POST(req) {
             storedMessagesForRegenerate = conv.messages || [];
         }
 
-        if (isImageModel) {
-            const conv = isRegenerateMode
-                ? { messages: storedMessagesForRegenerate }
-                : await Conversation.findOne({ _id: currentConversationId, userId: user.userId }).select('messages');
-            if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
-            const msgs = (limit > 0 && Number.isFinite(limit)) ? conv.messages.slice(-limit) : conv.messages;
-            contents = await buildGeminiContentsFromMessages(msgs);
+        if (isRegenerateMode) {
+            const msgs = storedMessagesForRegenerate || [];
+            const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
+            effectiveMsgs.forEach(msg => {
+                if (msg.role === 'user' || msg.role === 'model') {
+                    contents.push({
+                        role: msg.role,
+                        parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
+                    });
+                }
+            });
         } else {
-            if (isRegenerateMode) {
-                const msgs = storedMessagesForRegenerate || [];
-                const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
-                effectiveMsgs.forEach(msg => {
-                    if (msg.role === 'user' || msg.role === 'model') {
-                        contents.push({
-                            role: msg.role,
-                            parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
-                        });
-                    }
-                });
-            } else {
-                const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
-                effectiveHistory.forEach(msg => {
-                    if (msg.role === 'user' || msg.role === 'model') {
-                        // History remains text-only fallback to save bandwidth
-                        contents.push({
-                            role: msg.role,
-                            parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
-                        });
-                    }
-                });
-            }
+            const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
+            effectiveHistory.forEach(msg => {
+                if (msg.role === 'user' || msg.role === 'model') {
+                    // History remains text-only fallback to save bandwidth
+                    contents.push({
+                        role: msg.role,
+                        parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
+                    });
+                }
+            });
         }
 
         // regenerate 模式：最后一条用户消息已经在 messages 里了，这里不再追加“新用户消息”
@@ -270,11 +255,6 @@ export async function POST(req) {
         if (!payload.config) payload.config = {};
         payload.config.tools = [{ googleSearch: {} }];
 
-        if (isImageModel) {
-            payload.config.responseModalities = ['TEXT', 'IMAGE'];
-            if (config?.imageConfig) payload.config.imageConfig = config.imageConfig;
-        }
-
         // 3. Database Logic
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
@@ -303,143 +283,93 @@ export async function POST(req) {
         }
 
         // 4. Generate Response
-        if (isImageModel) {
-            const response = await ai.models.generateContent({
-                model: model,
-                contents: contents,
-                config: payload.config
-            });
-            const rawParts = response.candidates?.[0]?.content?.parts || [];
-            const parts = rawParts.filter(p => !p?.thought);
+        // Text Stream - 使用 SSE 格式以解决移动端缓冲问题
+        const streamResult = await ai.models.generateContentStream({
+            model: model,
+            contents: contents,
+            config: payload.config
+        });
 
-            const storedModelParts = [];
-            let imageIdx = 0;
+        const encoder = new TextEncoder();
+        // 填充字符串，用于突破缓冲区阈值（移动端浏览器/CDN 通常有 1KB-4KB 的缓冲）
+        const PADDING = ' '.repeat(2048);
+        let paddingSent = false;
+        const HEARTBEAT_INTERVAL_MS = 15000;
+        let heartbeatTimer = null;
 
-            for (const part of parts) {
-                if (isNonEmptyString(part?.text)) {
-                    const p = { text: part.text };
-                    if (isNonEmptyString(part?.thoughtSignature)) p.thoughtSignature = part.thoughtSignature;
-                    storedModelParts.push(p);
-                    continue;
-                }
-
-                const inline = part?.inlineData;
-                if (inline?.data) {
-                    const mimeType = inline.mimeType || 'image/png';
-                    const buffer = Buffer.from(inline.data, 'base64');
-                    const ext = mimeTypeToExt(mimeType);
-                    const filename = `gemini/${currentConversationId}/${Date.now()}-${imageIdx}.${ext}`;
-                    const blob = await put(filename, buffer, { access: 'public', contentType: mimeType });
-                    const p = { inlineData: { mimeType, url: blob.url } };
-                    if (isNonEmptyString(part?.thoughtSignature)) p.thoughtSignature = part.thoughtSignature;
-                    storedModelParts.push(p);
-                    imageIdx += 1;
-                }
-            }
-
-            const textContent = storedModelParts.map(p => p.text).filter(Boolean).join('') || '';
-            if (user && currentConversationId) {
-                await Conversation.findByIdAndUpdate(currentConversationId, {
-                    $push: { messages: { role: 'model', content: textContent, type: 'parts', parts: storedModelParts } },
-                    updatedAt: Date.now()
-                });
-            }
-
-            return Response.json({
-                type: 'parts',
-                parts: storedModelParts,
-                conversationId: currentConversationId
-            });
-
-        } else {
-            // Text Stream - 使用 SSE 格式以解决移动端缓冲问题
-            const streamResult = await ai.models.generateContentStream({
-                model: model,
-                contents: contents,
-                config: payload.config
-            });
-            
-            const encoder = new TextEncoder();
-            // 填充字符串，用于突破缓冲区阈值（移动端浏览器/CDN 通常有 1KB-4KB 的缓冲）
-            const PADDING = ' '.repeat(2048);
-            let paddingSent = false;
-            const HEARTBEAT_INTERVAL_MS = 15000;
-            let heartbeatTimer = null;
-            
-            const stream = new ReadableStream({
-                async start(controller) {
-                    let fullText = "";
-                    let fullThought = "";
-                    try {
-                        // 心跳：避免移动端/代理层在长时间无输出时断开连接
-                        const sendHeartbeat = () => {
-                            try {
-                                controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
-                            } catch (e) {
-                                // ignore
-                            }
-                        };
-                        heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
-                        // 立即发送一次，尽早“打开”流并减少首包缓冲
-                        sendHeartbeat();
-
-                        for await (const chunk of streamResult) {
-                            const parts = chunk.candidates?.[0]?.content?.parts || [];
-
-                            for (const part of parts) {
-                                // 首次发送时附加填充以突破缓冲
-                                const padding = !paddingSent ? PADDING : '';
-                                paddingSent = true;
-                                
-                                if (part.thought && part.text) {
-                                    fullThought += part.text;
-                                    const data = `data: ${JSON.stringify({ type: 'thought', content: part.text })}${padding}\n\n`;
-                                    controller.enqueue(encoder.encode(data));
-                                } else if (part.text) {
-                                    fullText += part.text;
-                                    const data = `data: ${JSON.stringify({ type: 'text', content: part.text })}${padding}\n\n`;
-                                    controller.enqueue(encoder.encode(data));
-                                }
-                            }
+        const stream = new ReadableStream({
+            async start(controller) {
+                let fullText = "";
+                let fullThought = "";
+                try {
+                    // 心跳：避免移动端/代理层在长时间无输出时断开连接
+                    const sendHeartbeat = () => {
+                        try {
+                            controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
+                        } catch (e) {
+                            // ignore
                         }
-                        
-                        // 发送结束信号
-                        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-                        
-                        if (user && currentConversationId) {
-                            await Conversation.findByIdAndUpdate(currentConversationId, {
-                                $push: {
-                                    messages: {
-                                        role: 'model',
-                                        content: fullText,
-                                        thought: fullThought || null,
-                                        type: 'text'
-                                    }
-                                },
-                                updatedAt: Date.now()
-                            });
-                        }
-                        controller.close();
-                    } catch (err) {
-                        controller.error(err);
-                    } finally {
-                        if (heartbeatTimer) {
-                            clearInterval(heartbeatTimer);
-                            heartbeatTimer = null;
+                    };
+                    heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+                    // 立即发送一次，尽早"打开"流并减少首包缓冲
+                    sendHeartbeat();
+
+                    for await (const chunk of streamResult) {
+                        const parts = chunk.candidates?.[0]?.content?.parts || [];
+
+                        for (const part of parts) {
+                            // 首次发送时附加填充以突破缓冲
+                            const padding = !paddingSent ? PADDING : '';
+                            paddingSent = true;
+
+                            if (part.thought && part.text) {
+                                fullThought += part.text;
+                                const data = `data: ${JSON.stringify({ type: 'thought', content: part.text })}${padding}\n\n`;
+                                controller.enqueue(encoder.encode(data));
+                            } else if (part.text) {
+                                fullText += part.text;
+                                const data = `data: ${JSON.stringify({ type: 'text', content: part.text })}${padding}\n\n`;
+                                controller.enqueue(encoder.encode(data));
+                            }
                         }
                     }
+
+                    // 发送结束信号
+                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+
+                    if (user && currentConversationId) {
+                        await Conversation.findByIdAndUpdate(currentConversationId, {
+                            $push: {
+                                messages: {
+                                    role: 'model',
+                                    content: fullText,
+                                    thought: fullThought || null,
+                                    type: 'text'
+                                }
+                            },
+                            updatedAt: Date.now()
+                        });
+                    }
+                    controller.close();
+                } catch (err) {
+                    controller.error(err);
+                } finally {
+                    if (heartbeatTimer) {
+                        clearInterval(heartbeatTimer);
+                        heartbeatTimer = null;
+                    }
                 }
-            });
-            
-            const headers = {
-                'Content-Type': 'text/event-stream; charset=utf-8',
-                'Cache-Control': 'no-cache, no-transform',
-                'Connection': 'keep-alive',
-                'X-Accel-Buffering': 'no', // 禁用 nginx/反向代理缓冲
-            };
-            if (currentConversationId) { headers['X-Conversation-Id'] = currentConversationId; }
-            return new Response(stream, { headers });
-        }
+            }
+        });
+
+        const headers = {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no', // 禁用 nginx/反向代理缓冲
+        };
+        if (currentConversationId) { headers['X-Conversation-Id'] = currentConversationId; }
+        return new Response(stream, { headers });
 
     } catch (error) {
         // Log detailed error information

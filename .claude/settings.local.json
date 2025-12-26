@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Edit",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "SlashCommand(/rules)"
     ]
   }
 }

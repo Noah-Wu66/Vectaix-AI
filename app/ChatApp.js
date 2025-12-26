@@ -8,8 +8,6 @@ import AuthModal from "./components/AuthModal";
 import ChatLayout from "./components/ChatLayout";
 import SettingsErrorView from "./components/SettingsErrorView";
 const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium", large: "text-size-large" };
-const IMAGE_MODEL_ID = "gemini-3-pro-image-preview";
-const isImageModel = (m) => m === IMAGE_MODEL_ID;
 const isImageConversation = (msgs = []) => msgs.some((m) => m?.role === "model" && m.type === "parts");
 export default function ChatApp() {
   const [user, setUser] = useState(null);
@@ -44,11 +42,8 @@ export default function ChatApp() {
   const lastUserScrollAtRef = useRef(0);
   const scrollRafRef = useRef(0);
   const chatAbortRef = useRef(null);
-  // 同步互斥锁：避免移动端/快速连点在 loading 状态更新前触发多次请求，导致“一次操作两条回复”
   const chatRequestLockRef = useRef(false);
   const lastTextModelRef = useRef("gemini-3-pro-preview");
-  const [switchModelOpen, setSwitchModelOpen] = useState(false);
-  const [pendingModel, setPendingModel] = useState(null);
   const isStreaming = messages.some((m) => m.isStreaming);
   const SCROLL_BOTTOM_THRESHOLD = 80;
 
@@ -87,7 +82,7 @@ export default function ChatApp() {
           (async () => {
             const s = await fetchSettings();
             const nextModel = s?.model;
-            if (typeof nextModel === "string" && !isImageModel(nextModel)) {
+            if (typeof nextModel === "string") {
               lastTextModelRef.current = nextModel;
             }
           })();
@@ -199,7 +194,7 @@ export default function ChatApp() {
       (async () => {
         const s = await fetchSettings();
         const nextModel = s?.model;
-        if (typeof nextModel === "string" && !isImageModel(nextModel)) {
+        if (typeof nextModel === "string") {
           lastTextModelRef.current = nextModel;
         }
       })();
@@ -229,18 +224,6 @@ export default function ChatApp() {
         userInterruptedRef.current = false;
         setMessages(nextMessages);
         setCurrentConversationId(id);
-        const convIsImage = isImageConversation(nextMessages);
-        if (convIsImage && model !== IMAGE_MODEL_ID) {
-          setModel(IMAGE_MODEL_ID);
-          const remembered = activePromptIds?.[IMAGE_MODEL_ID];
-          if (remembered != null) setActivePromptId(remembered);
-        }
-        if (!convIsImage && model === IMAGE_MODEL_ID) {
-          const nextModel = lastTextModelRef.current;
-          setModel(nextModel);
-          const remembered = activePromptIds?.[nextModel];
-          if (remembered != null) setActivePromptId(remembered);
-        }
         if (window.innerWidth < 768) setSidebarOpen(false);
       }
     } catch (e) {
@@ -274,22 +257,10 @@ export default function ChatApp() {
   const requestModelChange = (nextModel) => {
     if (loading || messages.some((m) => m.isStreaming)) return;
 
-    const hasConversation = Boolean(currentConversationId) || messages.length > 0;
-    const currentIsImageConv = currentConversationId
-      ? isImageConversation(messages)
-      : isImageModel(model);
-    const nextIsImage = isImageModel(nextModel);
-
-    if (hasConversation && nextIsImage !== currentIsImageConv) {
-      setPendingModel(nextModel);
-      setSwitchModelOpen(true);
-      return;
-    }
-
     setModel(nextModel);
     const rememberedPromptId = activePromptIds?.[nextModel];
     if (rememberedPromptId != null) setActivePromptId(rememberedPromptId);
-    if (!nextIsImage) lastTextModelRef.current = nextModel;
+    lastTextModelRef.current = nextModel;
     saveSettings({ model: nextModel });
   };
 
@@ -671,5 +642,5 @@ export default function ChatApp() {
   if (settingsError) {
     return <SettingsErrorView isDark={isDark} settingsError={settingsError} onLogout={handleLogout} />;
   }
-  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} switchModelOpen={switchModelOpen} onCloseSwitchModel={() => { setSwitchModelOpen(false); setPendingModel(null); }} onConfirmSwitchModel={() => { if (!pendingModel) return; startNewChat(); setModel(pendingModel); const rememberedPromptId = activePromptIds?.[pendingModel]; if (rememberedPromptId != null) setActivePromptId(rememberedPromptId); if (!isImageModel(pendingModel)) lastTextModelRef.current = pendingModel; saveSettings({ model: pendingModel }); }} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} editingImageAction={editingImageAction} editingImage={editingImage} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onEditingImageSelect={onEditingImageSelect} onEditingImageRemove={onEditingImageRemove} onEditingImageKeep={onEditingImageKeep} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} composerProps={{ loading, isStreaming, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })), historyLimit, setHistoryLimit, aspectRatio, setAspectRatio, imageSize, setImageSize, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, saveSettings, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
+  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} editingImageAction={editingImageAction} editingImage={editingImage} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onEditingImageSelect={onEditingImageSelect} onEditingImageRemove={onEditingImageRemove} onEditingImageKeep={onEditingImageKeep} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} composerProps={{ loading, isStreaming, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })), historyLimit, setHistoryLimit, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, saveSettings, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
 }

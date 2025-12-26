@@ -1,19 +1,13 @@
 export function buildChatConfig({
   model,
   thinkingLevel,
-  aspectRatio,
-  imageSize,
   mediaResolution,
   systemPrompts,
   activePromptId,
   imageUrl,
 }) {
   const cfg = {};
-  if (model === "gemini-3-pro-image-preview") {
-    cfg.imageConfig = { aspectRatio: aspectRatio, imageSize: imageSize };
-  } else {
-    cfg.thinkingLevel = thinkingLevel;
-  }
+  cfg.thinkingLevel = thinkingLevel;
 
   const activeId = activePromptId == null ? null : String(activePromptId);
   const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
@@ -63,36 +57,6 @@ export async function runChat({
   setLoading(true);
   let streamMsgId = null;
   try {
-    if (model === "gemini-3-pro-image-preview") {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal,
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-
-      if (data.conversationId && !currentConversationId) {
-        setCurrentConversationId(data.conversationId);
-        fetchConversations();
-      }
-
-      if (data.type !== "parts" || !Array.isArray(data.parts)) {
-        throw new Error("Unexpected response");
-      }
-
-      const textContent = data.parts
-        .map((p) => (p && typeof p.text === "string" ? p.text : ""))
-        .filter(Boolean)
-        .join("");
-      setMessages((prev) => [
-        ...prev,
-        { role: "model", type: "parts", parts: data.parts, content: textContent },
-      ]);
-      return;
-    }
-
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
