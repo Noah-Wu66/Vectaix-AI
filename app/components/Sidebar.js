@@ -124,7 +124,6 @@ export default function Sidebar({
                 <>
                   <button
                     onClick={() => onLoadConversation(conv._id)}
-                    onDoubleClick={(e) => handleEditClick(conv, e)}
                     className={`flex-1 text-left p-3 text-sm truncate ${currentConversationId === conv._id
                       ? "text-zinc-900 font-medium"
                       : "text-zinc-600"
