@@ -291,6 +291,15 @@ export async function POST(req) {
         });
 
         const encoder = new TextEncoder();
+        // 客户端点击“停止/取消”会中断请求；此时必须停止生成并且不要把结果写入 DB
+        let clientAborted = false;
+        const onAbort = () => { clientAborted = true; };
+        try {
+            req?.signal?.addEventListener?.('abort', onAbort, { once: true });
+        } catch {
+            // ignore
+        }
+
         // 填充字符串，用于突破缓冲区阈值（移动端浏览器/CDN 通常有 1KB-4KB 的缓冲）
         const PADDING = ' '.repeat(2048);
         let paddingSent = false;
@@ -305,6 +314,7 @@ export async function POST(req) {
                     // 心跳：避免移动端/代理层在长时间无输出时断开连接
                     const sendHeartbeat = () => {
                         try {
+                            if (clientAborted) return;
                             controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
                         } catch (e) {
                             // ignore
@@ -315,9 +325,11 @@ export async function POST(req) {
                     sendHeartbeat();
 
                     for await (const chunk of streamResult) {
+                        if (clientAborted) break;
                         const parts = chunk.candidates?.[0]?.content?.parts || [];
 
                         for (const part of parts) {
+                            if (clientAborted) break;
                             // 首次发送时附加填充以突破缓冲
                             const padding = !paddingSent ? PADDING : '';
                             paddingSent = true;
@@ -332,6 +344,12 @@ export async function POST(req) {
                                 controller.enqueue(encoder.encode(data));
                             }
                         }
+                    }
+
+                    // 取消/断连：直接结束，不写 DB，不发送 DONE（避免“旧请求晚写入”导致重复回答）
+                    if (clientAborted) {
+                        try { controller.close(); } catch { /* ignore */ }
+                        return;
                     }
 
                     // 发送结束信号
@@ -352,11 +370,20 @@ export async function POST(req) {
                     }
                     controller.close();
                 } catch (err) {
+                    if (clientAborted) {
+                        try { controller.close(); } catch { /* ignore */ }
+                        return;
+                    }
                     controller.error(err);
                 } finally {
                     if (heartbeatTimer) {
                         clearInterval(heartbeatTimer);
                         heartbeatTimer = null;
+                    }
+                    try {
+                        req?.signal?.removeEventListener?.('abort', onAbort);
+                    } catch {
+                        // ignore
                     }
                 }
             }
