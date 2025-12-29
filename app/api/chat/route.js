@@ -98,6 +98,10 @@ function sanitizeStoredMessages(messages) {
 }
 
 export async function POST(req) {
+    // 写入许可时间戳：只有当 conversation.updatedAt <= 此值时，才允许写入 model 消息
+    // 用于防止"停止后再 regenerate"时，旧请求晚于新请求覆盖导致重复回答
+    let writePermitTime = null;
+
     try {
         // Validate request body
         let body;
@@ -169,13 +173,16 @@ export async function POST(req) {
 
         if (isRegenerateMode) {
             const sanitized = sanitizeStoredMessages(messages);
+            const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },
-                { $set: { messages: sanitized, updatedAt: Date.now() } },
+                { $set: { messages: sanitized, updatedAt: regenerateTime } },
                 { new: true }
-            ).select('messages');
+            ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
             storedMessagesForRegenerate = conv.messages || [];
+            // 记录写入许可时间：只有 updatedAt 仍为此值时才允许写入 model 消息
+            writePermitTime = conv.updatedAt?.getTime?.() || regenerateTime;
         }
 
         if (isRegenerateMode) {
@@ -267,7 +274,8 @@ export async function POST(req) {
                     },
                 });
             }
-            await Conversation.findByIdAndUpdate(currentConversationId, {
+            const userMsgTime = Date.now();
+            const updatedConv = await Conversation.findByIdAndUpdate(currentConversationId, {
                 $push: {
                     messages: {
                         role: 'user',
@@ -278,8 +286,10 @@ export async function POST(req) {
                         parts: storedUserParts
                     }
                 },
-                updatedAt: Date.now()
-            });
+                updatedAt: userMsgTime
+            }, { new: true }).select('updatedAt');
+            // 记录写入许可时间
+            writePermitTime = updatedConv?.updatedAt?.getTime?.() || userMsgTime;
         }
 
         // 4. Generate Response
@@ -355,18 +365,26 @@ export async function POST(req) {
                     // 发送结束信号
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
+                    // 只有当会话未被其他请求覆盖时才写入（防止停止后 regenerate 导致重复回答）
+                    // writePermitTime 为 null 表示未登录或新建会话前的情况，此时允许写入
                     if (user && currentConversationId) {
-                        await Conversation.findByIdAndUpdate(currentConversationId, {
-                            $push: {
-                                messages: {
-                                    role: 'model',
-                                    content: fullText,
-                                    thought: fullThought || null,
-                                    type: 'text'
-                                }
-                            },
-                            updatedAt: Date.now()
-                        });
+                        const writeCondition = writePermitTime
+                            ? { _id: currentConversationId, updatedAt: { $lte: new Date(writePermitTime) } }
+                            : { _id: currentConversationId };
+                        await Conversation.findOneAndUpdate(
+                            writeCondition,
+                            {
+                                $push: {
+                                    messages: {
+                                        role: 'model',
+                                        content: fullText,
+                                        thought: fullThought || null,
+                                        type: 'text'
+                                    }
+                                },
+                                updatedAt: Date.now()
+                            }
+                        );
                     }
                     controller.close();
                 } catch (err) {

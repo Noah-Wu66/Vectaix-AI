@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const DEFAULT_MODEL = "gemini-3-pro-preview";
 const DEFAULT_THINKING_LEVELS = {
@@ -8,8 +8,31 @@ const DEFAULT_THINKING_LEVELS = {
   "gemini-3-pro-preview": "high",
 };
 
+const UI_THEME_MODE_KEY = "vectaix_ui_themeMode";
+const UI_FONT_SIZE_KEY = "vectaix_ui_fontSize";
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function readLocalUiSetting(key) {
+  try {
+    if (typeof window === "undefined") return null;
+    const v = window.localStorage?.getItem?.(key);
+    return typeof v === "string" && v ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalUiSetting(key, value) {
+  try {
+    if (typeof window === "undefined") return;
+    if (value == null) window.localStorage?.removeItem?.(key);
+    else window.localStorage?.setItem?.(key, String(value));
+  } catch {
+    // ignore
+  }
 }
 
 export function useUserSettings() {
@@ -21,9 +44,27 @@ export function useUserSettings() {
   const [systemPrompts, setSystemPrompts] = useState([]);
   const [activePromptIds, setActivePromptIds] = useState({});
   const [activePromptId, setActivePromptId] = useState(null);
-  const [themeMode, setThemeMode] = useState("system");
-  const [fontSize, setFontSize] = useState("medium");
+  const [themeMode, _setThemeMode] = useState("system");
+  const [fontSize, _setFontSize] = useState("medium");
   const [settingsError, setSettingsError] = useState(null);
+
+  // 主题/字号只保存在本地（localStorage），不走数据库
+  useEffect(() => {
+    const localTheme = readLocalUiSetting(UI_THEME_MODE_KEY);
+    const localFont = readLocalUiSetting(UI_FONT_SIZE_KEY);
+    if (typeof localTheme === "string") _setThemeMode(localTheme);
+    if (typeof localFont === "string") _setFontSize(localFont);
+  }, []);
+
+  const setThemeMode = useCallback((mode) => {
+    _setThemeMode(mode);
+    writeLocalUiSetting(UI_THEME_MODE_KEY, mode);
+  }, []);
+
+  const setFontSize = useCallback((size) => {
+    _setFontSize(size);
+    writeLocalUiSetting(UI_FONT_SIZE_KEY, size);
+  }, []);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -59,8 +100,6 @@ export function useUserSettings() {
         : (settings.activeSystemPromptId ? { [nextModel]: settings.activeSystemPromptId } : {});
       setActivePromptIds(ids);
       setActivePromptId(ids?.[nextModel] || settings.activeSystemPromptId || null);
-      if (typeof settings.themeMode === "string") setThemeMode(settings.themeMode);
-      if (typeof settings.fontSize === "string") setFontSize(settings.fontSize);
 
       return settings;
     } catch (e) {
@@ -71,10 +110,15 @@ export function useUserSettings() {
 
   const saveSettings = useCallback(async (updates) => {
     try {
+      // UI 设置不入库：themeMode/fontSize 直接丢弃
+      const nextUpdates = { ...(updates || {}) };
+      delete nextUpdates.themeMode;
+      delete nextUpdates.fontSize;
+
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates || {}),
+        body: JSON.stringify(nextUpdates),
       });
 
       let data = null;

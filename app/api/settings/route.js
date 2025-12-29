@@ -47,6 +47,8 @@ export async function PUT(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const updates = await req.json();
+    // UI 设置不入库：themeMode/fontSize 走本地 localStorage
+    const { themeMode, fontSize, ...dbUpdates } = updates || {};
 
     let settings = await UserSettings.findOne({ userId: user.userId });
 
@@ -54,7 +56,7 @@ export async function PUT(req) {
         settings = await UserSettings.create({
             userId: user.userId,
             systemPrompts: [{ name: '默认助手', content: 'You are a helpful AI assistant.' }],
-            ...updates
+            ...dbUpdates
         });
         settings.activeSystemPromptId = settings.systemPrompts[0]._id;
         if (!isPlainObject(settings.activeSystemPromptIds)) settings.activeSystemPromptIds = {};
@@ -74,7 +76,7 @@ export async function PUT(req) {
             settings.activeSystemPromptIds = { ...(settings.activeSystemPromptIds || {}), ...updates.activeSystemPromptIds };
         }
 
-        const { thinkingLevels, activeSystemPromptIds, userId, systemPrompts, updatedAt, ...rest } = updates || {};
+        const { thinkingLevels, activeSystemPromptIds, userId, systemPrompts, updatedAt, themeMode, fontSize, ...rest } = dbUpdates || {};
         Object.assign(settings, rest, { updatedAt: Date.now() });
         await settings.save();
     }

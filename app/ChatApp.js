@@ -626,12 +626,10 @@ export default function ChatApp() {
 
   const updateThemeMode = (mode) => {
     setThemeMode(mode);
-    saveSettings({ themeMode: mode });
   };
 
   const updateFontSize = (size) => {
     setFontSize(size);
-    saveSettings({ fontSize: size });
   };
   if (showAuthModal) {
     return (
