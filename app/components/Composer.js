@@ -534,14 +534,14 @@ export default function Composer({
           />
 
           <button
-            onClick={isStreaming ? onStop : handleSend}
-            disabled={!isStreaming && (loading || (!input.trim() && !selectedImage))}
+            onClick={isStreaming || loading ? onStop : handleSend}
+            disabled={!isStreaming && !loading && !input.trim() && !selectedImage}
             className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${
-              isStreaming ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
+              isStreaming || loading ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
             }`}
             type="button"
           >
-            {isStreaming ? <Square size={16} /> : <Send size={16} />}
+            {isStreaming || loading ? <Square size={16} /> : <Send size={16} />}
           </button>
         </div>
       </div>
