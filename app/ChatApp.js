@@ -33,6 +33,7 @@ export default function ChatApp() {
   // - new: 选择了新图片（替换/新增）
   const [editingImageAction, setEditingImageAction] = useState("keep");
   const [editingImage, setEditingImage] = useState(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   const chatEndRef = useRef(null);
   const messageListRef = useRef(null);
@@ -125,6 +126,10 @@ export default function ChatApp() {
   const handleMessageListScroll = () => {
     const el = messageListRef.current;
     if (!el) return;
+
+    // 更新滚动到底部按钮的显示状态
+    setShowScrollButton(!isNearBottom(el));
+
     if (isStreaming) {
       const top = el.scrollTop;
       const last = lastScrollTopRef.current;
@@ -133,7 +138,7 @@ export default function ChatApp() {
         userInterruptedRef.current = false;
         return;
       }
-      // 只在“用户真实手势导致的上滑”时才中断自动滚动，避免移动端键盘/地址栏/回流引起的误判
+      // 只在"用户真实手势导致的上滑"时才中断自动滚动，避免移动端键盘/地址栏/回流引起的误判
       const recentUserGesture = Date.now() - lastUserScrollAtRef.current < 800;
       const moved = Math.abs(top - last) > 2;
       if (recentUserGesture && moved) userInterruptedRef.current = true;
@@ -524,6 +529,9 @@ export default function ChatApp() {
     // 编辑提交时重置滚动中断标记
     userInterruptedRef.current = false;
 
+    // 提前设置 loading 状态，避免图片上传期间 UI 无反馈导致"卡顿"感
+    setLoading(true);
+
     const nextMessages = messages.slice(0, index);
     const updatedMsg = { ...oldMsg, content: newContent };
 
@@ -581,6 +589,7 @@ export default function ChatApp() {
     } catch (e) {
       console.error(e);
       chatRequestLockRef.current = false;
+      setLoading(false);
       setMessages((prev) => [
         ...prev,
         { role: "model", content: "Error: " + (e?.message || "图片处理失败"), type: "error" },
@@ -640,5 +649,5 @@ export default function ChatApp() {
   if (settingsError) {
     return <SettingsErrorView isDark={isDark} settingsError={settingsError} onLogout={handleLogout} />;
   }
-  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} editingMsgIndex={editingMsgIndex} editingContent={editingContent} editingImageAction={editingImageAction} editingImage={editingImage} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onEditingImageSelect={onEditingImageSelect} onEditingImageRemove={onEditingImageRemove} onEditingImageKeep={onEditingImageKeep} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} composerProps={{ loading, isStreaming, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })), historyLimit, setHistoryLimit, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, saveSettings, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
+  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} showScrollButton={showScrollButton} onScrollToBottom={scrollToBottom} editingMsgIndex={editingMsgIndex} editingContent={editingContent} editingImageAction={editingImageAction} editingImage={editingImage} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onEditingImageSelect={onEditingImageSelect} onEditingImageRemove={onEditingImageRemove} onEditingImageKeep={onEditingImageKeep} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} composerProps={{ loading, isStreaming, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })), historyLimit, setHistoryLimit, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, saveSettings, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
 }

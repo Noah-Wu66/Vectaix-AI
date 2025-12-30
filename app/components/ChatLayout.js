@@ -1,5 +1,7 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 import ChatHeader from "./ChatHeader";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
@@ -31,6 +33,8 @@ export default function ChatLayout({
   chatEndRef,
   messageListRef,
   onMessageListScroll,
+  showScrollButton,
+  onScrollToBottom,
   editingMsgIndex,
   editingContent,
   editingImageAction,
@@ -78,6 +82,22 @@ export default function ChatLayout({
           onRegenerateModelMessage={onRegenerateModelMessage}
           onStartEdit={onStartEdit}
         />
+        <AnimatePresence>
+          {showScrollButton && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.15 }}
+              onClick={onScrollToBottom}
+              className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10 w-9 h-9 rounded-full bg-white border border-zinc-200 shadow-md flex items-center justify-center text-zinc-500 hover:text-zinc-700 hover:bg-zinc-50 transition-colors"
+              type="button"
+              aria-label="滚动到底部"
+            >
+              <ChevronDown size={20} />
+            </motion.button>
+          )}
+        </AnimatePresence>
         <Composer {...composerProps} />
       </div>
     </div>
