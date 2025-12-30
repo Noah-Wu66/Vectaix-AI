@@ -222,6 +222,7 @@ export default function ChatApp() {
   const loadConversation = async (id) => {
     setLoading(true);
     setMessages([]); // 先清空消息，显示加载动画
+    if (window.innerWidth < 768) setSidebarOpen(false); // 移动端立即折叠侧边栏
     try {
       const res = await fetch(`/api/conversations/${id}`);
       const data = await res.json(); if (!res.ok) throw new Error(data?.error || res.statusText);
@@ -230,7 +231,6 @@ export default function ChatApp() {
         userInterruptedRef.current = false;
         setMessages(nextMessages);
         setCurrentConversationId(id);
-        if (window.innerWidth < 768) setSidebarOpen(false);
       }
     } catch (e) {
       console.error(e); alert(e?.message || "会话数据不兼容");
