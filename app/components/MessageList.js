@@ -223,10 +223,31 @@ export default function MessageList({
       />
 
       {messages.length === 0 ? (
-        <div className="h-full flex flex-col items-center justify-center text-zinc-400">
-          <Sparkles size={40} className="mb-4 text-zinc-300" />
-          <p className="font-medium">开始新对话</p>
-        </div>
+        loading ? (
+          // 加载历史会话时的居中加载动画
+          <div className="h-full flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1.5 px-4 py-3 bg-zinc-100 rounded-2xl">
+              <span
+                className="loading-dot w-2 h-2 bg-zinc-400 rounded-full animate-dot-bounce"
+                style={{ animationDelay: "0ms" }}
+              />
+              <span
+                className="loading-dot w-2 h-2 bg-zinc-400 rounded-full animate-dot-bounce"
+                style={{ animationDelay: "150ms" }}
+              />
+              <span
+                className="loading-dot w-2 h-2 bg-zinc-400 rounded-full animate-dot-bounce"
+                style={{ animationDelay: "300ms" }}
+              />
+            </div>
+            <p className="mt-3 text-sm text-zinc-400">加载中...</p>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-zinc-400">
+            <Sparkles size={40} className="mb-4 text-zinc-300" />
+            <p className="font-medium">开始新对话</p>
+          </div>
+        )
       ) : (
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;

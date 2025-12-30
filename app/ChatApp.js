@@ -221,6 +221,7 @@ export default function ChatApp() {
 
   const loadConversation = async (id) => {
     setLoading(true);
+    setMessages([]); // 先清空消息，显示加载动画
     try {
       const res = await fetch(`/api/conversations/${id}`);
       const data = await res.json(); if (!res.ok) throw new Error(data?.error || res.statusText);
