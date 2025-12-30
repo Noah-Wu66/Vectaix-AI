@@ -58,9 +58,17 @@ async function buildGeminiContentsFromMessages(messages) {
     for (const msg of messages || []) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
-        const storedParts = getStoredPartsFromMessage(msg);
+        let storedParts = getStoredPartsFromMessage(msg);
+        // 兼容旧消息：如果没有 parts 字段，从 content 和 image 构建
         if (!storedParts) {
-            throw createHttpError(409, 'Outdated conversation: missing message parts');
+            storedParts = [];
+            if (isNonEmptyString(msg.content)) {
+                storedParts.push({ text: msg.content });
+            }
+            if (isNonEmptyString(msg.image)) {
+                storedParts.push({ inlineData: { url: msg.image, mimeType: msg.mimeType || 'image/jpeg' } });
+            }
+            if (storedParts.length === 0) continue;
         }
         const parts = [];
         for (const storedPart of storedParts) {
@@ -188,14 +196,8 @@ export async function POST(req) {
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate || [];
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
-            effectiveMsgs.forEach(msg => {
-                if (msg.role === 'user' || msg.role === 'model') {
-                    contents.push({
-                        role: msg.role,
-                        parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
-                    });
-                }
-            });
+            // 使用 buildGeminiContentsFromMessages 正确处理图片消息
+            contents = await buildGeminiContentsFromMessages(effectiveMsgs);
         } else {
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
             effectiveHistory.forEach(msg => {
