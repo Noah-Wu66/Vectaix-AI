@@ -16,6 +16,7 @@ import { CHAT_MODELS } from "./ChatModels";
 export default function Composer({
   loading,
   isStreaming,
+  isWaitingForAI,
   model,
   onModelChange,
   thinkingLevel,
@@ -534,14 +535,14 @@ export default function Composer({
           />
 
           <button
-            onClick={isStreaming || loading ? onStop : handleSend}
-            disabled={!isStreaming && !loading && !input.trim() && !selectedImage}
+            onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
+            disabled={!isStreaming && !isWaitingForAI && !input.trim() && !selectedImage}
             className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${
-              isStreaming || loading ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
+              isStreaming || isWaitingForAI ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
             }`}
             type="button"
           >
-            {isStreaming || loading ? <Square size={16} /> : <Send size={16} />}
+            {isStreaming || isWaitingForAI ? <Square size={16} /> : <Send size={16} />}
           </button>
         </div>
       </div>

@@ -487,8 +487,8 @@ export default function MessageList({
         })
       )}
 
-      {/* 只在加载中且没有正在流式输出的消息时显示加载指示器 */}
-      {loading && !messages.some((m) => m.isStreaming) && (
+      {/* 只在有消息且加载中且没有正在流式输出的消息时显示加载指示器 */}
+      {messages.length > 0 && loading && !messages.some((m) => m.isStreaming) && (
         <div className="flex gap-2 sm:gap-3 items-start">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0 bg-zinc-100 text-zinc-600">
             <Bot size={14} />
