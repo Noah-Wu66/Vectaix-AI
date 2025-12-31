@@ -51,6 +51,12 @@ export default function Composer({
   const [selectedImage, setSelectedImage] = useState(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
   // 移动端键盘弹出时，同步可视高度，避免键盘遮挡输入区（尤其是 iOS Safari）
@@ -82,6 +88,7 @@ export default function Composer({
 
     const reader = new FileReader();
     reader.onload = (ev) => {
+      if (!mountedRef.current) return;
       setSelectedImage({
         file,
         preview: ev.target.result,

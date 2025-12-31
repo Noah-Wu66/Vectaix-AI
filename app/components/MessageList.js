@@ -35,6 +35,26 @@ function isSelectionFullyInsideElement(el) {
   return el.contains(anchor) && el.contains(focus);
 }
 
+function Thumb({ src, className = "", onClick }) {
+  if (!src) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick?.(src)}
+      className={`block text-left ${className}`}
+      title="点击查看"
+    >
+      <img
+        src={src}
+        alt=""
+        className="block max-w-[240px] max-h-[180px] w-auto h-auto object-cover rounded-lg border border-zinc-200 bg-zinc-50"
+        loading="eager"
+        decoding="async"
+      />
+    </button>
+  );
+}
+
 export default function MessageList({
   messages,
   loading,
@@ -89,27 +109,6 @@ export default function MessageList({
     }
     setDeleteConfirm({ open: false, index: null, role: null });
   };
-
-  function Thumb({ src, className = "" }) {
-    if (!src) return null;
-    return (
-      <button
-        type="button"
-        onClick={() => openLightbox(src)}
-        className={`block text-left ${className}`}
-        title="点击查看"
-      >
-        <img
-          src={src}
-          alt=""
-          className="block max-w-[240px] max-h-[180px] w-auto h-auto object-cover rounded-lg border border-zinc-200 bg-zinc-50"
-          // 聊天里的图片应该优先显示；lazy 会在列表更新/重排时明显变慢
-          loading="eager"
-          decoding="async"
-        />
-      </button>
-    );
-  }
 
   const getMessageImageSrc = (msg) => {
     if (msg && typeof msg.image === "string" && msg.image) return msg.image;
@@ -306,7 +305,7 @@ export default function MessageList({
                           : null;
                     return showSrc ? (
                       <div className="w-fit">
-                        <Thumb src={showSrc} />
+                        <Thumb src={showSrc} onClick={openLightbox} />
                       </div>
                     ) : null;
                   })()}
@@ -400,7 +399,7 @@ export default function MessageList({
                             return ordered.map(({ part, idx }) => {
                               const url = part?.inlineData?.url;
                               if (typeof url === "string" && url) {
-                                return <Thumb key={idx} src={url} className="w-fit" />;
+                                return <Thumb key={idx} src={url} className="w-fit" onClick={openLightbox} />;
                               }
                               if (part && typeof part.text === "string" && part.text.trim()) {
                                 return (
@@ -417,7 +416,7 @@ export default function MessageList({
                         <>
                           {msg.image && (
                             <div className="mb-2 w-fit">
-                              <Thumb src={msg.image} />
+                              <Thumb src={msg.image} onClick={openLightbox} />
                             </div>
                           )}
 

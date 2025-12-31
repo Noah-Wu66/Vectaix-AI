@@ -7,6 +7,11 @@ import { useUserSettings } from "./lib/useUserSettings";
 import AuthModal from "./components/AuthModal";
 import ChatLayout from "./components/ChatLayout";
 import SettingsErrorView from "./components/SettingsErrorView";
+
+// Simple unique id generator
+let msgIdCounter = 0;
+const generateMsgId = () => `msg_${Date.now()}_${++msgIdCounter}`;
+
 const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium", large: "text-size-large" };
 const isImageConversation = (msgs = []) => msgs.some((m) => m?.role === "model" && m.type === "parts");
 export default function ChatApp() {
@@ -45,7 +50,9 @@ export default function ChatApp() {
   const chatAbortRef = useRef(null);
   const chatRequestLockRef = useRef(false);
   const lastTextModelRef = useRef("gemini-3-pro-preview");
+  const isStreamingRef = useRef(false);
   const isStreaming = messages.some((m) => m.isStreaming);
+  isStreamingRef.current = isStreaming;
   const SCROLL_BOTTOM_THRESHOLD = 80;
 
   const distanceToBottom = (el) => {
@@ -90,8 +97,25 @@ export default function ChatApp() {
         } else {
           setShowAuthModal(true);
         }
+      })
+      .catch((err) => {
+        console.error("Auth check failed:", err);
+        // On network error, show auth modal as fallback
+        setShowAuthModal(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Cleanup: abort pending requests on unmount
+  useEffect(() => {
+    return () => {
+      chatAbortRef.current?.abort();
+      chatAbortRef.current = null;
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = 0;
+      }
+    };
   }, []);
 
   const fetchConversations = async () => {
@@ -169,14 +193,14 @@ export default function ChatApp() {
     if (typeof ResizeObserver === "undefined") return;
 
     const ro = new ResizeObserver(() => {
-      if (!isStreaming) return;
+      if (!isStreamingRef.current) return;
       if (userInterruptedRef.current) return;
       scrollToBottom();
     });
 
     ro.observe(el);
     return () => ro.disconnect();
-  }, [isStreaming]);
+  }, []);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -367,6 +391,7 @@ export default function ChatApp() {
     userInterruptedRef.current = false;
 
     const userMsg = {
+      id: generateMsgId(),
       role: "user",
       content: text,
       type: "text",
@@ -435,7 +460,7 @@ export default function ChatApp() {
       console.error(err);
       setMessages((prev) => [
         ...prev,
-        { role: "model", content: "Error: " + err.message, type: "error" },
+        { id: generateMsgId(), role: "model", content: "Error: " + err.message, type: "error" },
       ]);
       setLoading(false);
     } finally {
@@ -593,7 +618,7 @@ export default function ChatApp() {
       setLoading(false);
       setMessages((prev) => [
         ...prev,
-        { role: "model", content: "Error: " + (e?.message || "图片处理失败"), type: "error" },
+        { id: generateMsgId(), role: "model", content: "Error: " + (e?.message || "图片处理失败"), type: "error" },
       ]);
       return;
     }

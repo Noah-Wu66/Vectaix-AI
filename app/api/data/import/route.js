@@ -6,6 +6,10 @@ import { getAuthPayload } from '@/lib/auth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Limits to prevent DoS attacks
+const MAX_CONVERSATIONS = 1000;
+const MAX_MESSAGES_PER_CONVERSATION = 500;
+
 const ALLOWED_MESSAGE_TYPES = new Set(['text', 'parts', 'error']);
 const ALLOWED_ROLES = new Set(['user', 'model']);
 
@@ -44,6 +48,11 @@ function sanitizeConversation(conv, idx, userId) {
 
   const title = typeof conv.title === 'string' ? conv.title : 'New Chat';
   const messagesSrc = Array.isArray(conv.messages) ? conv.messages : [];
+
+  if (messagesSrc.length > MAX_MESSAGES_PER_CONVERSATION) {
+    throw new Error(`conversations[${idx}] has too many messages (max ${MAX_MESSAGES_PER_CONVERSATION})`);
+  }
+
   const messages = messagesSrc.map((m, mi) => sanitizeMessage(m, mi));
 
   const out = {
@@ -87,6 +96,11 @@ export async function POST(req) {
 
     const conversationsSrc = payload.data.conversations;
     if (!Array.isArray(conversationsSrc)) throw new Error('data.conversations must be an array');
+
+    if (conversationsSrc.length > MAX_CONVERSATIONS) {
+      throw new Error(`Too many conversations (max ${MAX_CONVERSATIONS})`);
+    }
+
     const settingsSrc = payload.data.settings ?? null;
     validateSettings(settingsSrc);
 

@@ -3,8 +3,27 @@ import { getAuthPayload } from "@/lib/auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Allowed domains for image downloads (prevent SSRF attacks)
+const ALLOWED_DOMAINS = [
+  "blob.vercel-storage.com",
+  "public.blob.vercel-storage.com",
+  // Add other trusted image CDN domains here
+];
+
 function isNonEmptyString(v) {
   return typeof v === "string" && v.trim().length > 0;
+}
+
+function isAllowedDomain(url) {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    return ALLOWED_DOMAINS.some(
+      (domain) => hostname === domain || hostname.endsWith("." + domain)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function pickFilenameFromUrl(url, fallbackExt = "png") {
@@ -47,6 +66,14 @@ export async function GET(req) {
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     return Response.json({ error: "Invalid url protocol" }, { status: 400 });
+  }
+
+  // SSRF protection: only allow whitelisted domains
+  if (!isAllowedDomain(url)) {
+    return Response.json(
+      { error: "Domain not allowed for security reasons" },
+      { status: 403 }
+    );
   }
 
   const upstream = await fetch(url, { cache: "no-store" });

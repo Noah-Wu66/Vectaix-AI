@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const DEFAULT_MODEL = "gemini-3-pro-preview";
 const DEFAULT_THINKING_LEVELS = {
@@ -48,6 +48,12 @@ export function useUserSettings() {
   const [fontSize, _setFontSize] = useState("medium");
   const [settingsError, setSettingsError] = useState(null);
 
+  // Refs to avoid stale closures in callbacks
+  const modelRef = useRef(model);
+  const activePromptIdsRef = useRef(activePromptIds);
+  modelRef.current = model;
+  activePromptIdsRef.current = activePromptIds;
+
   // 主题/字号只保存在本地（localStorage），不走数据库
   useEffect(() => {
     const localTheme = readLocalUiSetting(UI_THEME_MODE_KEY);
@@ -88,7 +94,7 @@ export function useUserSettings() {
       }
 
       setSettingsError(null);
-      const nextModel = typeof settings.model === "string" ? settings.model : model;
+      const nextModel = typeof settings.model === "string" ? settings.model : DEFAULT_MODEL;
       if (typeof settings.model === "string") setModel(settings.model);
       setThinkingLevels(settings.thinkingLevels);
       if (typeof settings.historyLimit === "number") setHistoryLimit(settings.historyLimit);
@@ -106,7 +112,7 @@ export function useUserSettings() {
       setSettingsError(e?.message || "Settings error");
       return null;
     }
-  }, [model]);
+  }, []);
 
   const saveSettings = useCallback(async (updates) => {
     try {
@@ -165,16 +171,16 @@ export function useUserSettings() {
       const settings = data?.settings;
       if (settings && typeof settings === "object") {
         if (Array.isArray(settings.systemPrompts)) setSystemPrompts(settings.systemPrompts);
-        const ids = isPlainObject(settings.activeSystemPromptIds) ? settings.activeSystemPromptIds : (activePromptIds || {});
+        const ids = isPlainObject(settings.activeSystemPromptIds) ? settings.activeSystemPromptIds : (activePromptIdsRef.current || {});
         setActivePromptIds(ids);
-        setActivePromptId(ids?.[model] || settings.activeSystemPromptId || null);
+        setActivePromptId(ids?.[modelRef.current] || settings.activeSystemPromptId || null);
       }
       return settings ?? null;
     } catch (e) {
       setSettingsError(e?.message || "Settings error");
       return null;
     }
-  }, [activePromptIds, model]);
+  }, []);
 
   const deletePrompt = useCallback(async (promptId) => {
     try {
@@ -200,16 +206,16 @@ export function useUserSettings() {
       const settings = data?.settings;
       if (settings && typeof settings === "object") {
         if (Array.isArray(settings.systemPrompts)) setSystemPrompts(settings.systemPrompts);
-        const ids = isPlainObject(settings.activeSystemPromptIds) ? settings.activeSystemPromptIds : (activePromptIds || {});
+        const ids = isPlainObject(settings.activeSystemPromptIds) ? settings.activeSystemPromptIds : (activePromptIdsRef.current || {});
         setActivePromptIds(ids);
-        setActivePromptId(ids?.[model] || settings.activeSystemPromptId || null);
+        setActivePromptId(ids?.[modelRef.current] || settings.activeSystemPromptId || null);
       }
       return settings ?? null;
     } catch (e) {
       setSettingsError(e?.message || "Settings error");
       return null;
     }
-  }, [activePromptIds, model]);
+  }, []);
 
   const updatePrompt = useCallback(async ({ promptId, name, content }) => {
     try {
@@ -235,16 +241,16 @@ export function useUserSettings() {
       const settings = data?.settings;
       if (settings && typeof settings === "object") {
         if (Array.isArray(settings.systemPrompts)) setSystemPrompts(settings.systemPrompts);
-        const ids = isPlainObject(settings.activeSystemPromptIds) ? settings.activeSystemPromptIds : (activePromptIds || {});
+        const ids = isPlainObject(settings.activeSystemPromptIds) ? settings.activeSystemPromptIds : (activePromptIdsRef.current || {});
         setActivePromptIds(ids);
-        setActivePromptId(ids?.[model] || settings.activeSystemPromptId || null);
+        setActivePromptId(ids?.[modelRef.current] || settings.activeSystemPromptId || null);
       }
       return settings ?? null;
     } catch (e) {
       setSettingsError(e?.message || "Settings error");
       return null;
     }
-  }, [activePromptIds, model]);
+  }, []);
 
   return {
     model,
