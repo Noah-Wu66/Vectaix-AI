@@ -2,6 +2,9 @@ import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import { getAuthPayload } from '@/lib/auth';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     try {
         await dbConnect();
