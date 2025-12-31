@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Sparkles, Zap } from "lucide-react";
+import { Sparkles, Zap } from "lucide-react";
 
 export const CHAT_MODELS = [
   {
@@ -14,13 +14,6 @@ export const CHAT_MODELS = [
     shortName: "思考",
     Icon: Sparkles,
     color: "text-purple-400",
-  },
-  {
-    id: "gemini-3-pro-image-preview",
-    name: "图片",
-    shortName: "图片",
-    Icon: ImageIcon,
-    color: "text-pink-400",
   },
 ];
 

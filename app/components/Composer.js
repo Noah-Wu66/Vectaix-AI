@@ -23,10 +23,6 @@ export default function Composer({
   setThinkingLevel,
   historyLimit,
   setHistoryLimit,
-  aspectRatio,
-  setAspectRatio,
-  imageSize,
-  setImageSize,
   systemPrompts,
   activePromptIds,
   setActivePromptIds,
@@ -201,11 +197,7 @@ export default function Composer({
                         key={m.id}
                         onClick={() => {
                           setShowModelMenu(false);
-                          if (m.id === "gemini-3-pro-image-preview") {
-                            window.open("https://studio.vectaix.com/", "_blank");
-                          } else {
-                            onModelChange(m.id);
-                          }
+                          onModelChange(m.id);
                         }}
                         className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${
                           model === m.id

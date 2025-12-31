@@ -13,7 +13,7 @@ let msgIdCounter = 0;
 const generateMsgId = () => `msg_${Date.now()}_${++msgIdCounter}`;
 
 const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium", large: "text-size-large" };
-const isImageConversation = (msgs = []) => msgs.some((m) => m?.role === "model" && m.type === "parts");
+
 export default function ChatApp() {
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -28,7 +28,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, aspectRatio, setAspectRatio, imageSize, setImageSize, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, settingsError, setSettingsError, fetchSettings, saveSettings, addPrompt, deletePrompt, updatePrompt } = useUserSettings();
+  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, settingsError, setSettingsError, fetchSettings, saveSettings, addPrompt, deletePrompt, updatePrompt } = useUserSettings();
   const { isDark } = useThemeMode(themeMode);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
@@ -435,8 +435,6 @@ export default function ChatApp() {
       const config = buildChatConfig({
         model,
         thinkingLevel: thinkingLevels?.[model],
-        aspectRatio,
-        imageSize,
         mediaResolution,
         systemPrompts,
         activePromptId,
@@ -487,8 +485,6 @@ export default function ChatApp() {
     const config = buildChatConfig({
       model,
       thinkingLevel: thinkingLevels?.[model],
-      aspectRatio,
-      imageSize,
       mediaResolution,
       systemPrompts,
       activePromptId,
@@ -508,7 +504,7 @@ export default function ChatApp() {
         setMessages,
         setLoading,
         signal: (chatAbortRef.current = new AbortController()).signal,
-        // 图片模型也必须走 regenerate：否则服务端会当作“新用户消息”追加，历史图片/签名带不上
+        // 图片模型也必须走 regenerate：否则服务端会当作"新用户消息"追加，历史图片/签名带不上
         mode: "regenerate",
         messagesForRegenerate: historyWithUser,
       });
@@ -629,8 +625,6 @@ export default function ChatApp() {
     const config = buildChatConfig({
       model,
       thinkingLevel: thinkingLevels?.[model],
-      aspectRatio,
-      imageSize,
       mediaResolution,
       systemPrompts,
       activePromptId,
@@ -650,7 +644,7 @@ export default function ChatApp() {
         setMessages,
         setLoading,
         signal: (chatAbortRef.current = new AbortController()).signal,
-        // 图片模型也要走 regenerate，否则编辑后的“图片对话上下文”会丢
+        // 图片模型也要走 regenerate，否则编辑后的"图片对话上下文"会丢
         mode: "regenerate",
         messagesForRegenerate: nextMessages,
       });
