@@ -197,10 +197,14 @@ export default function Composer({
                         key={m.id}
                         onClick={() => {
                           setShowModelMenu(false);
-                          onModelChange(m.id);
+                          if (m.externalLink) {
+                            window.open(m.externalLink, "_blank");
+                          } else {
+                            onModelChange(m.id);
+                          }
                         }}
                         className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${
-                          model === m.id
+                          model === m.id && !m.externalLink
                             ? "bg-zinc-600 text-white"
                             : "text-zinc-600 hover:bg-zinc-50"
                         }`}
@@ -208,7 +212,7 @@ export default function Composer({
                       >
                         <m.Icon
                           size={16}
-                          className={model === m.id ? "" : m.color}
+                          className={model === m.id && !m.externalLink ? "" : m.color}
                         />
                         {m.name}
                       </button>

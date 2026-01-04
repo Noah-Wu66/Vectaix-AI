@@ -1,4 +1,4 @@
-import { Sparkles, Zap } from "lucide-react";
+import { Sparkles, Zap, Image } from "lucide-react";
 
 export const CHAT_MODELS = [
   {
@@ -14,6 +14,14 @@ export const CHAT_MODELS = [
     shortName: "思考",
     Icon: Sparkles,
     color: "text-purple-400",
+  },
+  {
+    id: "image-studio",
+    name: "图片",
+    shortName: "图片",
+    Icon: Image,
+    color: "text-blue-400",
+    externalLink: "https://studio.vectaix.com/",
   },
 ];
 
