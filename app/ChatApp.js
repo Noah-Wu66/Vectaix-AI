@@ -241,6 +241,10 @@ export default function ChatApp() {
     setConversations([]);
     setCurrentConversationId(null);
     setSettingsError(null);
+    // 清除登录表单敏感信息
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
     setShowAuthModal(true);
     setShowProfileModal(false);
   };
