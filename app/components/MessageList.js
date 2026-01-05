@@ -250,6 +250,10 @@ export default function MessageList({
       ) : (
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
+          // 跳过等待首个内容且没有任何可显示内容的 model 消息
+          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts) {
+            return null;
+          }
           return (
             <motion.div
               key={msg.id ?? i}
@@ -265,7 +269,7 @@ export default function MessageList({
                 <span className="text-xs text-zinc-400 font-medium">你</span>
               </div>
             )}
-            {msg.role === "model" && (msg.thought || msg.content || msg.isStreaming || hasParts) && (
+            {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts) && (
               <div className="flex items-center gap-1.5">
                 <div className="w-6 h-6 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
                   <Bot size={12} />
@@ -486,8 +490,8 @@ export default function MessageList({
         })
       )}
 
-      {/* 只在有消息且加载中且没有正在流式输出的消息时显示加载指示器 */}
-      {messages.length > 0 && loading && !messages.some((m) => m.isStreaming) && (
+      {/* 只在有消息且加载中且没有正在流式输出的消息时显示加载指示器，或有消息在等待首个内容时 */}
+      {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => m.isStreaming && !m.isWaitingFirstChunk) && (
         <div className="flex gap-2 sm:gap-3 items-start">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0 bg-zinc-100 text-zinc-600">
             <Bot size={14} />

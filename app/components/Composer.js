@@ -511,7 +511,7 @@ export default function Composer({
                       {/* Budget Tokens (Claude only) */}
                       <div>
                         <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                          思考预算 (Budget Tokens)
+                          思考深度
                         </label>
                         <select
                           value={budgetTokens}

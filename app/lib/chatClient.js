@@ -101,6 +101,7 @@ export async function runChat({
       id: streamMsgId,
       isStreaming: true,
       isThinkingStreaming: true,
+      isWaitingFirstChunk: true,
       thought: "",
     },
   ]);
@@ -116,6 +117,7 @@ export async function runChat({
   const convIdForSync = newConvId || currentConversationId || conversationId;
 
   let flushScheduled = false;
+  let hasReceivedContent = false;
   const flushStreamingMessage = () => {
     flushScheduled = false;
     setMessages((prev) => {
@@ -127,8 +129,17 @@ export async function runChat({
       if (idx < 0) return prev;
 
       const base = prev[idx] || {};
-      const nextMsg = { ...base, content: fullText, thought: fullThought, isThinkingStreaming: !thinkingEnded };
-      if (base.content === nextMsg.content && base.thought === nextMsg.thought && base.isThinkingStreaming === nextMsg.isThinkingStreaming) {
+      // 当有内容时，标记已收到首个内容
+      const nowHasContent = fullText.length > 0 || fullThought.length > 0;
+      if (nowHasContent && !hasReceivedContent) hasReceivedContent = true;
+      const nextMsg = {
+        ...base,
+        content: fullText,
+        thought: fullThought,
+        isThinkingStreaming: !thinkingEnded,
+        isWaitingFirstChunk: !hasReceivedContent,
+      };
+      if (base.content === nextMsg.content && base.thought === nextMsg.thought && base.isThinkingStreaming === nextMsg.isThinkingStreaming && base.isWaitingFirstChunk === nextMsg.isWaitingFirstChunk) {
         return prev;
       }
 
