@@ -23,6 +23,10 @@ export default function Composer({
   setThinkingLevel,
   historyLimit,
   setHistoryLimit,
+  maxTokens,
+  setMaxTokens,
+  budgetTokens,
+  setBudgetTokens,
   systemPrompts,
   activePromptIds,
   setActivePromptIds,
@@ -482,6 +486,47 @@ export default function Composer({
                           </select>
                         </div>
                       )}
+
+                      {/* Max Tokens */}
+                      <div>
+                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                          最大输出 (Max Tokens)
+                        </label>
+                        <select
+                          value={maxTokens}
+                          onChange={(e) => setMaxTokens(Number(e.target.value))}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
+                        >
+                          <option value={1024}>1K</option>
+                          <option value={2048}>2K</option>
+                          <option value={4096}>4K</option>
+                          <option value={8192}>8K</option>
+                          <option value={12288}>12K</option>
+                          <option value={16384}>16K</option>
+                          <option value={32768}>32K</option>
+                          <option value={65536}>64K</option>
+                        </select>
+                      </div>
+
+                      {/* Budget Tokens (Claude only) */}
+                      <div>
+                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                          思考预算 (Budget Tokens)
+                        </label>
+                        <select
+                          value={budgetTokens}
+                          onChange={(e) => setBudgetTokens(Number(e.target.value))}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
+                        >
+                          <option value={1024}>1K</option>
+                          <option value={2048}>2K</option>
+                          <option value={4096}>4K</option>
+                          <option value={8192}>8K</option>
+                          <option value={12288}>12K</option>
+                          <option value={16384}>16K</option>
+                          <option value={32768}>32K</option>
+                        </select>
+                      </div>
                     </div>
                   </motion.div>
                 </>

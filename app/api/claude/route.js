@@ -1,5 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
-import { put } from "@vercel/blob";
+import Anthropic from "@anthropic-ai/sdk";
 import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
@@ -21,45 +20,41 @@ function isNonEmptyString(value) {
     return typeof value === 'string' && value.trim().length > 0;
 }
 
-function createHttpError(status, message) {
-    const err = new Error(message);
-    err.status = status;
-    return err;
-}
-
 function getStoredPartsFromMessage(msg) {
     if (Array.isArray(msg?.parts) && msg.parts.length > 0) return msg.parts;
     return null;
 }
 
-async function storedPartToRequestPart(part) {
+async function storedPartToClaudePart(part) {
     if (!part || typeof part !== 'object') return null;
 
     if (isNonEmptyString(part.text)) {
-        const p = { text: part.text };
-        if (isNonEmptyString(part.thoughtSignature)) p.thoughtSignature = part.thoughtSignature;
-        return p;
+        return { type: 'text', text: part.text };
     }
 
     const url = part?.inlineData?.url;
     if (isNonEmptyString(url)) {
         const { base64Data, mimeType: fetchedMimeType } = await fetchImageAsBase64(url);
         const mimeType = part.inlineData?.mimeType || fetchedMimeType;
-        const p = { inlineData: { mimeType, data: base64Data } };
-        if (isNonEmptyString(part.thoughtSignature)) p.thoughtSignature = part.thoughtSignature;
-        return p;
+        return {
+            type: 'image',
+            source: {
+                type: 'base64',
+                media_type: mimeType,
+                data: base64Data
+            }
+        };
     }
 
     return null;
 }
 
-async function buildGeminiContentsFromMessages(messages) {
-    const contents = [];
+async function buildClaudeMessagesFromHistory(messages) {
+    const claudeMessages = [];
     for (const msg of messages || []) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
         let storedParts = getStoredPartsFromMessage(msg);
-        // 兼容旧消息：如果没有 parts 字段，从 content 和 image 构建
         if (!storedParts) {
             storedParts = [];
             if (isNonEmptyString(msg.content)) {
@@ -70,19 +65,20 @@ async function buildGeminiContentsFromMessages(messages) {
             }
             if (storedParts.length === 0) continue;
         }
-        const parts = [];
-        for (const storedPart of storedParts) {
-            const p = await storedPartToRequestPart(storedPart);
-            if (p) parts.push(p);
-        }
-        if (parts.length) contents.push({ role: msg.role, parts });
-    }
-    return contents;
-}
 
-function mimeTypeToExt(mimeType) {
-    if (!isNonEmptyString(mimeType)) return 'png';
-    return mimeType.split(';')[0].split('/')[1] || 'png';
+        const content = [];
+        for (const storedPart of storedParts) {
+            const p = await storedPartToClaudePart(storedPart);
+            if (p) content.push(p);
+        }
+        if (content.length) {
+            claudeMessages.push({
+                role: msg.role === 'model' ? 'assistant' : 'user',
+                content
+            });
+        }
+    }
+    return claudeMessages;
 }
 
 function sanitizeStoredMessage(msg) {
@@ -106,40 +102,24 @@ function sanitizeStoredMessages(messages) {
 }
 
 export async function POST(req) {
-    // 写入许可时间戳：只有当 conversation.updatedAt <= 此值时，才允许写入 model 消息
-    // 用于防止"停止后再 regenerate"时，旧请求晚于新请求覆盖导致重复回答
     let writePermitTime = null;
 
     try {
-        // Validate request body
         let body;
         try {
             body = await req.json();
         } catch (jsonError) {
             console.error("Invalid JSON in request body:", jsonError);
-            return Response.json(
-                { error: 'Invalid JSON in request body' },
-                { status: 400 }
-            );
+            return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
         }
 
         const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages } = body;
 
-        // Validate required fields
         if (!model || typeof model !== 'string') {
-            console.error("Missing or invalid model field");
-            return Response.json(
-                { error: 'Model is required and must be a string' },
-                { status: 400 }
-            );
+            return Response.json({ error: 'Model is required' }, { status: 400 });
         }
-
         if (!prompt || typeof prompt !== 'string') {
-            console.error("Missing or invalid prompt field");
-            return Response.json(
-                { error: 'Prompt is required and must be a string' },
-                { status: 400 }
-            );
+            return Response.json({ error: 'Prompt is required' }, { status: 400 });
         }
 
         const auth = await getAuthPayload();
@@ -151,18 +131,18 @@ export async function POST(req) {
                 if (userDoc) user = auth;
             } catch (dbError) {
                 console.error("Database connection error:", dbError);
-                return Response.json(
-                    { error: 'Database connection failed' },
-                    { status: 500 }
-                );
+                return Response.json({ error: 'Database connection failed' }, { status: 500 });
             }
         }
 
         let currentConversationId = conversationId;
 
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const client = new Anthropic({
+            apiKey: process.env.RIGHTCODE_API_KEY,
+            baseURL: "https://www.right.codes/claude"
+        });
 
-        // 1) Ensure Conversation exists (for logged-in users)
+        // 创建新会话
         if (user && !currentConversationId) {
             const title = (prompt || '').length > 30 ? (prompt || '').substring(0, 30) + '...' : (prompt || '');
             const newConv = await Conversation.create({
@@ -173,8 +153,7 @@ export async function POST(req) {
             currentConversationId = newConv._id.toString();
         }
 
-        // 2) Prepare Request Contents
-        let contents = [];
+        let claudeMessages = [];
         const limit = Number.parseInt(historyLimit);
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
@@ -189,87 +168,49 @@ export async function POST(req) {
             ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
             storedMessagesForRegenerate = conv.messages || [];
-            // 记录写入许可时间：只有 updatedAt 仍为此值时才允许写入 model 消息
             writePermitTime = conv.updatedAt?.getTime?.() || regenerateTime;
         }
 
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate || [];
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
-            // 使用 buildGeminiContentsFromMessages 正确处理图片消息
-            contents = await buildGeminiContentsFromMessages(effectiveMsgs);
+            claudeMessages = await buildClaudeMessagesFromHistory(effectiveMsgs);
         } else {
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
-            effectiveHistory.forEach(msg => {
+            for (const msg of effectiveHistory) {
                 if (msg.role === 'user' || msg.role === 'model') {
-                    // History remains text-only fallback to save bandwidth
-                    contents.push({
-                        role: msg.role,
-                        parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
+                    claudeMessages.push({
+                        role: msg.role === 'model' ? 'assistant' : 'user',
+                        content: [{ type: 'text', text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
                     });
                 }
-            });
+            }
         }
 
-        // regenerate 模式：最后一条用户消息已经在 messages 里了，这里不再追加“新用户消息”
-        let currentParts = isRegenerateMode ? null : [{ text: prompt }];
-
-        // Handle Image Input (URL from Blob)
         let dbImageEntry = null;
         let dbImageMimeType = null;
 
-        if (!isRegenerateMode && config?.image?.url) {
-            const { base64Data, mimeType } = await fetchImageAsBase64(config.image.url);
-
-            currentParts.push({
-                inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data
-                },
-                ...(config.mediaResolution ? { mediaResolution: { level: config.mediaResolution } } : {})
-            });
-            dbImageEntry = config.image.url;
-            dbImageMimeType = mimeType;
-        }
-
         if (!isRegenerateMode) {
-            contents.push({
-                role: "user",
-                parts: currentParts
-            });
-        }
+            const userContent = [{ type: 'text', text: prompt }];
 
-        // 2. Prepare Payload
-        const systemText = config?.systemPrompt || "You are a helpful AI assistant.";
-        const payload = {
-            model: model,
-            contents: contents,
-            config: {
-                systemInstruction: {
-                    parts: [{ text: systemText }]
-                },
-                ...config?.generationConfig
+            if (config?.image?.url) {
+                const { base64Data, mimeType } = await fetchImageAsBase64(config.image.url);
+                userContent.push({
+                    type: 'image',
+                    source: {
+                        type: 'base64',
+                        media_type: mimeType,
+                        data: base64Data
+                    }
+                });
+                dbImageEntry = config.image.url;
+                dbImageMimeType = mimeType;
             }
-        };
 
-        // 添加 maxOutputTokens 支持
-        if (config?.maxTokens) {
-            payload.config.maxOutputTokens = config.maxTokens;
+            claudeMessages.push({ role: 'user', content: userContent });
         }
 
-        if (config?.thinkingLevel) {
-            if (!payload.config) payload.config = {};
-            payload.config.thinkingConfig = {
-                thinkingLevel: config.thinkingLevel,
-                includeThoughts: true  // 获取思考过程摘要
-            };
-        }
-
-        // 启用 Google Search 工具（所有模型均可联网）
-        if (!payload.config) payload.config = {};
-        payload.config.tools = [{ googleSearch: {} }];
-
-        // 3. Database Logic
+        // 保存用户消息
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
@@ -288,92 +229,89 @@ export async function POST(req) {
                         role: 'user',
                         content: prompt,
                         type: 'text',
-                        image: dbImageEntry, // URL
+                        image: dbImageEntry,
                         ...(dbImageMimeType ? { mimeType: dbImageMimeType } : {}),
                         parts: storedUserParts
                     }
                 },
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
-            // 记录写入许可时间
             writePermitTime = updatedConv?.updatedAt?.getTime?.() || userMsgTime;
         }
 
-        // 4. Generate Response
-        // Text Stream - 使用 SSE 格式以解决移动端缓冲问题
-        const streamResult = await ai.models.generateContentStream({
+        // 构建请求参数
+        const maxTokens = config?.maxTokens || 65536;
+        const budgetTokens = config?.budgetTokens || 32768;
+        const systemPrompt = config?.systemPrompt || "You are a helpful AI assistant.";
+
+        const requestParams = {
             model: model,
-            contents: contents,
-            config: payload.config
-        });
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: claudeMessages,
+            stream: true,
+            thinking: {
+                type: "enabled",
+                budget_tokens: budgetTokens
+            }
+        };
+
+        const stream = await client.messages.stream(requestParams);
 
         const encoder = new TextEncoder();
-        // 客户端点击“停止/取消”会中断请求；此时必须停止生成并且不要把结果写入 DB
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
         try {
             req?.signal?.addEventListener?.('abort', onAbort, { once: true });
-        } catch {
-            // ignore
-        }
+        } catch { /* ignore */ }
 
-        // 填充字符串，用于突破缓冲区阈值（移动端浏览器/CDN 通常有 1KB-4KB 的缓冲）
         const PADDING = ' '.repeat(2048);
         let paddingSent = false;
         const HEARTBEAT_INTERVAL_MS = 15000;
         let heartbeatTimer = null;
 
-        const stream = new ReadableStream({
+        const responseStream = new ReadableStream({
             async start(controller) {
                 let fullText = "";
                 let fullThought = "";
+
                 try {
-                    // 心跳：避免移动端/代理层在长时间无输出时断开连接
                     const sendHeartbeat = () => {
                         try {
                             if (clientAborted) return;
                             controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
-                        } catch (e) {
-                            // ignore
-                        }
+                        } catch { /* ignore */ }
                     };
                     heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
-                    // 立即发送一次，尽早"打开"流并减少首包缓冲
                     sendHeartbeat();
 
-                    for await (const chunk of streamResult) {
+                    for await (const event of stream) {
                         if (clientAborted) break;
-                        const parts = chunk.candidates?.[0]?.content?.parts || [];
 
-                        for (const part of parts) {
-                            if (clientAborted) break;
-                            // 首次发送时附加填充以突破缓冲
-                            const padding = !paddingSent ? PADDING : '';
-                            paddingSent = true;
+                        const padding = !paddingSent ? PADDING : '';
+                        paddingSent = true;
 
-                            if (part.thought && part.text) {
-                                fullThought += part.text;
-                                const data = `data: ${JSON.stringify({ type: 'thought', content: part.text })}${padding}\n\n`;
+                        if (event.type === 'content_block_delta') {
+                            const delta = event.delta;
+                            if (delta.type === 'thinking_delta') {
+                                fullThought += delta.thinking;
+                                const data = `data: ${JSON.stringify({ type: 'thought', content: delta.thinking })}${padding}\n\n`;
                                 controller.enqueue(encoder.encode(data));
-                            } else if (part.text) {
-                                fullText += part.text;
-                                const data = `data: ${JSON.stringify({ type: 'text', content: part.text })}${padding}\n\n`;
+                            } else if (delta.type === 'text_delta') {
+                                fullText += delta.text;
+                                const data = `data: ${JSON.stringify({ type: 'text', content: delta.text })}${padding}\n\n`;
                                 controller.enqueue(encoder.encode(data));
                             }
                         }
                     }
 
-                    // 取消/断连：直接结束，不写 DB，不发送 DONE（避免“旧请求晚写入”导致重复回答）
                     if (clientAborted) {
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
 
-                    // 发送结束信号
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
-                    // 只有当会话未被其他请求覆盖时才写入（防止停止后 regenerate 导致重复回答）
-                    // writePermitTime 为 null 表示未登录或新建会话前的情况，此时允许写入
                     if (user && currentConversationId) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, updatedAt: { $lte: new Date(writePermitTime) } }
@@ -407,9 +345,7 @@ export async function POST(req) {
                     }
                     try {
                         req?.signal?.removeEventListener?.('abort', onAbort);
-                    } catch {
-                        // ignore
-                    }
+                    } catch { /* ignore */ }
                 }
             }
         });
@@ -418,41 +354,27 @@ export async function POST(req) {
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Cache-Control': 'no-cache, no-transform',
             'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no', // 禁用 nginx/反向代理缓冲
+            'X-Accel-Buffering': 'no',
         };
-        if (currentConversationId) { headers['X-Conversation-Id'] = currentConversationId; }
-        return new Response(stream, { headers });
+        if (currentConversationId) {
+            headers['X-Conversation-Id'] = currentConversationId;
+        }
+        return new Response(responseStream, { headers });
 
     } catch (error) {
-        // Log detailed error information
-        console.error("Chat API Error:", {
+        console.error("Claude API Error:", {
             message: error?.message,
             status: error?.status,
-            stack: error?.stack,
-            name: error?.name,
-            code: error?.code
+            stack: error?.stack
         });
 
         const status = typeof error?.status === 'number' ? error.status : 500;
-
-        // Provide user-friendly error messages
         let errorMessage = error?.message || "Internal Server Error";
 
-        // Add context for common errors
         if (error?.message?.includes('API_KEY')) {
             errorMessage = "API configuration error. Please check your API keys.";
-        } else if (error?.message?.includes('ECONNREFUSED')) {
-            errorMessage = "Failed to connect to external service.";
-        } else if (error?.message?.includes('fetch')) {
-            errorMessage = "Failed to fetch external resource.";
         }
 
-        return Response.json(
-            {
-                error: errorMessage,
-                details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
-            },
-            { status }
-        );
+        return Response.json({ error: errorMessage }, { status });
     }
 }

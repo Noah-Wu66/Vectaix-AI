@@ -5,9 +5,13 @@ export function buildChatConfig({
   systemPrompts,
   activePromptId,
   imageUrl,
+  maxTokens,
+  budgetTokens,
 }) {
   const cfg = {};
   cfg.thinkingLevel = thinkingLevel;
+  cfg.maxTokens = maxTokens;
+  cfg.budgetTokens = budgetTokens;
 
   const activeId = activePromptId == null ? null : String(activePromptId);
   const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
@@ -36,6 +40,7 @@ export async function runChat({
   signal,
   mode,
   messagesForRegenerate,
+  provider,
 }) {
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
@@ -54,10 +59,13 @@ export async function runChat({
     ...(mode === "regenerate" ? { messages: messagesForRegenerate || [] } : {}),
   };
 
+  // 根据 provider 选择 API 端点
+  const apiEndpoint = provider === "claude" ? "/api/claude" : "/api/chat";
+
   setLoading(true);
   let streamMsgId = null;
   try {
-  const res = await fetch("/api/chat", {
+  const res = await fetch(apiEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

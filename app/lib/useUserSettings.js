@@ -7,6 +7,8 @@ const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
   "gemini-3-pro-preview": "high",
 };
+const DEFAULT_MAX_TOKENS = 65536;
+const DEFAULT_BUDGET_TOKENS = 32768;
 
 // localStorage keys - 所有设置都本地存储，只有 systemPrompts 内容存数据库
 const UI_THEME_MODE_KEY = "vectaix_ui_themeMode";
@@ -16,6 +18,8 @@ const UI_THINKING_LEVELS_KEY = "vectaix_ui_thinkingLevels";
 const UI_HISTORY_LIMIT_KEY = "vectaix_ui_historyLimit";
 const UI_ACTIVE_PROMPT_IDS_KEY = "vectaix_ui_activePromptIds";
 const UI_ACTIVE_PROMPT_ID_KEY = "vectaix_ui_activePromptId";
+const UI_MAX_TOKENS_KEY = "vectaix_ui_maxTokens";
+const UI_BUDGET_TOKENS_KEY = "vectaix_ui_budgetTokens";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -69,6 +73,8 @@ export function useUserSettings() {
   const [activePromptId, _setActivePromptId] = useState(null);
   const [themeMode, _setThemeMode] = useState("system");
   const [fontSize, _setFontSize] = useState("medium");
+  const [maxTokens, _setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
+  const [budgetTokens, _setBudgetTokens] = useState(DEFAULT_BUDGET_TOKENS);
   const [settingsError, setSettingsError] = useState(null);
 
   const modelRef = useRef(model);
@@ -83,6 +89,8 @@ export function useUserSettings() {
     const localHistoryLimit = readLocalSetting(UI_HISTORY_LIMIT_KEY);
     const localActivePromptIds = readLocalJson(UI_ACTIVE_PROMPT_IDS_KEY);
     const localActivePromptId = readLocalSetting(UI_ACTIVE_PROMPT_ID_KEY);
+    const localMaxTokens = readLocalSetting(UI_MAX_TOKENS_KEY);
+    const localBudgetTokens = readLocalSetting(UI_BUDGET_TOKENS_KEY);
 
     if (typeof localTheme === "string") _setThemeMode(localTheme);
     if (typeof localFont === "string") _setFontSize(localFont);
@@ -91,6 +99,8 @@ export function useUserSettings() {
     if (localHistoryLimit !== null) _setHistoryLimit(Number(localHistoryLimit) || 0);
     if (isPlainObject(localActivePromptIds)) _setActivePromptIds(localActivePromptIds);
     if (typeof localActivePromptId === "string") _setActivePromptId(localActivePromptId);
+    if (localMaxTokens !== null) _setMaxTokens(Number(localMaxTokens) || DEFAULT_MAX_TOKENS);
+    if (localBudgetTokens !== null) _setBudgetTokens(Number(localBudgetTokens) || DEFAULT_BUDGET_TOKENS);
   }, []);
 
   const setModel = useCallback((m) => {
@@ -126,6 +136,16 @@ export function useUserSettings() {
   const setActivePromptId = useCallback((id) => {
     _setActivePromptId(id);
     writeLocalSetting(UI_ACTIVE_PROMPT_ID_KEY, id);
+  }, []);
+
+  const setMaxTokens = useCallback((tokens) => {
+    _setMaxTokens(tokens);
+    writeLocalSetting(UI_MAX_TOKENS_KEY, String(tokens));
+  }, []);
+
+  const setBudgetTokens = useCallback((tokens) => {
+    _setBudgetTokens(tokens);
+    writeLocalSetting(UI_BUDGET_TOKENS_KEY, String(tokens));
   }, []);
 
   const fetchSettings = useCallback(async () => {
@@ -281,6 +301,10 @@ export function useUserSettings() {
     setThemeMode,
     fontSize,
     setFontSize,
+    maxTokens,
+    setMaxTokens,
+    budgetTokens,
+    setBudgetTokens,
     settingsError,
     setSettingsError,
     fetchSettings,
