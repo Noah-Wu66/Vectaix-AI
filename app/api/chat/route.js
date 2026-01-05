@@ -94,6 +94,7 @@ function sanitizeStoredMessage(msg) {
         type: typeof msg.type === 'string' ? msg.type : 'text',
     };
     if (isNonEmptyString(msg.image)) out.image = msg.image;
+    if (Array.isArray(msg.images) && msg.images.length > 0) out.images = msg.images;
     if (isNonEmptyString(msg.mimeType)) out.mimeType = msg.mimeType;
     if (isNonEmptyString(msg.thought)) out.thought = msg.thought;
     if (Array.isArray(msg.parts) && msg.parts.length > 0) out.parts = msg.parts;
@@ -214,22 +215,36 @@ export async function POST(req) {
         // regenerate 模式：最后一条用户消息已经在 messages 里了，这里不再追加“新用户消息”
         let currentParts = isRegenerateMode ? null : [{ text: prompt }];
 
-        // Handle Image Input (URL from Blob)
+        // Handle Image Input (URL from Blob) - 支持多张图片
         let dbImageEntry = null;
         let dbImageMimeType = null;
+        let dbImageEntries = [];
 
-        if (!isRegenerateMode && config?.image?.url) {
-            const { base64Data, mimeType } = await fetchImageAsBase64(config.image.url);
+        if (!isRegenerateMode && (config?.images?.length > 0 || config?.image?.url)) {
+            // 优先处理多张图片
+            const imagesToProcess = config?.images?.length > 0
+                ? config.images
+                : config?.image?.url ? [config.image] : [];
 
-            currentParts.push({
-                inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data
-                },
-                ...(config.mediaResolution ? { mediaResolution: { level: config.mediaResolution } } : {})
-            });
-            dbImageEntry = config.image.url;
-            dbImageMimeType = mimeType;
+            for (const img of imagesToProcess) {
+                if (img?.url) {
+                    const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
+                    currentParts.push({
+                        inlineData: {
+                            mimeType: mimeType,
+                            data: base64Data
+                        },
+                        ...(config.mediaResolution ? { mediaResolution: { level: config.mediaResolution } } : {})
+                    });
+                    dbImageEntries.push({ url: img.url, mimeType });
+                }
+            }
+
+            // 兼容旧的单图片字段
+            if (dbImageEntries.length > 0) {
+                dbImageEntry = dbImageEntries[0].url;
+                dbImageMimeType = dbImageEntries[0].mimeType;
+            }
         }
 
         if (!isRegenerateMode) {
@@ -273,7 +288,18 @@ export async function POST(req) {
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
-            if (isNonEmptyString(dbImageEntry)) {
+
+            // 支持多张图片存储
+            if (dbImageEntries.length > 0) {
+                for (const entry of dbImageEntries) {
+                    storedUserParts.push({
+                        inlineData: {
+                            mimeType: entry.mimeType || 'image/jpeg',
+                            url: entry.url,
+                        },
+                    });
+                }
+            } else if (isNonEmptyString(dbImageEntry)) {
                 storedUserParts.push({
                     inlineData: {
                         mimeType: dbImageMimeType || 'image/jpeg',
@@ -281,6 +307,7 @@ export async function POST(req) {
                     },
                 });
             }
+
             const userMsgTime = Date.now();
             const updatedConv = await Conversation.findByIdAndUpdate(currentConversationId, {
                 $push: {
@@ -288,7 +315,8 @@ export async function POST(req) {
                         role: 'user',
                         content: prompt,
                         type: 'text',
-                        image: dbImageEntry, // URL
+                        image: dbImageEntry, // 兼容旧字段，存第一张
+                        images: dbImageEntries.map(e => e.url), // 新字段存储所有图片
                         ...(dbImageMimeType ? { mimeType: dbImageMimeType } : {}),
                         parts: storedUserParts
                     }

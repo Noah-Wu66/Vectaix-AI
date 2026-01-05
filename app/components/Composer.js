@@ -48,7 +48,8 @@ export default function Composer({
   const [editPromptName, setEditPromptName] = useState("");
   const [editPromptContent, setEditPromptContent] = useState("");
   const [input, setInput] = useState("");
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [isMainInputFocused, setIsMainInputFocused] = useState(false);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const mountedRef = useRef(true);
@@ -60,11 +61,18 @@ export default function Composer({
 
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
   // 移动端键盘弹出时，同步可视高度，避免键盘遮挡输入区（尤其是 iOS Safari）
+  // 只在主对话输入框聚焦时才启用此调整，编辑系统提示词时不调整
   useEffect(() => {
     const setAppHeight = () => {
       const vv = window.visualViewport;
-      document.documentElement.style.setProperty("--app-height", `${Math.round(vv?.height || window.innerHeight)}px`);
-      document.documentElement.style.setProperty("--app-offset-top", `${Math.round(vv?.offsetTop || 0)}px`);
+      if (isMainInputFocused) {
+        document.documentElement.style.setProperty("--app-height", `${Math.round(vv?.height || window.innerHeight)}px`);
+        document.documentElement.style.setProperty("--app-offset-top", `${Math.round(vv?.offsetTop || 0)}px`);
+      } else {
+        // 非主输入框聚焦时，重置为默认值
+        document.documentElement.style.setProperty("--app-height", "100dvh");
+        document.documentElement.style.setProperty("--app-offset-top", "0px");
+      }
     };
     setAppHeight();
     const vv = window.visualViewport;
@@ -76,31 +84,49 @@ export default function Composer({
       vv?.removeEventListener("scroll", setAppHeight);
       window.removeEventListener("resize", setAppHeight);
     };
-  }, []);
+  }, [isMainInputFocused]);
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto"; const sh = el.scrollHeight; el.style.height = `${Math.min(sh, 160)}px`; el.style.overflowY = sh > 160 ? "auto" : "hidden";
   }, [input, model]);
   const handleFileSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (!mountedRef.current) return;
-      setSelectedImage({
-        file,
-        preview: ev.target.result,
-        name: file.name,
-      });
-    };
-    reader.readAsDataURL(file);
+    // 计算还能添加多少张图片（最多4张）
+    const remainingSlots = 4 - selectedImages.length;
+    const filesToAdd = files.slice(0, remainingSlots);
+
+    filesToAdd.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (!mountedRef.current) return;
+        setSelectedImages((prev) => {
+          if (prev.length >= 4) return prev;
+          return [
+            ...prev,
+            {
+              file,
+              preview: ev.target.result,
+              name: file.name,
+              id: `${Date.now()}-${Math.random()}`,
+            },
+          ];
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const removeImage = () => {
-    setSelectedImage(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  const removeImage = (imageId) => {
+    setSelectedImages((prev) => prev.filter((img) => img.id !== imageId));
+  };
+
+  const clearAllImages = () => {
+    setSelectedImages([]);
   };
 
   const handleKeyDown = (e) => {
@@ -113,10 +139,10 @@ export default function Composer({
 
   const handleSend = () => {
     const text = input.trim();
-    if ((!text && !selectedImage) || loading) return;
-    onSend({ text, image: selectedImage });
+    if ((!text && selectedImages.length === 0) || loading) return;
+    onSend({ text, images: selectedImages });
     setInput("");
-    removeImage();
+    clearAllImages();
   };
 
   const addPrompt = async () => {
@@ -533,18 +559,30 @@ export default function Composer({
             </AnimatePresence>
           </div>
 
-          {selectedImage && (
-            <div className="flex items-center gap-2 px-2 py-1 bg-zinc-100 rounded-lg border border-zinc-200">
-              <span className="text-xs text-zinc-600 truncate max-w-[80px]">
-                {selectedImage.name}
-              </span>
-              <button
-                onClick={removeImage}
-                className="text-zinc-400 hover:text-red-500"
-                type="button"
-              >
-                <X size={12} />
-              </button>
+          {selectedImages.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {selectedImages.map((img) => (
+                <div
+                  key={img.id}
+                  className="flex items-center gap-1.5 px-2 py-1 bg-zinc-100 rounded-lg border border-zinc-200"
+                >
+                  <span className="text-xs text-zinc-600 truncate max-w-[60px]">
+                    {img.name}
+                  </span>
+                  <button
+                    onClick={() => removeImage(img.id)}
+                    className="text-zinc-400 hover:text-red-500"
+                    type="button"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+              {selectedImages.length < 4 && (
+                <span className="text-xs text-zinc-400">
+                  {4 - selectedImages.length} 张可添加
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -556,15 +594,17 @@ export default function Composer({
             onChange={handleFileSelect}
             className="hidden"
             accept="image/*"
+            multiple
           />
 
           <button
             onClick={() => fileInputRef.current?.click()}
+            disabled={selectedImages.length >= 4}
             className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${
-              selectedImage
+              selectedImages.length > 0
                 ? "text-zinc-600 bg-zinc-200"
                 : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
-            }`}
+            } disabled:opacity-40 disabled:cursor-not-allowed`}
             type="button"
           >
             <Paperclip size={16} />
@@ -575,6 +615,8 @@ export default function Composer({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={() => setIsMainInputFocused(true)}
+            onBlur={() => setIsMainInputFocused(false)}
             placeholder="输入消息..."
             className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl pl-11 pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors"
             rows={1}
@@ -583,7 +625,7 @@ export default function Composer({
 
           <button
             onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
-            disabled={!isStreaming && !isWaitingForAI && !input.trim() && !selectedImage}
+            disabled={!isStreaming && !isWaitingForAI && !input.trim() && selectedImages.length === 0}
             className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${
               isStreaming || isWaitingForAI ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
             }`}

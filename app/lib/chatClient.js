@@ -5,6 +5,7 @@ export function buildChatConfig({
   systemPrompts,
   activePromptId,
   imageUrl,
+  imageUrls,
   maxTokens,
   budgetTokens,
 }) {
@@ -17,7 +18,11 @@ export function buildChatConfig({
   const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
   if (activePrompt) cfg.systemPrompt = activePrompt.content;
 
-  if (imageUrl) {
+  // 支持多张图片
+  if (imageUrls && imageUrls.length > 0) {
+    cfg.images = imageUrls.map((url) => ({ url }));
+    cfg.mediaResolution = mediaResolution;
+  } else if (imageUrl) {
     cfg.image = { url: imageUrl };
     cfg.mediaResolution = mediaResolution;
   }

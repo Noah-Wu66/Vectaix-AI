@@ -402,19 +402,23 @@ export default function ChatApp() {
     setEditingImage(null);
   };
 
-  const handleSendFromComposer = async ({ text, image }) => {
-    if ((!text && !image) || loading || chatRequestLockRef.current) return;
+  const handleSendFromComposer = async ({ text, images }) => {
+    if ((!text && (!images || images.length === 0)) || loading || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
 
     // 发送消息时重置滚动中断标记，确保自动滚动到底部
     userInterruptedRef.current = false;
+
+    // 获取第一张图片的预览（如有），用于显示
+    const firstImagePreview = images?.[0]?.preview || null;
 
     const userMsg = {
       id: generateMsgId(),
       role: "user",
       content: text,
       type: "text",
-      image: image ? image.preview : null,
+      image: firstImagePreview,
+      images: images?.map((img) => img.preview) || [],
     };
 
     const historyBeforeUser = messages;
@@ -422,27 +426,31 @@ export default function ChatApp() {
 
     setLoading(true);
     try {
-      let imageUrl = null;
-      if (image?.file) {
-        const blob = await upload(image.file.name, image.file, {
-          access: "public",
-          handleUploadUrl: "/api/upload",
-        });
-        imageUrl = blob.url;
+      // 上传所有图片
+      const imageUrls = [];
+      if (images && images.length > 0) {
+        for (const image of images) {
+          if (image?.file) {
+            const blob = await upload(image.file.name, image.file, {
+              access: "public",
+              handleUploadUrl: "/api/upload",
+            });
+            imageUrls.push(blob.url);
+          }
+        }
       }
 
-      // 将本地预览 dataURL 替换为可持久化的 Blob URL，避免后续编辑/同步时 data: 导致图片丢失
-      if (imageUrl && image?.preview) {
-        const mimeType = image?.mimeType || image?.file?.type || null;
+      // 将本地预览 dataURL 替换为可持久化的 Blob URL
+      if (imageUrls.length > 0) {
         setMessages((prev) => {
           const next = [...prev];
           for (let i = next.length - 1; i >= 0; i -= 1) {
             const m = next[i];
-            if (m?.role === "user" && m?.image === image.preview) {
+            if (m?.role === "user" && m?.id === userMsg.id) {
               next[i] = {
                 ...m,
-                image: imageUrl,
-                ...(mimeType ? { mimeType } : {}),
+                image: imageUrls[0] || null,
+                images: imageUrls,
               };
               break;
             }
@@ -457,7 +465,8 @@ export default function ChatApp() {
         mediaResolution,
         systemPrompts,
         activePromptId,
-        imageUrl,
+        imageUrl: imageUrls[0] || null,
+        imageUrls: imageUrls.length > 0 ? imageUrls : null,
         maxTokens,
         budgetTokens,
       });

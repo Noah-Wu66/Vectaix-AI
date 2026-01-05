@@ -90,6 +90,7 @@ function sanitizeStoredMessage(msg) {
         type: typeof msg.type === 'string' ? msg.type : 'text',
     };
     if (isNonEmptyString(msg.image)) out.image = msg.image;
+    if (Array.isArray(msg.images) && msg.images.length > 0) out.images = msg.images;
     if (isNonEmptyString(msg.mimeType)) out.mimeType = msg.mimeType;
     if (isNonEmptyString(msg.thought)) out.thought = msg.thought;
     if (Array.isArray(msg.parts) && msg.parts.length > 0) out.parts = msg.parts;
@@ -189,22 +190,37 @@ export async function POST(req) {
 
         let dbImageEntry = null;
         let dbImageMimeType = null;
+        let dbImageEntries = [];
 
         if (!isRegenerateMode) {
             const userContent = [{ type: 'text', text: prompt }];
 
-            if (config?.image?.url) {
-                const { base64Data, mimeType } = await fetchImageAsBase64(config.image.url);
-                userContent.push({
-                    type: 'image',
-                    source: {
-                        type: 'base64',
-                        media_type: mimeType,
-                        data: base64Data
+            // 支持多张图片
+            if (config?.images?.length > 0 || config?.image?.url) {
+                const imagesToProcess = config?.images?.length > 0
+                    ? config.images
+                    : config?.image?.url ? [config.image] : [];
+
+                for (const img of imagesToProcess) {
+                    if (img?.url) {
+                        const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
+                        userContent.push({
+                            type: 'image',
+                            source: {
+                                type: 'base64',
+                                media_type: mimeType,
+                                data: base64Data
+                            }
+                        });
+                        dbImageEntries.push({ url: img.url, mimeType });
                     }
-                });
-                dbImageEntry = config.image.url;
-                dbImageMimeType = mimeType;
+                }
+
+                // 兼容旧的单图片字段
+                if (dbImageEntries.length > 0) {
+                    dbImageEntry = dbImageEntries[0].url;
+                    dbImageMimeType = dbImageEntries[0].mimeType;
+                }
             }
 
             claudeMessages.push({ role: 'user', content: userContent });
@@ -214,7 +230,18 @@ export async function POST(req) {
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
-            if (isNonEmptyString(dbImageEntry)) {
+
+            // 支持多张图片存储
+            if (dbImageEntries.length > 0) {
+                for (const entry of dbImageEntries) {
+                    storedUserParts.push({
+                        inlineData: {
+                            mimeType: entry.mimeType || 'image/jpeg',
+                            url: entry.url,
+                        },
+                    });
+                }
+            } else if (isNonEmptyString(dbImageEntry)) {
                 storedUserParts.push({
                     inlineData: {
                         mimeType: dbImageMimeType || 'image/jpeg',
@@ -222,6 +249,7 @@ export async function POST(req) {
                     },
                 });
             }
+
             const userMsgTime = Date.now();
             const updatedConv = await Conversation.findByIdAndUpdate(currentConversationId, {
                 $push: {
@@ -229,7 +257,8 @@ export async function POST(req) {
                         role: 'user',
                         content: prompt,
                         type: 'text',
-                        image: dbImageEntry,
+                        image: dbImageEntry, // 兼容旧字段，存第一张
+                        images: dbImageEntries.map(e => e.url), // 新字段存储所有图片
                         ...(dbImageMimeType ? { mimeType: dbImageMimeType } : {}),
                         parts: storedUserParts
                     }
