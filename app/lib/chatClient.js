@@ -65,7 +65,7 @@ export async function runChat({
   };
 
   // 根据 provider 选择 API 端点
-  const apiEndpoint = provider === "claude" ? "/api/claude" : "/api/chat";
+  const apiEndpoint = provider === "claude" ? "/api/claude" : "/api/gemini";
 
   setLoading(true);
   let streamMsgId = null;

@@ -261,6 +261,15 @@ export default function ChatApp() {
         userInterruptedRef.current = false;
         setMessages(nextMessages);
         setCurrentConversationId(id);
+        // 恢复对话使用的模型
+        const conversationModel = data.conversation.model;
+        if (conversationModel && CHAT_MODELS.some((m) => m.id === conversationModel)) {
+          setModel(conversationModel);
+          lastTextModelRef.current = conversationModel;
+          // 恢复该模型对应的 prompt
+          const rememberedPromptId = activePromptIds?.[conversationModel];
+          if (rememberedPromptId != null) setActivePromptId(rememberedPromptId);
+        }
       }
     } catch (e) {
       console.error(e); alert(e?.message || "会话数据不兼容");

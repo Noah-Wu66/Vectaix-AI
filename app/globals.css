@@ -135,6 +135,8 @@ h6 {
 /* Prose for Markdown */
 .prose {
   color: var(--text-primary);
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .prose p {

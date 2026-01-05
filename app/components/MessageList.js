@@ -207,7 +207,7 @@ export default function MessageList({
     <div
       ref={listRef}
       onScroll={onScroll}
-      className={`flex-1 overflow-y-auto px-3 sm:px-4 py-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll ${fontSizeClass}`}
+      className={`flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-4 space-y-4 scroll-smooth custom-scrollbar mobile-scroll ${fontSizeClass}`}
     >
       <ImageLightbox open={lightboxOpen} onClose={closeLightbox} src={lightboxSrc} />
 

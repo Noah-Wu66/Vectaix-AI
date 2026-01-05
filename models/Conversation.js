@@ -24,6 +24,10 @@ const ConversationSchema = new mongoose.Schema({
         type: String,
         default: 'New Chat',
     },
+    model: {
+        type: String,
+        default: null,
+    },
     messages: [MessageSchema],
     updatedAt: {
         type: Date,

@@ -1,36 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
-import { put } from "@vercel/blob";
 import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
+import {
+    fetchImageAsBase64,
+    isNonEmptyString,
+    getStoredPartsFromMessage,
+    sanitizeStoredMessages
+} from '@/app/api/chat/utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-async function fetchImageAsBase64(url) {
-    const imgRes = await fetch(url);
-    if (!imgRes.ok) throw new Error("Failed to fetch image from blob");
-    const arrayBuffer = await imgRes.arrayBuffer();
-    const base64Data = Buffer.from(arrayBuffer).toString('base64');
-    const mimeType = imgRes.headers.get('content-type') || 'image/jpeg';
-    return { base64Data, mimeType };
-}
-
-function isNonEmptyString(value) {
-    return typeof value === 'string' && value.trim().length > 0;
-}
-
-function createHttpError(status, message) {
-    const err = new Error(message);
-    err.status = status;
-    return err;
-}
-
-function getStoredPartsFromMessage(msg) {
-    if (Array.isArray(msg?.parts) && msg.parts.length > 0) return msg.parts;
-    return null;
-}
 
 async function storedPartToRequestPart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -78,32 +59,6 @@ async function buildGeminiContentsFromMessages(messages) {
         if (parts.length) contents.push({ role: msg.role, parts });
     }
     return contents;
-}
-
-function mimeTypeToExt(mimeType) {
-    if (!isNonEmptyString(mimeType)) return 'png';
-    return mimeType.split(';')[0].split('/')[1] || 'png';
-}
-
-function sanitizeStoredMessage(msg) {
-    if (!msg || typeof msg !== 'object') return null;
-    if (msg.role !== 'user' && msg.role !== 'model') return null;
-    const out = {
-        role: msg.role,
-        content: typeof msg.content === 'string' ? msg.content : '',
-        type: typeof msg.type === 'string' ? msg.type : 'text',
-    };
-    if (isNonEmptyString(msg.image)) out.image = msg.image;
-    if (Array.isArray(msg.images) && msg.images.length > 0) out.images = msg.images;
-    if (isNonEmptyString(msg.mimeType)) out.mimeType = msg.mimeType;
-    if (isNonEmptyString(msg.thought)) out.thought = msg.thought;
-    if (Array.isArray(msg.parts) && msg.parts.length > 0) out.parts = msg.parts;
-    return out;
-}
-
-function sanitizeStoredMessages(messages) {
-    if (!Array.isArray(messages)) return [];
-    return messages.map(sanitizeStoredMessage).filter(Boolean);
 }
 
 export async function POST(req) {
@@ -169,6 +124,7 @@ export async function POST(req) {
             const newConv = await Conversation.create({
                 userId: user.userId,
                 title: title,
+                model: model,
                 messages: []
             });
             currentConversationId = newConv._id.toString();
@@ -212,7 +168,7 @@ export async function POST(req) {
             });
         }
 
-        // regenerate 模式：最后一条用户消息已经在 messages 里了，这里不再追加“新用户消息”
+        // regenerate 模式：最后一条用户消息已经在 messages 里了，这里不再追加"新用户消息"
         let currentParts = isRegenerateMode ? null : [{ text: prompt }];
 
         // Handle Image Input (URL from Blob) - 支持多张图片
@@ -336,7 +292,7 @@ export async function POST(req) {
         });
 
         const encoder = new TextEncoder();
-        // 客户端点击“停止/取消”会中断请求；此时必须停止生成并且不要把结果写入 DB
+        // 客户端点击"停止/取消"会中断请求；此时必须停止生成并且不要把结果写入 DB
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
         try {
@@ -391,7 +347,7 @@ export async function POST(req) {
                         }
                     }
 
-                    // 取消/断连：直接结束，不写 DB，不发送 DONE（避免“旧请求晚写入”导致重复回答）
+                    // 取消/断连：直接结束，不写 DB，不发送 DONE（避免"旧请求晚写入"导致重复回答）
                     if (clientAborted) {
                         try { controller.close(); } catch { /* ignore */ }
                         return;
@@ -453,7 +409,7 @@ export async function POST(req) {
 
     } catch (error) {
         // Log detailed error information
-        console.error("Chat API Error:", {
+        console.error("Gemini API Error:", {
             message: error?.message,
             status: error?.status,
             stack: error?.stack,
