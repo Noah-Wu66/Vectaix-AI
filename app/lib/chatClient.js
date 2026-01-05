@@ -46,6 +46,7 @@ export async function runChat({
   mode,
   messagesForRegenerate,
   provider,
+  settings,
 }) {
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
@@ -62,6 +63,7 @@ export async function runChat({
     conversationId,
     ...(mode ? { mode } : {}),
     ...(mode === "regenerate" ? { messages: messagesForRegenerate || [] } : {}),
+    ...(!conversationId && settings ? { settings } : {}),
   };
 
   // 根据 provider 选择 API 端点

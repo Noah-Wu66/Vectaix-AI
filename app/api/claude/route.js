@@ -81,7 +81,7 @@ export async function POST(req) {
             return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
         }
 
-        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages } = body;
+        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings } = body;
 
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
@@ -117,6 +117,7 @@ export async function POST(req) {
                 userId: user.userId,
                 title: title,
                 model: model,
+                settings: settings || {},
                 messages: []
             });
             currentConversationId = newConv._id.toString();

@@ -43,9 +43,23 @@ export async function PUT(req, { params }) {
             }
         }
     }
+
+    // 构建更新对象，支持 settings 的部分更新
+    const updateObj = { updatedAt: Date.now() };
+    for (const [key, value] of Object.entries(body)) {
+        if (key === 'settings' && typeof value === 'object' && value !== null) {
+            // 对 settings 进行部分更新（使用点号表示法）
+            for (const [settingKey, settingValue] of Object.entries(value)) {
+                updateObj[`settings.${settingKey}`] = settingValue;
+            }
+        } else {
+            updateObj[key] = value;
+        }
+    }
+
     const conversation = await Conversation.findOneAndUpdate(
         { _id: params.id, userId: user.userId },
-        { ...body, updatedAt: Date.now() },
+        { $set: updateObj },
         { new: true }
     );
 

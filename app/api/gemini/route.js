@@ -79,7 +79,7 @@ export async function POST(req) {
             );
         }
 
-        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages } = body;
+        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings } = body;
 
         // Validate required fields
         if (!model || typeof model !== 'string') {
@@ -125,6 +125,7 @@ export async function POST(req) {
                 userId: user.userId,
                 title: title,
                 model: model,
+                settings: settings || {},
                 messages: []
             });
             currentConversationId = newConv._id.toString();

@@ -28,6 +28,14 @@ const ConversationSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    // 对话专属参数设置
+    settings: {
+        thinkingLevel: { type: String, default: null },
+        historyLimit: { type: Number, default: null },
+        maxTokens: { type: Number, default: null },
+        budgetTokens: { type: Number, default: null },
+        activePromptId: { type: String, default: null },
+    },
     messages: [MessageSchema],
     updatedAt: {
         type: Date,
