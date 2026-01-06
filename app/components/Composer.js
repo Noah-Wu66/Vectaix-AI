@@ -238,30 +238,66 @@ export default function Composer({
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px]"
                   >
-                    {CHAT_MODELS.map((m) => (
+                    {/* Gemini 分组 */}
+                    <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Gemini</div>
+                    {CHAT_MODELS.filter((m) => m.provider === "gemini").map((m) => (
                       <button
                         key={m.id}
                         onClick={() => {
                           setShowModelMenu(false);
-                          if (m.externalLink) {
-                            window.open(m.externalLink, "_blank");
-                          } else {
-                            onModelChange(m.id);
-                          }
+                          onModelChange(m.id);
                         }}
                         className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${
-                          model === m.id && !m.externalLink
+                          model === m.id
                             ? "bg-zinc-600 text-white"
                             : "text-zinc-600 hover:bg-zinc-50"
                         }`}
                         type="button"
                       >
-                        <ModelIcon
-                          provider={m.provider}
-                          Icon={m.Icon}
-                          size={16}
-                          isSelected={model === m.id && !m.externalLink}
-                        />
+                        <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
+                        {m.name}
+                      </button>
+                    ))}
+
+                    {/* 分隔线 */}
+                    <div className="my-1.5 border-t border-zinc-200" />
+
+                    {/* Claude 分组 */}
+                    <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Claude</div>
+                    {CHAT_MODELS.filter((m) => m.provider === "claude").map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          setShowModelMenu(false);
+                          onModelChange(m.id);
+                        }}
+                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${
+                          model === m.id
+                            ? "bg-zinc-600 text-white"
+                            : "text-zinc-600 hover:bg-zinc-50"
+                        }`}
+                        type="button"
+                      >
+                        <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
+                        {m.name}
+                      </button>
+                    ))}
+
+                    {/* 分隔线 */}
+                    <div className="my-1.5 border-t border-zinc-200" />
+
+                    {/* 其他（外部链接） */}
+                    {CHAT_MODELS.filter((m) => m.externalLink).map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          setShowModelMenu(false);
+                          window.open(m.externalLink, "_blank");
+                        }}
+                        className="w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors text-zinc-600 hover:bg-zinc-50"
+                        type="button"
+                      >
+                        <ModelIcon provider={m.provider} Icon={m.Icon} size={16} isSelected={false} />
                         {m.name}
                       </button>
                     ))}
