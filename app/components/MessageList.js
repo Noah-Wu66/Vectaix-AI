@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Bot,
   Copy,
   Edit3,
   Paperclip,
@@ -13,10 +12,29 @@ import {
   User,
   X,
 } from "lucide-react";
+import { Gemini, Claude } from "@lobehub/icons";
 import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
 import ImageLightbox from "./ImageLightbox";
 import ConfirmModal from "./ConfirmModal";
+
+function AIAvatar({ model, size = 24 }) {
+  const props = { size, shape: "square", style: { borderRadius: 6 } };
+  if (model?.startsWith("claude-")) {
+    return <Claude.Avatar {...props} />;
+  }
+  return <Gemini.Avatar {...props} />;
+}
+
+// 响应式 AI 头像：移动端和桌面端分别渲染不同大小
+function ResponsiveAIAvatar({ model, mobileSize = 22, desktopSize = 26 }) {
+  return (
+    <>
+      <span className="sm:hidden"><AIAvatar model={model} size={mobileSize} /></span>
+      <span className="hidden sm:inline"><AIAvatar model={model} size={desktopSize} /></span>
+    </>
+  );
+}
 
 function normalizeCopiedText(text) {
   return (text ?? "")
@@ -66,6 +84,7 @@ export default function MessageList({
   editingImageAction,
   editingImage,
   fontSizeClass,
+  model,
   onEditingContentChange,
   onEditingImageSelect,
   onEditingImageRemove,
@@ -271,9 +290,7 @@ export default function MessageList({
             )}
             {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts) && (
               <div className="flex items-center gap-1.5">
-                <div className="w-6 h-6 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
-                  <Bot size={12} />
-                </div>
+                <AIAvatar model={model} size={22} />
                 <span className="text-xs text-zinc-400 font-medium">AI</span>
               </div>
             )}
@@ -493,9 +510,7 @@ export default function MessageList({
       {/* 只在有消息且加载中且没有正在流式输出的消息时显示加载指示器，或有消息在等待首个内容时 */}
       {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => m.isStreaming && !m.isWaitingFirstChunk) && (
         <div className="flex gap-2 sm:gap-3 items-start">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0 bg-zinc-100 text-zinc-600">
-            <Bot size={14} />
-          </div>
+          <ResponsiveAIAvatar model={model} mobileSize={22} desktopSize={28} />
           <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
             <span
               className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"

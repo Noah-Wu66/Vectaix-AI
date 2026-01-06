@@ -182,12 +182,6 @@ export function useUserSettings() {
     }
   }, []);
 
-  // saveSettings 现在不发送任何设置到服务器（因为都本地存储了）
-  // 保留这个函数以便向后兼容，但实际上不做任何事
-  const saveSettings = useCallback(async () => {
-    return null;
-  }, []);
-
   const addPrompt = useCallback(async ({ name, content }) => {
     try {
       const res = await fetch("/api/settings", {
@@ -308,7 +302,6 @@ export function useUserSettings() {
     settingsError,
     setSettingsError,
     fetchSettings,
-    saveSettings,
     addPrompt,
     deletePrompt,
     updatePrompt,

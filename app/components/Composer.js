@@ -9,10 +9,24 @@ import {
   Send,
   Square,
   Settings2,
-  Sparkles,
   X,
 } from "lucide-react";
+import { Gemini, Claude } from "@lobehub/icons";
 import { CHAT_MODELS } from "./ChatModels";
+
+// 根据 provider 渲染模型图标
+function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
+  if (provider === "gemini") {
+    return <Gemini.Avatar size={size} />;
+  }
+  if (provider === "claude") {
+    return <Claude.Avatar size={size} />;
+  }
+  if (Icon) {
+    return <Icon size={size} className={isSelected ? "" : "text-blue-400"} />;
+  }
+  return null;
+}
 export default function Composer({
   loading,
   isStreaming,
@@ -32,7 +46,6 @@ export default function Composer({
   setActivePromptIds,
   activePromptId,
   setActivePromptId,
-  saveSettings,
   onAddPrompt,
   onDeletePrompt,
   onUpdatePrompt,
@@ -192,10 +205,13 @@ export default function Composer({
               className="px-3 py-1.5 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors flex items-center gap-1.5 text-sm"
               type="button"
             >
-              {currentModel ? (
-                <currentModel.Icon size={14} />
-              ) : (
-                <Sparkles size={14} />
+              {currentModel && (
+                <ModelIcon
+                  provider={currentModel.provider}
+                  Icon={currentModel.Icon}
+                  size={14}
+                  isSelected={true}
+                />
               )}
               <span className="hidden sm:inline">{currentModel?.shortName}</span>
               <ChevronUp
@@ -240,9 +256,11 @@ export default function Composer({
                         }`}
                         type="button"
                       >
-                        <m.Icon
+                        <ModelIcon
+                          provider={m.provider}
+                          Icon={m.Icon}
                           size={16}
-                          className={model === m.id && !m.externalLink ? "" : m.color}
+                          isSelected={model === m.id && !m.externalLink}
                         />
                         {m.name}
                       </button>
@@ -309,10 +327,6 @@ export default function Composer({
                               const nextId = e.target.value;
                               setActivePromptId(nextId);
                               setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
-                              saveSettings({
-                                activeSystemPromptId: nextId,
-                                activeSystemPromptIds: { [model]: nextId },
-                              });
                             }}
                             className="flex-1 bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
                           >
@@ -462,11 +476,7 @@ export default function Composer({
                           max="20"
                           step="2"
                           value={historyLimit}
-                          onChange={(e) => {
-                            const next = Number(e.target.value);
-                            setHistoryLimit(next);
-                            saveSettings({ historyLimit: next });
-                          }}
+                          onChange={(e) => setHistoryLimit(Number(e.target.value))}
                           className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                         />
                         <span className="text-xs text-right block mt-1 text-zinc-600">
@@ -480,77 +490,73 @@ export default function Composer({
                           <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                             思考深度
                           </label>
-                          <select
-                            value={thinkingLevel}
-                            onChange={(e) => {
-                              setThinkingLevel(e.target.value);
-                              saveSettings({ thinkingLevels: { [model]: e.target.value } });
-                            }}
-                            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
-                          >
-                            <option value="high">深度 (High)</option>
-                            <option value="medium">平衡 (Medium)</option>
-                            <option value="low">快速 (Low)</option>
-                            <option value="minimal">最小 (Minimal)</option>
-                          </select>
+                          <input
+                            type="range"
+                            min="0"
+                            max="3"
+                            step="1"
+                            value={["minimal", "low", "medium", "high"].indexOf(thinkingLevel)}
+                            onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][e.target.value])}
+                            className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                          />
+                          <span className="text-xs text-right block mt-1 text-zinc-600">
+                            {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
+                          </span>
                         </div>
                       ) : model === "gemini-3-pro-preview" ? (
                         <div>
                           <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                             思考深度
                           </label>
-                          <select
-                            value={thinkingLevel}
-                            onChange={(e) => {
-                              setThinkingLevel(e.target.value);
-                              saveSettings({ thinkingLevels: { [model]: e.target.value } });
-                            }}
-                            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
-                          >
-                            <option value="high">深度 (High)</option>
-                            <option value="low">快速 (Low)</option>
-                          </select>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="1"
+                            value={thinkingLevel === "high" ? 1 : 0}
+                            onChange={(e) => setThinkingLevel(e.target.value === "1" ? "high" : "low")}
+                            className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                          />
+                          <span className="text-xs text-right block mt-1 text-zinc-600">
+                            {thinkingLevel === "high" ? "深度" : "快速"}
+                          </span>
                         </div>
                       ) : model?.startsWith("claude-") ? (
                         <div>
                           <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                             思考深度
                           </label>
-                          <select
-                            value={budgetTokens}
-                            onChange={(e) => setBudgetTokens(Number(e.target.value))}
-                            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
-                          >
-                            <option value={1024}>1K</option>
-                            <option value={2048}>2K</option>
-                            <option value={4096}>4K</option>
-                            <option value={8192}>8K</option>
-                            <option value={12288}>12K</option>
-                            <option value={16384}>16K</option>
-                            <option value={32768}>32K</option>
-                          </select>
+                          <input
+                            type="range"
+                            min="0"
+                            max="6"
+                            step="1"
+                            value={[1024, 2048, 4096, 8192, 16384, 32768, 65536].indexOf(budgetTokens)}
+                            onChange={(e) => setBudgetTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536][e.target.value])}
+                            className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                          />
+                          <span className="text-xs text-right block mt-1 text-zinc-600">
+                            {budgetTokens >= 1024 ? `${Math.round(budgetTokens / 1024)}K` : budgetTokens}
+                          </span>
                         </div>
                       ) : null}
 
-                      {/* Max Tokens */}
                       <div>
                         <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                          最大输出 (Max Tokens)
+                          最大输出
                         </label>
-                        <select
-                          value={maxTokens}
-                          onChange={(e) => setMaxTokens(Number(e.target.value))}
-                          className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
-                        >
-                          <option value={1024}>1K</option>
-                          <option value={2048}>2K</option>
-                          <option value={4096}>4K</option>
-                          <option value={8192}>8K</option>
-                          <option value={12288}>12K</option>
-                          <option value={16384}>16K</option>
-                          <option value={32768}>32K</option>
-                          <option value={65536}>64K</option>
-                        </select>
+                        <input
+                          type="range"
+                          min="0"
+                          max="7"
+                          step="1"
+                          value={[1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072].indexOf(maxTokens)}
+                          onChange={(e) => setMaxTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072][e.target.value])}
+                          className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                        />
+                        <span className="text-xs text-right block mt-1 text-zinc-600">
+                          {maxTokens >= 1024 ? `${Math.round(maxTokens / 1024)}K` : maxTokens}
+                        </span>
                       </div>
                     </div>
                   </motion.div>

@@ -29,7 +29,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, settingsError, setSettingsError, fetchSettings, saveSettings, addPrompt, deletePrompt, updatePrompt } = useUserSettings();
+  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt } = useUserSettings();
   const { isDark } = useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -89,20 +89,13 @@ export default function ChatApp() {
         if (data.user) {
           setUser(data.user);
           fetchConversations();
-          (async () => {
-            const s = await fetchSettings();
-            const nextModel = s?.model;
-            if (typeof nextModel === "string") {
-              lastTextModelRef.current = nextModel;
-            }
-          })();
+          fetchSettings(); // 只获取系统提示词
         } else {
           setShowAuthModal(true);
         }
       })
       .catch((err) => {
         console.error("Auth check failed:", err);
-        // On network error, show auth modal as fallback
         setShowAuthModal(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -222,13 +215,7 @@ export default function ChatApp() {
       setUser(data.user);
       setShowAuthModal(false);
       fetchConversations();
-      (async () => {
-        const s = await fetchSettings();
-        const nextModel = s?.model;
-        if (typeof nextModel === "string") {
-          lastTextModelRef.current = nextModel;
-        }
-      })();
+      fetchSettings(); // 只获取系统提示词
     } else {
       alert(data.error);
     }
@@ -261,37 +248,48 @@ export default function ChatApp() {
         userInterruptedRef.current = false;
         setMessages(nextMessages);
         setCurrentConversationId(id);
-        // 恢复对话使用的模型
+
+        // 获取对话的模型和 provider
         const conversationModel = data.conversation.model;
-        const isValidModel = conversationModel && CHAT_MODELS.some((m) => m.id === conversationModel);
-        if (isValidModel) {
-          setModel(conversationModel);
-          lastTextModelRef.current = conversationModel;
+        const conversationModelConfig = CHAT_MODELS.find((m) => m.id === conversationModel);
+        const conversationProvider = conversationModelConfig?.provider;
+        const currentProvider = currentModelConfig?.provider;
+
+        // 铁律：根据对话的 provider 强制切换模型
+        // - Gemini 对话进入后，如果当前不是 Gemini 模型，强制变为 Flash
+        // - Claude 对话进入后，如果当前不是 Claude 模型，强制变为 Sonnet
+        let targetModel = model; // 默认保持当前模型
+        if (conversationProvider === "gemini" && currentProvider !== "gemini") {
+          targetModel = "gemini-3-flash-preview";
+        } else if (conversationProvider === "claude" && currentProvider !== "claude") {
+          targetModel = "claude-sonnet-4-5-20250929";
+        } else if (conversationProvider === currentProvider) {
+          // provider 相同，保持当前模型不变
+          targetModel = model;
         }
+
+        if (targetModel !== model) {
+          setModel(targetModel);
+          lastTextModelRef.current = targetModel;
+        }
+
         // 恢复对话的参数设置（使用默认值填充缺失的字段）
         const settings = data.conversation.settings || {};
-        // 思考级别：仅当模型有效时恢复，否则使用模型默认值
-        if (isValidModel) {
+        // 思考级别：恢复对话存储的值
+        if (settings.thinkingLevel !== undefined && conversationModel) {
           const defaultThinkingLevel = conversationModel.includes("gemini") ? "high" : null;
           setThinkingLevels((prev) => ({
             ...(prev || {}),
-            [conversationModel]: settings.thinkingLevel ?? defaultThinkingLevel
+            [targetModel]: settings.thinkingLevel ?? defaultThinkingLevel
           }));
         }
         // 其他参数：使用对话设置，否则使用默认值
         setHistoryLimit(settings.historyLimit ?? 0);
         setMaxTokens(settings.maxTokens ?? 65536);
         setBudgetTokens(settings.budgetTokens ?? 32768);
-        // activePromptId：优先使用对话存储的值，若无则保留用户的 per-model 偏好（兼容旧对话）
+        // activePromptId：优先使用对话存储的值
         if (settings.activePromptId !== undefined) {
           setActivePromptId(settings.activePromptId);
-        } else if (isValidModel) {
-          // 旧对话没有存储 activePromptId，恢复用户该模型的偏好设置
-          const modelPromptPreference = activePromptIds?.[conversationModel];
-          if (modelPromptPreference !== undefined) {
-            setActivePromptId(modelPromptPreference);
-          }
-          // 若无偏好设置，保持当前 activePromptId 不变
         }
       }
     } catch (e) {
@@ -382,7 +380,6 @@ export default function ChatApp() {
     const rememberedPromptId = activePromptIds?.[nextModel];
     if (rememberedPromptId != null) setActivePromptId(rememberedPromptId);
     lastTextModelRef.current = nextModel;
-    saveSettings({ model: nextModel });
   };
 
   const renameConversation = async (id, newTitle) => {
@@ -785,5 +782,5 @@ export default function ChatApp() {
   if (settingsError) {
     return <SettingsErrorView isDark={isDark} settingsError={settingsError} onLogout={handleLogout} />;
   }
-  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} showScrollButton={showScrollButton} onScrollToBottom={scrollToBottom} editingMsgIndex={editingMsgIndex} editingContent={editingContent} editingImageAction={editingImageAction} editingImage={editingImage} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onEditingImageSelect={onEditingImageSelect} onEditingImageRemove={onEditingImageRemove} onEditingImageKeep={onEditingImageKeep} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} composerProps={{ loading, isStreaming, isWaitingForAI: loading && messages.length > 0, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => { setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })); syncConversationSettings({ thinkingLevel: v }); }, historyLimit, setHistoryLimit: (v) => { setHistoryLimit(v); syncConversationSettings({ historyLimit: v }); }, maxTokens, setMaxTokens: (v) => { setMaxTokens(v); syncConversationSettings({ maxTokens: v }); }, budgetTokens, setBudgetTokens: (v) => { setBudgetTokens(v); syncConversationSettings({ budgetTokens: v }); }, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId: (v) => { setActivePromptId(v); syncConversationSettings({ activePromptId: v != null ? String(v) : null }); }, saveSettings, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
+  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} showScrollButton={showScrollButton} onScrollToBottom={scrollToBottom} editingMsgIndex={editingMsgIndex} editingContent={editingContent} editingImageAction={editingImageAction} editingImage={editingImage} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onEditingImageSelect={onEditingImageSelect} onEditingImageRemove={onEditingImageRemove} onEditingImageKeep={onEditingImageKeep} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} composerProps={{ loading, isStreaming, isWaitingForAI: loading && messages.length > 0, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => { setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })); syncConversationSettings({ thinkingLevel: v }); }, historyLimit, setHistoryLimit: (v) => { setHistoryLimit(v); syncConversationSettings({ historyLimit: v }); }, maxTokens, setMaxTokens: (v) => { setMaxTokens(v); syncConversationSettings({ maxTokens: v }); }, budgetTokens, setBudgetTokens: (v) => { setBudgetTokens(v); syncConversationSettings({ budgetTokens: v }); }, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId: (v) => { setActivePromptId(v); syncConversationSettings({ activePromptId: v != null ? String(v) : null }); }, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
 }

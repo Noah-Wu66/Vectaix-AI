@@ -2,7 +2,18 @@
 
 import { useState, useRef, useEffect } from "react";
 import { LogOut, Pencil, Plus, Trash2, X, Check } from "lucide-react";
+import { Gemini, Claude } from "@lobehub/icons";
 import ConfirmModal from "./ConfirmModal";
+
+function ConversationIcon({ model }) {
+  if (model?.startsWith("claude-")) {
+    return <Claude.Color size={16} />;
+  }
+  if (model?.startsWith("gemini-")) {
+    return <Gemini.Color size={16} />;
+  }
+  return <Gemini.Color size={16} />;
+}
 
 export default function Sidebar({
   isOpen,
@@ -124,12 +135,13 @@ export default function Sidebar({
                 <>
                   <button
                     onClick={() => onLoadConversation(conv._id)}
-                    className={`flex-1 text-left p-3 text-sm truncate ${currentConversationId === conv._id
+                    className={`flex-1 flex items-center gap-2 text-left p-3 text-sm ${currentConversationId === conv._id
                       ? "text-zinc-900 font-medium"
                       : "text-zinc-600"
                       }`}
                   >
-                    {conv.title}
+                    <span className="shrink-0"><ConversationIcon model={conv.model} /></span>
+                    <span className="truncate">{conv.title}</span>
                   </button>
                   <button
                     onClick={(e) => handleEditClick(conv, e)}

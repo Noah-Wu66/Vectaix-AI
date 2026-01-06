@@ -70,6 +70,7 @@ export default function ChatLayout({
           editingImageAction={editingImageAction}
           editingImage={editingImage}
           fontSizeClass={fontSizeClass}
+          model={composerProps?.model}
           onEditingContentChange={onEditingContentChange}
           onEditingImageSelect={onEditingImageSelect}
           onEditingImageRemove={onEditingImageRemove}
