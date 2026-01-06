@@ -17,10 +17,10 @@ import { CHAT_MODELS } from "./ChatModels";
 // 根据 provider 渲染模型图标
 function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
   if (provider === "gemini") {
-    return <Gemini.Avatar size={size} />;
+    return <Gemini.Color size={size} />;
   }
   if (provider === "claude") {
-    return <Claude.Avatar size={size} />;
+    return <Claude.Color size={size} />;
   }
   if (Icon) {
     return <Icon size={size} className={isSelected ? "" : "text-blue-400"} />;

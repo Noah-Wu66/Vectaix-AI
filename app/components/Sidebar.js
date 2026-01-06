@@ -135,7 +135,7 @@ export default function Sidebar({
                 <>
                   <button
                     onClick={() => onLoadConversation(conv._id)}
-                    className={`flex-1 flex items-center gap-2 text-left p-3 text-sm ${currentConversationId === conv._id
+                    className={`flex-1 flex items-center gap-1.5 text-left py-3 pl-3 pr-1 text-sm min-w-0 ${currentConversationId === conv._id
                       ? "text-zinc-900 font-medium"
                       : "text-zinc-600"
                       }`}
