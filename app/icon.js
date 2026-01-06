@@ -45,11 +45,10 @@ export default function Icon() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'white',
-          borderRadius: 6,
+          background: 'transparent',
         }}
       >
-        <GeminiColorIcon size={26} />
+        <GeminiColorIcon size={28} />
       </div>
     ),
     { ...size }
