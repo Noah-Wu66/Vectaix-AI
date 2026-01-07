@@ -584,10 +584,10 @@ export default function Composer({
                         <input
                           type="range"
                           min="0"
-                          max="7"
+                          max="6"
                           step="1"
-                          value={[1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072].indexOf(maxTokens)}
-                          onChange={(e) => setMaxTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072][e.target.value])}
+                          value={[1024, 2048, 4096, 8192, 16384, 32768, 65536].indexOf(maxTokens)}
+                          onChange={(e) => setMaxTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536][e.target.value])}
                           className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                         />
                         <span className="text-xs text-right block mt-1 text-zinc-600">

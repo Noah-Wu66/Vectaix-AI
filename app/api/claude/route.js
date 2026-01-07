@@ -107,7 +107,10 @@ export async function POST(req) {
 
         const client = new Anthropic({
             apiKey: process.env.RIGHTCODE_API_KEY,
-            baseURL: "https://www.right.codes/claude"
+            baseURL: "https://www.right.codes/claude",
+            defaultHeaders: {
+                "anthropic-beta": "extended-cache-ttl-2025-04-11"
+            }
         });
 
         // 创建新会话
@@ -154,6 +157,15 @@ export async function POST(req) {
                         content: [{ type: 'text', text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
                     });
                 }
+            }
+        }
+
+        // 在历史消息的最后一条添加缓存控制，使对话历史可被缓存
+        if (claudeMessages.length > 0) {
+            const lastHistoryMsg = claudeMessages[claudeMessages.length - 1];
+            if (lastHistoryMsg.content?.length > 0) {
+                const lastContent = lastHistoryMsg.content[lastHistoryMsg.content.length - 1];
+                lastContent.cache_control = { type: "ephemeral", ttl: "1h" };
             }
         }
 
@@ -246,7 +258,16 @@ export async function POST(req) {
         const requestParams = {
             model: model,
             max_tokens: maxTokens,
-            system: systemPrompt,
+            system: [
+                {
+                    type: "text",
+                    text: systemPrompt,
+                    cache_control: {
+                        type: "ephemeral",
+                        ttl: "1h"
+                    }
+                }
+            ],
             messages: claudeMessages,
             stream: true,
             thinking: {
