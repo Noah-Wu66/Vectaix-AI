@@ -27,9 +27,11 @@ export async function GET() {
     }
 
     const { payload } = await jwtVerify(oaToken, secretKey);
-    const email = String(payload?.email || '').trim().toLowerCase();
+    const rawEmail = String(payload?.email || '').trim().toLowerCase();
+    const rawEmployeeId = String(payload?.employeeId || '').trim();
+    const email = rawEmail || (rawEmployeeId ? `oa-${rawEmployeeId}@oa.vectaix.com` : '');
     if (!email) {
-      return Response.json({ error: '企业登录信息缺少邮箱' }, { status: 400 });
+      return Response.json({ error: '企业登录信息缺少邮箱/工号' }, { status: 400 });
     }
 
     await dbConnect();
