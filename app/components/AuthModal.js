@@ -58,6 +58,18 @@ export default function AuthModal({
           <button className="w-full bg-zinc-600 hover:bg-zinc-500 text-white font-medium py-3 rounded-lg transition-colors">
             {authMode === "login" ? "登录" : "注册"}
           </button>
+
+          {authMode === "login" && (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/enterprise-login";
+              }}
+              className="w-full border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900 font-medium py-3 rounded-lg transition-colors"
+            >
+              企业登录
+            </button>
+          )}
         </form>
 
         <p className="text-center mt-6 text-zinc-500 text-sm">
