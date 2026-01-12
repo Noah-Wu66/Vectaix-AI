@@ -6,6 +6,8 @@ import { jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { signAuthToken, setAuthCookie } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 const OA_COOKIE_NAME = 'oa_token';
 
 function getOaSecretKey() {
