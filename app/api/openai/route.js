@@ -231,17 +231,22 @@ export async function POST(req) {
             ? userSystemPrompt.trim()
             : "You are a helpful AI assistant.";
 
-        const requestBody = {
-            model: model,
-            input: openaiInput,
-            instructions: instructions,
-            stream: true,
-            max_output_tokens: maxTokens,
-            reasoning: {
-                effort: "high",
-                summary: "auto"
-            }
-        };
+	        // RIGHT.CODES Codex Responses：不使用 instructions 字段，改为在 input 中注入 developer 指令
+	        const inputWithInstructions = [
+	            { role: 'developer', content: [{ type: 'input_text', text: instructions }] },
+	            ...(Array.isArray(openaiInput) ? openaiInput : [])
+	        ];
+
+	        const requestBody = {
+	            model: model,
+	            input: inputWithInstructions,
+	            stream: true,
+	            max_output_tokens: maxTokens,
+	            reasoning: {
+	                effort: "high",
+	                summary: "auto"
+	            }
+	        };
 
         // 根据 budgetTokens 设置 reasoning effort
         if (budgetTokens <= 2048) {
