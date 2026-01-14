@@ -226,10 +226,15 @@ export async function POST(req) {
         const budgetTokens = config?.budgetTokens || 32768;
         const maxTokens = config?.maxTokens || 65536;
 
+        // 确保 instructions 是有效的字符串
+        const instructions = typeof userSystemPrompt === 'string' && userSystemPrompt.trim()
+            ? userSystemPrompt.trim()
+            : "You are a helpful AI assistant.";
+
         const requestBody = {
             model: model,
             input: openaiInput,
-            instructions: userSystemPrompt,
+            instructions: instructions,
             stream: true,
             max_output_tokens: maxTokens,
             reasoning: {
