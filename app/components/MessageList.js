@@ -14,7 +14,7 @@ import {
   User,
   X,
 } from "lucide-react";
-import { Gemini, Claude } from "@lobehub/icons";
+import { Gemini, Claude, OpenAI } from "@lobehub/icons";
 import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
 import ImageLightbox from "./ImageLightbox";
@@ -24,6 +24,9 @@ function AIAvatar({ model, size = 24 }) {
   const props = { size, shape: "square", style: { borderRadius: 6 } };
   if (model?.startsWith("claude-")) {
     return <Claude.Avatar {...props} />;
+  }
+  if (model?.startsWith("gpt-")) {
+    return <OpenAI.Avatar {...props} type="gpt5" />;
   }
   return <Gemini.Avatar {...props} />;
 }

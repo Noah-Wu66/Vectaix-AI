@@ -12,7 +12,7 @@ import {
   Settings2,
   X,
 } from "lucide-react";
-import { Gemini, Claude } from "@lobehub/icons";
+import { Gemini, Claude, OpenAI } from "@lobehub/icons";
 import { CHAT_MODELS } from "./ChatModels";
 
 // 根据 provider 渲染模型图标
@@ -22,6 +22,9 @@ function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
   }
   if (provider === "claude") {
     return <Claude.Color size={size} />;
+  }
+  if (provider === "openai") {
+    return <OpenAI size={size} />;
   }
   if (Icon) {
     return <Icon size={size} className={isSelected ? "" : "text-blue-400"} />;
@@ -42,8 +45,6 @@ export default function Composer({
   setMaxTokens,
   budgetTokens,
   setBudgetTokens,
-  claudeRoute,
-  setClaudeRoute,
   webSearch,
   setWebSearch,
   systemPrompts,
@@ -270,6 +271,30 @@ export default function Composer({
                     {/* Claude 分组 */}
                     <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Claude</div>
                     {CHAT_MODELS.filter((m) => m.provider === "claude").map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => {
+                          setShowModelMenu(false);
+                          onModelChange(m.id);
+                        }}
+                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${
+                          model === m.id
+                            ? "bg-zinc-600 text-white"
+                            : "text-zinc-600 hover:bg-zinc-50"
+                        }`}
+                        type="button"
+                      >
+                        <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
+                        {m.name}
+                      </button>
+                    ))}
+
+                    {/* 分隔线 */}
+                    <div className="my-1.5 border-t border-zinc-200" />
+
+                    {/* OpenAI 分组 */}
+                    <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">OpenAI</div>
+                    {CHAT_MODELS.filter((m) => m.provider === "openai").map((m) => (
                       <button
                         key={m.id}
                         onClick={() => {
@@ -598,29 +623,42 @@ export default function Composer({
                               {webSearch ? "已开启" : "已关闭"}
                             </button>
                           </div>
+                        </>
+                      ) : model?.startsWith("gpt-") ? (
+                        <>
                           <div>
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              API 线路
+                              思考深度
                             </label>
-                            <div className="flex gap-2">
-                              {[
-                                { id: "line2", label: "线路2" },
-                                { id: "line1", label: "线路1" },
-                              ].map((r) => (
-                                <button
-                                  key={r.id}
-                                  onClick={() => setClaudeRoute(r.id)}
-                                  type="button"
-                                  className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${
-                                    claudeRoute === r.id
-                                      ? "bg-zinc-600 text-white border-zinc-600"
-                                      : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                                  }`}
-                                >
-                                  {r.label}
-                                </button>
-                              ))}
-                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="6"
+                              step="1"
+                              value={[1024, 2048, 4096, 8192, 16384, 32768, 65536].indexOf(budgetTokens)}
+                              onChange={(e) => setBudgetTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536][e.target.value])}
+                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                            />
+                            <span className="text-xs text-right block mt-1 text-zinc-600">
+                              {budgetTokens >= 1024 ? `${Math.round(budgetTokens / 1024)}K` : budgetTokens}
+                            </span>
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              联网搜索
+                            </label>
+                            <button
+                              onClick={() => setWebSearch(!webSearch)}
+                              type="button"
+                              className={`w-full py-2 rounded-lg border transition-colors text-sm flex items-center justify-center gap-2 ${
+                                webSearch
+                                  ? "bg-blue-600 text-white border-blue-600"
+                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                              }`}
+                            >
+                              <Globe size={14} />
+                              {webSearch ? "已开启" : "已关闭"}
+                            </button>
                           </div>
                         </>
                       ) : null}

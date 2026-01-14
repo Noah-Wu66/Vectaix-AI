@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { LogOut, Pencil, Plus, Trash2, X, Check } from "lucide-react";
-import { Gemini, Claude } from "@lobehub/icons";
+import { Gemini, Claude, OpenAI } from "@lobehub/icons";
 import ConfirmModal from "./ConfirmModal";
 
 function ConversationIcon({ model }) {
@@ -11,6 +11,9 @@ function ConversationIcon({ model }) {
   }
   if (model?.startsWith("gemini-")) {
     return <Gemini.Color size={16} />;
+  }
+  if (model?.startsWith("gpt-")) {
+    return <OpenAI size={16} />;
   }
   return <Gemini.Color size={16} />;
 }

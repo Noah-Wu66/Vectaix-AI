@@ -26,6 +26,12 @@ export const CHAT_MODELS = [
     provider: "claude",
   },
   {
+    id: "gpt-5.2",
+    name: "GPT",
+    shortName: "GPT",
+    provider: "openai",
+  },
+  {
     id: "image-studio",
     name: "图片",
     shortName: "图片",

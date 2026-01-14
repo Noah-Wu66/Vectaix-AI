@@ -48,7 +48,6 @@ export async function runChat({
   mode,
   messagesForRegenerate,
   provider,
-  claudeRoute,
   settings,
 }) {
   const historyPayload = historyMessages.map((m) => ({
@@ -70,11 +69,10 @@ export async function runChat({
     ...(mode ? { mode } : {}),
     ...(mode === "regenerate" ? { messages: messagesForRegenerate || [] } : {}),
     ...(!conversationId && settings ? { settings } : {}),
-    ...(provider === "claude" && claudeRoute ? { claudeRoute } : {}),
   };
 
   // 根据 provider 选择 API 端点
-  const apiEndpoint = provider === "claude" ? "/api/claude" : "/api/gemini";
+  const apiEndpoint = provider === "claude" ? "/api/claude" : provider === "openai" ? "/api/openai" : "/api/gemini";
 
   setLoading(true);
   let streamMsgId = null;
