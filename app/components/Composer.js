@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronUp,
+  Globe,
   Pencil,
   Paperclip,
   Plus,
@@ -43,6 +44,8 @@ export default function Composer({
   setBudgetTokens,
   claudeRoute,
   setClaudeRoute,
+  webSearch,
+  setWebSearch,
   systemPrompts,
   activePromptIds,
   setActivePromptIds,
@@ -577,6 +580,23 @@ export default function Composer({
                             <span className="text-xs text-right block mt-1 text-zinc-600">
                               {budgetTokens >= 1024 ? `${Math.round(budgetTokens / 1024)}K` : budgetTokens}
                             </span>
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              联网搜索
+                            </label>
+                            <button
+                              onClick={() => setWebSearch(!webSearch)}
+                              type="button"
+                              className={`w-full py-2 rounded-lg border transition-colors text-sm flex items-center justify-center gap-2 ${
+                                webSearch
+                                  ? "bg-blue-600 text-white border-blue-600"
+                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                              }`}
+                            >
+                              <Globe size={14} />
+                              {webSearch ? "已开启" : "已关闭"}
+                            </button>
                           </div>
                           <div>
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">

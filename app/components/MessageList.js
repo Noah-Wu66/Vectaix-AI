@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import {
   Copy,
   Edit3,
+  ExternalLink,
+  Globe,
   Paperclip,
   RotateCcw,
   Sparkles,
@@ -70,6 +72,74 @@ function Thumb({ src, className = "", onClick }) {
         decoding="async"
       />
     </button>
+  );
+}
+
+function SearchingIndicator() {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-sm mb-2">
+      <Globe size={16} className="animate-pulse" />
+      <span>正在搜索网络...</span>
+      <span className="flex gap-0.5">
+        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
+        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
+        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
+      </span>
+    </div>
+  );
+}
+
+function Citations({ citations }) {
+  if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
+  
+  // 去重并限制显示数量
+  const uniqueCitations = [];
+  const seenUrls = new Set();
+  for (const c of citations) {
+    if (c?.url && !seenUrls.has(c.url)) {
+      seenUrls.add(c.url);
+      uniqueCitations.push(c);
+    }
+  }
+  
+  if (uniqueCitations.length === 0) return null;
+
+  return (
+    <div className="mt-3 pt-3 border-t border-zinc-200">
+      <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-2">
+        <Globe size={12} />
+        <span>信息来源</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {uniqueCitations.slice(0, 5).map((citation, idx) => {
+          const domain = (() => {
+            try {
+              return new URL(citation.url).hostname.replace('www.', '');
+            } catch {
+              return citation.url;
+            }
+          })();
+          return (
+            <a
+              key={idx}
+              href={citation.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-xs transition-colors max-w-[200px]"
+              title={citation.title || citation.url}
+            >
+              <ExternalLink size={10} className="flex-shrink-0" />
+              <span className="truncate">{citation.title || domain}</span>
+            </a>
+          );
+        })}
+        {uniqueCitations.length > 5 && (
+          <span className="px-2 py-1 text-xs text-zinc-400">
+            +{uniqueCitations.length - 5} 更多来源
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -269,8 +339,8 @@ export default function MessageList({
       ) : (
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
-          // 跳过等待首个内容且没有任何可显示内容的 model 消息
-          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts) {
+          // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
+          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching) {
             return null;
           }
           return (
@@ -303,6 +373,10 @@ export default function MessageList({
             >
               {msg.role === "model" && msg.thought && (
                 <ThinkingBlock thought={msg.thought} isStreaming={msg.isThinkingStreaming} />
+              )}
+
+              {msg.role === "model" && msg.isSearching && (
+                <SearchingIndicator />
               )}
 
               {/* 编辑模式 */}
@@ -444,6 +518,10 @@ export default function MessageList({
                           <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
                         </>
                       )}
+                      
+                      {msg.role === "model" && !msg.isStreaming && msg.citations && (
+                        <Citations citations={msg.citations} />
+                      )}
                     </div>
                   )}
 
@@ -507,8 +585,8 @@ export default function MessageList({
         })
       )}
 
-      {/* 只在有消息且加载中且没有正在流式输出的消息时显示加载指示器，或有消息在等待首个内容时 */}
-      {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => m.isStreaming && !m.isWaitingFirstChunk) && (
+      {/* 只在有消息且加载中且没有正在流式输出或搜索的消息时显示加载指示器 */}
+      {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => (m.isStreaming && !m.isWaitingFirstChunk) || m.isSearching) && (
         <div className="flex gap-2 sm:gap-3 items-start">
           <ResponsiveAIAvatar model={model} mobileSize={22} desktopSize={28} />
           <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">

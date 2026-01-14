@@ -21,6 +21,7 @@ const UI_ACTIVE_PROMPT_ID_KEY = "vectaix_ui_activePromptId";
 const UI_MAX_TOKENS_KEY = "vectaix_ui_maxTokens";
 const UI_BUDGET_TOKENS_KEY = "vectaix_ui_budgetTokens";
 const UI_CLAUDE_ROUTE_KEY = "vectaix_ui_claudeRoute";
+const UI_WEB_SEARCH_KEY = "vectaix_ui_webSearch";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -77,6 +78,7 @@ export function useUserSettings() {
   const [maxTokens, _setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
   const [budgetTokens, _setBudgetTokens] = useState(DEFAULT_BUDGET_TOKENS);
   const [claudeRoute, _setClaudeRoute] = useState("line2");
+  const [webSearch, _setWebSearch] = useState(false);
   const [settingsError, setSettingsError] = useState(null);
 
   const modelRef = useRef(model);
@@ -94,6 +96,7 @@ export function useUserSettings() {
     const localMaxTokens = readLocalSetting(UI_MAX_TOKENS_KEY);
     const localBudgetTokens = readLocalSetting(UI_BUDGET_TOKENS_KEY);
     const localClaudeRoute = readLocalSetting(UI_CLAUDE_ROUTE_KEY);
+    const localWebSearch = readLocalSetting(UI_WEB_SEARCH_KEY);
 
     if (typeof localTheme === "string") _setThemeMode(localTheme);
     if (typeof localFont === "string") _setFontSize(localFont);
@@ -105,6 +108,8 @@ export function useUserSettings() {
     if (localMaxTokens !== null) _setMaxTokens(Number(localMaxTokens) || DEFAULT_MAX_TOKENS);
     if (localBudgetTokens !== null) _setBudgetTokens(Number(localBudgetTokens) || DEFAULT_BUDGET_TOKENS);
     if (localClaudeRoute === "line1" || localClaudeRoute === "line2") _setClaudeRoute(localClaudeRoute);
+    if (localWebSearch === "true") _setWebSearch(true);
+    else if (localWebSearch === "false") _setWebSearch(false);
   }, []);
 
   const setModel = useCallback((m) => {
@@ -155,6 +160,11 @@ export function useUserSettings() {
   const setClaudeRoute = useCallback((route) => {
     _setClaudeRoute(route);
     writeLocalSetting(UI_CLAUDE_ROUTE_KEY, route);
+  }, []);
+
+  const setWebSearch = useCallback((enabled) => {
+    _setWebSearch(enabled);
+    writeLocalSetting(UI_WEB_SEARCH_KEY, String(enabled));
   }, []);
 
   const fetchSettings = useCallback(async () => {
@@ -310,6 +320,8 @@ export function useUserSettings() {
     setBudgetTokens,
     claudeRoute,
     setClaudeRoute,
+    webSearch,
+    setWebSearch,
     settingsError,
     setSettingsError,
     fetchSettings,

@@ -8,11 +8,13 @@ export function buildChatConfig({
   imageUrls,
   maxTokens,
   budgetTokens,
+  webSearch,
 }) {
   const cfg = {};
   cfg.thinkingLevel = thinkingLevel;
   cfg.maxTokens = maxTokens;
   cfg.budgetTokens = budgetTokens;
+  cfg.webSearch = webSearch === true;
 
   const activeId = activePromptId == null ? null : String(activePromptId);
   const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
@@ -52,7 +54,10 @@ export async function runChat({
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
     content: m.content,
-    image: null,
+    image: m.image || null,
+    images: m.images || null,
+    mimeType: m.mimeType || null,
+    parts: m.parts || null,
   }));
 
   const payload = {
@@ -112,6 +117,9 @@ export async function runChat({
       isThinkingStreaming: true,
       isWaitingFirstChunk: true,
       thought: "",
+      isSearching: false,
+      searchResults: null,
+      citations: null,
     },
   ]);
 
@@ -127,6 +135,9 @@ export async function runChat({
 
   let flushScheduled = false;
   let hasReceivedContent = false;
+  let isSearching = false;
+  let searchResults = null;
+  let citations = null;
   const flushStreamingMessage = () => {
     flushScheduled = false;
     setMessages((prev) => {
@@ -139,7 +150,7 @@ export async function runChat({
 
       const base = prev[idx] || {};
       // 当有内容时，标记已收到首个内容
-      const nowHasContent = fullText.length > 0 || fullThought.length > 0;
+      const nowHasContent = fullText.length > 0 || fullThought.length > 0 || isSearching;
       if (nowHasContent && !hasReceivedContent) hasReceivedContent = true;
       const nextMsg = {
         ...base,
@@ -147,8 +158,19 @@ export async function runChat({
         thought: fullThought,
         isThinkingStreaming: !thinkingEnded,
         isWaitingFirstChunk: !hasReceivedContent,
+        isSearching,
+        searchResults,
+        citations,
       };
-      if (base.content === nextMsg.content && base.thought === nextMsg.thought && base.isThinkingStreaming === nextMsg.isThinkingStreaming && base.isWaitingFirstChunk === nextMsg.isWaitingFirstChunk) {
+      if (
+        base.content === nextMsg.content && 
+        base.thought === nextMsg.thought && 
+        base.isThinkingStreaming === nextMsg.isThinkingStreaming && 
+        base.isWaitingFirstChunk === nextMsg.isWaitingFirstChunk &&
+        base.isSearching === nextMsg.isSearching &&
+        base.searchResults === nextMsg.searchResults &&
+        base.citations === nextMsg.citations
+      ) {
         return prev;
       }
 
@@ -170,6 +192,7 @@ export async function runChat({
     if (!p) return;
     if (p === "[DONE]") {
       sawDone = true;
+      isSearching = false;
       return;
     }
     try {
@@ -179,6 +202,14 @@ export async function runChat({
       } else if (data.type === "text") {
         fullText += data.content;
         if (!thinkingEnded) thinkingEnded = true;
+        isSearching = false;
+      } else if (data.type === "search_start") {
+        isSearching = true;
+      } else if (data.type === "search_result") {
+        isSearching = false;
+        searchResults = data.results || [];
+      } else if (data.type === "citations") {
+        citations = data.citations || [];
       }
     } catch {
       // ignore
