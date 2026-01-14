@@ -23,6 +23,9 @@ export async function POST(request) {
                     }),
                 };
             },
+            onUploadCompleted: async () => {
+                // 上传完成回调，Vercel Blob 服务器会调用此方法通知上传完成
+            },
         });
 
         return Response.json(jsonResponse);

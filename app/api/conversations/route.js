@@ -13,7 +13,7 @@ export async function GET() {
 
         const conversations = await Conversation.find({ userId: user.userId })
             .sort({ updatedAt: -1 })
-            .select('title updatedAt');
+            .select('title model updatedAt');
 
         return Response.json({ conversations });
     } catch (error) {
