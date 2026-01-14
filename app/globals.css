@@ -140,7 +140,8 @@ h6 {
 }
 
 .prose p {
-  margin-bottom: 0.75em;
+  margin-top: 0;
+  margin-bottom: 0.5em;
 }
 
 .prose p:last-child {
@@ -149,6 +150,17 @@ h6 {
 
 .prose p:first-child {
   margin-top: 0;
+}
+
+/* 空段落不占用额外空间 */
+.prose p:empty {
+  margin: 0;
+  display: none;
+}
+
+/* 连续段落间距更紧凑 */
+.prose p + p {
+  margin-top: 0.5em;
 }
 
 .prose code {

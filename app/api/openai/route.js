@@ -14,21 +14,29 @@ export const dynamic = 'force-dynamic';
 
 const OPENAI_BASE_URL = 'https://www.right.codes/codex/v1';
 
-async function storedPartToOpenAIPart(part) {
+async function storedPartToOpenAIPart(part, role) {
     if (!part || typeof part !== 'object') return null;
 
+    // assistant 角色使用 output_text，user 角色使用 input_text
+    const isAssistant = role === 'assistant' || role === 'model';
+
     if (isNonEmptyString(part.text)) {
-        return { type: 'input_text', text: part.text };
+        return isAssistant
+            ? { type: 'output_text', text: part.text }
+            : { type: 'input_text', text: part.text };
     }
 
-    const url = part?.inlineData?.url;
-    if (isNonEmptyString(url)) {
-        const { base64Data, mimeType: fetchedMimeType } = await fetchImageAsBase64(url);
-        const mimeType = part.inlineData?.mimeType || fetchedMimeType;
-        return {
-            type: 'input_image',
-            image_url: `data:${mimeType};base64,${base64Data}`
-        };
+    // 图片只对 user 角色有效
+    if (!isAssistant) {
+        const url = part?.inlineData?.url;
+        if (isNonEmptyString(url)) {
+            const { base64Data, mimeType: fetchedMimeType } = await fetchImageAsBase64(url);
+            const mimeType = part.inlineData?.mimeType || fetchedMimeType;
+            return {
+                type: 'input_image',
+                image_url: `data:${mimeType};base64,${base64Data}`
+            };
+        }
     }
 
     return null;
@@ -57,14 +65,15 @@ async function buildOpenAIInputFromHistory(messages) {
             if (storedParts.length === 0) continue;
         }
 
+        const openaiRole = msg.role === 'model' ? 'assistant' : 'user';
         const content = [];
         for (const storedPart of storedParts) {
-            const p = await storedPartToOpenAIPart(storedPart);
+            const p = await storedPartToOpenAIPart(storedPart, openaiRole);
             if (p) content.push(p);
         }
         if (content.length) {
             input.push({
-                role: msg.role === 'model' ? 'assistant' : 'user',
+                role: openaiRole,
                 content
             });
         }
@@ -221,10 +230,10 @@ export async function POST(req) {
             writePermitTime = updatedConv?.updatedAt?.getTime?.() || userMsgTime;
         }
 
-        // 构建 Responses API 请求
-        const userSystemPrompt = config?.systemPrompt || "You are a helpful AI assistant.";
-        const budgetTokens = config?.budgetTokens || 32768;
-        const maxTokens = config?.maxTokens || 65536;
+	        // 构建 Responses API 请求
+	        const userSystemPrompt = config?.systemPrompt || "You are a helpful AI assistant.";
+	        const maxTokens = config?.maxTokens || 65536;
+	        const thinkingLevel = config?.thinkingLevel;
 
         // 确保 instructions 是有效的字符串
         const instructions = typeof userSystemPrompt === 'string' && userSystemPrompt.trim()
@@ -237,25 +246,22 @@ export async function POST(req) {
 	            ...(Array.isArray(openaiInput) ? openaiInput : [])
 	        ];
 
-	        const requestBody = {
-	            model: model,
-	            input: inputWithInstructions,
-	            stream: true,
-	            max_output_tokens: maxTokens,
-	            reasoning: {
-	                effort: "high",
-	                summary: "auto"
-	            }
-	        };
+		        const requestBody = {
+		            model: model,
+		            input: inputWithInstructions,
+		            stream: true,
+		            max_output_tokens: maxTokens,
+		            reasoning: {
+		                effort: "high",
+		                summary: "auto"
+		            }
+		        };
 
-        // 根据 budgetTokens 设置 reasoning effort
-        if (budgetTokens <= 2048) {
-            requestBody.reasoning.effort = "low";
-        } else if (budgetTokens <= 8192) {
-            requestBody.reasoning.effort = "medium";
-        } else {
-            requestBody.reasoning.effort = "high";
-        }
+		        // Map UI thinkingLevel to Responses API reasoning.effort
+		        const allowedEfforts = new Set(["minimal", "low", "medium", "high"]);
+		        if (allowedEfforts.has(thinkingLevel)) {
+		            requestBody.reasoning.effort = thinkingLevel;
+		        }
 
 	        // RIGHT.CODES Codex Responses：支持 web_search（用于联网搜索/引用）
 	        const enableWebSearch = config?.webSearch === true;
