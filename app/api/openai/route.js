@@ -12,7 +12,7 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const OPENAI_BASE_URL = 'https://www.right.codes/codex';
+const OPENAI_BASE_URL = 'https://www.right.codes/codex/v1';
 
 async function storedPartToOpenAIPart(part) {
     if (!part || typeof part !== 'object') return null;
