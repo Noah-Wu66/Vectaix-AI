@@ -32,6 +32,7 @@ export function sanitizeStoredMessage(msg) {
     if (Array.isArray(msg.images) && msg.images.length > 0) out.images = msg.images;
     if (isNonEmptyString(msg.mimeType)) out.mimeType = msg.mimeType;
     if (isNonEmptyString(msg.thought)) out.thought = msg.thought;
+    if (Array.isArray(msg.citations) && msg.citations.length > 0) out.citations = msg.citations;
     if (Array.isArray(msg.parts) && msg.parts.length > 0) out.parts = msg.parts;
     return out;
 }

@@ -257,11 +257,11 @@ export async function POST(req) {
             requestBody.reasoning.effort = "high";
         }
 
-        // 是否启用联网搜索
-        const enableWebSearch = config?.webSearch === true;
-        if (enableWebSearch) {
-            requestBody.tools = [{ type: "web_search_preview" }];
-        }
+	        // RIGHT.CODES Codex Responses：支持 web_search（用于联网搜索/引用）
+	        const enableWebSearch = config?.webSearch === true;
+	        if (enableWebSearch) {
+	            requestBody.tools = [{ type: 'web_search' }];
+	        }
 
         const response = await fetch(`${OPENAI_BASE_URL}/responses`, {
             method: 'POST',
@@ -294,6 +294,8 @@ export async function POST(req) {
             async start(controller) {
                 let fullText = "";
                 let fullThought = "";
+	                let citations = [];
+	                let isSearching = false;
 
                 try {
                     const sendHeartbeat = () => {
@@ -329,7 +331,7 @@ export async function POST(req) {
                                 const padding = !paddingSent ? PADDING : '';
                                 paddingSent = true;
 
-                                // 处理 Responses API 事件
+	                                // 处理 Responses API 事件
                                 if (event.type === 'response.output_text.delta') {
                                     const text = event.delta || '';
                                     fullText += text;
@@ -340,6 +342,37 @@ export async function POST(req) {
                                     fullThought += thought;
                                     const data = `data: ${JSON.stringify({ type: 'thought', content: thought })}${padding}\n\n`;
                                     controller.enqueue(encoder.encode(data));
+	                                } else if (event.type === 'response.output_text.annotation.added') {
+	                                    // Web search 引用（url_citation）
+	                                    const ann = event.annotation;
+	                                    if (ann?.type === 'url_citation' && ann?.url) {
+	                                        const exists = citations.some(c => c?.url === ann.url);
+	                                        if (!exists) {
+	                                            citations.push({ url: ann.url, title: ann.title || null });
+	                                            const data = `data: ${JSON.stringify({ type: 'citations', citations })}${padding}\n\n`;
+	                                            controller.enqueue(encoder.encode(data));
+	                                        }
+	                                    }
+	                                } else if (event.type === 'response.output_item.added') {
+	                                    const item = event.item;
+	                                    if (item?.type === 'web_search_call' && !isSearching) {
+	                                        isSearching = true;
+	                                        const data = `data: ${JSON.stringify({ type: 'search_start' })}${padding}\n\n`;
+	                                        controller.enqueue(encoder.encode(data));
+	                                    }
+	                                } else if (event.type === 'response.output_item.done') {
+	                                    const item = event.item;
+	                                    if (item?.type === 'web_search_call') {
+	                                        isSearching = false;
+	                                        const sources = item?.action?.sources;
+	                                        if (Array.isArray(sources) && sources.length > 0) {
+	                                            const results = sources
+	                                                .filter(s => s?.url)
+	                                                .map(s => ({ url: s.url, title: s.title || null }));
+	                                            const data = `data: ${JSON.stringify({ type: 'search_result', results })}${padding}\n\n`;
+	                                            controller.enqueue(encoder.encode(data));
+	                                        }
+	                                    }
                                 }
                             } catch { /* ignore parse errors */ }
                         }
@@ -350,7 +383,13 @@ export async function POST(req) {
                         return;
                     }
 
-                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+	                    // 发送引用信息
+	                    if (citations.length > 0) {
+	                        const citationsData = `data: ${JSON.stringify({ type: 'citations', citations })}\n\n`;
+	                        controller.enqueue(encoder.encode(citationsData));
+	                    }
+
+	                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
                     if (user && currentConversationId) {
                         const writeCondition = writePermitTime
@@ -364,6 +403,7 @@ export async function POST(req) {
                                         role: 'model',
                                         content: fullText,
                                         thought: fullThought || null,
+	                                        citations: citations.length > 0 ? citations : null,
                                         type: 'text'
                                     }
                                 },

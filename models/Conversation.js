@@ -4,6 +4,7 @@ const MessageSchema = new mongoose.Schema({
     role: { type: String, required: true }, // 'user' or 'model'
     content: { type: String, default: '' },
     thought: { type: String }, // For model thinking blocks
+    citations: { type: [mongoose.Schema.Types.Mixed] },
     type: { type: String, default: 'text', enum: ['text', 'parts', 'error'] },
     image: { type: String }, // URL
     mimeType: { type: String },
