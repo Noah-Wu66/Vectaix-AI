@@ -81,7 +81,7 @@ export async function POST(req) {
             return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
         }
 
-        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings } = body;
+        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings, claudeRoute } = body;
 
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
@@ -89,6 +89,12 @@ export async function POST(req) {
         if (!prompt || typeof prompt !== 'string') {
             return Response.json({ error: 'Prompt is required' }, { status: 400 });
         }
+
+        // 线路选择：默认 line2 (AIGOCODE)
+        const route = claudeRoute === "line1" ? "line1" : "line2";
+        const apiConfig = route === "line1"
+            ? { apiKey: process.env.RIGHTCODE_API_KEY, baseURL: "https://www.right.codes/claude" }
+            : { apiKey: process.env.AIGOCODE_API_KEY, baseURL: "https://api.aigocode.com/api" };
 
         const auth = await getAuthPayload();
         let user = null;
@@ -106,8 +112,8 @@ export async function POST(req) {
         let currentConversationId = conversationId;
 
         const client = new Anthropic({
-            apiKey: process.env.RIGHTCODE_API_KEY,
-            baseURL: "https://www.right.codes/claude",
+            apiKey: apiConfig.apiKey,
+            baseURL: apiConfig.baseURL,
             defaultHeaders: {
                 "anthropic-beta": "extended-cache-ttl-2025-04-11"
             }

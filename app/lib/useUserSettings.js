@@ -20,6 +20,7 @@ const UI_ACTIVE_PROMPT_IDS_KEY = "vectaix_ui_activePromptIds";
 const UI_ACTIVE_PROMPT_ID_KEY = "vectaix_ui_activePromptId";
 const UI_MAX_TOKENS_KEY = "vectaix_ui_maxTokens";
 const UI_BUDGET_TOKENS_KEY = "vectaix_ui_budgetTokens";
+const UI_CLAUDE_ROUTE_KEY = "vectaix_ui_claudeRoute";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -75,6 +76,7 @@ export function useUserSettings() {
   const [fontSize, _setFontSize] = useState("medium");
   const [maxTokens, _setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
   const [budgetTokens, _setBudgetTokens] = useState(DEFAULT_BUDGET_TOKENS);
+  const [claudeRoute, _setClaudeRoute] = useState("line2");
   const [settingsError, setSettingsError] = useState(null);
 
   const modelRef = useRef(model);
@@ -91,6 +93,7 @@ export function useUserSettings() {
     const localActivePromptId = readLocalSetting(UI_ACTIVE_PROMPT_ID_KEY);
     const localMaxTokens = readLocalSetting(UI_MAX_TOKENS_KEY);
     const localBudgetTokens = readLocalSetting(UI_BUDGET_TOKENS_KEY);
+    const localClaudeRoute = readLocalSetting(UI_CLAUDE_ROUTE_KEY);
 
     if (typeof localTheme === "string") _setThemeMode(localTheme);
     if (typeof localFont === "string") _setFontSize(localFont);
@@ -101,6 +104,7 @@ export function useUserSettings() {
     if (typeof localActivePromptId === "string") _setActivePromptId(localActivePromptId);
     if (localMaxTokens !== null) _setMaxTokens(Number(localMaxTokens) || DEFAULT_MAX_TOKENS);
     if (localBudgetTokens !== null) _setBudgetTokens(Number(localBudgetTokens) || DEFAULT_BUDGET_TOKENS);
+    if (localClaudeRoute === "line1" || localClaudeRoute === "line2") _setClaudeRoute(localClaudeRoute);
   }, []);
 
   const setModel = useCallback((m) => {
@@ -146,6 +150,11 @@ export function useUserSettings() {
   const setBudgetTokens = useCallback((tokens) => {
     _setBudgetTokens(tokens);
     writeLocalSetting(UI_BUDGET_TOKENS_KEY, String(tokens));
+  }, []);
+
+  const setClaudeRoute = useCallback((route) => {
+    _setClaudeRoute(route);
+    writeLocalSetting(UI_CLAUDE_ROUTE_KEY, route);
   }, []);
 
   const fetchSettings = useCallback(async () => {
@@ -299,6 +308,8 @@ export function useUserSettings() {
     setMaxTokens,
     budgetTokens,
     setBudgetTokens,
+    claudeRoute,
+    setClaudeRoute,
     settingsError,
     setSettingsError,
     fetchSettings,

@@ -41,6 +41,8 @@ export default function Composer({
   setMaxTokens,
   budgetTokens,
   setBudgetTokens,
+  claudeRoute,
+  setClaudeRoute,
   systemPrompts,
   activePromptIds,
   setActivePromptIds,
@@ -558,23 +560,49 @@ export default function Composer({
                           </span>
                         </div>
                       ) : model?.startsWith("claude-") ? (
-                        <div>
-                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                            思考深度
-                          </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="6"
-                            step="1"
-                            value={[1024, 2048, 4096, 8192, 16384, 32768, 65536].indexOf(budgetTokens)}
-                            onChange={(e) => setBudgetTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536][e.target.value])}
-                            className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                          />
-                          <span className="text-xs text-right block mt-1 text-zinc-600">
-                            {budgetTokens >= 1024 ? `${Math.round(budgetTokens / 1024)}K` : budgetTokens}
-                          </span>
-                        </div>
+                        <>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              思考深度
+                            </label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="6"
+                              step="1"
+                              value={[1024, 2048, 4096, 8192, 16384, 32768, 65536].indexOf(budgetTokens)}
+                              onChange={(e) => setBudgetTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536][e.target.value])}
+                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                            />
+                            <span className="text-xs text-right block mt-1 text-zinc-600">
+                              {budgetTokens >= 1024 ? `${Math.round(budgetTokens / 1024)}K` : budgetTokens}
+                            </span>
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              API 线路
+                            </label>
+                            <div className="flex gap-2">
+                              {[
+                                { id: "line2", label: "线路2" },
+                                { id: "line1", label: "线路1" },
+                              ].map((r) => (
+                                <button
+                                  key={r.id}
+                                  onClick={() => setClaudeRoute(r.id)}
+                                  type="button"
+                                  className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${
+                                    claudeRoute === r.id
+                                      ? "bg-zinc-600 text-white border-zinc-600"
+                                      : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                  }`}
+                                >
+                                  {r.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </>
                       ) : null}
 
                       <div>
