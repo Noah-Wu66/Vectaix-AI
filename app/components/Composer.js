@@ -613,14 +613,14 @@ export default function Composer({
                             <button
                               onClick={() => setWebSearch(!webSearch)}
                               type="button"
-                              className={`w-full py-1 rounded-lg border transition-colors text-sm flex items-center justify-center gap-2 ${
+                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${
                                 webSearch
                                   ? "bg-blue-600 text-white border-blue-600"
                                   : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
                               }`}
                             >
                               <Globe size={14} />
-                              {webSearch ? "已开启" : "已关闭"}
+                              {webSearch ? "开" : "关"}
                             </button>
                           </div>
                         </>
@@ -653,14 +653,14 @@ export default function Composer({
 	                            <button
 	                              onClick={() => setWebSearch(!webSearch)}
 	                              type="button"
-	                              className={`w-full py-1 rounded-lg border transition-colors text-sm flex items-center justify-center gap-2 ${
+	                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${
 	                                webSearch
 	                                  ? "bg-blue-600 text-white border-blue-600"
 	                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
 	                              }`}
 	                            >
 	                              <Globe size={14} />
-	                              {webSearch ? "已开启" : "已关闭"}
+	                              {webSearch ? "开" : "关"}
 	                            </button>
 	                          </div>
                         </>

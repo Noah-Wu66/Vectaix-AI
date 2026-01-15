@@ -76,6 +76,7 @@ export async function runChat({
 
   setLoading(true);
   let streamMsgId = null;
+  let simulatedStreamTimer = null;
   try {
   const res = await fetch(apiEndpoint, {
     method: "POST",
@@ -139,7 +140,6 @@ export async function runChat({
   let citations = null;
 
   // 模拟流式输出：控制文本逐步显示
-  let simulatedStreamTimer = null;
   const SIMULATED_STREAM_INTERVAL = 8; // 每8ms显示一批字符
   const SIMULATED_STREAM_BATCH = 3; // 每批显示3个字符
 
