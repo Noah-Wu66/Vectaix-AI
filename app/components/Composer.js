@@ -312,25 +312,6 @@ export default function Composer({
                         {m.name}
                       </button>
                     ))}
-
-                    {/* 分隔线 */}
-                    <div className="my-1.5 border-t border-zinc-200" />
-
-                    {/* 其他（外部链接） */}
-                    {CHAT_MODELS.filter((m) => m.externalLink).map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => {
-                          setShowModelMenu(false);
-                          window.open(m.externalLink, "_blank");
-                        }}
-                        className="w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors text-zinc-600 hover:bg-zinc-50"
-                        type="button"
-                      >
-                        <ModelIcon provider={m.provider} Icon={m.Icon} size={16} isSelected={false} />
-                        {m.name}
-                      </button>
-                    ))}
                   </motion.div>
                 </>
               )}
