@@ -389,7 +389,7 @@ export default function MessageList({
                 }`}
             >
               {msg.role === "model" && msg.thought && (
-                <ThinkingBlock thought={msg.thought} isStreaming={msg.isThinkingStreaming} />
+                <ThinkingBlock thought={msg.thought} isStreaming={msg.isThinkingStreaming} isSearching={msg.isSearching} />
               )}
 
               {msg.role === "model" && msg.isSearching && (

@@ -5,13 +5,18 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BrainCircuit, ChevronDown, ChevronUp } from "lucide-react";
 import Markdown from "./Markdown";
 
-export default function ThinkingBlock({ thought, isStreaming }) {
+export default function ThinkingBlock({ thought, isStreaming, isSearching }) {
   const [collapsed, setCollapsed] = useState(true);
   const containerRef = useRef(null);
 
+  // 联网搜索开始后或思考流结束后，自动折叠
   useEffect(() => {
-    setCollapsed(!isStreaming);
-  }, [isStreaming]);
+    if (isSearching) {
+      setCollapsed(true);
+    } else {
+      setCollapsed(!isStreaming);
+    }
+  }, [isStreaming, isSearching]);
 
   useEffect(() => {
     if (collapsed) return;
@@ -27,7 +32,7 @@ export default function ThinkingBlock({ thought, isStreaming }) {
         className="thinking-btn flex items-center gap-1.5 sm:gap-2.5 text-[11px] sm:text-xs font-medium text-zinc-500 hover:text-zinc-700 mb-1.5 uppercase tracking-wider bg-zinc-100 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-colors"
       >
         <BrainCircuit size={14} className="sm:w-4 sm:h-4" />
-        {isStreaming ? (
+        {isStreaming && !isSearching ? (
           <span className="flex items-center gap-1 sm:gap-1.5">
             思考中
             <span className="flex gap-0.5">
