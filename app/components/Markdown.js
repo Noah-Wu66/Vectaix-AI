@@ -7,7 +7,7 @@ import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 
-// Extended schema to allow KaTeX and highlight.js classes while sanitizing dangerous content
+// Extended schema to allow KaTeX and highlight.js classes while sanitizing dangerous content (updated)
 const sanitizeSchema = {
   ...defaultSchema,
   attributes: {
