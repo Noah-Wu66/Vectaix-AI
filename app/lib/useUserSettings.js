@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const DEFAULT_MODEL = "gemini-3-pro-preview";
+const DEFAULT_MODEL = "gemini-3-flash-preview";
 const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
   "gemini-3-pro-preview": "high",

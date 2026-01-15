@@ -149,10 +149,14 @@ export default function Composer({
   };
 
   const handleKeyDown = (e) => {
-    // 全设备统一：Enter 换行，Shift + Enter 发送
-    if (e.key === "Enter" && e.shiftKey) {
-      e.preventDefault();
-      if (!loading) handleSend();
+    // 桌面端：Enter 发送，Shift+Enter 换行
+    // 移动端：不拦截 Enter，避免 iOS 输入法换行按钮误触发送
+    if (e.key === "Enter" && !e.shiftKey) {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (!isMobile) {
+        e.preventDefault();
+        if (!loading) handleSend();
+      }
     }
   };
 
@@ -222,9 +226,8 @@ export default function Composer({
               <span className="hidden sm:inline">{currentModel?.shortName}</span>
               <ChevronUp
                 size={12}
-                className={`transition-transform ${
-                  showModelMenu ? "rotate-180" : ""
-                }`}
+                className={`transition-transform ${showModelMenu ? "rotate-180" : ""
+                  }`}
               />
             </button>
 
@@ -253,11 +256,10 @@ export default function Composer({
                           setShowModelMenu(false);
                           onModelChange(m.id);
                         }}
-                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${
-                          model === m.id
+                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id
                             ? "bg-zinc-600 text-white"
                             : "text-zinc-600 hover:bg-zinc-50"
-                        }`}
+                          }`}
                         type="button"
                       >
                         <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
@@ -277,11 +279,10 @@ export default function Composer({
                           setShowModelMenu(false);
                           onModelChange(m.id);
                         }}
-                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${
-                          model === m.id
+                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id
                             ? "bg-zinc-600 text-white"
                             : "text-zinc-600 hover:bg-zinc-50"
-                        }`}
+                          }`}
                         type="button"
                       >
                         <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
@@ -301,11 +302,10 @@ export default function Composer({
                           setShowModelMenu(false);
                           onModelChange(m.id);
                         }}
-                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${
-                          model === m.id
+                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id
                             ? "bg-zinc-600 text-white"
                             : "text-zinc-600 hover:bg-zinc-50"
-                        }`}
+                          }`}
                         type="button"
                       >
                         <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
@@ -321,11 +321,10 @@ export default function Composer({
           <div className="relative">
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 text-sm ${
-                showSettings
+              className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 text-sm ${showSettings
                   ? "bg-zinc-100 border-zinc-300 text-zinc-700"
                   : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
-              }`}
+                }`}
               type="button"
             >
               <Settings2 size={14} />
@@ -594,11 +593,10 @@ export default function Composer({
                             <button
                               onClick={() => setWebSearch(!webSearch)}
                               type="button"
-                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${
-                                webSearch
+                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
                                   ? "bg-blue-600 text-white border-blue-600"
                                   : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                              }`}
+                                }`}
                             >
                               <Globe size={14} />
                               {webSearch ? "开" : "关"}
@@ -612,38 +610,37 @@ export default function Composer({
                               思考深度
                             </label>
                             <input
-	                              type="range"
-	                              min="0"
-	                              max="3"
-	                              step="1"
-	                              value={(() => {
-	                                const idx = ["minimal", "low", "medium", "high"].indexOf(thinkingLevel);
-	                                return idx >= 0 ? idx : 3;
-	                              })()}
-	                              onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][Number(e.target.value)])}
+                              type="range"
+                              min="0"
+                              max="3"
+                              step="1"
+                              value={(() => {
+                                const idx = ["minimal", "low", "medium", "high"].indexOf(thinkingLevel);
+                                return idx >= 0 ? idx : 3;
+                              })()}
+                              onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][Number(e.target.value)])}
                               className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                             />
                             <span className="text-xs text-right block mt-1 text-zinc-600">
-	                              {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
+                              {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
                             </span>
                           </div>
-	                          <div>
-	                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-	                              联网搜索
-	                            </label>
-	                            <button
-	                              onClick={() => setWebSearch(!webSearch)}
-	                              type="button"
-	                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${
-	                                webSearch
-	                                  ? "bg-blue-600 text-white border-blue-600"
-	                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-	                              }`}
-	                            >
-	                              <Globe size={14} />
-	                              {webSearch ? "开" : "关"}
-	                            </button>
-	                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              联网搜索
+                            </label>
+                            <button
+                              onClick={() => setWebSearch(!webSearch)}
+                              type="button"
+                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
+                                  ? "bg-blue-600 text-white border-blue-600"
+                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                }`}
+                            >
+                              <Globe size={14} />
+                              {webSearch ? "开" : "关"}
+                            </button>
+                          </div>
                         </>
                       ) : null}
 
@@ -712,11 +709,10 @@ export default function Composer({
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={selectedImages.length >= 4}
-            className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${
-              selectedImages.length > 0
+            className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedImages.length > 0
                 ? "text-zinc-600 bg-zinc-200"
                 : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
             type="button"
           >
             <Paperclip size={16} />
@@ -738,9 +734,8 @@ export default function Composer({
           <button
             onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
             disabled={!isStreaming && !isWaitingForAI && !input.trim() && selectedImages.length === 0}
-            className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${
-              isStreaming || isWaitingForAI ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
-            }`}
+            className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${isStreaming || isWaitingForAI ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
+              }`}
             type="button"
           >
             {isStreaming || isWaitingForAI ? <Square size={16} /> : <Send size={16} />}

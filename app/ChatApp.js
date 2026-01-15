@@ -51,7 +51,7 @@ export default function ChatApp() {
   const scrollRafRef = useRef(0);
   const chatAbortRef = useRef(null);
   const chatRequestLockRef = useRef(false);
-  const lastTextModelRef = useRef("gemini-3-pro-preview");
+  const lastTextModelRef = useRef("gemini-3-flash-preview");
   const isStreamingRef = useRef(false);
   const isStreaming = messages.some((m) => m.isStreaming);
   isStreamingRef.current = isStreaming;
@@ -531,7 +531,7 @@ export default function ChatApp() {
         });
       }
 
-	      const config = buildChatConfig({
+      const config = buildChatConfig({
         model,
         thinkingLevel: thinkingLevels?.[model],
         mediaResolution,
@@ -541,7 +541,7 @@ export default function ChatApp() {
         imageUrls: imageUrls.length > 0 ? imageUrls : null,
         maxTokens,
         budgetTokens,
-	        webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-")) ? webSearch : false,
+        webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-")) ? webSearch : false,
       });
 
       await runChat({
@@ -593,7 +593,7 @@ export default function ChatApp() {
     const historyWithUser = messages.slice(0, index);
     setMessages(historyWithUser);
 
-	    const config = buildChatConfig({
+    const config = buildChatConfig({
       model,
       thinkingLevel: thinkingLevels?.[model],
       mediaResolution,
@@ -601,7 +601,7 @@ export default function ChatApp() {
       activePromptId,
       maxTokens,
       budgetTokens,
-	      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-")) ? webSearch : false,
+      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-")) ? webSearch : false,
     });
 
     try {
@@ -737,7 +737,7 @@ export default function ChatApp() {
     setMessages(nextMessages);
     cancelEdit();
 
-	    const config = buildChatConfig({
+    const config = buildChatConfig({
       model,
       thinkingLevel: thinkingLevels?.[model],
       mediaResolution,
@@ -745,7 +745,7 @@ export default function ChatApp() {
       activePromptId,
       maxTokens,
       budgetTokens,
-	      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-")) ? webSearch : false,
+      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-")) ? webSearch : false,
     });
 
     try {
