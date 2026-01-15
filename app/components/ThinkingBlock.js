@@ -61,10 +61,10 @@ export default function ThinkingBlock({ thought, isStreaming }) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-y-auto max-h-[200px] w-full text-xs text-zinc-600"
+            className="thinking-content bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-y-auto max-h-[200px] w-full text-xs text-zinc-400"
             ref={containerRef}
           >
-            <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs">
+            <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
               {thought}
             </Markdown>
           </motion.div>

@@ -92,13 +92,15 @@ function Thumb({ src, className = "", onClick }) {
 
 function SearchingIndicator() {
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-sm mb-2">
-      <Globe size={16} className="animate-pulse" />
-      <span>正在搜索网络...</span>
-      <span className="flex gap-0.5">
-        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
-        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
-        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
+    <div className="flex items-center gap-1.5 sm:gap-2.5 text-[11px] sm:text-xs font-medium text-blue-600 mb-1.5 uppercase tracking-wider bg-blue-50 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg">
+      <Globe size={14} className="sm:w-4 sm:h-4 animate-pulse" />
+      <span className="flex items-center gap-1 sm:gap-1.5">
+        正在搜索网络
+        <span className="flex gap-0.5">
+          <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
+          <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
+          <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
+        </span>
       </span>
     </div>
   );

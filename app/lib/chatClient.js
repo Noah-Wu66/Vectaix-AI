@@ -125,6 +125,7 @@ export async function runChat({
   const decoder = new TextDecoder();
   let done = false;
   let fullText = "";
+  let displayedText = "";
   let fullThought = "";
   let buffer = "";
   let thinkingEnded = false;
@@ -136,6 +137,12 @@ export async function runChat({
   let isSearching = false;
   let searchResults = null;
   let citations = null;
+
+  // 模拟流式输出：控制文本逐步显示
+  let simulatedStreamTimer = null;
+  const SIMULATED_STREAM_INTERVAL = 8; // 每8ms显示一批字符
+  const SIMULATED_STREAM_BATCH = 3; // 每批显示3个字符
+
   const flushStreamingMessage = () => {
     flushScheduled = false;
     setMessages((prev) => {
@@ -147,12 +154,11 @@ export async function runChat({
       if (idx < 0) return prev;
 
       const base = prev[idx] || {};
-      // 当有内容时，标记已收到首个内容
-      const nowHasContent = fullText.length > 0 || fullThought.length > 0 || isSearching;
+      const nowHasContent = displayedText.length > 0 || fullThought.length > 0 || isSearching;
       if (nowHasContent && !hasReceivedContent) hasReceivedContent = true;
       const nextMsg = {
         ...base,
-        content: fullText,
+        content: displayedText,
         thought: fullThought,
         isThinkingStreaming: !thinkingEnded,
         isWaitingFirstChunk: !hasReceivedContent,
@@ -161,9 +167,9 @@ export async function runChat({
         citations,
       };
       if (
-        base.content === nextMsg.content && 
-        base.thought === nextMsg.thought && 
-        base.isThinkingStreaming === nextMsg.isThinkingStreaming && 
+        base.content === nextMsg.content &&
+        base.thought === nextMsg.thought &&
+        base.isThinkingStreaming === nextMsg.isThinkingStreaming &&
         base.isWaitingFirstChunk === nextMsg.isWaitingFirstChunk &&
         base.isSearching === nextMsg.isSearching &&
         base.searchResults === nextMsg.searchResults &&
@@ -185,6 +191,22 @@ export async function runChat({
     else setTimeout(flushStreamingMessage, 0);
   };
 
+  // 启动模拟流式输出定时器
+  const startSimulatedStream = () => {
+    if (simulatedStreamTimer) return;
+    simulatedStreamTimer = setInterval(() => {
+      if (displayedText.length < fullText.length) {
+        const remaining = fullText.length - displayedText.length;
+        const batchSize = Math.min(SIMULATED_STREAM_BATCH, remaining);
+        displayedText = fullText.slice(0, displayedText.length + batchSize);
+        scheduleFlush();
+      } else if (sawDone && displayedText.length >= fullText.length) {
+        clearInterval(simulatedStreamTimer);
+        simulatedStreamTimer = null;
+      }
+    }, SIMULATED_STREAM_INTERVAL);
+  };
+
   const applyEventPayload = (payload) => {
     const p = (payload ?? "").trim();
     if (!p) return;
@@ -201,6 +223,8 @@ export async function runChat({
         fullText += data.content;
         if (!thinkingEnded) thinkingEnded = true;
         isSearching = false;
+        // 启动模拟流式输出
+        startSimulatedStream();
       } else if (data.type === "search_start") {
         isSearching = true;
       } else if (data.type === "search_result") {
@@ -253,7 +277,36 @@ export async function runChat({
   // flush TextDecoder / 最后一段 buffer（避免最后一个事件未以空行结尾时被漏掉）
   buffer += decoder.decode();
   consumeSseBuffer(true);
-  flushStreamingMessage();
+
+  // 等待模拟流式输出完成
+  const waitForSimulatedStream = () => {
+    return new Promise((resolve) => {
+      const checkComplete = () => {
+        if (displayedText.length >= fullText.length) {
+          if (simulatedStreamTimer) {
+            clearInterval(simulatedStreamTimer);
+            simulatedStreamTimer = null;
+          }
+          // 确保显示完整内容
+          displayedText = fullText;
+          flushStreamingMessage();
+          resolve();
+        } else {
+          setTimeout(checkComplete, 20);
+        }
+      };
+      // 如果没有内容或者没有启动定时器，直接完成
+      if (fullText.length === 0 || !simulatedStreamTimer) {
+        displayedText = fullText;
+        flushStreamingMessage();
+        resolve();
+      } else {
+        checkComplete();
+      }
+    });
+  };
+
+  await waitForSimulatedStream();
 
   // 流式结束后做一次"最终对齐"：移动端偶发断流/缓冲时，避免必须刷新才能看到完整内容
   if (!signal?.aborted && sawDone && convIdForSync) {
@@ -306,6 +359,11 @@ export async function runChat({
       ]);
     }
   } finally {
+    // 清理定时器
+    if (simulatedStreamTimer) {
+      clearInterval(simulatedStreamTimer);
+      simulatedStreamTimer = null;
+    }
     if (streamMsgId !== null) {
       setMessages((prev) =>
         prev.map((msg) =>

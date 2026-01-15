@@ -378,6 +378,35 @@ h6 {
   background: var(--bg-secondary);
 }
 
+/* Thinking block content - lighter text color */
+.thinking-content {
+  color: #a1a1aa;
+}
+
+.thinking-prose.prose {
+  color: #a1a1aa;
+}
+
+.thinking-prose.prose p,
+.thinking-prose.prose li,
+.thinking-prose.prose span {
+  color: #a1a1aa;
+}
+
+.dark-mode .thinking-content {
+  color: #71717a;
+}
+
+.dark-mode .thinking-prose.prose {
+  color: #71717a;
+}
+
+.dark-mode .thinking-prose.prose p,
+.dark-mode .thinking-prose.prose li,
+.dark-mode .thinking-prose.prose span {
+  color: #71717a;
+}
+
 /* Font Size Classes - Only affects message content */
 .text-size-small .prose {
   font-size: 0.85rem;

@@ -613,7 +613,7 @@ export default function Composer({
                             <button
                               onClick={() => setWebSearch(!webSearch)}
                               type="button"
-                              className={`w-full py-2 rounded-lg border transition-colors text-sm flex items-center justify-center gap-2 ${
+                              className={`w-full py-1 rounded-lg border transition-colors text-sm flex items-center justify-center gap-2 ${
                                 webSearch
                                   ? "bg-blue-600 text-white border-blue-600"
                                   : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
@@ -653,7 +653,7 @@ export default function Composer({
 	                            <button
 	                              onClick={() => setWebSearch(!webSearch)}
 	                              type="button"
-	                              className={`w-full py-2 rounded-lg border transition-colors text-sm flex items-center justify-center gap-2 ${
+	                              className={`w-full py-1 rounded-lg border transition-colors text-sm flex items-center justify-center gap-2 ${
 	                                webSearch
 	                                  ? "bg-blue-600 text-white border-blue-600"
 	                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"

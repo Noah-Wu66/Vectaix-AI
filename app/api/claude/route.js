@@ -285,12 +285,13 @@ export async function POST(req) {
             }
         };
 
-        // 添加联网搜索工具
+        // 添加联网搜索工具（带缓存控制）
         if (enableWebSearch) {
             requestParams.tools = [{
                 type: "web_search_20250305",
                 name: "web_search",
-                max_uses: 5
+                max_uses: 5,
+                cache_control: { type: "ephemeral", ttl: "1h" }
             }];
         }
 
