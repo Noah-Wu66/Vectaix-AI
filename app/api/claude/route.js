@@ -349,10 +349,20 @@ export async function POST(req) {
                                         title: r.title,
                                         page_age: r.page_age
                                     }));
-                                const data = `data: ${JSON.stringify({ 
-                                    type: 'search_result', 
+                                // 将搜索结果作为 citations 来源（Claude 的引用往往不在 delta.citations 中）
+                                for (const r of searchResults) {
+                                    if (r.url && !citations.some(c => c.url === r.url)) {
+                                        citations.push({
+                                            url: r.url,
+                                            title: r.title || null,
+                                            cited_text: null
+                                        });
+                                    }
+                                }
+                                const data = `data: ${JSON.stringify({
+                                    type: 'search_result',
                                     query: currentSearchQuery,
-                                    results: searchResults 
+                                    results: searchResults
                                 })}${padding}\n\n`;
                                 controller.enqueue(encoder.encode(data));
                             }
