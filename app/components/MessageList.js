@@ -49,6 +49,18 @@ function normalizeCopiedText(text) {
     .replace(/\n{3,}/g, "\n\n");
 }
 
+function stripThinkingBlocks(text) {
+  if (typeof text !== "string" || !text) return "";
+  return text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
+}
+
+function buildCopyText(msg) {
+  if (!msg) return "";
+  const raw = typeof msg.content === "string" ? msg.content : "";
+  const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
+  return normalizeCopiedText(cleaned);
+}
+
 function isSelectionFullyInsideElement(el) {
   const sel = window.getSelection?.();
   if (!sel || sel.rangeCount === 0) return false;
@@ -535,7 +547,7 @@ export default function MessageList({
                         }`}
                     >
                       <button
-                        onClick={() => onCopy(msg.content)}
+                        onClick={() => onCopy(buildCopyText(msg))}
                         className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
                         title="复制"
                       >
