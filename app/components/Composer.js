@@ -583,7 +583,7 @@ export default function Composer({
                               className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                             />
                             <span className="text-xs text-right block mt-1 text-zinc-600">
-                              {budgetTokens >= 1024 ? `${Math.round(budgetTokens / 1024)}K` : budgetTokens}
+                              {budgetTokens >= 1000 ? `${Math.round(budgetTokens / 1000)}K` : budgetTokens}
                             </span>
                           </div>
                           <div>
@@ -658,7 +658,7 @@ export default function Composer({
                           className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                         />
                         <span className="text-xs text-right block mt-1 text-zinc-600">
-                          {maxTokens >= 1024 ? `${Math.round(maxTokens / 1024)}K` : maxTokens}
+                          {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
                         </span>
                       </div>
                     </div>
