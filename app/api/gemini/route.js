@@ -39,18 +39,8 @@ async function buildGeminiContentsFromMessages(messages) {
     for (const msg of messages || []) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
-        let storedParts = getStoredPartsFromMessage(msg);
-        // 兼容旧消息：如果没有 parts 字段，从 content 和 image 构建
-        if (!storedParts) {
-            storedParts = [];
-            if (isNonEmptyString(msg.content)) {
-                storedParts.push({ text: msg.content });
-            }
-            if (isNonEmptyString(msg.image)) {
-                storedParts.push({ inlineData: { url: msg.image, mimeType: msg.mimeType || 'image/jpeg' } });
-            }
-            if (storedParts.length === 0) continue;
-        }
+        const storedParts = getStoredPartsFromMessage(msg);
+        if (!storedParts || storedParts.length === 0) continue;
         const parts = [];
         for (const storedPart of storedParts) {
             const p = await storedPartToRequestPart(storedPart);
@@ -173,17 +163,11 @@ export async function POST(req) {
         let currentParts = isRegenerateMode ? null : [{ text: prompt }];
 
         // Handle Image Input (URL from Blob) - 支持多张图片
-        let dbImageEntry = null;
         let dbImageMimeType = null;
         let dbImageEntries = [];
 
-        if (!isRegenerateMode && (config?.images?.length > 0 || config?.image?.url)) {
-            // 优先处理多张图片
-            const imagesToProcess = config?.images?.length > 0
-                ? config.images
-                : config?.image?.url ? [config.image] : [];
-
-            for (const img of imagesToProcess) {
+        if (!isRegenerateMode && config?.images?.length > 0) {
+            for (const img of config.images) {
                 if (img?.url) {
                     const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
                     currentParts.push({
@@ -196,10 +180,7 @@ export async function POST(req) {
                     dbImageEntries.push({ url: img.url, mimeType });
                 }
             }
-
-            // 兼容旧的单图片字段
             if (dbImageEntries.length > 0) {
-                dbImageEntry = dbImageEntries[0].url;
                 dbImageMimeType = dbImageEntries[0].mimeType;
             }
         }
@@ -256,13 +237,6 @@ export async function POST(req) {
                         },
                     });
                 }
-            } else if (isNonEmptyString(dbImageEntry)) {
-                storedUserParts.push({
-                    inlineData: {
-                        mimeType: dbImageMimeType || 'image/jpeg',
-                        url: dbImageEntry,
-                    },
-                });
             }
 
             const userMsgTime = Date.now();
@@ -272,8 +246,7 @@ export async function POST(req) {
                         role: 'user',
                         content: prompt,
                         type: 'text',
-                        image: dbImageEntry, // 兼容旧字段，存第一张
-                        images: dbImageEntries.map(e => e.url), // 新字段存储所有图片
+                        images: dbImageEntries.map(e => e.url),
                         ...(dbImageMimeType ? { mimeType: dbImageMimeType } : {}),
                         parts: storedUserParts
                     }

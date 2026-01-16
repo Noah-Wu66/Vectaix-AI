@@ -42,25 +42,8 @@ async function buildClaudeMessagesFromHistory(messages) {
     for (const msg of messages || []) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
-        let storedParts = getStoredPartsFromMessage(msg);
-        if (!storedParts) {
-            storedParts = [];
-            if (isNonEmptyString(msg.content)) {
-                storedParts.push({ text: msg.content });
-            }
-            // 支持多张图片（优先使用 images 数组）
-            if (Array.isArray(msg.images) && msg.images.length > 0) {
-                for (const imgUrl of msg.images) {
-                    if (isNonEmptyString(imgUrl)) {
-                        storedParts.push({ inlineData: { url: imgUrl, mimeType: msg.mimeType || 'image/jpeg' } });
-                    }
-                }
-            } else if (isNonEmptyString(msg.image)) {
-                // 兼容单图片字段
-                storedParts.push({ inlineData: { url: msg.image, mimeType: msg.mimeType || 'image/jpeg' } });
-            }
-            if (storedParts.length === 0) continue;
-        }
+        const storedParts = getStoredPartsFromMessage(msg);
+        if (!storedParts || storedParts.length === 0) continue;
 
         const content = [];
         for (const storedPart of storedParts) {
@@ -174,7 +157,6 @@ export async function POST(req) {
             }
         }
 
-        let dbImageEntry = null;
         let dbImageMimeType = null;
         let dbImageEntries = [];
 
@@ -182,12 +164,8 @@ export async function POST(req) {
             const userContent = [{ type: 'text', text: prompt }];
 
             // 支持多张图片
-            if (config?.images?.length > 0 || config?.image?.url) {
-                const imagesToProcess = config?.images?.length > 0
-                    ? config.images
-                    : config?.image?.url ? [config.image] : [];
-
-                for (const img of imagesToProcess) {
+            if (config?.images?.length > 0) {
+                for (const img of config.images) {
                     if (img?.url) {
                         const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
                         userContent.push({
@@ -201,10 +179,7 @@ export async function POST(req) {
                         dbImageEntries.push({ url: img.url, mimeType });
                     }
                 }
-
-                // 兼容旧的单图片字段
                 if (dbImageEntries.length > 0) {
-                    dbImageEntry = dbImageEntries[0].url;
                     dbImageMimeType = dbImageEntries[0].mimeType;
                 }
             }
@@ -227,13 +202,6 @@ export async function POST(req) {
                         },
                     });
                 }
-            } else if (isNonEmptyString(dbImageEntry)) {
-                storedUserParts.push({
-                    inlineData: {
-                        mimeType: dbImageMimeType || 'image/jpeg',
-                        url: dbImageEntry,
-                    },
-                });
             }
 
             const userMsgTime = Date.now();
@@ -243,8 +211,7 @@ export async function POST(req) {
                         role: 'user',
                         content: prompt,
                         type: 'text',
-                        image: dbImageEntry, // 兼容旧字段，存第一张
-                        images: dbImageEntries.map(e => e.url), // 新字段存储所有图片
+                        images: dbImageEntries.map(e => e.url),
                         ...(dbImageMimeType ? { mimeType: dbImageMimeType } : {}),
                         parts: storedUserParts
                     }
@@ -255,8 +222,8 @@ export async function POST(req) {
         }
 
         // 构建请求参数
-        const maxTokens = config?.maxTokens || 65536;
-        const budgetTokens = config?.budgetTokens || 32768;
+        const maxTokens = config?.maxTokens || 64000;
+        const budgetTokens = config?.budgetTokens || 32000;
         const userSystemPrompt = config?.systemPrompt || "You are a helpful AI assistant.";
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 

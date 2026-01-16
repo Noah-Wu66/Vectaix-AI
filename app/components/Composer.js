@@ -257,8 +257,8 @@ export default function Composer({
                           onModelChange(m.id);
                         }}
                         className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id
-                            ? "bg-zinc-600 text-white"
-                            : "text-zinc-600 hover:bg-zinc-50"
+                          ? "bg-zinc-600 text-white"
+                          : "text-zinc-600 hover:bg-zinc-50"
                           }`}
                         type="button"
                       >
@@ -280,8 +280,8 @@ export default function Composer({
                           onModelChange(m.id);
                         }}
                         className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id
-                            ? "bg-zinc-600 text-white"
-                            : "text-zinc-600 hover:bg-zinc-50"
+                          ? "bg-zinc-600 text-white"
+                          : "text-zinc-600 hover:bg-zinc-50"
                           }`}
                         type="button"
                       >
@@ -303,8 +303,8 @@ export default function Composer({
                           onModelChange(m.id);
                         }}
                         className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id
-                            ? "bg-zinc-600 text-white"
-                            : "text-zinc-600 hover:bg-zinc-50"
+                          ? "bg-zinc-600 text-white"
+                          : "text-zinc-600 hover:bg-zinc-50"
                           }`}
                         type="button"
                       >
@@ -322,8 +322,8 @@ export default function Composer({
             <button
               onClick={() => setShowSettings(!showSettings)}
               className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 text-sm ${showSettings
-                  ? "bg-zinc-100 border-zinc-300 text-zinc-700"
-                  : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
+                ? "bg-zinc-100 border-zinc-300 text-zinc-700"
+                : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"
                 }`}
               type="button"
             >
@@ -578,8 +578,8 @@ export default function Composer({
                               min="0"
                               max="6"
                               step="1"
-                              value={[1024, 2048, 4096, 8192, 16384, 32768, 65536].indexOf(budgetTokens)}
-                              onChange={(e) => setBudgetTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536][e.target.value])}
+                              value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(budgetTokens)}
+                              onChange={(e) => setBudgetTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
                               className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                             />
                             <span className="text-xs text-right block mt-1 text-zinc-600">
@@ -594,8 +594,8 @@ export default function Composer({
                               onClick={() => setWebSearch(!webSearch)}
                               type="button"
                               className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
-                                  ? "bg-blue-600 text-white border-blue-600"
-                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
                                 }`}
                             >
                               <Globe size={14} />
@@ -633,8 +633,8 @@ export default function Composer({
                               onClick={() => setWebSearch(!webSearch)}
                               type="button"
                               className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
-                                  ? "bg-blue-600 text-white border-blue-600"
-                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
                                 }`}
                             >
                               <Globe size={14} />
@@ -653,8 +653,8 @@ export default function Composer({
                           min="0"
                           max="6"
                           step="1"
-                          value={[1024, 2048, 4096, 8192, 16384, 32768, 65536].indexOf(maxTokens)}
-                          onChange={(e) => setMaxTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536][e.target.value])}
+                          value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(maxTokens)}
+                          onChange={(e) => setMaxTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
                           className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                         />
                         <span className="text-xs text-right block mt-1 text-zinc-600">
@@ -710,8 +710,8 @@ export default function Composer({
             onClick={() => fileInputRef.current?.click()}
             disabled={selectedImages.length >= 4}
             className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedImages.length > 0
-                ? "text-zinc-600 bg-zinc-200"
-                : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
+              ? "text-zinc-600 bg-zinc-200"
+              : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
               } disabled:opacity-40 disabled:cursor-not-allowed`}
             type="button"
           >

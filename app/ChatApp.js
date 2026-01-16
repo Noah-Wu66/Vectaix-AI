@@ -628,15 +628,10 @@ export default function ChatApp() {
     }
   };
 
-  const startEdit = (index, content) => {
+  const startEdit = (index, msg) => {
     if (loading) return;
     setEditingMsgIndex(index);
-    // 兼容旧调用（只传 content）与新调用（传 msg 对象）
-    if (content && typeof content === "object") {
-      setEditingContent(content.content || "");
-    } else {
-      setEditingContent(content || "");
-    }
+    setEditingContent(msg?.content || "");
     setEditingImageAction("keep");
     setEditingImage(null);
   };
