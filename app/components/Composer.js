@@ -588,6 +588,23 @@ export default function Composer({
                           </div>
                           <div>
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              最大输出
+                            </label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="6"
+                              step="1"
+                              value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(maxTokens)}
+                              onChange={(e) => setMaxTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
+                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                            />
+                            <span className="text-xs text-right block mt-1 text-zinc-600">
+                              {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
+                            </span>
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                               联网搜索
                             </label>
                             <button
@@ -644,23 +661,25 @@ export default function Composer({
                         </>
                       ) : null}
 
-                      <div>
-                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                          最大输出
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="6"
-                          step="1"
-                          value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(maxTokens)}
-                          onChange={(e) => setMaxTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
-                          className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                        />
-                        <span className="text-xs text-right block mt-1 text-zinc-600">
-                          {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
-                        </span>
-                      </div>
+                      {!model?.startsWith("claude-") && (
+                        <div>
+                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                            最大输出
+                          </label>
+                          <input
+                            type="range"
+                            min="0"
+                            max="6"
+                            step="1"
+                            value={[1024, 2048, 4096, 8192, 16384, 32768, 65536].indexOf(maxTokens)}
+                            onChange={(e) => setMaxTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536][e.target.value])}
+                            className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                          />
+                          <span className="text-xs text-right block mt-1 text-zinc-600">
+                            {maxTokens >= 1024 ? `${Math.round(maxTokens / 1024)}K` : maxTokens}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 </>
