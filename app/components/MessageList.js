@@ -108,7 +108,7 @@ function SearchingIndicator() {
 
 function Citations({ citations }) {
   if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
-  
+
   // 去重并限制显示数量
   const uniqueCitations = [];
   const seenUrls = new Set();
@@ -118,7 +118,7 @@ function Citations({ citations }) {
       uniqueCitations.push(c);
     }
   }
-  
+
   if (uniqueCitations.length === 0) return null;
 
   return (
@@ -367,236 +367,249 @@ export default function MessageList({
               animate={{ opacity: 1, y: 0 }}
               className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
             >
-            {msg.role === "user" && (
-              <div className="flex items-center gap-1.5 flex-row-reverse">
-                <div className="w-6 h-6 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
-                  <User size={12} />
+              {msg.role === "user" && (
+                <div className="flex items-center gap-1.5 flex-row-reverse">
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
+                    <User size={12} />
+                  </div>
+                  <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
-                <span className="text-xs text-zinc-400 font-medium">你</span>
-              </div>
-            )}
-            {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts) && (
-              <div className="flex items-center gap-1.5">
-                <AIAvatar model={model} size={22} />
-                <span className="text-xs text-zinc-400 font-medium">AI</span>
-              </div>
-            )}
-
-            <div
-              className={`flex flex-col ${msg.role === "user"
-                ? "items-end w-full max-w-[92%]"
-                : "items-start w-full"
-                }`}
-            >
-              {msg.role === "model" && msg.thought && (
-                <ThinkingBlock thought={msg.thought} isStreaming={msg.isThinkingStreaming} isSearching={msg.isSearching} />
+              )}
+              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts) && (
+                <div className="flex items-center gap-1.5">
+                  <AIAvatar model={model} size={22} />
+                  <span className="text-xs text-zinc-400 font-medium">AI</span>
+                </div>
               )}
 
-              {msg.role === "model" && msg.isSearching && (
-                <SearchingIndicator />
-              )}
+              <div
+                className={`flex flex-col ${msg.role === "user"
+                  ? "items-end w-full max-w-[92%]"
+                  : "items-start w-full"
+                  }`}
+              >
+                {msg.role === "model" && msg.thought && (
+                  <ThinkingBlock thought={msg.thought} isStreaming={msg.isThinkingStreaming} isSearching={msg.isSearching} />
+                )}
 
-              {/* 编辑模式 */}
-              {editingMsgIndex === i && msg.role === "user" ? (
-                <div className="w-full space-y-2">
-                  <input
-                    type="file"
-                    ref={editFileInputRef}
-                    onChange={handleEditFileSelect}
-                    className="hidden"
-                    accept="image/*"
-                  />
+                {msg.role === "model" && msg.isSearching && (
+                  <SearchingIndicator />
+                )}
 
-                  {(() => {
-                    const existing = getMessageImageSrc(msg);
-                    const showSrc =
-                      editingImageAction === "new"
-                        ? editingImage?.preview
-                        : editingImageAction === "keep"
-                          ? existing
-                          : null;
-                    return showSrc ? (
-                      <div className="w-fit">
-                        <Thumb src={showSrc} onClick={openLightbox} />
-                      </div>
-                    ) : null;
-                  })()}
-
-                  <textarea
-                    ref={editTextareaRef}
-                    value={editingContent}
-                    onChange={(e) => onEditingContentChange(e.target.value)}
-                    onFocus={scrollEditIntoView}
-                    className="w-full bg-white border border-zinc-300 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400 resize-none min-h-[80px]"
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => editFileInputRef.current?.click()}
-                      className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors inline-flex items-center gap-1"
-                      title="添加/更换图片"
-                    >
-                      <Paperclip size={14} />
-                      图片
-                    </button>
+                {/* 编辑模式 */}
+                {editingMsgIndex === i && msg.role === "user" ? (
+                  <div className="w-full space-y-2">
+                    <input
+                      type="file"
+                      ref={editFileInputRef}
+                      onChange={handleEditFileSelect}
+                      className="hidden"
+                      accept="image/*"
+                    />
 
                     {(() => {
                       const existing = getMessageImageSrc(msg);
-                      const hasExisting = isKeepableImageSrc(existing);
-                      const hasNew = editingImageAction === "new" && Boolean(editingImage?.preview);
-                      const showToggle =
-                        editingImageAction === "remove" ? hasExisting : hasExisting || hasNew;
-                      if (!showToggle) return null;
-
-                      const label = editingImageAction === "remove" ? "恢复图片" : "移除图片";
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (editingImageAction === "remove") {
-                              if (hasExisting) onEditingImageKeep?.();
-                            } else {
-                              onEditingImageRemove?.();
-                            }
-                            if (editFileInputRef.current) editFileInputRef.current.value = "";
-                          }}
-                          className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors inline-flex items-center gap-1"
-                          title={label}
-                        >
-                          <X size={14} />
-                          {label}
-                        </button>
-                      );
+                      const showSrc =
+                        editingImageAction === "new"
+                          ? editingImage?.preview
+                          : editingImageAction === "keep"
+                            ? existing
+                            : null;
+                      return showSrc ? (
+                        <div className="w-fit">
+                          <Thumb src={showSrc} onClick={openLightbox} />
+                        </div>
+                      ) : null;
                     })()}
 
-                    <button
-                      onClick={onCancelEdit}
-                      className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
-                    >
-                      取消
-                    </button>
-                    <button
-                      onClick={() => onSubmitEdit(i)}
-                      disabled={loading || (!editingContent.trim() && !hasEditingImage())}
-                      className="px-3 py-1.5 text-xs text-white bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 rounded-lg transition-colors"
-                    >
-                      提交并重新生成
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {(hasParts || msg.content || msg.image) && (
-                    <div
-                      className={`msg-bubble px-4 py-3 rounded-2xl ${msg.role === "user"
-                        ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
-                        : "bg-zinc-100 text-zinc-800"
-                        }`}
-                      onCopy={handleBubbleCopy}
-                    >
-                      {hasParts ? (
-                        <div className="flex flex-col gap-2">
-                          {(() => {
-                            const entries = msg.parts.map((part, idx) => ({ part, idx }));
-                            const isUser = msg.role === "user";
-                            const imageEntries = entries.filter(({ part }) => {
-                              const url = part?.inlineData?.url;
-                              return typeof url === "string" && url;
-                            });
-                            const textEntries = entries.filter(({ part }) => {
-                              return part && typeof part.text === "string" && part.text.trim();
-                            });
-                            const ordered = isUser ? [...imageEntries, ...textEntries] : entries;
-
-                            return ordered.map(({ part, idx }) => {
-                              const url = part?.inlineData?.url;
-                              if (typeof url === "string" && url) {
-                                return <Thumb key={idx} src={url} className="w-fit" onClick={openLightbox} />;
-                              }
-                              if (part && typeof part.text === "string" && part.text.trim()) {
-                                return (
-                                  <Markdown key={idx} enableHighlight={!msg.isStreaming}>
-                                    {part.text}
-                                  </Markdown>
-                                );
-                              }
-                              return null;
-                            });
-                          })()}
-                        </div>
-                      ) : (
-                        <>
-                          {msg.image && (
-                            <div className="mb-2 w-fit">
-                              <Thumb src={msg.image} onClick={openLightbox} />
-                            </div>
-                          )}
-
-                          <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
-                        </>
-                      )}
-                      
-                      {msg.role === "model" && !msg.isStreaming && msg.citations && (
-                        <Citations citations={msg.citations} />
-                      )}
-                    </div>
-                  )}
-
-                  {/* 消息操作按钮 */}
-                  {!msg.isStreaming && (
-                    <div
-                      className={`flex gap-1 mt-1 ${msg.role === "user" ? "flex-row-reverse" : ""
-                        }`}
-                    >
+                    <textarea
+                      ref={editTextareaRef}
+                      value={editingContent}
+                      onChange={(e) => onEditingContentChange(e.target.value)}
+                      onFocus={scrollEditIntoView}
+                      onKeyDown={(e) => {
+                        // 桌面端：Enter 发送，Shift+Enter 换行
+                        // 移动端：不拦截 Enter，避免 iOS 输入法换行按钮误触发送
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                          if (!isMobile) {
+                            e.preventDefault();
+                            if (!loading && (editingContent.trim() || hasEditingImage())) {
+                              onSubmitEdit(i);
+                            }
+                          }
+                        }
+                      }}
+                      className="w-full bg-white border border-zinc-300 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400 resize-none min-h-[80px]"
+                    />
+                    <div className="flex gap-2 justify-end">
                       <button
-                        onClick={() => onCopy(buildCopyText(msg))}
-                        className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-                        title="复制"
+                        type="button"
+                        onClick={() => editFileInputRef.current?.click()}
+                        className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors inline-flex items-center gap-1"
+                        title="添加/更换图片"
                       >
-                        <Copy size={14} />
+                        <Paperclip size={14} />
+                        图片
                       </button>
 
-                      {msg.role === "user" ? (
-                        <>
+                      {(() => {
+                        const existing = getMessageImageSrc(msg);
+                        const hasExisting = isKeepableImageSrc(existing);
+                        const hasNew = editingImageAction === "new" && Boolean(editingImage?.preview);
+                        const showToggle =
+                          editingImageAction === "remove" ? hasExisting : hasExisting || hasNew;
+                        if (!showToggle) return null;
+
+                        const label = editingImageAction === "remove" ? "恢复图片" : "移除图片";
+                        return (
                           <button
-                            onClick={() => handleDeleteClick(i, "user")}
-                            className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
-                            title="删除"
+                            type="button"
+                            onClick={() => {
+                              if (editingImageAction === "remove") {
+                                if (hasExisting) onEditingImageKeep?.();
+                              } else {
+                                onEditingImageRemove?.();
+                              }
+                              if (editFileInputRef.current) editFileInputRef.current.value = "";
+                            }}
+                            className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors inline-flex items-center gap-1"
+                            title={label}
                           >
-                            <Trash2 size={14} />
+                            <X size={14} />
+                            {label}
                           </button>
-                          <button
-                            onClick={() => onStartEdit(i, msg)}
-                            className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-                            title="编辑并重新生成"
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleDeleteClick(i, "model")}
-                            className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
-                            title="删除"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                          <button
-                            onClick={() => onRegenerateModelMessage(i)}
-                            disabled={loading}
-                            className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
-                            title="重新生成"
-                          >
-                            <RotateCcw size={14} />
-                          </button>
-                        </>
-                      )}
+                        );
+                      })()}
+
+                      <button
+                        onClick={onCancelEdit}
+                        className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors"
+                      >
+                        取消
+                      </button>
+                      <button
+                        onClick={() => onSubmitEdit(i)}
+                        disabled={loading || (!editingContent.trim() && !hasEditingImage())}
+                        className="px-3 py-1.5 text-xs text-white bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 rounded-lg transition-colors"
+                      >
+                        提交并重新生成
+                      </button>
                     </div>
-                  )}
-                </>
-              )}
-            </div>
+                  </div>
+                ) : (
+                  <>
+                    {(hasParts || msg.content || msg.image) && (
+                      <div
+                        className={`msg-bubble px-4 py-3 rounded-2xl ${msg.role === "user"
+                          ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
+                          : "bg-zinc-100 text-zinc-800"
+                          }`}
+                        onCopy={handleBubbleCopy}
+                      >
+                        {hasParts ? (
+                          <div className="flex flex-col gap-2">
+                            {(() => {
+                              const entries = msg.parts.map((part, idx) => ({ part, idx }));
+                              const isUser = msg.role === "user";
+                              const imageEntries = entries.filter(({ part }) => {
+                                const url = part?.inlineData?.url;
+                                return typeof url === "string" && url;
+                              });
+                              const textEntries = entries.filter(({ part }) => {
+                                return part && typeof part.text === "string" && part.text.trim();
+                              });
+                              const ordered = isUser ? [...imageEntries, ...textEntries] : entries;
+
+                              return ordered.map(({ part, idx }) => {
+                                const url = part?.inlineData?.url;
+                                if (typeof url === "string" && url) {
+                                  return <Thumb key={idx} src={url} className="w-fit" onClick={openLightbox} />;
+                                }
+                                if (part && typeof part.text === "string" && part.text.trim()) {
+                                  return (
+                                    <Markdown key={idx} enableHighlight={!msg.isStreaming}>
+                                      {part.text}
+                                    </Markdown>
+                                  );
+                                }
+                                return null;
+                              });
+                            })()}
+                          </div>
+                        ) : (
+                          <>
+                            {msg.image && (
+                              <div className="mb-2 w-fit">
+                                <Thumb src={msg.image} onClick={openLightbox} />
+                              </div>
+                            )}
+
+                            <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
+                          </>
+                        )}
+
+                        {msg.role === "model" && !msg.isStreaming && msg.citations && (
+                          <Citations citations={msg.citations} />
+                        )}
+                      </div>
+                    )}
+
+                    {/* 消息操作按钮 */}
+                    {!msg.isStreaming && (
+                      <div
+                        className={`flex gap-1 mt-1 ${msg.role === "user" ? "flex-row-reverse" : ""
+                          }`}
+                      >
+                        <button
+                          onClick={() => onCopy(buildCopyText(msg))}
+                          className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                          title="复制"
+                        >
+                          <Copy size={14} />
+                        </button>
+
+                        {msg.role === "user" ? (
+                          <>
+                            <button
+                              onClick={() => handleDeleteClick(i, "user")}
+                              className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
+                              title="删除"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => onStartEdit(i, msg)}
+                              className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                              title="编辑并重新生成"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleDeleteClick(i, "model")}
+                              className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
+                              title="删除"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => onRegenerateModelMessage(i)}
+                              disabled={loading}
+                              className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
+                              title="重新生成"
+                            >
+                              <RotateCcw size={14} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </motion.div>
           );
         })
