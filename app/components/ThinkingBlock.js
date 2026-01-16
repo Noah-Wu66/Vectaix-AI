@@ -29,9 +29,9 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching }) {
     <div className="mb-2 w-full max-w-full">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="thinking-btn flex items-center gap-1.5 sm:gap-2.5 text-[11px] sm:text-xs font-medium text-zinc-500 hover:text-zinc-700 mb-1.5 uppercase tracking-wider bg-zinc-100 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-colors"
+        className="thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium text-zinc-500 hover:text-zinc-700 mb-1.5 uppercase tracking-wider bg-zinc-100 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors"
       >
-        <BrainCircuit size={14} className="sm:w-4 sm:h-4" />
+        <BrainCircuit size={16} className="sm:w-5 sm:h-5" />
         {isStreaming && !isSearching ? (
           <span className="flex items-center gap-1 sm:gap-1.5">
             思考中

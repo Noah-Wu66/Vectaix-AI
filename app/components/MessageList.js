@@ -369,15 +369,15 @@ export default function MessageList({
             >
               {msg.role === "user" && (
                 <div className="flex items-center gap-1.5 flex-row-reverse">
-                  <div className="w-6 h-6 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
-                    <User size={12} />
+                  <div className="w-8 h-8 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
+                    <User size={16} />
                   </div>
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
               {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts) && (
                 <div className="flex items-center gap-1.5">
-                  <AIAvatar model={model} size={22} />
+                  <AIAvatar model={model} size={28} />
                   <span className="text-xs text-zinc-400 font-medium">AI</span>
                 </div>
               )}
