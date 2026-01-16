@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import remarkGfm from "remark-gfm";
@@ -19,8 +20,24 @@ const sanitizeSchema = {
 };
 
 export default function Markdown({ children, className = "", enableHighlight = true }) {
+  // 使用 ref 记住上一次的 enableHighlight 值，避免重复触发
+  const prevEnableRef = useRef(enableHighlight);
+  const [actualHighlight, setActualHighlight] = useState(enableHighlight);
+
+  useEffect(() => {
+    // 只有当从 false -> true 时才延迟启用，避免闪烁
+    if (!prevEnableRef.current && enableHighlight) {
+      const timer = setTimeout(() => setActualHighlight(true), 50);
+      prevEnableRef.current = enableHighlight;
+      return () => clearTimeout(timer);
+    }
+    // 其他情况直接同步
+    setActualHighlight(enableHighlight);
+    prevEnableRef.current = enableHighlight;
+  }, [enableHighlight]);
+
   // Sanitize must be last to clean content from all preceding plugins (KaTeX CVE-2020-28170 etc.)
-  const rehypePlugins = enableHighlight
+  const rehypePlugins = actualHighlight
     ? [rehypeKatex, rehypeHighlight, [rehypeSanitize, sanitizeSchema]]
     : [rehypeKatex, [rehypeSanitize, sanitizeSchema]];
   return (
