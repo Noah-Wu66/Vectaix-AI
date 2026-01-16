@@ -409,7 +409,8 @@ export async function POST(req) {
                                         content: fullText,
                                         thought: fullThought || null,
                                         citations: citations.length > 0 ? citations : null,
-                                        type: 'text'
+                                        type: 'text',
+                                        parts: [{ text: fullText }]
                                     }
                                 },
                                 updatedAt: Date.now()

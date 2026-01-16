@@ -344,7 +344,8 @@ export async function POST(req) {
                                         role: 'model',
                                         content: fullText,
                                         thought: fullThought || null,
-                                        type: 'text'
+                                        type: 'text',
+                                        parts: [{ text: fullText }]
                                     }
                                 },
                                 updatedAt: Date.now()
