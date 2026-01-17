@@ -29,6 +29,11 @@ export function buildChatConfig({
   return cfg;
 }
 
+// Claude 路由记忆状态（每个会话独立）
+// key: conversationId, value: { routeLevel: number, roundCount: number }
+const claudeRouteMemory = new Map();
+const CLAUDE_ROUTE_RESET_ROUNDS = 5; // 每5轮对话重置为主线路
+
 export async function runChat({
   prompt,
   historyMessages,
@@ -71,29 +76,188 @@ export async function runChat({
   // 根据 provider 选择 API 端点
   const apiEndpoint = provider === "claude" ? "/api/claude" : provider === "openai" ? "/api/openai" : "/api/gemini";
 
+  // Claude 备用路由超时配置（15秒无响应切换备用线路）
+  const CLAUDE_FALLBACK_TIMEOUT_MS = 15000;
+
   setLoading(true);
   let streamMsgId = null;
   let simulatedStreamTimer = null;
-  try {
-    const res = await fetch(apiEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal,
-    });
 
-    // Handle error responses with detailed messages
-    if (!res.ok) {
-      let errorMessage = res.statusText;
-      try {
-        const errorData = await res.json();
-        errorMessage = errorData.error || errorData.message || errorMessage;
-      } catch (e) {
-        // If we can't parse the error body, use the status text
-        console.error("Failed to parse error response:", e);
-      }
-      throw new Error(errorMessage);
+  // Claude 请求封装：支持三级路由超时切换（主线路 → 备用线路 → 保障线路）
+  // routeLevel: 0=主线路, 1=备用线路, 2=保障线路
+  let finalRouteLevel = 0; // 记录最终使用的路由级别
+  const fetchWithClaudeRoute = async (routeLevel = 0) => {
+    const routeNames = ["主线路", "备用线路 AIGOCODE", "保障线路 AIHUBMIX"];
+    const routeParams = [null, "fallback", "guarantee"];
+    const maxRouteLevel = 2; // 最多三级路由
+
+    let hasReceivedAnyData = false;
+    const routeController = new AbortController();
+    const combinedSignal = signal;
+
+    // 监听外部 abort signal
+    const onExternalAbort = () => {
+      routeController.abort();
+    };
+    if (combinedSignal) {
+      combinedSignal.addEventListener("abort", onExternalAbort, { once: true });
     }
+
+    // 设置超时定时器（仅非保障线路需要）
+    let timeoutId = null;
+    let timeoutPromise = null;
+    if (routeLevel < maxRouteLevel) {
+      timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          if (!hasReceivedAnyData) {
+            routeController.abort();
+            reject(new Error("CLAUDE_ROUTE_TIMEOUT"));
+          }
+        }, CLAUDE_FALLBACK_TIMEOUT_MS);
+      });
+    }
+
+    // 构建请求 payload，添加路由级别参数
+    const routePayload = routeLevel === 0
+      ? payload
+      : { ...payload, routeLevel: routeParams[routeLevel] };
+
+    try {
+      const fetchPromise = (async () => {
+        const res = await fetch(apiEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(routePayload),
+          signal: routeController.signal,
+        });
+        if (!res.ok) {
+          let errorMessage = res.statusText;
+          try {
+            const errorData = await res.json();
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } catch (e) {
+            console.error("Failed to parse error response:", e);
+          }
+          throw new Error(errorMessage);
+        }
+        // 包装 response，添加数据接收检测
+        const originalReader = res.body.getReader();
+        const wrappedStream = new ReadableStream({
+          async pull(controller) {
+            try {
+              const { value, done } = await originalReader.read();
+              if (done) {
+                controller.close();
+                return;
+              }
+              // 收到任何数据就标记并清除超时
+              hasReceivedAnyData = true;
+              if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+              }
+              controller.enqueue(value);
+            } catch (err) {
+              controller.error(err);
+            }
+          },
+          cancel() {
+            originalReader.cancel();
+          }
+        });
+        // 记录成功使用的路由级别
+        finalRouteLevel = routeLevel;
+        return new Response(wrappedStream, {
+          headers: res.headers,
+          status: res.status,
+          statusText: res.statusText
+        });
+      })();
+
+      const res = timeoutPromise
+        ? await Promise.race([fetchPromise, timeoutPromise])
+        : await fetchPromise;
+      if (timeoutId) clearTimeout(timeoutId);
+      if (combinedSignal) combinedSignal.removeEventListener("abort", onExternalAbort);
+      return res;
+    } catch (err) {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (combinedSignal) combinedSignal.removeEventListener("abort", onExternalAbort);
+
+      // 检查是否是超时触发的切换
+      const isTimeout = err.message === "CLAUDE_ROUTE_TIMEOUT" ||
+        (err.name === "AbortError" && !hasReceivedAnyData && !combinedSignal?.aborted);
+
+      if (isTimeout && routeLevel < maxRouteLevel) {
+        const nextLevel = routeLevel + 1;
+        console.log(`[Claude] ${routeNames[routeLevel]} 15s 无响应，切换${routeNames[nextLevel]}...`);
+        return fetchWithClaudeRoute(nextLevel);
+      }
+      throw err;
+    }
+  };
+
+  const fetchWithClaudeFallback = async () => {
+    if (provider !== "claude") {
+      // 非 Claude 直接使用原逻辑
+      const res = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal,
+      });
+      if (!res.ok) {
+        let errorMessage = res.statusText;
+        try {
+          const errorData = await res.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (e) {
+          console.error("Failed to parse error response:", e);
+        }
+        throw new Error(errorMessage);
+      }
+      return res;
+    }
+
+    // Claude：检查路由记忆
+    const convId = conversationId || currentConversationId;
+    let startRouteLevel = 0;
+
+    if (convId && claudeRouteMemory.has(convId)) {
+      const memory = claudeRouteMemory.get(convId);
+      // 每5轮重置为主线路
+      if (memory.roundCount >= CLAUDE_ROUTE_RESET_ROUNDS) {
+        console.log(`[Claude] 已达 ${CLAUDE_ROUTE_RESET_ROUNDS} 轮，重新尝试主线路`);
+        claudeRouteMemory.delete(convId);
+      } else {
+        startRouteLevel = memory.routeLevel;
+        if (startRouteLevel > 0) {
+          const routeNames = ["主线路", "备用线路 AIGOCODE", "保障线路 AIHUBMIX"];
+          console.log(`[Claude] 继续使用${routeNames[startRouteLevel]} (第 ${memory.roundCount + 1}/${CLAUDE_ROUTE_RESET_ROUNDS} 轮)`);
+        }
+      }
+    }
+
+    const res = await fetchWithClaudeRoute(startRouteLevel);
+
+    // 更新路由记忆
+    const finalConvId = res.headers.get("X-Conversation-Id") || convId;
+    if (finalConvId && finalRouteLevel > 0) {
+      const existing = claudeRouteMemory.get(finalConvId);
+      claudeRouteMemory.set(finalConvId, {
+        routeLevel: finalRouteLevel,
+        roundCount: (existing?.roundCount || 0) + 1
+      });
+    } else if (finalConvId && finalRouteLevel === 0 && claudeRouteMemory.has(finalConvId)) {
+      // 主线路成功，清除记忆
+      claudeRouteMemory.delete(finalConvId);
+    }
+
+    return res;
+  };
+
+  try {
+    const res = await fetchWithClaudeFallback();
 
     const newConvId = res.headers.get("X-Conversation-Id");
     if (newConvId && !currentConversationId) {
