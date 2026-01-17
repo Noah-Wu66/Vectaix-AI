@@ -170,14 +170,29 @@ export default function ChatApp() {
     const markUserGesture = () => {
       lastUserScrollAtRef.current = Date.now();
     };
+    // 移动端触摸滑动时，如果不在底部则直接标记为用户中断
+    const handleTouchMove = () => {
+      lastUserScrollAtRef.current = Date.now();
+      if (isStreamingRef.current && !isNearBottom(el)) {
+        userInterruptedRef.current = true;
+      }
+    };
+    // 电脑端滚轮向上滚动时，直接标记为用户中断
+    const handleWheel = (e) => {
+      lastUserScrollAtRef.current = Date.now();
+      // deltaY < 0 表示向上滚动
+      if (isStreamingRef.current && e.deltaY < 0) {
+        userInterruptedRef.current = true;
+      }
+    };
     el.addEventListener("touchstart", markUserGesture, { passive: true });
-    el.addEventListener("touchmove", markUserGesture, { passive: true });
-    el.addEventListener("wheel", markUserGesture, { passive: true });
+    el.addEventListener("touchmove", handleTouchMove, { passive: true });
+    el.addEventListener("wheel", handleWheel, { passive: true });
     el.addEventListener("mousedown", markUserGesture);
     return () => {
       el.removeEventListener("touchstart", markUserGesture);
-      el.removeEventListener("touchmove", markUserGesture);
-      el.removeEventListener("wheel", markUserGesture);
+      el.removeEventListener("touchmove", handleTouchMove);
+      el.removeEventListener("wheel", handleWheel);
       el.removeEventListener("mousedown", markUserGesture);
     };
   }, []);

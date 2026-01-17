@@ -192,6 +192,12 @@ export async function runChat({
     const startSimulatedStream = () => {
       if (simulatedStreamTimer) return;
       simulatedStreamTimer = setInterval(() => {
+        // 检查是否已中止，如果已中止则立即停止定时器
+        if (signal?.aborted) {
+          clearInterval(simulatedStreamTimer);
+          simulatedStreamTimer = null;
+          return;
+        }
         if (displayedText.length < fullText.length) {
           const remaining = fullText.length - displayedText.length;
           const batchSize = Math.min(SIMULATED_STREAM_BATCH, remaining);
@@ -279,6 +285,15 @@ export async function runChat({
     const waitForSimulatedStream = () => {
       return new Promise((resolve) => {
         const checkComplete = () => {
+          // 如果已中止，立即完成
+          if (signal?.aborted) {
+            if (simulatedStreamTimer) {
+              clearInterval(simulatedStreamTimer);
+              simulatedStreamTimer = null;
+            }
+            resolve();
+            return;
+          }
           if (displayedText.length >= fullText.length) {
             if (simulatedStreamTimer) {
               clearInterval(simulatedStreamTimer);
@@ -292,10 +307,16 @@ export async function runChat({
             setTimeout(checkComplete, 20);
           }
         };
-        // 如果没有内容或者没有启动定时器，直接完成
-        if (fullText.length === 0 || !simulatedStreamTimer) {
-          displayedText = fullText;
-          flushStreamingMessage();
+        // 如果已中止、没有内容或者没有启动定时器，直接完成
+        if (signal?.aborted || fullText.length === 0 || !simulatedStreamTimer) {
+          if (simulatedStreamTimer) {
+            clearInterval(simulatedStreamTimer);
+            simulatedStreamTimer = null;
+          }
+          if (!signal?.aborted) {
+            displayedText = fullText;
+            flushStreamingMessage();
+          }
           resolve();
         } else {
           checkComplete();
