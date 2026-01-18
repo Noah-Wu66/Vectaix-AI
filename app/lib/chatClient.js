@@ -148,16 +148,19 @@ export async function runChat({
     let searchResults = null;
     let citations = null;
 
-    // Claude 15秒超时检测
+    // Claude 超时检测：有图片时30秒，否则15秒
     let claudeTimeoutId = null;
     let claudeTimedOut = false;
     if (provider === "claude") {
+      // 检查当前请求是否包含图片
+      const hasImages = config?.images?.length > 0;
+      const timeoutMs = hasImages ? 30000 : 15000;
       claudeTimeoutId = setTimeout(() => {
         if (!hasReceivedContent) {
           claudeTimedOut = true;
           reader.cancel();
         }
-      }, 15000);
+      }, timeoutMs);
     }
 
     // 模拟流式输出：控制文本逐步显示
