@@ -88,8 +88,8 @@ export async function POST(req) {
             apiConfig = { apiKey: process.env.AIHUBMIX_API_KEY, baseURL: "https://aihubmix.com" };
             console.log("[Claude] 使用保障线路 AIHUBMIX");
         } else if (routeLevel === "fallback") {
-            apiConfig = { apiKey: process.env.AIGOCODE_API_KEY, baseURL: "https://api.aigocode.com/api" };
-            console.log("[Claude] 使用备用线路 AIGOCODE");
+            apiConfig = { apiKey: process.env.RIGHTCODE_API_KEY, baseURL: "https://www.right.codes/claude-aws" };
+            console.log("[Claude] 使用备用线路 RIGHT.CODES-AWS");
         } else {
             apiConfig = { apiKey: process.env.RIGHTCODE_API_KEY, baseURL: "https://www.right.codes/claude" };
         }

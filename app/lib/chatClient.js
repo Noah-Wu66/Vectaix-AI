@@ -419,17 +419,16 @@ export async function runChat({
         ? "服务暂不可用，请尝试在设置中切换线路"
         : "网络连接错误，请重新尝试";
       setMessages((prev) => {
-        // 如果是 Claude 超时且存在空白的流式消息，移除它
-        if (err?.message === "CLAUDE_TIMEOUT" && streamMsgId !== null) {
+        // 如果存在流式消息，根据情况处理
+        if (streamMsgId !== null) {
+          // 移除空白的流式消息，统一用错误消息替代
           const filtered = prev.filter((msg) => msg.id !== streamMsgId);
           return [...filtered, { role: "model", content: errorMessage, type: "error" }];
         }
         return [...prev, { role: "model", content: errorMessage, type: "error" }];
       });
-      // 超时时清除 streamMsgId，避免 finally 再次处理
-      if (err?.message === "CLAUDE_TIMEOUT") {
-        streamMsgId = null;
-      }
+      // 清除 streamMsgId，避免 finally 再次处理
+      streamMsgId = null;
     }
   } finally {
     // 清理定时器
