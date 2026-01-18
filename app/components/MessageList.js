@@ -183,6 +183,7 @@ export default function MessageList({
   onDeleteUserMessage,
   onRegenerateModelMessage,
   onStartEdit,
+  userAvatar,
 }) {
   const editTextareaRef = useRef(null);
   const editFileInputRef = useRef(null);
@@ -369,8 +370,12 @@ export default function MessageList({
             >
               {msg.role === "user" && (
                 <div className="flex items-center gap-1.5 flex-row-reverse">
-                  <div className="w-8 h-8 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600">
-                    <User size={16} />
+                  <div className="w-8 h-8 rounded-md flex items-center justify-center bg-zinc-100 text-zinc-600 overflow-hidden">
+                    {userAvatar ? (
+                      <img src={userAvatar} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={16} />
+                    )}
                   </div>
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>

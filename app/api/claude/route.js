@@ -234,7 +234,8 @@ export async function POST(req) {
         // 构建请求参数
         const maxTokens = config?.maxTokens || 64000;
         const budgetTokens = config?.budgetTokens || 32000;
-        const userSystemPrompt = config?.systemPrompt || "You are a helpful AI assistant.";
+        // Claude 使用内置系统提示词
+        const claudeSystemPrompt = "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         // 是否启用联网搜索
@@ -246,7 +247,7 @@ export async function POST(req) {
             : "";
 
         // 系统提示词
-        const systemPrompt = `${userSystemPrompt}\n\n${formattingGuard}${webSearchGuide}`;
+        const systemPrompt = `${claudeSystemPrompt}\n\n${formattingGuard}${webSearchGuide}`;
 
         const requestParams = {
             model: model,

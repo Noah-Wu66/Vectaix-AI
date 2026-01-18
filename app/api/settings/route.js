@@ -72,6 +72,31 @@ export async function DELETE(req) {
     return Response.json({ settings });
 }
 
+// 更新用户头像
+export async function PUT(req) {
+    await dbConnect();
+    const user = await getAuthPayload();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { avatar } = await req.json();
+
+    let settings = await UserSettings.findOne({ userId: user.userId });
+
+    if (!settings) {
+        settings = await UserSettings.create({
+            userId: user.userId,
+            avatar: avatar || null,
+            systemPrompts: [{ name: '默认助手', content: 'You are a helpful AI assistant.' }]
+        });
+    } else {
+        settings.avatar = avatar || null;
+        settings.updatedAt = Date.now();
+        await settings.save();
+    }
+
+    return Response.json({ settings });
+}
+
 // 编辑系统提示词
 export async function PATCH(req) {
     await dbConnect();

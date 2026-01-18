@@ -9,6 +9,7 @@ const DEFAULT_THINKING_LEVELS = {
 };
 const DEFAULT_MAX_TOKENS = 65536;
 const DEFAULT_BUDGET_TOKENS = 32768;
+const DEFAULT_CLAUDE_ROUTE = "primary"; // primary | fallback | guarantee
 
 // localStorage keys - 所有设置都本地存储，只有 systemPrompts 内容存数据库
 const UI_THEME_MODE_KEY = "vectaix_ui_themeMode";
@@ -21,6 +22,7 @@ const UI_ACTIVE_PROMPT_ID_KEY = "vectaix_ui_activePromptId";
 const UI_MAX_TOKENS_KEY = "vectaix_ui_maxTokens";
 const UI_BUDGET_TOKENS_KEY = "vectaix_ui_budgetTokens";
 const UI_WEB_SEARCH_KEY = "vectaix_ui_webSearch";
+const UI_CLAUDE_ROUTE_KEY = "vectaix_ui_claudeRoute";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -77,6 +79,8 @@ export function useUserSettings() {
   const [maxTokens, _setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
   const [budgetTokens, _setBudgetTokens] = useState(DEFAULT_BUDGET_TOKENS);
   const [webSearch, _setWebSearch] = useState(false);
+  const [claudeRoute, _setClaudeRoute] = useState(DEFAULT_CLAUDE_ROUTE);
+  const [avatar, _setAvatar] = useState(null);
   const [settingsError, setSettingsError] = useState(null);
 
   const modelRef = useRef(model);
@@ -106,6 +110,10 @@ export function useUserSettings() {
     if (localBudgetTokens !== null) _setBudgetTokens(Number(localBudgetTokens) || DEFAULT_BUDGET_TOKENS);
     if (localWebSearch === "true") _setWebSearch(true);
     else if (localWebSearch === "false") _setWebSearch(false);
+    const localClaudeRoute = readLocalSetting(UI_CLAUDE_ROUTE_KEY);
+    if (typeof localClaudeRoute === "string" && ["primary", "fallback", "guarantee"].includes(localClaudeRoute)) {
+      _setClaudeRoute(localClaudeRoute);
+    }
   }, []);
 
   const setModel = useCallback((m) => {
@@ -158,6 +166,11 @@ export function useUserSettings() {
     writeLocalSetting(UI_WEB_SEARCH_KEY, String(enabled));
   }, []);
 
+  const setClaudeRoute = useCallback((route) => {
+    _setClaudeRoute(route);
+    writeLocalSetting(UI_CLAUDE_ROUTE_KEY, route);
+  }, []);
+
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/settings");
@@ -180,9 +193,12 @@ export function useUserSettings() {
       }
 
       setSettingsError(null);
-      // 只从服务器读取 systemPrompts，其他都从 localStorage
+      // 只从服务器读取 systemPrompts 和 avatar，其他都从 localStorage
       if (Array.isArray(settings.systemPrompts)) {
         setSystemPrompts(settings.systemPrompts);
+      }
+      if (settings.avatar !== undefined) {
+        _setAvatar(settings.avatar || null);
       }
 
       return settings;
@@ -288,6 +304,38 @@ export function useUserSettings() {
     }
   }, []);
 
+  const setAvatar = useCallback(async (avatarUrl) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar: avatarUrl }),
+      });
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        setSettingsError(data?.error || res.statusText || "Avatar update error");
+        return null;
+      }
+
+      setSettingsError(null);
+      const settings = data?.settings;
+      if (settings?.avatar !== undefined) {
+        _setAvatar(settings.avatar || null);
+      }
+      return settings ?? null;
+    } catch (e) {
+      setSettingsError(e?.message || "Avatar update error");
+      return null;
+    }
+  }, []);
+
   return {
     model,
     setModel,
@@ -311,11 +359,15 @@ export function useUserSettings() {
     setBudgetTokens,
     webSearch,
     setWebSearch,
+    claudeRoute,
+    setClaudeRoute,
     settingsError,
     setSettingsError,
     fetchSettings,
     addPrompt,
     deletePrompt,
     updatePrompt,
+    avatar,
+    setAvatar,
   };
 }

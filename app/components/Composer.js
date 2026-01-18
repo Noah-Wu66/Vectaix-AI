@@ -47,6 +47,8 @@ export default function Composer({
   setBudgetTokens,
   webSearch,
   setWebSearch,
+  claudeRoute,
+  setClaudeRoute,
   systemPrompts,
   activePromptIds,
   setActivePromptIds,
@@ -109,7 +111,40 @@ export default function Composer({
     if (!el) return;
     el.style.height = "auto"; const sh = el.scrollHeight; el.style.height = `${Math.min(sh, 160)}px`; el.style.overflowY = sh > 160 ? "auto" : "hidden";
   }, [input, model]);
-  const handleFileSelect = (e) => {
+  const MAX_IMAGE_SIZE_MB = 20;
+  const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+  const SUPPORTED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+  // 将不支持格式的图片转换为 PNG
+  const convertToPng = (file) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const baseName = file.name.replace(/\.[^.]+$/, "");
+              const newFile = new File([blob], `${baseName}.png`, { type: "image/png" });
+              resolve(newFile);
+            } else {
+              resolve(null);
+            }
+          },
+          "image/png",
+          1.0
+        );
+      };
+      img.onerror = () => resolve(null);
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
@@ -117,7 +152,24 @@ export default function Composer({
     const remainingSlots = 4 - selectedImages.length;
     const filesToAdd = files.slice(0, remainingSlots);
 
-    filesToAdd.forEach((file) => {
+    // 过滤超过大小限制的文件
+    const oversizedFiles = filesToAdd.filter((f) => f.size > MAX_IMAGE_SIZE_BYTES);
+    const validFiles = filesToAdd.filter((f) => f.size <= MAX_IMAGE_SIZE_BYTES);
+
+    if (oversizedFiles.length > 0) {
+      const names = oversizedFiles.map((f) => f.name).join("、");
+      alert(`以下图片超过 ${MAX_IMAGE_SIZE_MB}MB 限制，已跳过：${names}`);
+    }
+
+    // 处理每个文件，不支持的格式转换为 PNG
+    for (const file of validFiles) {
+      let processedFile = file;
+      if (!SUPPORTED_TYPES.includes(file.type)) {
+        const converted = await convertToPng(file);
+        if (!converted) continue; // 转换失败则跳过
+        processedFile = converted;
+      }
+
       const reader = new FileReader();
       reader.onload = (ev) => {
         if (!mountedRef.current) return;
@@ -126,16 +178,16 @@ export default function Composer({
           return [
             ...prev,
             {
-              file,
+              file: processedFile,
               preview: ev.target.result,
-              name: file.name,
+              name: processedFile.name,
               id: `${Date.now()}-${Math.random()}`,
             },
           ];
         });
       };
-      reader.readAsDataURL(file);
-    });
+      reader.readAsDataURL(processedFile);
+    }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -361,155 +413,166 @@ export default function Composer({
                     </div>
 
                     <div className="space-y-4">
-                      {/* System prompts */}
-                      <div>
-                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                          系统提示词
-                        </label>
-                        <div className="flex gap-2">
-                          <select
-                            value={activePromptId || ""}
-                            onChange={(e) => {
-                              const nextId = e.target.value;
-                              setActivePromptId(nextId);
-                              setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
-                            }}
-                            className="flex-1 bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
-                          >
-                            {systemPrompts.map((p) => (
-                              <option key={p._id} value={p._id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => setShowAddPrompt(!showAddPrompt)}
-                            className="px-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 rounded-lg text-zinc-600 transition-colors"
-                            type="button"
-                          >
-                            <Plus size={16} />
-                          </button>
+                      {/* System prompts - Claude 模型使用内置提示词 */}
+                      {model?.startsWith("claude-") ? (
+                        <div>
+                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                            系统提示词
+                          </label>
+                          <div className="bg-zinc-100 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-400 cursor-not-allowed">
+                            内置提示词（不可修改）
+                          </div>
                         </div>
-
-                        <AnimatePresence>
-                          {showAddPrompt && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
+                      ) : (
+                        <div>
+                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                            系统提示词
+                          </label>
+                          <div className="flex gap-2">
+                            <select
+                              value={activePromptId || ""}
+                              onChange={(e) => {
+                                const nextId = e.target.value;
+                                setActivePromptId(nextId);
+                                setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
+                              }}
+                              className="flex-1 bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
                             >
-                              <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
-                                <input
-                                  type="text"
-                                  placeholder="名称"
-                                  value={newPromptName}
-                                  onChange={(e) => setNewPromptName(e.target.value)}
-                                  className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm focus:outline-none focus:border-zinc-400"
-                                />
-                                <textarea
-                                  placeholder="提示词内容..."
-                                  value={newPromptContent}
-                                  onChange={(e) =>
-                                    setNewPromptContent(e.target.value)
-                                  }
-                                  className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:border-zinc-400"
-                                  rows={2}
-                                />
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={addPrompt}
-                                    className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white text-xs py-1.5 rounded-lg transition-colors"
-                                    type="button"
-                                  >
-                                    添加
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setShowAddPrompt(false);
-                                      setNewPromptName("");
-                                      setNewPromptContent("");
-                                    }}
-                                    className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-600 text-xs py-1.5 rounded-lg transition-colors"
-                                    type="button"
-                                  >
-                                    取消
-                                  </button>
-                                </div>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        {activePromptId && (
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            {systemPrompts.length > 1 ? (
-                              <button
-                                onClick={deleteCurrentPrompt}
-                                className="text-xs text-red-500 hover:text-red-600"
-                                type="button"
-                              >
-                                删除当前提示词
-                              </button>
-                            ) : (
-                              <span className="text-[11px] text-zinc-400">仅剩 1 个提示词不可删除</span>
-                            )}
-
+                              {systemPrompts.map((p) => (
+                                <option key={p._id} value={p._id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </select>
                             <button
-                              onClick={openEditPrompt}
-                              className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-800"
+                              onClick={() => setShowAddPrompt(!showAddPrompt)}
+                              className="px-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 rounded-lg text-zinc-600 transition-colors"
                               type="button"
                             >
-                              <Pencil size={14} />
-                              编辑当前提示词
+                              <Plus size={16} />
                             </button>
                           </div>
-                        )}
 
-                        <AnimatePresence>
-                          {showEditPrompt && activePromptId && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: "auto", opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
-                                <input
-                                  type="text"
-                                  placeholder="名称"
-                                  value={editPromptName}
-                                  onChange={(e) => setEditPromptName(e.target.value)}
-                                  className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm focus:outline-none focus:border-zinc-400"
-                                />
-                                <textarea
-                                  placeholder="提示词内容..."
-                                  value={editPromptContent}
-                                  onChange={(e) => setEditPromptContent(e.target.value)}
-                                  className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:border-zinc-400"
-                                  rows={3}
-                                />
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={updateCurrentPrompt}
-                                    className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white text-xs py-1.5 rounded-lg transition-colors"
-                                    type="button"
-                                  >
-                                    保存
-                                  </button>
-                                  <button
-                                    onClick={() => setShowEditPrompt(false)}
-                                    className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-600 text-xs py-1.5 rounded-lg transition-colors"
-                                    type="button"
-                                  >
-                                    取消
-                                  </button>
+                          <AnimatePresence>
+                            {showAddPrompt && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
+                                  <input
+                                    type="text"
+                                    placeholder="名称"
+                                    value={newPromptName}
+                                    onChange={(e) => setNewPromptName(e.target.value)}
+                                    className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm focus:outline-none focus:border-zinc-400"
+                                  />
+                                  <textarea
+                                    placeholder="提示词内容..."
+                                    value={newPromptContent}
+                                    onChange={(e) =>
+                                      setNewPromptContent(e.target.value)
+                                    }
+                                    className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:border-zinc-400"
+                                    rows={2}
+                                  />
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={addPrompt}
+                                      className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white text-xs py-1.5 rounded-lg transition-colors"
+                                      type="button"
+                                    >
+                                      添加
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setShowAddPrompt(false);
+                                        setNewPromptName("");
+                                        setNewPromptContent("");
+                                      }}
+                                      className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-600 text-xs py-1.5 rounded-lg transition-colors"
+                                      type="button"
+                                    >
+                                      取消
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
-                            </motion.div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {activePromptId && (
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              {systemPrompts.length > 1 ? (
+                                <button
+                                  onClick={deleteCurrentPrompt}
+                                  className="text-xs text-red-500 hover:text-red-600"
+                                  type="button"
+                                >
+                                  删除当前提示词
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-zinc-400">仅剩 1 个提示词不可删除</span>
+                              )}
+
+                              <button
+                                onClick={openEditPrompt}
+                                className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-800"
+                                type="button"
+                              >
+                                <Pencil size={14} />
+                                编辑当前提示词
+                              </button>
+                            </div>
                           )}
-                        </AnimatePresence>
-                      </div>
+
+                          <AnimatePresence>
+                            {showEditPrompt && activePromptId && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
+                                  <input
+                                    type="text"
+                                    placeholder="名称"
+                                    value={editPromptName}
+                                    onChange={(e) => setEditPromptName(e.target.value)}
+                                    className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm focus:outline-none focus:border-zinc-400"
+                                  />
+                                  <textarea
+                                    placeholder="提示词内容..."
+                                    value={editPromptContent}
+                                    onChange={(e) => setEditPromptContent(e.target.value)}
+                                    className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:border-zinc-400"
+                                    rows={3}
+                                  />
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={updateCurrentPrompt}
+                                      className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white text-xs py-1.5 rounded-lg transition-colors"
+                                      type="button"
+                                    >
+                                      保存
+                                    </button>
+                                    <button
+                                      onClick={() => setShowEditPrompt(false)}
+                                      className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-600 text-xs py-1.5 rounded-lg transition-colors"
+                                      type="button"
+                                    >
+                                      取消
+                                    </button>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
 
                       {/* History limit */}
                       <div>
@@ -569,6 +632,30 @@ export default function Composer({
                         </div>
                       ) : model?.startsWith("claude-") ? (
                         <>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              线路选择
+                            </label>
+                            <div className="flex gap-1">
+                              {[
+                                { id: "primary", label: "主线路" },
+                                { id: "fallback", label: "备用" },
+                                { id: "guarantee", label: "保障" },
+                              ].map((route) => (
+                                <button
+                                  key={route.id}
+                                  onClick={() => setClaudeRoute(route.id)}
+                                  type="button"
+                                  className={`flex-1 px-2 py-1.5 rounded-lg border transition-colors text-xs font-medium ${claudeRoute === route.id
+                                    ? "bg-zinc-600 text-white border-zinc-600"
+                                    : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                    }`}
+                                >
+                                  {route.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                           <div>
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                               思考深度

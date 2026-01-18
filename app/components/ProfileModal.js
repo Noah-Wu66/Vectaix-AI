@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
@@ -10,7 +10,10 @@ import {
   Type,
   Upload,
   X,
+  Camera,
 } from "lucide-react";
+
+import { upload } from "@vercel/blob/client";
 
 export default function ProfileModal({
   open,
@@ -20,6 +23,8 @@ export default function ProfileModal({
   fontSize,
   onThemeModeChange,
   onFontSizeChange,
+  avatar,
+  onAvatarChange,
 }) {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
@@ -36,11 +41,15 @@ export default function ProfileModal({
   const [importLoading, setImportLoading] = useState(false);
   const [importMsg, setImportMsg] = useState("");
 
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarMsg, setAvatarMsg] = useState("");
+
   const emailInitial = useMemo(() => {
     const c = user?.email?.[0];
     return c ? c.toUpperCase() : "?";
   }, [user?.email]);
 
+  const avatarFileInputRef = useRef(null);
   const parseDownloadFilename = (contentDisposition) => {
     if (!contentDisposition || typeof contentDisposition !== "string") return null;
     const m = contentDisposition.match(/filename="([^"]+)"/i);
@@ -69,7 +78,7 @@ export default function ProfileModal({
         try {
           const j = await res.json();
           errText = j?.error ? String(j.error) : "";
-        } catch {}
+        } catch { }
         throw new Error(errText || "导出失败");
       }
       const blob = await res.blob();
@@ -122,6 +131,38 @@ export default function ProfileModal({
       setImportMsg(e?.message || "导入失败");
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  const handleAvatarSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setAvatarMsg("请选择图片文件");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarMsg("图片大小不能超过 5MB");
+      return;
+    }
+
+    setAvatarLoading(true);
+    setAvatarMsg("");
+    try {
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+      });
+      await onAvatarChange?.(blob.url);
+      setAvatarMsg("头像更新成功");
+      setTimeout(() => setAvatarMsg(""), 3000);
+    } catch (err) {
+      console.error(err);
+      setAvatarMsg(err?.message || "头像上传失败");
+    } finally {
+      setAvatarLoading(false);
+      if (avatarFileInputRef.current) avatarFileInputRef.current.value = "";
     }
   };
 
@@ -183,9 +224,41 @@ export default function ProfileModal({
             </button>
 
             <div className="text-center mb-6">
-              <div className="w-14 h-14 rounded-xl bg-zinc-500 mx-auto flex items-center justify-center text-xl font-semibold text-white mb-3">
-                {emailInitial}
-              </div>
+              <input
+                type="file"
+                ref={avatarFileInputRef}
+                onChange={handleAvatarSelect}
+                className="hidden"
+                accept="image/*"
+              />
+              <button
+                type="button"
+                onClick={() => avatarFileInputRef.current?.click()}
+                disabled={avatarLoading}
+                className="relative w-16 h-16 rounded-xl mx-auto flex items-center justify-center mb-3 overflow-hidden group transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2"
+                title="点击更换头像"
+              >
+                {avatar ? (
+                  <img src={avatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-zinc-500 flex items-center justify-center text-xl font-semibold text-white">
+                    {emailInitial}
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera size={20} className="text-white" />
+                </div>
+                {avatarLoading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </button>
+              {avatarMsg && (
+                <p className={`text-xs mb-2 ${avatarMsg.includes("成功") ? "text-green-600" : "text-red-500"}`}>
+                  {avatarMsg}
+                </p>
+              )}
               <h2 className="text-lg font-semibold text-zinc-900">
                 {user?.email}
               </h2>
@@ -203,9 +276,8 @@ export default function ProfileModal({
                 </span>
                 <ChevronDown
                   size={16}
-                  className={`text-zinc-400 transition-transform ${
-                    showChangePassword ? "rotate-180" : ""
-                  }`}
+                  className={`text-zinc-400 transition-transform ${showChangePassword ? "rotate-180" : ""
+                    }`}
                 />
               </button>
 
@@ -253,11 +325,10 @@ export default function ProfileModal({
                       </form>
                       {pwMsg && (
                         <p
-                          className={`text-xs mt-3 text-center ${
-                            pwMsg.includes("成功")
-                              ? "text-green-600"
-                              : "text-red-500"
-                          }`}
+                          className={`text-xs mt-3 text-center ${pwMsg.includes("成功")
+                            ? "text-green-600"
+                            : "text-red-500"
+                            }`}
                         >
                           {pwMsg}
                         </p>
@@ -277,9 +348,8 @@ export default function ProfileModal({
                 </span>
                 <ChevronDown
                   size={16}
-                  className={`text-zinc-400 transition-transform ${
-                    showAppearance ? "rotate-180" : ""
-                  }`}
+                  className={`text-zinc-400 transition-transform ${showAppearance ? "rotate-180" : ""
+                    }`}
                 />
               </button>
 
@@ -307,11 +377,10 @@ export default function ProfileModal({
                               key={t.id}
                               onClick={() => onThemeModeChange(t.id)}
                               type="button"
-                              className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${
-                                themeMode === t.id
-                                  ? "bg-zinc-600 text-white border-zinc-600"
-                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                              }`}
+                              className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${themeMode === t.id
+                                ? "bg-zinc-600 text-white border-zinc-600"
+                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                }`}
                             >
                               {t.label}
                             </button>
@@ -334,11 +403,10 @@ export default function ProfileModal({
                               key={f.id}
                               onClick={() => onFontSizeChange(f.id)}
                               type="button"
-                              className={`flex-1 py-2 rounded-lg border transition-colors ${
-                                fontSize === f.id
-                                  ? "bg-zinc-600 text-white border-zinc-600"
-                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                              } ${f.size}`}
+                              className={`flex-1 py-2 rounded-lg border transition-colors ${fontSize === f.id
+                                ? "bg-zinc-600 text-white border-zinc-600"
+                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                } ${f.size}`}
                             >
                               {f.label}
                             </button>
@@ -360,9 +428,8 @@ export default function ProfileModal({
                 </span>
                 <ChevronDown
                   size={16}
-                  className={`text-zinc-400 transition-transform ${
-                    showDataManager ? "rotate-180" : ""
-                  }`}
+                  className={`text-zinc-400 transition-transform ${showDataManager ? "rotate-180" : ""
+                    }`}
                 />
               </button>
 
@@ -407,22 +474,20 @@ export default function ProfileModal({
 
                       {exportMsg && (
                         <p
-                          className={`text-xs text-center ${
-                            exportMsg.includes("成功")
-                              ? "text-green-600"
-                              : "text-red-500"
-                          }`}
+                          className={`text-xs text-center ${exportMsg.includes("成功")
+                            ? "text-green-600"
+                            : "text-red-500"
+                            }`}
                         >
                           {exportMsg}
                         </p>
                       )}
                       {importMsg && (
                         <p
-                          className={`text-xs text-center ${
-                            importMsg.includes("成功")
-                              ? "text-green-600"
-                              : "text-red-500"
-                          }`}
+                          className={`text-xs text-center ${importMsg.includes("成功")
+                            ? "text-green-600"
+                            : "text-red-500"
+                            }`}
                         >
                           {importMsg}
                         </p>

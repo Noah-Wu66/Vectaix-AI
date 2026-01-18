@@ -12,6 +12,10 @@ const UserSettingsSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
+    avatar: {
+        type: String,
+        default: null
+    },
     systemPrompts: [SystemPromptSchema],
     updatedAt: {
         type: Date,

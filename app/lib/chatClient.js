@@ -9,12 +9,14 @@ export function buildChatConfig({
   maxTokens,
   budgetTokens,
   webSearch,
+  claudeRoute,
 }) {
   const cfg = {};
   cfg.thinkingLevel = thinkingLevel;
   cfg.maxTokens = maxTokens;
   cfg.budgetTokens = budgetTokens;
   cfg.webSearch = webSearch === true;
+  cfg.claudeRoute = claudeRoute || "primary";
 
   const activeId = activePromptId == null ? null : String(activePromptId);
   const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
@@ -28,11 +30,6 @@ export function buildChatConfig({
 
   return cfg;
 }
-
-// Claude 路由记忆状态（每个会话独立）
-// key: conversationId, value: { routeLevel: number, roundCount: number }
-const claudeRouteMemory = new Map();
-const CLAUDE_ROUTE_RESET_ROUNDS = 5; // 每5轮对话重置为主线路
 
 export async function runChat({
   prompt,
@@ -76,188 +73,39 @@ export async function runChat({
   // 根据 provider 选择 API 端点
   const apiEndpoint = provider === "claude" ? "/api/claude" : provider === "openai" ? "/api/openai" : "/api/gemini";
 
-  // Claude 备用路由超时配置（15秒无响应切换备用线路）
-  const CLAUDE_FALLBACK_TIMEOUT_MS = 15000;
-
   setLoading(true);
   let streamMsgId = null;
   let simulatedStreamTimer = null;
 
-  // Claude 请求封装：支持三级路由超时切换（主线路 → 备用线路 → 保障线路）
-  // routeLevel: 0=主线路, 1=备用线路, 2=保障线路
-  let finalRouteLevel = 0; // 记录最终使用的路由级别
-  const fetchWithClaudeRoute = async (routeLevel = 0) => {
-    const routeNames = ["主线路", "备用线路 AIGOCODE", "保障线路 AIHUBMIX"];
-    const routeParams = [null, "fallback", "guarantee"];
-    const maxRouteLevel = 2; // 最多三级路由
+  // 构建 Claude 路由参数
+  const claudeRouteLevel = provider === "claude" && config?.claudeRoute && config.claudeRoute !== "primary"
+    ? config.claudeRoute
+    : null;
 
-    let hasReceivedAnyData = false;
-    const routeController = new AbortController();
-    const combinedSignal = signal;
-
-    // 监听外部 abort signal
-    const onExternalAbort = () => {
-      routeController.abort();
-    };
-    if (combinedSignal) {
-      combinedSignal.addEventListener("abort", onExternalAbort, { once: true });
-    }
-
-    // 设置超时定时器（仅非保障线路需要）
-    let timeoutId = null;
-    let timeoutPromise = null;
-    if (routeLevel < maxRouteLevel) {
-      timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-          if (!hasReceivedAnyData) {
-            routeController.abort();
-            reject(new Error("CLAUDE_ROUTE_TIMEOUT"));
-          }
-        }, CLAUDE_FALLBACK_TIMEOUT_MS);
-      });
-    }
-
-    // 构建请求 payload，添加路由级别参数
-    const routePayload = routeLevel === 0
-      ? payload
-      : { ...payload, routeLevel: routeParams[routeLevel] };
-
-    try {
-      const fetchPromise = (async () => {
-        const res = await fetch(apiEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(routePayload),
-          signal: routeController.signal,
-        });
-        if (!res.ok) {
-          let errorMessage = res.statusText;
-          try {
-            const errorData = await res.json();
-            errorMessage = errorData.error || errorData.message || errorMessage;
-          } catch (e) {
-            console.error("Failed to parse error response:", e);
-          }
-          throw new Error(errorMessage);
-        }
-        // 包装 response，添加数据接收检测
-        const originalReader = res.body.getReader();
-        const wrappedStream = new ReadableStream({
-          async pull(controller) {
-            try {
-              const { value, done } = await originalReader.read();
-              if (done) {
-                controller.close();
-                return;
-              }
-              // 收到任何数据就标记并清除超时
-              hasReceivedAnyData = true;
-              if (timeoutId) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-              }
-              controller.enqueue(value);
-            } catch (err) {
-              controller.error(err);
-            }
-          },
-          cancel() {
-            originalReader.cancel();
-          }
-        });
-        // 记录成功使用的路由级别
-        finalRouteLevel = routeLevel;
-        return new Response(wrappedStream, {
-          headers: res.headers,
-          status: res.status,
-          statusText: res.statusText
-        });
-      })();
-
-      const res = timeoutPromise
-        ? await Promise.race([fetchPromise, timeoutPromise])
-        : await fetchPromise;
-      if (timeoutId) clearTimeout(timeoutId);
-      if (combinedSignal) combinedSignal.removeEventListener("abort", onExternalAbort);
-      return res;
-    } catch (err) {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (combinedSignal) combinedSignal.removeEventListener("abort", onExternalAbort);
-
-      // 检查是否是超时触发的切换
-      const isTimeout = err.message === "CLAUDE_ROUTE_TIMEOUT" ||
-        (err.name === "AbortError" && !hasReceivedAnyData && !combinedSignal?.aborted);
-
-      if (isTimeout && routeLevel < maxRouteLevel) {
-        const nextLevel = routeLevel + 1;
-        console.log(`[Claude] ${routeNames[routeLevel]} 15s 无响应，切换${routeNames[nextLevel]}...`);
-        return fetchWithClaudeRoute(nextLevel);
-      }
-      throw err;
-    }
-  };
-
-  const fetchWithClaudeFallback = async () => {
-    if (provider !== "claude") {
-      // 非 Claude 直接使用原逻辑
-      const res = await fetch(apiEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal,
-      });
-      if (!res.ok) {
-        let errorMessage = res.statusText;
-        try {
-          const errorData = await res.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } catch (e) {
-          console.error("Failed to parse error response:", e);
-        }
-        throw new Error(errorMessage);
-      }
-      return res;
-    }
-
-    // Claude：检查路由记忆
-    const convId = conversationId || currentConversationId;
-    let startRouteLevel = 0;
-
-    if (convId && claudeRouteMemory.has(convId)) {
-      const memory = claudeRouteMemory.get(convId);
-      // 每5轮重置为主线路
-      if (memory.roundCount >= CLAUDE_ROUTE_RESET_ROUNDS) {
-        console.log(`[Claude] 已达 ${CLAUDE_ROUTE_RESET_ROUNDS} 轮，重新尝试主线路`);
-        claudeRouteMemory.delete(convId);
-      } else {
-        startRouteLevel = memory.routeLevel;
-        if (startRouteLevel > 0) {
-          const routeNames = ["主线路", "备用线路 AIGOCODE", "保障线路 AIHUBMIX"];
-          console.log(`[Claude] 继续使用${routeNames[startRouteLevel]} (第 ${memory.roundCount + 1}/${CLAUDE_ROUTE_RESET_ROUNDS} 轮)`);
-        }
-      }
-    }
-
-    const res = await fetchWithClaudeRoute(startRouteLevel);
-
-    // 更新路由记忆
-    const finalConvId = res.headers.get("X-Conversation-Id") || convId;
-    if (finalConvId && finalRouteLevel > 0) {
-      const existing = claudeRouteMemory.get(finalConvId);
-      claudeRouteMemory.set(finalConvId, {
-        routeLevel: finalRouteLevel,
-        roundCount: (existing?.roundCount || 0) + 1
-      });
-    } else if (finalConvId && finalRouteLevel === 0 && claudeRouteMemory.has(finalConvId)) {
-      // 主线路成功，清除记忆
-      claudeRouteMemory.delete(finalConvId);
-    }
-
-    return res;
-  };
+  // 如果指定了线路，添加到 payload
+  const finalPayload = claudeRouteLevel
+    ? { ...payload, routeLevel: claudeRouteLevel }
+    : payload;
 
   try {
-    const res = await fetchWithClaudeFallback();
+    const res = await fetch(apiEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(finalPayload),
+      signal,
+    });
+
+    if (!res.ok) {
+      let errorMessage = res.statusText;
+      try {
+        const errorData = await res.json();
+        errorMessage = errorData.error || errorData.message || errorMessage;
+      } catch (e) {
+        console.error("Failed to parse error response:", e);
+      }
+      throw new Error(errorMessage);
+    }
+
 
     const newConvId = res.headers.get("X-Conversation-Id");
     if (newConvId && !currentConversationId) {
@@ -300,6 +148,18 @@ export async function runChat({
     let searchResults = null;
     let citations = null;
 
+    // Claude 15秒超时检测
+    let claudeTimeoutId = null;
+    let claudeTimedOut = false;
+    if (provider === "claude") {
+      claudeTimeoutId = setTimeout(() => {
+        if (!hasReceivedContent) {
+          claudeTimedOut = true;
+          reader.cancel();
+        }
+      }, 15000);
+    }
+
     // 模拟流式输出：控制文本逐步显示
     const SIMULATED_STREAM_INTERVAL = 8; // 每8ms显示一批字符
     const SIMULATED_STREAM_BATCH = 3; // 每批显示3个字符
@@ -316,7 +176,14 @@ export async function runChat({
 
         const base = prev[idx] || {};
         const nowHasContent = displayedText.length > 0 || fullThought.length > 0 || isSearching;
-        if (nowHasContent && !hasReceivedContent) hasReceivedContent = true;
+        if (nowHasContent && !hasReceivedContent) {
+          hasReceivedContent = true;
+          // 收到内容，清除 Claude 超时定时器
+          if (claudeTimeoutId) {
+            clearTimeout(claudeTimeoutId);
+            claudeTimeoutId = null;
+          }
+        }
         const nextMsg = {
           ...base,
           content: displayedText,
@@ -434,11 +301,20 @@ export async function runChat({
       const { value, done: doneReading } = await reader.read();
       done = doneReading;
       if (signal?.aborted) break;
+      // 检查 Claude 超时
+      if (claudeTimedOut) {
+        throw new Error("CLAUDE_TIMEOUT");
+      }
       if (value) buffer += decoder.decode(value, { stream: true });
       consumeSseBuffer(false);
 
       if (signal?.aborted) break;
       scheduleFlush();
+    }
+
+    // 检查 Claude 超时（在循环结束后再检查一次）
+    if (claudeTimedOut) {
+      throw new Error("CLAUDE_TIMEOUT");
     }
 
     // flush TextDecoder / 最后一段 buffer（避免最后一个事件未以空行结尾时被漏掉）
@@ -535,9 +411,13 @@ export async function runChat({
   } catch (err) {
     if (err?.name !== "AbortError") {
       console.error(err);
+      // Claude 超时：显示特定错误提示
+      const errorMessage = err?.message === "CLAUDE_TIMEOUT"
+        ? "服务暂不可用，请尝试在设置中切换线路"
+        : "Error: " + err.message;
       setMessages((prev) => [
         ...prev,
-        { role: "model", content: "Error: " + err.message, type: "error" },
+        { role: "model", content: errorMessage, type: "error" },
       ]);
     }
   } finally {
