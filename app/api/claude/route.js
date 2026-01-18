@@ -234,8 +234,10 @@ export async function POST(req) {
         // 构建请求参数
         const maxTokens = config?.maxTokens || 64000;
         const budgetTokens = config?.budgetTokens || 32000;
-        // Claude 使用内置系统提示词
-        const claudeSystemPrompt = "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";
+        // Claude 使用内置系统提示词（保障线路使用独立的简化提示词）
+        const claudeSystemPrompt = routeLevel === "guarantee"
+            ? "You are a helpful AI assistant."
+            : "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         // 是否启用联网搜索

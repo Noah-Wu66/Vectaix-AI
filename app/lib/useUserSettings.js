@@ -7,8 +7,8 @@ const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
   "gemini-3-pro-preview": "high",
 };
-const DEFAULT_MAX_TOKENS = 65536;
-const DEFAULT_BUDGET_TOKENS = 32768;
+const DEFAULT_MAX_TOKENS = 64000;
+const DEFAULT_BUDGET_TOKENS = 32000;
 const DEFAULT_CLAUDE_ROUTE = "primary"; // primary | fallback | guarantee
 
 // localStorage keys - 所有设置都本地存储，只有 systemPrompts 内容存数据库

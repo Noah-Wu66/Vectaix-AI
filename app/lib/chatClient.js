@@ -418,10 +418,18 @@ export async function runChat({
       const errorMessage = err?.message === "CLAUDE_TIMEOUT"
         ? "服务暂不可用，请尝试在设置中切换线路"
         : "Error: " + err.message;
-      setMessages((prev) => [
-        ...prev,
-        { role: "model", content: errorMessage, type: "error" },
-      ]);
+      setMessages((prev) => {
+        // 如果是 Claude 超时且存在空白的流式消息，移除它
+        if (err?.message === "CLAUDE_TIMEOUT" && streamMsgId !== null) {
+          const filtered = prev.filter((msg) => msg.id !== streamMsgId);
+          return [...filtered, { role: "model", content: errorMessage, type: "error" }];
+        }
+        return [...prev, { role: "model", content: errorMessage, type: "error" }];
+      });
+      // 超时时清除 streamMsgId，避免 finally 再次处理
+      if (err?.message === "CLAUDE_TIMEOUT") {
+        streamMsgId = null;
+      }
     }
   } finally {
     // 清理定时器
