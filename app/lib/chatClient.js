@@ -414,10 +414,10 @@ export async function runChat({
   } catch (err) {
     if (err?.name !== "AbortError") {
       console.error(err);
-      // Claude 超时：显示特定错误提示
+      // Claude 超时：显示特定错误提示；其他错误：显示网络错误提示
       const errorMessage = err?.message === "CLAUDE_TIMEOUT"
         ? "服务暂不可用，请尝试在设置中切换线路"
-        : "Error: " + err.message;
+        : "网络连接错误，请重新尝试";
       setMessages((prev) => {
         // 如果是 Claude 超时且存在空白的流式消息，移除它
         if (err?.message === "CLAUDE_TIMEOUT" && streamMsgId !== null) {
@@ -440,7 +440,7 @@ export async function runChat({
     if (streamMsgId !== null) {
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === streamMsgId ? { ...msg, isStreaming: false } : msg,
+          msg.id === streamMsgId ? { ...msg, isStreaming: false, isWaitingFirstChunk: false } : msg,
         ),
       );
     }
