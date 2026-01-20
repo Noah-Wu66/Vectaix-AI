@@ -414,20 +414,34 @@ export async function runChat({
   } catch (err) {
     if (err?.name !== "AbortError") {
       console.error(err);
-      // Claude 超时：显示特定错误提示；其他错误：显示网络错误提示
-      const errorMessage = err?.message === "CLAUDE_TIMEOUT"
-        ? "服务暂不可用，请尝试在设置中切换线路"
-        : "网络连接错误，请重新尝试";
+      // 根据错误类型给出准确的提示
+      let errorMessage;
+      const errMsg = err?.message || "";
+      if (errMsg === "CLAUDE_TIMEOUT") {
+        errorMessage = "Claude 响应超时，请尝试在设置中切换线路";
+      } else if (errMsg.includes("Failed to fetch") || errMsg.includes("NetworkError") || errMsg.includes("network")) {
+        errorMessage = "网络连接失败，请检查网络后重试";
+      } else if (errMsg.includes("rate limit") || errMsg.includes("429")) {
+        errorMessage = "请求过于频繁，请稍后再试";
+      } else if (errMsg.includes("401") || errMsg.includes("Unauthorized")) {
+        errorMessage = "登录已过期，请刷新页面重新登录";
+      } else if (errMsg.includes("500") || errMsg.includes("Internal Server Error")) {
+        errorMessage = "服务器内部错误，请稍后再试";
+      } else if (errMsg.includes("503") || errMsg.includes("Service Unavailable")) {
+        errorMessage = "服务暂时不可用，请稍后再试";
+      } else if (errMsg) {
+        // 有具体错误信息时直接显示
+        errorMessage = errMsg;
+      } else {
+        errorMessage = "请求失败，请重试";
+      }
       setMessages((prev) => {
-        // 如果存在流式消息，根据情况处理
         if (streamMsgId !== null) {
-          // 移除空白的流式消息，统一用错误消息替代
           const filtered = prev.filter((msg) => msg.id !== streamMsgId);
           return [...filtered, { role: "model", content: errorMessage, type: "error" }];
         }
         return [...prev, { role: "model", content: errorMessage, type: "error" }];
       });
-      // 清除 streamMsgId，避免 finally 再次处理
       streamMsgId = null;
     }
   } finally {

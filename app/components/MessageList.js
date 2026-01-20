@@ -588,7 +588,14 @@ export default function MessageList({
                           </div>
                         ) : (
                           <>
-                            {msg.image && (
+                            {/* 多图片支持：优先渲染 images 数组，否则回退到单张 image */}
+                            {Array.isArray(msg.images) && msg.images.length > 1 ? (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {msg.images.map((imgSrc, imgIdx) => (
+                                  <Thumb key={imgIdx} src={imgSrc} className="w-fit" onClick={openLightbox} />
+                                ))}
+                              </div>
+                            ) : msg.image && (
                               <div className="mb-2 w-fit">
                                 <Thumb src={msg.image} onClick={openLightbox} />
                               </div>

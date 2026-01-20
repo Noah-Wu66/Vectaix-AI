@@ -22,6 +22,7 @@ export default function ChatApp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [authError, setAuthError] = useState("");
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
@@ -214,6 +215,7 @@ export default function ChatApp() {
 
   const handleAuth = async (e) => {
     e.preventDefault();
+    setAuthError("");
     const endpoint =
       authMode === "login" ? "/api/auth/login" : "/api/auth/register";
     const body =
@@ -229,10 +231,11 @@ export default function ChatApp() {
     if (data.success || data.user) {
       setUser(data.user);
       setShowAuthModal(false);
+      setAuthError("");
       fetchConversations();
-      fetchSettings(); // 只获取系统提示词
+      fetchSettings();
     } else {
-      alert(data.error);
+      setAuthError(data.error || "登录失败，请重试");
     }
   };
 
@@ -311,7 +314,8 @@ export default function ChatApp() {
         }
       }
     } catch (e) {
-      console.error(e); alert(e?.message || "会话数据不兼容");
+      console.error(e);
+      setMessages([{ id: generateMsgId(), role: "model", content: `加载会话失败：${e?.message || "数据格式错误"}`, type: "error" }]);
     } finally {
       setLoading(false);
     }
@@ -583,9 +587,11 @@ export default function ChatApp() {
       });
     } catch (err) {
       console.error(err);
+      const errMsg = err?.message || "发送失败";
+      const friendlyMsg = errMsg.includes("Failed to fetch") ? "网络连接失败，请检查网络后重试" : errMsg;
       setMessages((prev) => [
         ...prev,
-        { id: generateMsgId(), role: "model", content: "Error: " + err.message, type: "error" },
+        { id: generateMsgId(), role: "model", content: friendlyMsg, type: "error" },
       ]);
       setLoading(false);
     } finally {
@@ -739,9 +745,11 @@ export default function ChatApp() {
       console.error(e);
       chatRequestLockRef.current = false;
       setLoading(false);
+      const errMsg = e?.message || "图片处理失败";
+      const friendlyMsg = errMsg.includes("Failed to fetch") ? "网络连接失败，请检查网络后重试" : `图片上传失败：${errMsg}`;
       setMessages((prev) => [
         ...prev,
-        { id: generateMsgId(), role: "model", content: "Error: " + (e?.message || "图片处理失败"), type: "error" },
+        { id: generateMsgId(), role: "model", content: friendlyMsg, type: "error" },
       ]);
       return;
     }
@@ -794,7 +802,7 @@ export default function ChatApp() {
   };
   if (showAuthModal) {
     return (
-      <AuthModal authMode={authMode} email={email} password={password} confirmPassword={confirmPassword} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onSubmit={handleAuth} onToggleMode={() => setAuthMode((m) => (m === "login" ? "register" : "login"))} />
+      <AuthModal authMode={authMode} email={email} password={password} confirmPassword={confirmPassword} authError={authError} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onSubmit={handleAuth} onToggleMode={() => { setAuthError(""); setAuthMode((m) => (m === "login" ? "register" : "login")); }} />
     );
   }
 
