@@ -9,7 +9,7 @@ const DEFAULT_THINKING_LEVELS = {
 };
 const DEFAULT_MAX_TOKENS = 64000;
 const DEFAULT_BUDGET_TOKENS = 32000;
-const DEFAULT_CLAUDE_ROUTE = "primary"; // primary | fallback | guarantee
+const DEFAULT_CLAUDE_ROUTE = "fallback"; // primary | fallback | guarantee
 
 // localStorage keys - 所有设置都本地存储，只有 systemPrompts 内容存数据库
 const UI_THEME_MODE_KEY = "vectaix_ui_themeMode";

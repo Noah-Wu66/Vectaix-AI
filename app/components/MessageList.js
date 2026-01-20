@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Sparkles,
   Trash2,
+  Type,
   User,
   X,
 } from "lucide-react";
@@ -59,6 +60,47 @@ function buildCopyText(msg) {
   const raw = typeof msg.content === "string" ? msg.content : "";
   const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
   return normalizeCopiedText(cleaned);
+}
+
+function stripMarkdown(text) {
+  if (typeof text !== "string" || !text) return "";
+  return text
+    // 移除代码块
+    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?|```$/g, "").trim())
+    // 移除行内代码
+    .replace(/`([^`]+)`/g, "$1")
+    // 移除标题标记
+    .replace(/^#{1,6}\s+/gm, "")
+    // 移除粗体
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    // 移除斜体
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    // 移除删除线
+    .replace(/~~([^~]+)~~/g, "$1")
+    // 移除链接，保留文字
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    // 移除图片
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    // 移除引用
+    .replace(/^>\s?/gm, "")
+    // 移除无序列表标记
+    .replace(/^[\*\-+]\s+/gm, "")
+    // 移除有序列表标记
+    .replace(/^\d+\.\s+/gm, "")
+    // 移除水平线
+    .replace(/^[-*_]{3,}$/gm, "")
+    // 清理多余空行
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function buildPlainText(msg) {
+  if (!msg) return "";
+  const raw = typeof msg.content === "string" ? msg.content : "";
+  const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
+  return normalizeCopiedText(stripMarkdown(cleaned));
 }
 
 function isSelectionFullyInsideElement(el) {
@@ -532,7 +574,9 @@ export default function MessageList({
                                   return <Thumb key={idx} src={url} className="w-fit" onClick={openLightbox} />;
                                 }
                                 if (part && typeof part.text === "string" && part.text.trim()) {
-                                  return (
+                                  return isUser ? (
+                                    <span key={idx} className="whitespace-pre-wrap break-words">{part.text}</span>
+                                  ) : (
                                     <Markdown key={idx} enableHighlight={!msg.isStreaming}>
                                       {part.text}
                                     </Markdown>
@@ -550,7 +594,11 @@ export default function MessageList({
                               </div>
                             )}
 
-                            <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
+                            {msg.role === "user" ? (
+                              <span className="whitespace-pre-wrap break-words">{msg.content}</span>
+                            ) : (
+                              <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
+                            )}
                           </>
                         )}
 
@@ -573,6 +621,16 @@ export default function MessageList({
                         >
                           <Copy size={14} />
                         </button>
+
+                        {msg.role === "model" && (
+                          <button
+                            onClick={() => onCopy(buildPlainText(msg))}
+                            className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                            title="复制纯文本"
+                          >
+                            <Type size={14} />
+                          </button>
+                        )}
 
                         {msg.role === "user" ? (
                           <>
