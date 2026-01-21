@@ -432,7 +432,7 @@ export default function MessageList({
               <div
                 className={`flex flex-col ${msg.role === "user"
                   ? "items-end w-full max-w-[92%]"
-                  : "items-start w-full"
+                  : "items-start w-full max-w-full"
                   }`}
               >
                 {msg.role === "model" && msg.thought && (
@@ -548,10 +548,11 @@ export default function MessageList({
                   <>
                     {(hasParts || msg.content || msg.image) && (
                       <div
-                        className={`msg-bubble px-4 py-3 rounded-2xl ${msg.role === "user"
+                        className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
-                          : "bg-zinc-100 text-zinc-800"
+                          : "bg-zinc-100 text-zinc-800 max-w-full"
                           }`}
+                        style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
                         onCopy={handleBubbleCopy}
                       >
                         {hasParts ? (

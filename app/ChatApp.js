@@ -168,13 +168,26 @@ export default function ChatApp() {
   useEffect(() => {
     const el = messageListRef.current;
     if (!el) return;
+    let touchStartY = 0;
+    let touchStartScrollTop = 0;
     const markUserGesture = () => {
       lastUserScrollAtRef.current = Date.now();
     };
-    // 移动端触摸滑动时，如果不在底部则直接标记为用户中断
-    const handleTouchMove = () => {
+    // 记录触摸开始时的位置和滚动位置
+    const handleTouchStart = (e) => {
       lastUserScrollAtRef.current = Date.now();
-      if (isStreamingRef.current && !isNearBottom(el)) {
+      touchStartY = e.touches?.[0]?.clientY ?? 0;
+      touchStartScrollTop = el.scrollTop;
+    };
+    // 移动端触摸滑动时：检测向上滑动意图（手指向下移动 = 内容向上滚动）
+    const handleTouchMove = (e) => {
+      lastUserScrollAtRef.current = Date.now();
+      if (!isStreamingRef.current) return;
+      const currentY = e.touches?.[0]?.clientY ?? 0;
+      const deltaY = currentY - touchStartY;
+      // deltaY > 0 表示手指向下移动，即用户想向上滚动查看历史
+      // 同时检测 scrollTop 是否减少或用户意图明显（移动超过 10px）
+      if (deltaY > 10 || el.scrollTop < touchStartScrollTop - 5) {
         userInterruptedRef.current = true;
       }
     };
@@ -186,12 +199,12 @@ export default function ChatApp() {
         userInterruptedRef.current = true;
       }
     };
-    el.addEventListener("touchstart", markUserGesture, { passive: true });
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
     el.addEventListener("touchmove", handleTouchMove, { passive: true });
     el.addEventListener("wheel", handleWheel, { passive: true });
     el.addEventListener("mousedown", markUserGesture);
     return () => {
-      el.removeEventListener("touchstart", markUserGesture);
+      el.removeEventListener("touchstart", handleTouchStart);
       el.removeEventListener("touchmove", handleTouchMove);
       el.removeEventListener("wheel", handleWheel);
       el.removeEventListener("mousedown", markUserGesture);
