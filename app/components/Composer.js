@@ -229,6 +229,18 @@ export default function Composer({
       content: newPromptContent.trim(),
     });
     if (!settings) return;
+
+    // 选中新添加的提示词
+    const prompts = settings.systemPrompts;
+    if (Array.isArray(prompts) && prompts.length > 0) {
+      const newPrompt = prompts[prompts.length - 1];
+      if (newPrompt && newPrompt._id) {
+        const nextId = String(newPrompt._id);
+        setActivePromptId(nextId);
+        setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
+      }
+    }
+
     setNewPromptName("");
     setNewPromptContent("");
     setShowAddPrompt(false);
