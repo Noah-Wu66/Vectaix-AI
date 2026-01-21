@@ -48,6 +48,7 @@ export async function runChat({
   messagesForRegenerate,
   provider,
   settings,
+  onError,
 }) {
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
@@ -435,13 +436,12 @@ export async function runChat({
       } else {
         errorMessage = "请求失败，请重试";
       }
-      setMessages((prev) => {
-        if (streamMsgId !== null) {
-          const filtered = prev.filter((msg) => msg.id !== streamMsgId);
-          return [...filtered, { role: "model", content: errorMessage, type: "error" }];
-        }
-        return [...prev, { role: "model", content: errorMessage, type: "error" }];
-      });
+      // 移除正在流式输出的消息（如有）
+      if (streamMsgId !== null) {
+        setMessages((prev) => prev.filter((msg) => msg.id !== streamMsgId));
+      }
+      // 通过回调通知错误（由调用方显示 toast）
+      onError?.(errorMessage);
       streamMsgId = null;
     }
   } finally {

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { upload } from "@vercel/blob/client";
+import { useToast } from "./ToastProvider";
 
 export default function ProfileModal({
   open,
@@ -26,6 +27,7 @@ export default function ProfileModal({
   avatar,
   onAvatarChange,
 }) {
+  const toast = useToast();
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
   const [showDataManager, setShowDataManager] = useState(false);
@@ -33,16 +35,12 @@ export default function ProfileModal({
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [pwMsg, setPwMsg] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
 
   const [exportLoading, setExportLoading] = useState(false);
-  const [exportMsg, setExportMsg] = useState("");
   const [importLoading, setImportLoading] = useState(false);
-  const [importMsg, setImportMsg] = useState("");
 
   const [avatarLoading, setAvatarLoading] = useState(false);
-  const [avatarMsg, setAvatarMsg] = useState("");
 
   const emailInitial = useMemo(() => {
     const c = user?.email?.[0];
@@ -68,8 +66,6 @@ export default function ProfileModal({
   };
 
   const onExport = async () => {
-    setExportMsg("");
-    setImportMsg("");
     setExportLoading(true);
     try {
       const res = await fetch("/api/data/export", { method: "GET" });
@@ -86,11 +82,10 @@ export default function ProfileModal({
         parseDownloadFilename(res.headers.get("content-disposition")) ||
         "vectaix-export.json";
       triggerDownload(blob, filename);
-      setExportMsg("导出成功");
-      setTimeout(() => setExportMsg(""), 3000);
+      toast.success("导出成功");
     } catch (e) {
       console.error(e);
-      setExportMsg(e?.message || "导出失败");
+      toast.error(e?.message || "导出失败");
     } finally {
       setExportLoading(false);
     }
@@ -98,8 +93,6 @@ export default function ProfileModal({
 
   const onImportFile = async (file) => {
     if (!file) return;
-    setExportMsg("");
-    setImportMsg("");
     const ok = window.confirm(
       "导入会覆盖当前账号的所有聊天记录与个人设置，且不可撤销。是否继续？"
     );
@@ -122,13 +115,10 @@ export default function ProfileModal({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "导入失败");
-      setImportMsg(
-        `导入成功（会话：${data?.imported?.conversationsCount ?? 0}）`
-      );
-      setTimeout(() => setImportMsg(""), 4000);
+      toast.success(`导入成功（会话：${data?.imported?.conversationsCount ?? 0}）`);
     } catch (e) {
       console.error(e);
-      setImportMsg(e?.message || "导入失败");
+      toast.error(e?.message || "导入失败");
     } finally {
       setImportLoading(false);
     }
@@ -139,27 +129,25 @@ export default function ProfileModal({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setAvatarMsg("请选择图片文件");
+      toast.warning("请选择图片文件");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setAvatarMsg("图片大小不能超过 5MB");
+      toast.warning("图片大小不能超过 5MB");
       return;
     }
 
     setAvatarLoading(true);
-    setAvatarMsg("");
     try {
       const blob = await upload(file.name, file, {
         access: "public",
         handleUploadUrl: "/api/upload",
       });
       await onAvatarChange?.(blob.url);
-      setAvatarMsg("头像更新成功");
-      setTimeout(() => setAvatarMsg(""), 3000);
+      toast.success("头像更新成功");
     } catch (err) {
       console.error(err);
-      setAvatarMsg(err?.message || "头像上传失败");
+      toast.error(err?.message || "头像上传失败");
     } finally {
       setAvatarLoading(false);
       if (avatarFileInputRef.current) avatarFileInputRef.current.value = "";
@@ -168,9 +156,8 @@ export default function ProfileModal({
 
   const submitChangePassword = async (e) => {
     e.preventDefault();
-    setPwMsg("");
     if (newPassword !== confirmNewPassword) {
-      setPwMsg("两次输入的新密码不一致");
+      toast.warning("两次输入的新密码不一致");
       return;
     }
 
@@ -183,17 +170,16 @@ export default function ProfileModal({
       });
       const data = await res.json();
       if (data.success) {
-        setPwMsg("密码修改成功");
+        toast.success("密码修改成功");
         setOldPassword("");
         setNewPassword("");
         setConfirmNewPassword("");
-        setTimeout(() => setPwMsg(""), 3000);
       } else {
-        setPwMsg(data.error || "密码修改失败");
+        toast.error(data.error || "密码修改失败");
       }
     } catch (err) {
       console.error(err);
-      setPwMsg("密码修改失败");
+      toast.error("密码修改失败");
     } finally {
       setPwLoading(false);
     }
@@ -254,11 +240,6 @@ export default function ProfileModal({
                   </div>
                 )}
               </button>
-              {avatarMsg && (
-                <p className={`text-xs mb-2 ${avatarMsg.includes("成功") ? "text-green-600" : "text-red-500"}`}>
-                  {avatarMsg}
-                </p>
-              )}
               <h2 className="text-lg font-semibold text-zinc-900">
                 {user?.email}
               </h2>
@@ -323,16 +304,6 @@ export default function ProfileModal({
                           更新密码
                         </button>
                       </form>
-                      {pwMsg && (
-                        <p
-                          className={`text-xs mt-3 text-center ${pwMsg.includes("成功")
-                            ? "text-green-600"
-                            : "text-red-500"
-                            }`}
-                        >
-                          {pwMsg}
-                        </p>
-                      )}
                     </div>
                   </motion.div>
                 )}
@@ -471,27 +442,6 @@ export default function ProfileModal({
                           图片仅导入文件里保存的 URL/parts，不包含二进制图片。
                         </p>
                       </div>
-
-                      {exportMsg && (
-                        <p
-                          className={`text-xs text-center ${exportMsg.includes("成功")
-                            ? "text-green-600"
-                            : "text-red-500"
-                            }`}
-                        >
-                          {exportMsg}
-                        </p>
-                      )}
-                      {importMsg && (
-                        <p
-                          className={`text-xs text-center ${importMsg.includes("成功")
-                            ? "text-green-600"
-                            : "text-red-500"
-                            }`}
-                        >
-                          {importMsg}
-                        </p>
-                      )}
                     </div>
                   </motion.div>
                 )}

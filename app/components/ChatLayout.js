@@ -9,7 +9,6 @@ import ProfileModal from "./ProfileModal";
 import Sidebar from "./Sidebar";
 
 export default function ChatLayout({
-  isDark,
   user,
   showProfileModal,
   onCloseProfile,
@@ -56,7 +55,7 @@ export default function ChatLayout({
   onAvatarChange,
 }) {
   return (
-    <div className={`app-root flex font-sans overflow-hidden ${isDark ? "dark-mode" : "light-mode"}`}>
+    <div className="app-root flex font-sans overflow-hidden">
       <ProfileModal open={showProfileModal} onClose={onCloseProfile} user={user} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={onThemeModeChange} onFontSizeChange={onFontSizeChange} avatar={userAvatar} onAvatarChange={onAvatarChange} />
       <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} onStartNewChat={onStartNewChat} onLoadConversation={onLoadConversation} onDeleteConversation={onDeleteConversation} onRenameConversation={onRenameConversation} onOpenProfile={onOpenProfile} onLogout={onLogout} onClose={onCloseSidebar} />
       <div className="flex-1 flex flex-col w-full h-full relative">

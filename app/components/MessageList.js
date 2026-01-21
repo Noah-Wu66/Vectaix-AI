@@ -20,6 +20,7 @@ import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
 import ImageLightbox from "./ImageLightbox";
 import ConfirmModal from "./ConfirmModal";
+import { getMessageImageSrc, isKeepableImageSrc } from "../lib/messageImage";
 
 function AIAvatar({ model, size = 24 }) {
   const props = { size, shape: "square", style: { borderRadius: 6 } };
@@ -258,21 +259,6 @@ export default function MessageList({
     }
     setDeleteConfirm({ open: false, index: null, role: null });
   };
-
-  const getMessageImageSrc = (msg) => {
-    if (msg && typeof msg.image === "string" && msg.image) return msg.image;
-    if (Array.isArray(msg?.parts)) {
-      for (const p of msg.parts) {
-        const url = p?.inlineData?.url;
-        if (typeof url === "string" && url) return url;
-      }
-    }
-    return null;
-  };
-
-  const isHttpUrl = (src) => typeof src === "string" && /^https?:\/\//i.test(src);
-  const isDataImageUrl = (src) => typeof src === "string" && /^data:image\//i.test(src);
-  const isKeepableImageSrc = (src) => isHttpUrl(src) || isDataImageUrl(src);
 
   const handleEditFileSelect = (e) => {
     const file = e.target.files?.[0];

@@ -1,6 +1,8 @@
 import './globals.css';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
+import { ToastProvider } from './components/ToastProvider';
+import { UI_THEME_MODE_KEY } from './lib/storageKeys';
 
 export const metadata = {
     title: 'Vectaix AI',
@@ -29,7 +31,7 @@ export default function RootLayout({ children }) {
     const themeScript = `
 (function() {
   try {
-    var mode = localStorage.getItem('vectaix_ui_themeMode');
+    var mode = localStorage.getItem('${UI_THEME_MODE_KEY}');
     // null means no preference set, treat as 'system' (the default)
     var isDark = mode === 'dark' || ((mode === 'system' || mode === null) && window.matchMedia('(prefers-color-scheme: dark)').matches);
     if (isDark) {
@@ -50,9 +52,11 @@ export default function RootLayout({ children }) {
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
             </head>
             <body>
-                <div className="main-layout h-full">
-                    {children}
-                </div>
+                <ToastProvider>
+                    <div className="main-layout h-full">
+                        {children}
+                    </div>
+                </ToastProvider>
             </body>
         </html>
     );

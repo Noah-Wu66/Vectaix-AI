@@ -2,8 +2,10 @@
 import { useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { buildChatConfig, runChat } from "./lib/chatClient";
+import { getMessageImageSrcs, isDataImageUrl, isHttpUrl } from "./lib/messageImage";
 import { useThemeMode } from "./lib/useThemeMode";
 import { useUserSettings } from "./lib/useUserSettings";
+import { useToast } from "./components/ToastProvider";
 import { CHAT_MODELS } from "./components/ChatModels";
 import AuthModal from "./components/AuthModal";
 import ChatLayout from "./components/ChatLayout";
@@ -16,13 +18,13 @@ const generateMsgId = () => `msg_${Date.now()}_${++msgIdCounter}`;
 const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium", large: "text-size-large" };
 
 export default function ChatApp() {
+  const toast = useToast();
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [authError, setAuthError] = useState("");
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
@@ -31,7 +33,7 @@ export default function ChatApp() {
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
   const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, claudeRoute, setClaudeRoute, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
-  const { isDark } = useThemeMode(themeMode);
+  useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
@@ -57,6 +59,15 @@ export default function ChatApp() {
   const isStreaming = messages.some((m) => m.isStreaming);
   isStreamingRef.current = isStreaming;
   const SCROLL_BOTTOM_THRESHOLD = 80;
+  const lastSettingsErrorRef = useRef(null);
+
+  // 监听 settingsError 变化，显示 toast
+  useEffect(() => {
+    if (settingsError && settingsError !== lastSettingsErrorRef.current) {
+      toast.error(settingsError);
+      lastSettingsErrorRef.current = settingsError;
+    }
+  }, [settingsError, toast]);
 
   const distanceToBottom = (el) => {
     if (!el) return 0;
@@ -228,7 +239,6 @@ export default function ChatApp() {
 
   const handleAuth = async (e) => {
     e.preventDefault();
-    setAuthError("");
     const endpoint =
       authMode === "login" ? "/api/auth/login" : "/api/auth/register";
     const body =
@@ -244,11 +254,11 @@ export default function ChatApp() {
     if (data.success || data.user) {
       setUser(data.user);
       setShowAuthModal(false);
-      setAuthError("");
+      toast.success(authMode === "login" ? "登录成功" : "注册成功");
       fetchConversations();
       fetchSettings();
     } else {
-      setAuthError(data.error || "登录失败，请重试");
+      toast.error(data.error || "登录失败，请重试");
     }
   };
 
@@ -328,7 +338,7 @@ export default function ChatApp() {
       }
     } catch (e) {
       console.error(e);
-      setMessages([{ id: generateMsgId(), role: "model", content: `加载会话失败：${e?.message || "数据格式错误"}`, type: "error" }]);
+      toast.error(`加载会话失败：${e?.message || "数据格式错误"}`);
     } finally {
       setLoading(false);
     }
@@ -477,40 +487,7 @@ export default function ChatApp() {
       .map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)));
   };
 
-  const isHttpUrl = (src) => typeof src === "string" && /^https?:\/\//i.test(src);
-  const isDataImageUrl = (src) => typeof src === "string" && /^data:image\//i.test(src);
-
-  const getMessageImageSrc = (msg) => {
-    if (msg && typeof msg.image === "string" && msg.image) return msg.image;
-    if (Array.isArray(msg?.parts)) {
-      for (const p of msg.parts) {
-        const url = p?.inlineData?.url;
-        if (typeof url === "string" && url) return url;
-      }
-    }
-    return null;
-  };
-
-  // 获取消息中的所有图片URL（支持多图）
-  const getMessageImageSrcs = (msg) => {
-    if (!msg) return [];
-    // 优先使用 images 数组
-    if (Array.isArray(msg.images) && msg.images.length > 0) {
-      return msg.images.filter((src) => typeof src === "string" && src);
-    }
-    // 从 parts 中提取所有图片
-    if (Array.isArray(msg.parts)) {
-      const urls = [];
-      for (const p of msg.parts) {
-        const url = p?.inlineData?.url;
-        if (typeof url === "string" && url) urls.push(url);
-      }
-      if (urls.length > 0) return urls;
-    }
-    // 回退到单张 image
-    if (typeof msg.image === "string" && msg.image) return [msg.image];
-    return [];
-  };
+  // 图片消息工具函数统一在 messageImage 中维护
 
   const onEditingImageSelect = (img) => {
     setEditingImageAction("new");
@@ -609,7 +586,8 @@ export default function ChatApp() {
         setCurrentConversationId,
         fetchConversations,
         setMessages,
-        setLoading, signal: (chatAbortRef.current = new AbortController()).signal,
+        setLoading,
+        signal: (chatAbortRef.current = new AbortController()).signal,
         provider: currentModelConfig?.provider,
         settings: !currentConversationId ? {
           thinkingLevel: thinkingLevels?.[model] || null,
@@ -618,15 +596,13 @@ export default function ChatApp() {
           budgetTokens,
           activePromptId: activePromptId != null ? String(activePromptId) : null,
         } : undefined,
+        onError: (msg) => toast.error(msg),
       });
     } catch (err) {
       console.error(err);
       const errMsg = err?.message || "发送失败";
       const friendlyMsg = errMsg.includes("Failed to fetch") ? "网络连接失败，请检查网络后重试" : errMsg;
-      setMessages((prev) => [
-        ...prev,
-        { id: generateMsgId(), role: "model", content: friendlyMsg, type: "error" },
-      ]);
+      toast.error(friendlyMsg);
       setLoading(false);
     } finally {
       chatRequestLockRef.current = false;
@@ -679,6 +655,7 @@ export default function ChatApp() {
         mode: "regenerate",
         messagesForRegenerate: historyWithUser,
         provider: currentModelConfig?.provider,
+        onError: (msg) => toast.error(msg),
       });
     } finally {
       chatRequestLockRef.current = false;
@@ -790,10 +767,7 @@ export default function ChatApp() {
       setLoading(false);
       const errMsg = e?.message || "图片处理失败";
       const friendlyMsg = errMsg.includes("Failed to fetch") ? "网络连接失败，请检查网络后重试" : `图片上传失败：${errMsg}`;
-      setMessages((prev) => [
-        ...prev,
-        { id: generateMsgId(), role: "model", content: friendlyMsg, type: "error" },
-      ]);
+      toast.error(friendlyMsg);
       return;
     }
     nextMessages.push(updatedMsg);
@@ -830,6 +804,7 @@ export default function ChatApp() {
         mode: "regenerate",
         messagesForRegenerate: nextMessages,
         provider: currentModelConfig?.provider,
+        onError: (msg) => toast.error(msg),
       });
     } finally {
       chatRequestLockRef.current = false;
@@ -845,12 +820,11 @@ export default function ChatApp() {
   };
   if (showAuthModal) {
     return (
-      <AuthModal authMode={authMode} email={email} password={password} confirmPassword={confirmPassword} authError={authError} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onSubmit={handleAuth} onToggleMode={() => { setAuthError(""); setAuthMode((m) => (m === "login" ? "register" : "login")); }} />
+      <AuthModal authMode={authMode} email={email} password={password} confirmPassword={confirmPassword} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onSubmit={handleAuth} onToggleMode={() => setAuthMode((m) => (m === "login" ? "register" : "login"))} />
     );
   }
-
   if (settingsError) {
-    return <SettingsErrorView isDark={isDark} settingsError={settingsError} onLogout={handleLogout} />;
+    return <SettingsErrorView settingsError={settingsError} onLogout={handleLogout} />;
   }
-  return <ChatLayout isDark={isDark} user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} showScrollButton={showScrollButton} onScrollToBottom={scrollToBottom} editingMsgIndex={editingMsgIndex} editingContent={editingContent} editingImageAction={editingImageAction} editingImage={editingImage} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onEditingImageSelect={onEditingImageSelect} onEditingImageRemove={onEditingImageRemove} onEditingImageKeep={onEditingImageKeep} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} userAvatar={avatar} onAvatarChange={setAvatar} composerProps={{ loading, isStreaming, isWaitingForAI: loading && messages.length > 0, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => { setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })); syncConversationSettings({ thinkingLevel: v }); }, historyLimit, setHistoryLimit: (v) => { setHistoryLimit(v); syncConversationSettings({ historyLimit: v }); }, maxTokens, setMaxTokens: (v) => { setMaxTokens(v); syncConversationSettings({ maxTokens: v }); }, budgetTokens, setBudgetTokens: (v) => { setBudgetTokens(v); syncConversationSettings({ budgetTokens: v }); }, webSearch, setWebSearch, claudeRoute, setClaudeRoute, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId: (v) => { setActivePromptId(v); syncConversationSettings({ activePromptId: v != null ? String(v) : null }); }, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
+  return <ChatLayout user={user} showProfileModal={showProfileModal} onCloseProfile={() => setShowProfileModal(false)} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={updateThemeMode} onFontSizeChange={updateFontSize} sidebarOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} onStartNewChat={startNewChat} onLoadConversation={loadConversation} onDeleteConversation={deleteConversation} onRenameConversation={renameConversation} onOpenProfile={() => setShowProfileModal(true)} onLogout={handleLogout} onCloseSidebar={() => setSidebarOpen(false)} onToggleSidebar={() => setSidebarOpen((v) => !v)} messages={messages} loading={loading} chatEndRef={chatEndRef} messageListRef={messageListRef} onMessageListScroll={handleMessageListScroll} showScrollButton={showScrollButton} onScrollToBottom={scrollToBottom} editingMsgIndex={editingMsgIndex} editingContent={editingContent} editingImageAction={editingImageAction} editingImage={editingImage} fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""} onEditingContentChange={setEditingContent} onEditingImageSelect={onEditingImageSelect} onEditingImageRemove={onEditingImageRemove} onEditingImageKeep={onEditingImageKeep} onCancelEdit={cancelEdit} onSubmitEdit={submitEditAndRegenerate} onCopy={copyMessage} onDeleteModelMessage={deleteModelMessage} onDeleteUserMessage={deleteUserMessage} onRegenerateModelMessage={regenerateModelMessage} onStartEdit={startEdit} userAvatar={avatar} onAvatarChange={setAvatar} composerProps={{ loading, isStreaming, isWaitingForAI: loading && messages.length > 0, model, onModelChange: requestModelChange, thinkingLevel: thinkingLevels?.[model], setThinkingLevel: (v) => { setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v })); syncConversationSettings({ thinkingLevel: v }); }, historyLimit, setHistoryLimit: (v) => { setHistoryLimit(v); syncConversationSettings({ historyLimit: v }); }, maxTokens, setMaxTokens: (v) => { setMaxTokens(v); syncConversationSettings({ maxTokens: v }); }, budgetTokens, setBudgetTokens: (v) => { setBudgetTokens(v); syncConversationSettings({ budgetTokens: v }); }, webSearch, setWebSearch, claudeRoute, setClaudeRoute, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId: (v) => { setActivePromptId(v); syncConversationSettings({ activePromptId: v != null ? String(v) : null }); }, onAddPrompt: addPrompt, onDeletePrompt: deletePrompt, onUpdatePrompt: updatePrompt, onSend: handleSendFromComposer, onStop: stopStreaming }} />;
 }

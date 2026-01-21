@@ -7,7 +7,6 @@ export default function AuthModal({
   email,
   password,
   confirmPassword,
-  authError,
   onEmailChange,
   onPasswordChange,
   onConfirmPasswordChange,
@@ -55,9 +54,6 @@ export default function AuthModal({
               className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors"
               required
             />
-          )}
-          {authError && (
-            <p className="text-sm text-red-500 text-center py-1">{authError}</p>
           )}
           <button className="w-full bg-zinc-600 hover:bg-zinc-500 text-white font-medium py-3 rounded-lg transition-colors">
             {authMode === "login" ? "登录" : "注册"}

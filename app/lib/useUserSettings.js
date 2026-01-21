@@ -1,6 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  UI_ACTIVE_PROMPT_ID_KEY,
+  UI_ACTIVE_PROMPT_IDS_KEY,
+  UI_BUDGET_TOKENS_KEY,
+  UI_CLAUDE_ROUTE_KEY,
+  UI_FONT_SIZE_KEY,
+  UI_HISTORY_LIMIT_KEY,
+  UI_MAX_TOKENS_KEY,
+  UI_MODEL_KEY,
+  UI_THEME_MODE_KEY,
+  UI_THINKING_LEVELS_KEY,
+  UI_WEB_SEARCH_KEY,
+} from "./storageKeys";
 
 const DEFAULT_MODEL = "gemini-3-flash-preview";
 const DEFAULT_THINKING_LEVELS = {
@@ -12,17 +25,6 @@ const DEFAULT_BUDGET_TOKENS = 32000;
 const DEFAULT_CLAUDE_ROUTE = "fallback"; // primary | fallback | guarantee
 
 // localStorage keys - 所有设置都本地存储，只有 systemPrompts 内容存数据库
-const UI_THEME_MODE_KEY = "vectaix_ui_themeMode";
-const UI_FONT_SIZE_KEY = "vectaix_ui_fontSize";
-const UI_MODEL_KEY = "vectaix_ui_model";
-const UI_THINKING_LEVELS_KEY = "vectaix_ui_thinkingLevels";
-const UI_HISTORY_LIMIT_KEY = "vectaix_ui_historyLimit";
-const UI_ACTIVE_PROMPT_IDS_KEY = "vectaix_ui_activePromptIds";
-const UI_ACTIVE_PROMPT_ID_KEY = "vectaix_ui_activePromptId";
-const UI_MAX_TOKENS_KEY = "vectaix_ui_maxTokens";
-const UI_BUDGET_TOKENS_KEY = "vectaix_ui_budgetTokens";
-const UI_WEB_SEARCH_KEY = "vectaix_ui_webSearch";
-const UI_CLAUDE_ROUTE_KEY = "vectaix_ui_claudeRoute";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Gemini, Claude, OpenAI } from "@lobehub/icons";
 import { CHAT_MODELS } from "./ChatModels";
+import { useToast } from "./ToastProvider";
 
 // 根据 provider 渲染模型图标
 function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
@@ -60,6 +61,7 @@ export default function Composer({
   onSend,
   onStop,
 }) {
+  const toast = useToast();
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAddPrompt, setShowAddPrompt] = useState(false);
@@ -158,7 +160,7 @@ export default function Composer({
 
     if (oversizedFiles.length > 0) {
       const names = oversizedFiles.map((f) => f.name).join("、");
-      alert(`以下图片超过 ${MAX_IMAGE_SIZE_MB}MB 限制，已跳过：${names}`);
+      toast.warning(`以下图片超过 ${MAX_IMAGE_SIZE_MB}MB 限制，已跳过：${names}`);
     }
 
     // 处理每个文件，不支持的格式转换为 PNG
