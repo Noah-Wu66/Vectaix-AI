@@ -491,6 +491,27 @@ export default function ChatApp() {
     return null;
   };
 
+  // 获取消息中的所有图片URL（支持多图）
+  const getMessageImageSrcs = (msg) => {
+    if (!msg) return [];
+    // 优先使用 images 数组
+    if (Array.isArray(msg.images) && msg.images.length > 0) {
+      return msg.images.filter((src) => typeof src === "string" && src);
+    }
+    // 从 parts 中提取所有图片
+    if (Array.isArray(msg.parts)) {
+      const urls = [];
+      for (const p of msg.parts) {
+        const url = p?.inlineData?.url;
+        if (typeof url === "string" && url) urls.push(url);
+      }
+      if (urls.length > 0) return urls;
+    }
+    // 回退到单张 image
+    if (typeof msg.image === "string" && msg.image) return [msg.image];
+    return [];
+  };
+
   const onEditingImageSelect = (img) => {
     setEditingImageAction("new");
     setEditingImage(img || null);
@@ -684,11 +705,11 @@ export default function ChatApp() {
     chatRequestLockRef.current = true;
     const newContent = editingContent.trim();
     const oldMsg = messages[index];
-    const existingImageSrc = getMessageImageSrc(oldMsg);
-    const canKeepExistingImage = isHttpUrl(existingImageSrc) || isDataImageUrl(existingImageSrc);
+    const existingImageSrcs = getMessageImageSrcs(oldMsg);
+    const canKeepExistingImages = existingImageSrcs.length > 0 && existingImageSrcs.every((src) => isHttpUrl(src) || isDataImageUrl(src));
     const hasImageAfterEdit =
       (editingImageAction === "new" && editingImage?.file) ||
-      (editingImageAction === "keep" && canKeepExistingImage);
+      (editingImageAction === "keep" && canKeepExistingImages);
     if (!newContent && !hasImageAfterEdit) {
       chatRequestLockRef.current = false;
       return;
@@ -703,45 +724,48 @@ export default function ChatApp() {
     const nextMessages = messages.slice(0, index);
     const updatedMsg = { ...oldMsg, content: newContent };
 
-    let nextImageUrl = null;
+    // 支持多张图片
+    let nextImageUrls = [];
     let nextMimeType = null;
     try {
       if (editingImageAction === "remove") {
-        nextImageUrl = null;
+        nextImageUrls = [];
       } else if (editingImageAction === "new" && editingImage?.file) {
         const blob = await upload(editingImage.file.name, editingImage.file, {
           access: "public",
           handleUploadUrl: "/api/upload",
         });
-        nextImageUrl = blob.url;
+        nextImageUrls = [blob.url];
         nextMimeType = editingImage.mimeType || editingImage.file.type || null;
       } else if (editingImageAction === "keep") {
         if (typeof oldMsg?.mimeType === "string" && oldMsg.mimeType) nextMimeType = oldMsg.mimeType;
 
-        if (isHttpUrl(existingImageSrc)) {
-          nextImageUrl = existingImageSrc;
-        } else if (isDataImageUrl(existingImageSrc)) {
-          // 兼容：历史消息里如果残留 data:image（本地预览），这里自动上传到 Blob，避免提交后“静默丢图”
-          const resp = await fetch(existingImageSrc);
-          const b = await resp.blob();
-          const mime = b.type || nextMimeType || "image/png";
-          const ext = (mime.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "") || "png";
-          const file = new File([b], `edit-${Date.now()}.${ext}`, { type: mime });
-          const uploaded = await upload(file.name, file, {
-            access: "public",
-            handleUploadUrl: "/api/upload",
-          });
-          nextImageUrl = uploaded.url;
-          nextMimeType = mime;
-        } else {
-          nextImageUrl = null;
+        // 处理所有图片
+        for (const src of existingImageSrcs) {
+          if (isHttpUrl(src)) {
+            nextImageUrls.push(src);
+          } else if (isDataImageUrl(src)) {
+            // 兼容：历史消息里如果残留 data:image（本地预览），这里自动上传到 Blob
+            const resp = await fetch(src);
+            const b = await resp.blob();
+            const mime = b.type || nextMimeType || "image/png";
+            const ext = (mime.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "") || "png";
+            const file = new File([b], `edit-${Date.now()}-${nextImageUrls.length}.${ext}`, { type: mime });
+            const uploaded = await upload(file.name, file, {
+              access: "public",
+              handleUploadUrl: "/api/upload",
+            });
+            nextImageUrls.push(uploaded.url);
+            if (!nextMimeType) nextMimeType = mime;
+          }
         }
       }
 
       const parts = [];
       if (newContent) parts.push({ text: newContent });
-      if (nextImageUrl) {
-        const inlineData = { url: nextImageUrl };
+      // 添加所有图片到 parts
+      for (const imgUrl of nextImageUrls) {
+        const inlineData = { url: imgUrl };
         if (nextMimeType) inlineData.mimeType = nextMimeType;
         parts.push({ inlineData });
       }
@@ -749,8 +773,14 @@ export default function ChatApp() {
       if (parts.length > 0) updatedMsg.parts = parts;
       else delete updatedMsg.parts;
 
-      if (nextImageUrl) updatedMsg.image = nextImageUrl;
-      else delete updatedMsg.image;
+      // 更新 image 和 images 字段
+      if (nextImageUrls.length > 0) {
+        updatedMsg.image = nextImageUrls[0];
+        updatedMsg.images = nextImageUrls;
+      } else {
+        delete updatedMsg.image;
+        delete updatedMsg.images;
+      }
 
       if (nextMimeType) updatedMsg.mimeType = nextMimeType;
       else if (editingImageAction === "remove") delete updatedMsg.mimeType;
