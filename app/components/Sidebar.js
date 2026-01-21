@@ -23,6 +23,7 @@ export default function Sidebar({
   conversations,
   currentConversationId,
   user,
+  avatar,
   onStartNewChat,
   onLoadConversation,
   onDeleteConversation,
@@ -170,9 +171,17 @@ export default function Sidebar({
               onClick={onOpenProfile}
               className="flex items-center gap-2 flex-1 hover:bg-white p-2 rounded-lg transition-colors -ml-2 text-left mr-2"
             >
-              <div className="w-8 h-8 rounded-lg bg-zinc-500 flex items-center justify-center text-xs font-semibold text-white">
-                {user?.email?.[0]?.toUpperCase?.() ?? "?"}
-              </div>
+              {avatar ? (
+                <img
+                  src={avatar}
+                  alt=""
+                  className="w-8 h-8 rounded-lg object-cover bg-zinc-500"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-zinc-500 flex items-center justify-center text-xs font-semibold text-white">
+                  {user?.email?.[0]?.toUpperCase?.() ?? "?"}
+                </div>
+              )}
               <div className="text-xs truncate max-w-[100px] text-zinc-600 font-medium">
                 {user?.email}
               </div>
