@@ -135,6 +135,11 @@ export function useUserSettings() {
       }
       return;
     }
+    if (model.startsWith("gpt-") && maxTokens <= 65536) {
+      _setMaxTokens(128000);
+      writeLocalSetting(UI_MAX_TOKENS_KEY, "128000");
+      return;
+    }
     if (model.startsWith("gpt-") && maxTokens > 128000) {
       _setMaxTokens(128000);
       writeLocalSetting(UI_MAX_TOKENS_KEY, "128000");

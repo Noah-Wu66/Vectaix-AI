@@ -631,22 +631,6 @@ export default function Composer({
                               {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
                             </span>
                           </div>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              联网搜索
-                            </label>
-                            <button
-                              onClick={() => setWebSearch(!webSearch)}
-                              type="button"
-                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                                }`}
-                            >
-                              <Globe size={14} />
-                              {webSearch ? "开" : "关"}
-                            </button>
-                          </div>
                         </>
                       ) : model === "gemini-3-pro-preview" ? (
                         <>
@@ -666,22 +650,6 @@ export default function Composer({
                             <span className="text-xs text-right block mt-1 text-zinc-600">
                               {thinkingLevel === "high" ? "深度" : "快速"}
                             </span>
-                          </div>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              联网搜索
-                            </label>
-                            <button
-                              onClick={() => setWebSearch(!webSearch)}
-                              type="button"
-                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                                }`}
-                            >
-                              <Globe size={14} />
-                              {webSearch ? "开" : "关"}
-                            </button>
                           </div>
                         </>
                       ) : model?.startsWith("claude-") ? (
@@ -744,22 +712,6 @@ export default function Composer({
                               {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
                             </span>
                           </div>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              联网搜索
-                            </label>
-                            <button
-                              onClick={() => setWebSearch(!webSearch)}
-                              type="button"
-                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                                }`}
-                            >
-                              <Globe size={14} />
-                              {webSearch ? "开" : "关"}
-                            </button>
-                          </div>
                         </>
                       ) : model?.startsWith("gpt-") ? (
                         <>
@@ -783,43 +735,8 @@ export default function Composer({
                               {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
                             </span>
                           </div>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              联网搜索
-                            </label>
-                            <button
-                              onClick={() => setWebSearch(!webSearch)}
-                              type="button"
-                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                                }`}
-                            >
-                              <Globe size={14} />
-                              {webSearch ? "开" : "关"}
-                            </button>
-                          </div>
                         </>
-                      ) : (
-                        <>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              联网搜索
-                            </label>
-                            <button
-                              onClick={() => setWebSearch(!webSearch)}
-                              type="button"
-                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                                }`}
-                            >
-                              <Globe size={14} />
-                              {webSearch ? "开" : "关"}
-                            </button>
-                          </div>
-                        </>
-                      )}
+                      ) : null}
 
                       {!model?.startsWith("claude-") && (
                         <div>
@@ -842,6 +759,22 @@ export default function Composer({
                           </span>
                         </div>
                       )}
+                      <div>
+                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                          联网搜索
+                        </label>
+                        <button
+                          onClick={() => setWebSearch(!webSearch)}
+                          type="button"
+                          className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                            }`}
+                        >
+                          <Globe size={14} />
+                          {webSearch ? "开" : "关"}
+                        </button>
+                      </div>
                     </div>
                   </motion.div>
                 </>
