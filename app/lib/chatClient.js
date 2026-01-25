@@ -127,6 +127,7 @@ export async function runChat({
         isWaitingFirstChunk: true,
         thought: "",
         isSearching: false,
+        searchQuery: null,
         searchResults: null,
         citations: null,
       },
@@ -146,6 +147,7 @@ export async function runChat({
     let flushScheduled = false;
     let hasReceivedContent = false;
     let isSearching = false;
+    let searchQuery = null;
     let searchResults = null;
     let citations = null;
 
@@ -193,6 +195,7 @@ export async function runChat({
           isThinkingStreaming: !thinkingEnded,
           isWaitingFirstChunk: !hasReceivedContent,
           isSearching,
+          searchQuery,
           searchResults,
           citations,
         };
@@ -202,6 +205,7 @@ export async function runChat({
           base.isThinkingStreaming === nextMsg.isThinkingStreaming &&
           base.isWaitingFirstChunk === nextMsg.isWaitingFirstChunk &&
           base.isSearching === nextMsg.isSearching &&
+          base.searchQuery === nextMsg.searchQuery &&
           base.searchResults === nextMsg.searchResults &&
           base.citations === nextMsg.citations
         ) {
@@ -263,8 +267,14 @@ export async function runChat({
           startSimulatedStream();
         } else if (data.type === "search_start") {
           isSearching = true;
+          if (typeof data.query === "string" && data.query.trim()) {
+            searchQuery = data.query.trim();
+          }
         } else if (data.type === "search_result") {
           isSearching = false;
+          if (typeof data.query === "string" && data.query.trim()) {
+            searchQuery = data.query.trim();
+          }
           searchResults = data.results || [];
         } else if (data.type === "citations") {
           citations = data.citations || [];

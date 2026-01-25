@@ -133,22 +133,6 @@ function Thumb({ src, className = "", onClick }) {
   );
 }
 
-function SearchingIndicator() {
-  return (
-    <div className="flex items-center gap-1.5 sm:gap-2.5 text-[11px] sm:text-xs font-medium text-blue-600 mb-1.5 uppercase tracking-wider bg-blue-50 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg">
-      <Globe size={14} className="sm:w-4 sm:h-4 animate-pulse" />
-      <span className="flex items-center gap-1 sm:gap-1.5">
-        正在搜索网络
-        <span className="flex gap-0.5">
-          <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
-          <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
-          <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
-        </span>
-      </span>
-    </div>
-  );
-}
-
 function Citations({ citations }) {
   if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
 
@@ -421,12 +405,13 @@ export default function MessageList({
                   : "items-start w-full max-w-full"
                   }`}
               >
-                {msg.role === "model" && msg.thought && (
-                  <ThinkingBlock thought={msg.thought} isStreaming={msg.isThinkingStreaming} isSearching={msg.isSearching} />
-                )}
-
-                {msg.role === "model" && msg.isSearching && (
-                  <SearchingIndicator />
+                {msg.role === "model" && (msg.thought || msg.isSearching) && (
+                  <ThinkingBlock
+                    thought={msg.thought}
+                    isStreaming={msg.isThinkingStreaming}
+                    isSearching={msg.isSearching}
+                    searchQuery={msg.searchQuery}
+                  />
                 )}
 
                 {/* 编辑模式 */}
@@ -697,5 +682,3 @@ export default function MessageList({
     </div>
   );
 }
-
-

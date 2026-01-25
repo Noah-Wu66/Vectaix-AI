@@ -2,17 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BrainCircuit, ChevronDown, ChevronUp } from "lucide-react";
+import { BrainCircuit, ChevronDown, ChevronUp, Globe } from "lucide-react";
 import Markdown from "./Markdown";
 
-export default function ThinkingBlock({ thought, isStreaming, isSearching }) {
+export default function ThinkingBlock({ thought, isStreaming, isSearching, searchQuery }) {
   const [collapsed, setCollapsed] = useState(true);
   const containerRef = useRef(null);
+  const safeThought = typeof thought === "string" ? thought : "";
 
-  // 联网搜索开始后或思考流结束后，自动折叠
+  // 联网搜索时保持展开，思考流结束后自动折叠
   useEffect(() => {
     if (isSearching) {
-      setCollapsed(true);
+      setCollapsed(false);
     } else {
       setCollapsed(!isStreaming);
     }
@@ -69,8 +70,23 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching }) {
             className="thinking-content bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-y-auto max-h-[200px] w-full max-w-[800px] text-xs text-zinc-400"
             ref={containerRef}
           >
+            {isSearching && (
+              <div className="inline-flex items-center gap-1.5 sm:gap-2 mb-2 bg-blue-50 text-blue-700 border border-blue-100 rounded-full px-2.5 py-1 text-[11px] sm:text-xs">
+                <Globe size={12} className="sm:w-3.5 sm:h-3.5 animate-pulse" />
+                <span className="flex items-center gap-1 min-w-0">
+                  <span className="truncate max-w-[220px]">
+                    {searchQuery ? `联网检索中：${searchQuery}` : "联网检索中"}
+                  </span>
+                  <span className="flex gap-0.5">
+                    <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
+                  </span>
+                </span>
+              </div>
+            )}
             <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
-              {thought}
+              {safeThought}
             </Markdown>
           </motion.div>
         )}
@@ -78,5 +94,3 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching }) {
     </div>
   );
 }
-
-

@@ -9,6 +9,12 @@ import {
     getStoredPartsFromMessage,
     sanitizeStoredMessages
 } from '@/app/api/chat/utils';
+import {
+    metasoSearch,
+    buildMetasoContext,
+    buildMetasoCitations,
+    buildMetasoSearchEventResults
+} from '@/app/api/chat/metasoSearch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -58,6 +64,24 @@ async function buildClaudeMessagesFromHistory(messages) {
         }
     }
     return claudeMessages;
+}
+
+function extractJsonObject(text) {
+    if (typeof text !== 'string') return null;
+    const first = text.indexOf('{');
+    const last = text.lastIndexOf('}');
+    if (first === -1 || last === -1 || last <= first) return null;
+    return text.slice(first, last + 1);
+}
+
+function parseJsonFromText(text) {
+    const jsonText = extractJsonObject(text);
+    if (!jsonText) return null;
+    try {
+        return JSON.parse(jsonText);
+    } catch {
+        return null;
+    }
 }
 
 export async function POST(req) {
@@ -236,7 +260,7 @@ export async function POST(req) {
             writePermitTime = updatedConv?.updatedAt?.getTime?.() || userMsgTime;
         }
 
-        // 构建请求参数
+        // 构建请求参数（联网检索上下文将在流式开始前注入）
         const maxTokens = config?.maxTokens || 64000;
         const budgetTokens = config?.budgetTokens || 32000;
         // Claude 使用内置系统提示词（保障线路使用独立的简化提示词）
@@ -252,42 +276,6 @@ export async function POST(req) {
         const webSearchGuide = enableWebSearch
             ? "\n\nWhen citing information from web search results, add the source domain in parentheses at the end of the relevant sentence, e.g. (reuters.com)."
             : "";
-
-        // 系统提示词
-        const systemPrompt = `${claudeSystemPrompt}\n\n${formattingGuard}${webSearchGuide}`;
-
-        const requestParams = {
-            model: model,
-            max_tokens: maxTokens,
-            system: [
-                {
-                    type: "text",
-                    text: systemPrompt,
-                    cache_control: {
-                        type: "ephemeral",
-                        ttl: "1h"
-                    }
-                }
-            ],
-            messages: claudeMessages,
-            stream: true,
-            thinking: {
-                type: "enabled",
-                budget_tokens: budgetTokens
-            }
-        };
-
-        // 添加联网搜索工具（带缓存控制）
-        if (enableWebSearch) {
-            requestParams.tools = [{
-                type: "web_search_20250305",
-                name: "web_search",
-                max_uses: 5,
-                cache_control: { type: "ephemeral", ttl: "1h" }
-            }];
-        }
-
-        const stream = await client.messages.stream(requestParams);
 
         const encoder = new TextEncoder();
         let clientAborted = false;
@@ -306,7 +294,6 @@ export async function POST(req) {
                 let fullText = "";
                 let fullThought = "";
                 let citations = [];
-                let currentSearchQuery = "";
 
                 try {
                     const sendHeartbeat = () => {
@@ -318,57 +305,157 @@ export async function POST(req) {
                     heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
                     sendHeartbeat();
 
-                    for await (const event of stream) {
-                        if (clientAborted) break;
-
+                    const sendEvent = (payload) => {
                         const padding = !paddingSent ? PADDING : '';
                         paddingSent = true;
+                        const data = `data: ${JSON.stringify(payload)}${padding}\n\n`;
+                        controller.enqueue(encoder.encode(data));
+                    };
 
-                        // 处理搜索开始事件
-                        if (event.type === 'content_block_start') {
-                            const block = event.content_block;
-                            if (block?.type === 'server_tool_use' && block?.name === 'web_search') {
-                                currentSearchQuery = "";
-                                const data = `data: ${JSON.stringify({ type: 'search_start' })}${padding}\n\n`;
-                                controller.enqueue(encoder.encode(data));
-                            } else if (block?.type === 'web_search_tool_result') {
-                                // 搜索结果返回
-                                const results = Array.isArray(block.content) ? block.content : [];
-                                const searchResults = results
-                                    .filter(r => r?.type === 'web_search_result')
-                                    .map(r => ({
-                                        url: r.url,
-                                        title: r.title,
-                                        page_age: r.page_age
-                                    }));
-                                // 将搜索结果作为 citations 来源（Claude 的引用往往不在 delta.citations 中）
-                                for (const r of searchResults) {
-                                    if (r.url && !citations.some(c => c.url === r.url)) {
-                                        citations.push({
-                                            url: r.url,
-                                            title: r.title || null,
-                                            cited_text: null
-                                        });
-                                    }
-                                }
-                                const data = `data: ${JSON.stringify({
-                                    type: 'search_result',
-                                    query: currentSearchQuery,
-                                    results: searchResults
-                                })}${padding}\n\n`;
-                                controller.enqueue(encoder.encode(data));
+                    const pushCitations = (items) => {
+                        for (const item of items || []) {
+                            if (!item?.url) continue;
+                            if (!citations.some(c => c.url === item.url)) {
+                                citations.push({ url: item.url, title: item.title || null, cited_text: null });
                             }
                         }
+                    };
+
+                    const runDecisionStream = async (systemText, userText) => {
+                        let decisionText = "";
+                        const decisionStream = await client.messages.stream({
+                            model: model,
+                            max_tokens: 512,
+                            system: [
+                                {
+                                    type: "text",
+                                    text: systemText,
+                                    cache_control: { type: "ephemeral", ttl: "1h" }
+                                }
+                            ],
+                            messages: [
+                                { role: 'user', content: [{ type: 'text', text: userText }] }
+                            ],
+                            stream: true,
+                            thinking: {
+                                type: "enabled",
+                                budget_tokens: 1024
+                            }
+                        });
+
+                        for await (const event of decisionStream) {
+                            if (clientAborted) break;
+                            if (event.type === 'content_block_delta') {
+                                const delta = event.delta;
+                                if (delta.type === 'thinking_delta') {
+                                    fullThought += delta.thinking;
+                                    sendEvent({ type: 'thought', content: delta.thinking });
+                                } else if (delta.type === 'text_delta') {
+                                    decisionText += delta.text;
+                                }
+                            }
+                        }
+
+                        return decisionText;
+                    };
+
+                    let searchContextText = "";
+                    if (enableWebSearch && !clientAborted) {
+                        const decisionSystem = "你是联网检索决策器。必须只输出严格 JSON，不要输出任何多余文本。";
+                        const decisionUser = `用户问题：${prompt}\n\n判断是否必须联网检索才能回答。\n- 需要联网：输出 {"needSearch": true, "query": "精炼检索词"}\n- 不需要联网：输出 {"needSearch": false}`;
+                        const decisionText = await runDecisionStream(decisionSystem, decisionUser);
+                        const decision = parseJsonFromText(decisionText) || {};
+                        let needSearch = decision?.needSearch === true;
+                        let nextQuery = typeof decision?.query === 'string' ? decision.query.trim() : "";
+
+                        const searchContextParts = [];
+                        const maxSearchRounds = 5;
+                        for (let round = 0; round < maxSearchRounds && needSearch && nextQuery; round++) {
+                            if (clientAborted) break;
+                            sendEvent({ type: 'search_start', query: nextQuery });
+                            let results = [];
+                            try {
+                                const searchData = await metasoSearch(nextQuery, {
+                                    scope: "webpage",
+                                    includeSummary: true,
+                                    size: 20,
+                                    includeRawContent: false,
+                                    conciseSnippet: false
+                                });
+                                results = searchData?.results || [];
+                            } catch (searchError) {
+                                console.error("[Claude] MetaSo Search Error:", searchError);
+                            }
+
+                            const eventResults = buildMetasoSearchEventResults(results, 10);
+                            sendEvent({ type: 'search_result', query: nextQuery, results: eventResults });
+                            pushCitations(buildMetasoCitations(results));
+
+                            const contextBlock = buildMetasoContext(results, { maxItems: 6 });
+                            if (contextBlock) {
+                                searchContextParts.push(`检索词: ${nextQuery}\n${contextBlock}`);
+                            }
+
+                            if (round === maxSearchRounds - 1) break;
+
+                            const recentContext = searchContextParts.slice(-2).join("\n\n");
+                            const enoughSystem = "你是联网检索补充决策器。必须只输出严格 JSON，不要输出任何多余文本。";
+                            const enoughUser = `用户问题：${prompt}\n\n已获得的检索摘要：\n${recentContext || "(无)"}\n\n判断这些信息是否足够回答。\n- 足够：输出 {"enough": true}\n- 不足：输出 {"enough": false, "nextQuery": "新的检索词"}`;
+                            const enoughText = await runDecisionStream(enoughSystem, enoughUser);
+                            const enoughDecision = parseJsonFromText(enoughText) || {};
+                            if (enoughDecision?.enough === true) break;
+                            const candidateQuery = typeof enoughDecision?.nextQuery === 'string'
+                                ? enoughDecision.nextQuery.trim()
+                                : "";
+                            if (!candidateQuery || candidateQuery === nextQuery) break;
+                            nextQuery = candidateQuery;
+                        }
+
+                        searchContextText = searchContextParts.join("\n\n");
+                    }
+
+                    if (clientAborted) {
+                        try { controller.close(); } catch { /* ignore */ }
+                        return;
+                    }
+
+                    const searchContextSection = searchContextText
+                        ? `\n\nWeb search results:\n${searchContextText}`
+                        : "";
+                    const systemPrompt = `${claudeSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
+                    const requestParams = {
+                        model: model,
+                        max_tokens: maxTokens,
+                        system: [
+                            {
+                                type: "text",
+                                text: systemPrompt,
+                                cache_control: {
+                                    type: "ephemeral",
+                                    ttl: "1h"
+                                }
+                            }
+                        ],
+                        messages: claudeMessages,
+                        stream: true,
+                        thinking: {
+                            type: "enabled",
+                            budget_tokens: budgetTokens
+                        }
+                    };
+
+                    const stream = await client.messages.stream(requestParams);
+
+                    for await (const event of stream) {
+                        if (clientAborted) break;
 
                         if (event.type === 'content_block_delta') {
                             const delta = event.delta;
                             if (delta.type === 'thinking_delta') {
                                 fullThought += delta.thinking;
-                                const data = `data: ${JSON.stringify({ type: 'thought', content: delta.thinking })}${padding}\n\n`;
-                                controller.enqueue(encoder.encode(data));
+                                sendEvent({ type: 'thought', content: delta.thinking });
                             } else if (delta.type === 'text_delta') {
                                 fullText += delta.text;
-                                // 检查是否有引用
                                 const citationData = delta.citations || [];
                                 if (citationData.length > 0) {
                                     for (const c of citationData) {
@@ -386,19 +473,8 @@ export async function POST(req) {
                                         }
                                     }
                                 }
-                                const data = `data: ${JSON.stringify({ type: 'text', content: delta.text })}${padding}\n\n`;
-                                controller.enqueue(encoder.encode(data));
-                            } else if (delta.type === 'input_json_delta') {
-                                // 搜索查询的 JSON 片段
-                                try {
-                                    currentSearchQuery += delta.partial_json || "";
-                                } catch { /* ignore */ }
+                                sendEvent({ type: 'text', content: delta.text });
                             }
-                        }
-
-                        // 处理完整的内容块结束，检查是否有引用
-                        if (event.type === 'content_block_stop') {
-                            // 可能在这里需要处理引用，但通常引用在 delta 中就已经包含
                         }
                     }
 
