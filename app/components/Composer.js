@@ -83,6 +83,10 @@ export default function Composer({
   }, []);
 
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
+  const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
+  const maxTokenOptions = isOpenAIModel
+    ? [1024, 2048, 4096, 8192, 16384, 32768, 65536, 128000]
+    : [1024, 2048, 4096, 8192, 16384, 32768, 65536];
   // 移动端键盘弹出时，同步可视高度，避免键盘遮挡输入区（尤其是 iOS Safari）
   // 只在主对话输入框聚焦时才启用此调整，编辑系统提示词时不调整
   useEffect(() => {
@@ -609,41 +613,77 @@ export default function Composer({
 
                       {/* Model-specific settings */}
                       {model === "gemini-3-flash-preview" ? (
-                        <div>
-                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                            思考深度
-                          </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="3"
-                            step="1"
-                            value={["minimal", "low", "medium", "high"].indexOf(thinkingLevel)}
-                            onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][e.target.value])}
-                            className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                          />
-                          <span className="text-xs text-right block mt-1 text-zinc-600">
-                            {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
-                          </span>
-                        </div>
+                        <>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              思考深度
+                            </label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="3"
+                              step="1"
+                              value={["minimal", "low", "medium", "high"].indexOf(thinkingLevel)}
+                              onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][e.target.value])}
+                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                            />
+                            <span className="text-xs text-right block mt-1 text-zinc-600">
+                              {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
+                            </span>
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              联网搜索
+                            </label>
+                            <button
+                              onClick={() => setWebSearch(!webSearch)}
+                              type="button"
+                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                }`}
+                            >
+                              <Globe size={14} />
+                              {webSearch ? "开" : "关"}
+                            </button>
+                          </div>
+                        </>
                       ) : model === "gemini-3-pro-preview" ? (
-                        <div>
-                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                            思考深度
-                          </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="1"
-                            value={thinkingLevel === "high" ? 1 : 0}
-                            onChange={(e) => setThinkingLevel(e.target.value === "1" ? "high" : "low")}
-                            className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                          />
-                          <span className="text-xs text-right block mt-1 text-zinc-600">
-                            {thinkingLevel === "high" ? "深度" : "快速"}
-                          </span>
-                        </div>
+                        <>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              思考深度
+                            </label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="1"
+                              value={thinkingLevel === "high" ? 1 : 0}
+                              onChange={(e) => setThinkingLevel(e.target.value === "1" ? "high" : "low")}
+                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                            />
+                            <span className="text-xs text-right block mt-1 text-zinc-600">
+                              {thinkingLevel === "high" ? "深度" : "快速"}
+                            </span>
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                              联网搜索
+                            </label>
+                            <button
+                              onClick={() => setWebSearch(!webSearch)}
+                              type="button"
+                              className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                }`}
+                            >
+                              <Globe size={14} />
+                              {webSearch ? "开" : "关"}
+                            </button>
+                          </div>
+                        </>
                       ) : model?.startsWith("claude-") ? (
                         <>
                           <div>
@@ -789,14 +829,16 @@ export default function Composer({
                           <input
                             type="range"
                             min="0"
-                            max="6"
+                            max={maxTokenOptions.length - 1}
                             step="1"
-                            value={[1024, 2048, 4096, 8192, 16384, 32768, 65536].indexOf(maxTokens)}
-                            onChange={(e) => setMaxTokens([1024, 2048, 4096, 8192, 16384, 32768, 65536][e.target.value])}
+                            value={maxTokenOptions.indexOf(maxTokens)}
+                            onChange={(e) => setMaxTokens(maxTokenOptions[e.target.value])}
                             className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                           />
                           <span className="text-xs text-right block mt-1 text-zinc-600">
-                            {maxTokens >= 1024 ? `${Math.round(maxTokens / 1024)}K` : maxTokens}
+                            {isOpenAIModel
+                              ? (maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens)
+                              : (maxTokens >= 1024 ? `${Math.round(maxTokens / 1024)}K` : maxTokens)}
                           </span>
                         </div>
                       )}

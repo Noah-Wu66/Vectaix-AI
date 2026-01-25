@@ -231,7 +231,7 @@ export async function POST(req) {
 
         // 构建 Responses API 请求
         const userSystemPrompt = config?.systemPrompt || "You are a helpful AI assistant.";
-        const maxTokens = config?.maxTokens || 65536;
+        const maxTokens = config?.maxTokens || 128000;
         const thinkingLevel = config?.thinkingLevel;
 
         // 确保 instructions 是有效的字符串

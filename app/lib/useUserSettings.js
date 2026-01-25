@@ -20,7 +20,7 @@ const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
   "gemini-3-pro-preview": "high",
 };
-const DEFAULT_MAX_TOKENS = 64000;
+const DEFAULT_MAX_TOKENS = 65536;
 const DEFAULT_BUDGET_TOKENS = 32000;
 const DEFAULT_CLAUDE_ROUTE = "fallback"; // primary | fallback | guarantee
 
@@ -108,7 +108,10 @@ export function useUserSettings() {
     if (localHistoryLimit !== null) _setHistoryLimit(Number(localHistoryLimit) || 0);
     if (isPlainObject(localActivePromptIds)) _setActivePromptIds(localActivePromptIds);
     if (typeof localActivePromptId === "string") _setActivePromptId(localActivePromptId);
-    if (localMaxTokens !== null) _setMaxTokens(Number(localMaxTokens) || DEFAULT_MAX_TOKENS);
+    if (localMaxTokens !== null) {
+      const parsed = Number(localMaxTokens) || DEFAULT_MAX_TOKENS;
+      _setMaxTokens(parsed === 64000 ? 65536 : parsed);
+    }
     if (localBudgetTokens !== null) _setBudgetTokens(Number(localBudgetTokens) || DEFAULT_BUDGET_TOKENS);
     if (localWebSearch === "true") _setWebSearch(true);
     else if (localWebSearch === "false") _setWebSearch(false);
@@ -122,6 +125,26 @@ export function useUserSettings() {
     _setModel(m);
     writeLocalSetting(UI_MODEL_KEY, m);
   }, []);
+
+  useEffect(() => {
+    if (typeof model !== "string") return;
+    if (model.startsWith("claude-")) {
+      if (maxTokens > 64000) {
+        _setMaxTokens(64000);
+        writeLocalSetting(UI_MAX_TOKENS_KEY, "64000");
+      }
+      return;
+    }
+    if (model.startsWith("gpt-") && maxTokens > 128000) {
+      _setMaxTokens(128000);
+      writeLocalSetting(UI_MAX_TOKENS_KEY, "128000");
+      return;
+    }
+    if (model.startsWith("gemini-") && maxTokens === 64000) {
+      _setMaxTokens(65536);
+      writeLocalSetting(UI_MAX_TOKENS_KEY, "65536");
+    }
+  }, [model, maxTokens]);
 
   const setThemeMode = useCallback((mode) => {
     _setThemeMode(mode);
