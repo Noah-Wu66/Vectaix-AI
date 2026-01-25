@@ -35,21 +35,25 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     <div className="mb-2 w-full max-w-full">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium text-zinc-500 hover:text-zinc-700 mb-1.5 uppercase tracking-wider bg-zinc-100 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors"
+        className={`thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium mb-1.5 uppercase tracking-wider px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors ${isSearching
+          ? "text-blue-700 bg-blue-50 hover:text-blue-800"
+          : "text-zinc-500 hover:text-zinc-700 bg-zinc-100"
+          }`}
       >
-        <BrainCircuit size={16} className="sm:w-5 sm:h-5" />
         {isSearching ? (
-          <span className="inline-flex items-center gap-1.5 sm:gap-2 bg-blue-50 text-blue-700 border border-blue-100 rounded-full px-2.5 py-1 text-[11px] sm:text-xs">
-            <Globe size={12} className="sm:w-3.5 sm:h-3.5 animate-pulse" />
-            <span className="flex items-center gap-1 min-w-0">
-              <span className="truncate max-w-[220px]">
-                {searchQuery ? `联网检索中：${searchQuery}` : "联网检索中"}
-              </span>
-              <span className="flex gap-0.5">
-                <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
-              </span>
+          <Globe size={16} className="sm:w-5 sm:h-5 animate-pulse" />
+        ) : (
+          <BrainCircuit size={16} className="sm:w-5 sm:h-5" />
+        )}
+        {isSearching ? (
+          <span className="flex items-center gap-1 min-w-0">
+            <span className="truncate max-w-[220px]">
+              {searchQuery ? `联网检索中：${searchQuery}` : "联网检索中"}
+            </span>
+            <span className="flex gap-0.5">
+              <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
             </span>
           </span>
         ) : isStreaming ? (
