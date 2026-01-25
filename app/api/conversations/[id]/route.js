@@ -3,6 +3,8 @@ import Conversation from '@/models/Conversation';
 import { getAuthPayload } from '@/lib/auth';
 
 const ALLOWED_MESSAGE_TYPES = new Set(['text', 'parts', 'error']);
+const ALLOWED_UPDATE_KEYS = new Set(['title', 'messages', 'settings']);
+const ALLOWED_SETTINGS_KEYS = new Set(['thinkingLevel', 'historyLimit', 'maxTokens', 'budgetTokens', 'activePromptId']);
 
 export async function GET(req, { params }) {
     await dbConnect();
@@ -35,25 +37,53 @@ export async function PUT(req, { params }) {
     const user = await getAuthPayload();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const body = await req.json();
+    let body;
+    try {
+        body = await req.json();
+    } catch {
+        return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return Response.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
+    for (const key of Object.keys(body)) {
+        if (!ALLOWED_UPDATE_KEYS.has(key)) {
+            return Response.json({ error: 'Unsupported field in request body' }, { status: 400 });
+        }
+    }
+
     if (Array.isArray(body?.messages)) {
         for (const msg of body.messages) {
             if (!ALLOWED_MESSAGE_TYPES.has(msg?.type)) {
                 return Response.json({ error: 'Outdated conversation: unsupported message type' }, { status: 409 });
             }
         }
+    } else if (body?.messages !== undefined) {
+        return Response.json({ error: 'messages must be an array' }, { status: 400 });
+    }
+
+    if (body?.settings !== undefined) {
+        if (typeof body.settings !== 'object' || body.settings === null || Array.isArray(body.settings)) {
+            return Response.json({ error: 'settings must be an object' }, { status: 400 });
+        }
     }
 
     // 构建更新对象，支持 settings 的部分更新
     const updateObj = { updatedAt: Date.now() };
-    for (const [key, value] of Object.entries(body)) {
-        if (key === 'settings' && typeof value === 'object' && value !== null) {
-            // 对 settings 进行部分更新（使用点号表示法）
-            for (const [settingKey, settingValue] of Object.entries(value)) {
-                updateObj[`settings.${settingKey}`] = settingValue;
-            }
-        } else {
-            updateObj[key] = value;
+    if (typeof body.title === 'string') {
+        updateObj.title = body.title;
+    }
+
+    if (Array.isArray(body.messages)) {
+        updateObj.messages = body.messages;
+    }
+
+    if (body.settings && typeof body.settings === 'object') {
+        for (const [settingKey, settingValue] of Object.entries(body.settings)) {
+            if (!ALLOWED_SETTINGS_KEYS.has(settingKey)) continue;
+            updateObj[`settings.${settingKey}`] = settingValue;
         }
     }
 

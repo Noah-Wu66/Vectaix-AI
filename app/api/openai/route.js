@@ -88,16 +88,21 @@ export async function POST(req) {
         }
 
         const auth = await getAuthPayload();
+        if (!auth) {
+            return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         let user = null;
-        if (auth) {
-            try {
-                await dbConnect();
-                const userDoc = await User.findById(auth.userId);
-                if (userDoc) user = auth;
-            } catch (dbError) {
-                console.error("Database connection error:", dbError);
-                return Response.json({ error: 'Database connection failed' }, { status: 500 });
+        try {
+            await dbConnect();
+            const userDoc = await User.findById(auth.userId);
+            if (!userDoc) {
+                return Response.json({ error: 'Unauthorized' }, { status: 401 });
             }
+            user = auth;
+        } catch (dbError) {
+            console.error("Database connection error:", dbError);
+            return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
         let currentConversationId = conversationId;
@@ -436,4 +441,3 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
-

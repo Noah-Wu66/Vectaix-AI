@@ -149,13 +149,11 @@ export async function runChat({
     let searchResults = null;
     let citations = null;
 
-    // Claude 超时检测：有图片时30秒，否则15秒
+    // Claude 超时检测：统一40秒
     let claudeTimeoutId = null;
     let claudeTimedOut = false;
     if (provider === "claude") {
-      // 检查当前请求是否包含图片
-      const hasImages = config?.images?.length > 0;
-      const timeoutMs = hasImages ? 30000 : 15000;
+      const timeoutMs = 40000;
       claudeTimeoutId = setTimeout(() => {
         if (!hasReceivedContent) {
           claudeTimedOut = true;
@@ -440,6 +438,33 @@ export async function runChat({
       if (streamMsgId !== null) {
         setMessages((prev) => prev.filter((msg) => msg.id !== streamMsgId));
       }
+      // Claude 超时：回滚本次用户消息，避免“悬空提问”扰乱上下文
+      if (errMsg === "CLAUDE_TIMEOUT" && provider === "claude" && mode !== "regenerate") {
+        const convIdForSync = newConvId || currentConversationId || conversationId;
+        let nextMessagesForSync = null;
+        setMessages((prev) => {
+          if (!Array.isArray(prev) || prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last?.role !== "user") return prev;
+          if (typeof prompt === "string" && last?.content !== prompt) return prev;
+          const next = prev.slice(0, -1);
+          nextMessagesForSync = next;
+          return next;
+        });
+        if (convIdForSync && Array.isArray(nextMessagesForSync)) {
+          try {
+            await fetch(`/api/conversations/${convIdForSync}`,
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messages: nextMessagesForSync }),
+              }
+            );
+          } catch (syncErr) {
+            console.error("Failed to rollback user message:", syncErr);
+          }
+        }
+      }
       // 通过回调通知错误（由调用方显示 toast）
       onError?.(errorMessage);
       streamMsgId = null;
@@ -460,5 +485,3 @@ export async function runChat({
     setLoading(false);
   }
 }
-
-
