@@ -80,7 +80,7 @@ export function useUserSettings() {
   const [fontSize, _setFontSize] = useState("medium");
   const [maxTokens, _setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
   const [budgetTokens, _setBudgetTokens] = useState(DEFAULT_BUDGET_TOKENS);
-  const [webSearch, _setWebSearch] = useState(false);
+  const [webSearch, _setWebSearch] = useState(true);
   const [claudeRoute, _setClaudeRoute] = useState(DEFAULT_CLAUDE_ROUTE);
   const [avatar, _setAvatar] = useState(null);
   const [settingsError, setSettingsError] = useState(null);
