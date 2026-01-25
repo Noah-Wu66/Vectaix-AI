@@ -272,9 +272,9 @@ export async function POST(req) {
         // 是否启用联网搜索
         const enableWebSearch = config?.webSearch === true;
 
-        // 联网搜索时追加引用格式指令
+        // 联网搜索时禁用来源括号标注
         const webSearchGuide = enableWebSearch
-            ? "\n\nWhen citing information from web search results, add the source domain in parentheses at the end of the relevant sentence, e.g. (reuters.com)."
+            ? "\n\nDo not add source domains or URLs in parentheses in your reply."
             : "";
 
         const encoder = new TextEncoder();
