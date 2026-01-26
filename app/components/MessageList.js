@@ -5,8 +5,6 @@ import { motion } from "framer-motion";
 import {
   Copy,
   Edit3,
-  ExternalLink,
-  Globe,
   Paperclip,
   RotateCcw,
   Sparkles,
@@ -15,177 +13,21 @@ import {
   User,
   X,
 } from "lucide-react";
-import { Gemini, Claude, OpenAI } from "@lobehub/icons";
 import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
 import ImageLightbox from "./ImageLightbox";
 import ConfirmModal from "./ConfirmModal";
 import { getMessageImageSrc, isKeepableImageSrc } from "../lib/messageImage";
+import {
+  AIAvatar,
+  ResponsiveAIAvatar,
+  buildCopyText,
+  buildPlainText,
+  isSelectionFullyInsideElement,
+  Thumb,
+  Citations,
+} from "./MessageListHelpers";
 
-function AIAvatar({ model, size = 24 }) {
-  const props = { size, shape: "square", style: { borderRadius: 6 } };
-  if (model?.startsWith("claude-")) {
-    return <Claude.Avatar {...props} />;
-  }
-  if (model?.startsWith("gpt-")) {
-    return <OpenAI.Avatar {...props} type="gpt5" />;
-  }
-  return <Gemini.Avatar {...props} />;
-}
-
-// 响应式 AI 头像：移动端和桌面端分别渲染不同大小
-function ResponsiveAIAvatar({ model, mobileSize = 22, desktopSize = 26 }) {
-  return (
-    <>
-      <span className="sm:hidden"><AIAvatar model={model} size={mobileSize} /></span>
-      <span className="hidden sm:inline"><AIAvatar model={model} size={desktopSize} /></span>
-    </>
-  );
-}
-
-function normalizeCopiedText(text) {
-  return (text ?? "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\u00A0/g, " ")
-    // 把浏览器从块级元素/段落转换出来的“超多空行”压缩到最多 1 个空行
-    .replace(/\n{3,}/g, "\n\n");
-}
-
-function stripThinkingBlocks(text) {
-  if (typeof text !== "string" || !text) return "";
-  return text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
-}
-
-function buildCopyText(msg) {
-  if (!msg) return "";
-  const raw = typeof msg.content === "string" ? msg.content : "";
-  const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
-  return normalizeCopiedText(cleaned);
-}
-
-function stripMarkdown(text) {
-  if (typeof text !== "string" || !text) return "";
-  return text
-    // 移除代码块
-    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?|```$/g, "").trim())
-    // 移除行内代码
-    .replace(/`([^`]+)`/g, "$1")
-    // 移除标题标记
-    .replace(/^#{1,6}\s+/gm, "")
-    // 移除粗体
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/__([^_]+)__/g, "$1")
-    // 移除斜体
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/_([^_]+)_/g, "$1")
-    // 移除删除线
-    .replace(/~~([^~]+)~~/g, "$1")
-    // 移除链接，保留文字
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    // 移除图片
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-    // 移除引用
-    .replace(/^>\s?/gm, "")
-    // 移除无序列表标记
-    .replace(/^[\*\-+]\s+/gm, "")
-    // 移除有序列表标记
-    .replace(/^\d+\.\s+/gm, "")
-    // 移除水平线
-    .replace(/^[-*_]{3,}$/gm, "")
-    // 清理多余空行
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function buildPlainText(msg) {
-  if (!msg) return "";
-  const raw = typeof msg.content === "string" ? msg.content : "";
-  const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
-  return normalizeCopiedText(stripMarkdown(cleaned));
-}
-
-function isSelectionFullyInsideElement(el) {
-  const sel = window.getSelection?.();
-  if (!sel || sel.rangeCount === 0) return false;
-  const anchor = sel.anchorNode;
-  const focus = sel.focusNode;
-  if (!anchor || !focus) return false;
-  return el.contains(anchor) && el.contains(focus);
-}
-
-function Thumb({ src, className = "", onClick }) {
-  if (!src) return null;
-  return (
-    <button
-      type="button"
-      onClick={() => onClick?.(src)}
-      className={`block text-left ${className}`}
-      title="点击查看"
-    >
-      <img
-        src={src}
-        alt=""
-        className="block max-w-[240px] max-h-[180px] w-auto h-auto object-cover rounded-lg border border-zinc-200 bg-zinc-50"
-        loading="eager"
-        decoding="async"
-      />
-    </button>
-  );
-}
-
-function Citations({ citations }) {
-  if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
-
-  // 去重并限制显示数量
-  const uniqueCitations = [];
-  const seenUrls = new Set();
-  for (const c of citations) {
-    if (c?.url && !seenUrls.has(c.url)) {
-      seenUrls.add(c.url);
-      uniqueCitations.push(c);
-    }
-  }
-
-  if (uniqueCitations.length === 0) return null;
-
-  return (
-    <div className="mt-3 pt-3 border-t border-zinc-200">
-      <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-2">
-        <Globe size={12} />
-        <span>信息来源</span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {uniqueCitations.slice(0, 5).map((citation, idx) => {
-          const domain = (() => {
-            try {
-              return new URL(citation.url).hostname.replace('www.', '');
-            } catch {
-              return citation.url;
-            }
-          })();
-          return (
-            <a
-              key={idx}
-              href={citation.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-xs transition-colors max-w-[200px]"
-              title={citation.title || citation.url}
-            >
-              <ExternalLink size={10} className="flex-shrink-0" />
-              <span className="truncate">{citation.title || domain}</span>
-            </a>
-          );
-        })}
-        {uniqueCitations.length > 5 && (
-          <span className="px-2 py-1 text-xs text-zinc-400">
-            +{uniqueCitations.length - 5} 更多来源
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default function MessageList({
   messages,
@@ -370,7 +212,7 @@ export default function MessageList({
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
-          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching) {
+          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.isDecidingSearch) {
             return null;
           }
           return (
@@ -392,7 +234,7 @@ export default function MessageList({
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
-              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts) && (
+              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.isDecidingSearch) && (
                 <div className="flex items-center gap-1.5">
                   <AIAvatar model={model} size={28} />
                   <span className="text-xs text-zinc-400 font-medium">AI</span>
@@ -405,11 +247,12 @@ export default function MessageList({
                   : "items-start w-full max-w-full"
                   }`}
               >
-                {msg.role === "model" && (msg.thought || msg.isSearching) && (
+                {msg.role === "model" && (msg.thought || msg.isSearching || msg.isDecidingSearch) && (
                   <ThinkingBlock
                     thought={msg.thought}
                     isStreaming={msg.isThinkingStreaming}
                     isSearching={msg.isSearching}
+                    isDeciding={msg.isDecidingSearch}
                     searchQuery={msg.searchQuery}
                   />
                 )}
@@ -658,7 +501,7 @@ export default function MessageList({
       )}
 
       {/* 只在有消息且加载中且没有正在流式输出或搜索的消息时显示加载指示器 */}
-      {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => (m.isStreaming && !m.isWaitingFirstChunk) || m.isSearching) && (
+      {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => (m.isStreaming && !m.isWaitingFirstChunk) || m.isSearching || m.isDecidingSearch) && (
         <div className="flex gap-2 sm:gap-3 items-start">
           <ResponsiveAIAvatar model={model} mobileSize={22} desktopSize={28} />
           <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
