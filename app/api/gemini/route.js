@@ -9,22 +9,32 @@ import {
     getStoredPartsFromMessage,
     sanitizeStoredMessages
 } from '@/app/api/chat/utils';
+import {
+    metasoSearch,
+    buildMetasoContext,
+    buildMetasoCitations,
+    buildMetasoSearchEventResults
+} from '@/app/api/chat/metasoSearch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function extractGeminiCitations(metadata) {
-    const citations = [];
-    const seen = new Set();
-    const chunks = metadata?.groundingChunks || [];
-    for (const chunk of chunks) {
-        const web = chunk?.web || chunk?.webpage || chunk?.retrievedContext || null;
-        const url = web?.uri || web?.url || web?.link || null;
-        if (!url || seen.has(url)) continue;
-        seen.add(url);
-        citations.push({ url, title: web?.title || null });
+function extractJsonObject(text) {
+    if (typeof text !== 'string') return null;
+    const first = text.indexOf('{');
+    const last = text.lastIndexOf('}');
+    if (first === -1 || last === -1 || last <= first) return null;
+    return text.slice(first, last + 1);
+}
+
+function parseJsonFromText(text) {
+    const jsonText = extractJsonObject(text);
+    if (!jsonText) return null;
+    try {
+        return JSON.parse(jsonText);
+    } catch {
+        return null;
     }
-    return citations;
 }
 
 async function storedPartToRequestPart(part) {
@@ -212,36 +222,29 @@ export async function POST(req) {
         }
 
         // 2. Prepare Payload
-        const systemText = config?.systemPrompt || "You are a helpful AI assistant.";
-        const payload = {
-            model: model,
-            contents: contents,
-            config: {
-                systemInstruction: {
-                    parts: [{ text: systemText }]
-                },
-                ...config?.generationConfig
-            }
+        const baseSystemText = config?.systemPrompt || "You are a helpful AI assistant.";
+        const baseConfig = {
+            systemInstruction: {
+                parts: [{ text: baseSystemText }]
+            },
+            ...config?.generationConfig
         };
 
-        // 添加 maxOutputTokens 支持
         if (config?.maxTokens) {
-            payload.config.maxOutputTokens = config.maxTokens;
+            baseConfig.maxOutputTokens = config.maxTokens;
         }
 
         if (config?.thinkingLevel) {
-            if (!payload.config) payload.config = {};
-            payload.config.thinkingConfig = {
+            baseConfig.thinkingConfig = {
                 thinkingLevel: config.thinkingLevel,
-                includeThoughts: true  // 获取思考过程摘要
+                includeThoughts: true
             };
         }
 
-        // 启用 Google Search 工具（Gemini 原生联网）
-        if (config?.webSearch === true) {
-            if (!payload.config) payload.config = {};
-            payload.config.tools = [{ googleSearch: {} }];
-        }
+        const enableWebSearch = config?.webSearch === true;
+        const webSearchGuide = enableWebSearch
+            ? "\n\nDo not add source domains or URLs in parentheses in your reply."
+            : "";
 
         // 3. Database Logic
         if (user && !isRegenerateMode) {
@@ -278,16 +281,7 @@ export async function POST(req) {
             writePermitTime = updatedConv?.updatedAt?.getTime?.() || userMsgTime;
         }
 
-        // 4. Generate Response
-        // Text Stream - 使用 SSE 格式以解决移动端缓冲问题
-        const streamResult = await ai.models.generateContentStream({
-            model: model,
-            contents: contents,
-            config: payload.config
-        });
-
         const encoder = new TextEncoder();
-        // 客户端点击"停止/取消"会中断请求；此时必须停止生成并且不要把结果写入 DB
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
         try {
@@ -296,7 +290,6 @@ export async function POST(req) {
             // ignore
         }
 
-        // 填充字符串，用于突破缓冲区阈值（移动端浏览器/CDN 通常有 1KB-4KB 的缓冲）
         const PADDING = ' '.repeat(2048);
         let paddingSent = false;
         const HEARTBEAT_INTERVAL_MS = 15000;
@@ -309,75 +302,163 @@ export async function POST(req) {
                 let citations = [];
                 const seenUrls = new Set();
                 try {
-                    // 心跳：避免移动端/代理层在长时间无输出时断开连接
                     const sendHeartbeat = () => {
                         try {
                             if (clientAborted) return;
                             controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
-                        } catch (e) {
+                        } catch {
                             // ignore
                         }
                     };
                     heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
-                    // 立即发送一次，尽早"打开"流并减少首包缓冲
                     sendHeartbeat();
 
-                    for await (const chunk of streamResult) {
-                        if (clientAborted) break;
-                        const candidate = chunk.candidates?.[0] || {};
-                        const parts = candidate?.content?.parts || [];
-                        const groundingMeta = candidate?.groundingMetadata || chunk?.groundingMetadata || null;
-                        const extracted = extractGeminiCitations(groundingMeta);
-                        if (extracted.length > 0) {
-                            const next = [];
-                            for (const c of extracted) {
-                                if (!c?.url || seenUrls.has(c.url)) continue;
-                                seenUrls.add(c.url);
-                                next.push(c);
-                            }
-                            if (next.length > 0) {
-                                citations = citations.concat(next);
-                                const padding = !paddingSent ? PADDING : '';
-                                paddingSent = true;
-                                const data = `data: ${JSON.stringify({ type: 'citations', citations })}${padding}\n\n`;
-                                controller.enqueue(encoder.encode(data));
-                            }
-                        }
+                    const sendEvent = (payload) => {
+                        const padding = !paddingSent ? PADDING : '';
+                        paddingSent = true;
+                        const data = `data: ${JSON.stringify(payload)}${padding}\n\n`;
+                        controller.enqueue(encoder.encode(data));
+                    };
 
-                        for (const part of parts) {
+                    const pushCitations = (items) => {
+                        for (const item of items || []) {
+                            if (!item?.url || seenUrls.has(item.url)) continue;
+                            seenUrls.add(item.url);
+                            citations.push({ url: item.url, title: item.title || null });
+                        }
+                    };
+
+                    const runDecisionStream = async (systemText, userText) => {
+                        let decisionText = "";
+                        const decisionStream = await ai.models.generateContentStream({
+                            model: model,
+                            contents: [{ role: "user", parts: [{ text: userText }] }],
+                            config: {
+                                systemInstruction: { parts: [{ text: systemText }] },
+                                maxOutputTokens: 512
+                            }
+                        });
+
+                        for await (const chunk of decisionStream) {
                             if (clientAborted) break;
-                            const padding = !paddingSent ? PADDING : '';
-                            paddingSent = true;
-
-                            if (part.thought && part.text) {
-                                fullThought += part.text;
-                                const data = `data: ${JSON.stringify({ type: 'thought', content: part.text })}${padding}\n\n`;
-                                controller.enqueue(encoder.encode(data));
-                            } else if (part.text) {
-                                fullText += part.text;
-                                const data = `data: ${JSON.stringify({ type: 'text', content: part.text })}${padding}\n\n`;
-                                controller.enqueue(encoder.encode(data));
+                            const candidate = chunk.candidates?.[0] || {};
+                            const parts = candidate?.content?.parts || [];
+                            for (const part of parts) {
+                                if (clientAborted) break;
+                                if (part.thought && part.text) {
+                                    fullThought += part.text;
+                                    sendEvent({ type: 'thought', content: part.text });
+                                } else if (part.text) {
+                                    decisionText += part.text;
+                                }
                             }
                         }
+                        return decisionText;
+                    };
+
+                    let searchContextText = "";
+                    if (enableWebSearch && !clientAborted) {
+                        const decisionSystem = "你是联网检索决策器。必须只输出严格 JSON，不要输出任何多余文本。";
+                        const decisionUser = `用户问题：${prompt}\n\n判断是否必须联网检索才能回答。\n- 需要联网：输出 {"needSearch": true, "query": "精炼检索词"}\n- 不需要联网：输出 {"needSearch": false}`;
+                        const decisionText = await runDecisionStream(decisionSystem, decisionUser);
+                        const decision = parseJsonFromText(decisionText) || {};
+                        let needSearch = decision?.needSearch === true;
+                        let nextQuery = typeof decision?.query === 'string' ? decision.query.trim() : "";
+
+                        const searchContextParts = [];
+                        const maxSearchRounds = 10;
+                        for (let round = 0; round < maxSearchRounds && needSearch && nextQuery; round++) {
+                            if (clientAborted) break;
+                            sendEvent({ type: 'search_start', query: nextQuery });
+                            let results = [];
+                            try {
+                                const searchData = await metasoSearch(nextQuery, {
+                                    scope: "webpage",
+                                    includeSummary: true,
+                                    size: 100,
+                                    includeRawContent: false,
+                                    conciseSnippet: false
+                                });
+                                results = searchData?.results || [];
+                            } catch (searchError) {
+                                console.error("[Gemini] MetaSo Search Error:", searchError);
+                            }
+
+                            const eventResults = buildMetasoSearchEventResults(results);
+                            sendEvent({ type: 'search_result', query: nextQuery, results: eventResults });
+                            pushCitations(buildMetasoCitations(results));
+
+                            const contextBlock = buildMetasoContext(results);
+                            if (contextBlock) {
+                                searchContextParts.push(`检索词: ${nextQuery}\n${contextBlock}`);
+                            }
+
+                            if (round === maxSearchRounds - 1) break;
+
+                            const recentContext = searchContextParts.slice(-2).join("\n\n");
+                            const enoughSystem = "你是联网检索补充决策器。必须只输出严格 JSON，不要输出任何多余文本。";
+                            const enoughUser = `用户问题：${prompt}\n\n已获得的检索摘要：\n${recentContext || "(无)"}\n\n判断这些信息是否足够回答。\n- 足够：输出 {"enough": true}\n- 不足：输出 {"enough": false, "nextQuery": "新的检索词"}`;
+                            const enoughText = await runDecisionStream(enoughSystem, enoughUser);
+                            const enoughDecision = parseJsonFromText(enoughText) || {};
+                            if (enoughDecision?.enough === true) break;
+                            const candidateQuery = typeof enoughDecision?.nextQuery === 'string'
+                                ? enoughDecision.nextQuery.trim()
+                                : "";
+                            if (!candidateQuery || candidateQuery === nextQuery) break;
+                            nextQuery = candidateQuery;
+                        }
+
+                        searchContextText = searchContextParts.join("\n\n");
                     }
 
-                    // 取消/断连：直接结束，不写 DB，不发送 DONE（避免"旧请求晚写入"导致重复回答）
                     if (clientAborted) {
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
 
-                    // 发送引用信息
-                    if (citations.length > 0) {
-                        const citationsData = `data: ${JSON.stringify({ type: 'citations', citations })}\n\n`;
-                        controller.enqueue(encoder.encode(citationsData));
+                    const searchContextSection = searchContextText
+                        ? `\n\nWeb search results:\n${searchContextText}`
+                        : "";
+                    const finalSystemText = `${baseSystemText}${webSearchGuide}${searchContextSection}`;
+                    const finalConfig = {
+                        ...baseConfig,
+                        systemInstruction: { parts: [{ text: finalSystemText }] }
+                    };
+
+                    const streamResult = await ai.models.generateContentStream({
+                        model: model,
+                        contents: contents,
+                        config: finalConfig
+                    });
+
+                    for await (const chunk of streamResult) {
+                        if (clientAborted) break;
+                        const candidate = chunk.candidates?.[0] || {};
+                        const parts = candidate?.content?.parts || [];
+
+                        for (const part of parts) {
+                            if (clientAborted) break;
+                            if (part.thought && part.text) {
+                                fullThought += part.text;
+                                sendEvent({ type: 'thought', content: part.text });
+                            } else if (part.text) {
+                                fullText += part.text;
+                                sendEvent({ type: 'text', content: part.text });
+                            }
+                        }
                     }
 
-                    // 发送结束信号
+                    if (clientAborted) {
+                        try { controller.close(); } catch { /* ignore */ }
+                        return;
+                    }
+
+                    if (citations.length > 0) {
+                        sendEvent({ type: 'citations', citations });
+                    }
+
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
-                    // 只有当会话未被其他请求覆盖时才写入（防止停止后 regenerate 导致重复回答）
-                    // writePermitTime 为 null 表示未登录或新建会话前的情况，此时允许写入
                     if (user && currentConversationId) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, updatedAt: { $lte: new Date(writePermitTime) } }

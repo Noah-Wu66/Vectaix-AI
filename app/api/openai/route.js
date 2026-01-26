@@ -386,7 +386,7 @@ export async function POST(req) {
                         let nextQuery = typeof decision?.query === 'string' ? decision.query.trim() : "";
 
                         const searchContextParts = [];
-                        const maxSearchRounds = 5;
+                        const maxSearchRounds = 10;
                         for (let round = 0; round < maxSearchRounds && needSearch && nextQuery; round++) {
                             if (clientAborted) break;
                             sendEvent({ type: 'search_start', query: nextQuery });
@@ -395,7 +395,7 @@ export async function POST(req) {
                                 const searchData = await metasoSearch(nextQuery, {
                                     scope: "webpage",
                                     includeSummary: true,
-                                    size: 20,
+                                    size: 100,
                                     includeRawContent: false,
                                     conciseSnippet: false
                                 });
@@ -404,11 +404,11 @@ export async function POST(req) {
                                 console.error("[OpenAI] MetaSo Search Error:", searchError);
                             }
 
-                            const eventResults = buildMetasoSearchEventResults(results, 10);
+                            const eventResults = buildMetasoSearchEventResults(results);
                             sendEvent({ type: 'search_result', query: nextQuery, results: eventResults });
                             pushCitations(buildMetasoCitations(results));
 
-                            const contextBlock = buildMetasoContext(results, { maxItems: 6 });
+                            const contextBlock = buildMetasoContext(results);
                             if (contextBlock) {
                                 searchContextParts.push(`检索词: ${nextQuery}\n${contextBlock}`);
                             }

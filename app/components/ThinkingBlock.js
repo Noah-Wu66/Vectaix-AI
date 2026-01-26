@@ -35,13 +35,10 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     <div className="mb-2 w-full max-w-full">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className={`thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium mb-1.5 uppercase tracking-wider px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors ${isSearching
-          ? "text-blue-700 bg-blue-50 hover:text-blue-800"
-          : "text-zinc-500 hover:text-zinc-700 bg-zinc-100"
-          }`}
+        className="thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium mb-1.5 uppercase tracking-wider px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors text-zinc-500 hover:text-zinc-700 bg-zinc-100"
       >
         {isSearching ? (
-          <Globe size={16} className="sm:w-5 sm:h-5 animate-pulse" />
+          <Globe size={16} className="sm:w-5 sm:h-5" />
         ) : (
           <BrainCircuit size={16} className="sm:w-5 sm:h-5" />
         )}
@@ -51,9 +48,9 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
               {searchQuery ? `联网检索中：${searchQuery}` : "联网检索中"}
             </span>
             <span className="flex gap-0.5">
-              <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="w-1 h-1 bg-blue-400 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
+              <span className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
             </span>
           </span>
         ) : isStreaming ? (

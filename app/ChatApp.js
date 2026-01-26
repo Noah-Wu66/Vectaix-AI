@@ -577,7 +577,7 @@ export default function ChatApp() {
         imageUrls: imageUrls.length > 0 ? imageUrls : null,
         maxTokens,
         budgetTokens,
-        webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-")) ? webSearch : false,
+        webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-") || model?.startsWith("gemini-")) ? webSearch : false,
         claudeRoute,
       });
 
@@ -639,7 +639,7 @@ export default function ChatApp() {
       activePromptId,
       maxTokens,
       budgetTokens,
-      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-")) ? webSearch : false,
+      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-") || model?.startsWith("gemini-")) ? webSearch : false,
       claudeRoute,
     });
 
@@ -788,7 +788,7 @@ export default function ChatApp() {
       activePromptId,
       maxTokens,
       budgetTokens,
-      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-")) ? webSearch : false,
+      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-") || model?.startsWith("gemini-")) ? webSearch : false,
       claudeRoute,
     });
 

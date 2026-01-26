@@ -28,10 +28,12 @@ export function normalizeMetasoResults(webpages) {
 }
 
 export function buildMetasoContext(results, options = {}) {
-  const maxItems = Number.isFinite(options.maxItems) ? options.maxItems : 8;
-  const maxSummaryChars = Number.isFinite(options.maxSummaryChars) ? options.maxSummaryChars : 320;
-  const maxSnippetChars = Number.isFinite(options.maxSnippetChars) ? options.maxSnippetChars : 320;
-  const items = Array.isArray(results) ? results.slice(0, maxItems) : [];
+  const maxItems = Number.isFinite(options.maxItems) ? options.maxItems : 0;
+  const maxSummaryChars = Number.isFinite(options.maxSummaryChars) ? options.maxSummaryChars : 0;
+  const maxSnippetChars = Number.isFinite(options.maxSnippetChars) ? options.maxSnippetChars : 0;
+  const items = Array.isArray(results)
+    ? (maxItems > 0 ? results.slice(0, maxItems) : results)
+    : [];
   return items
     .map((item, idx) => {
       const lines = [];
@@ -59,8 +61,10 @@ export function buildMetasoCitations(results) {
   return citations;
 }
 
-export function buildMetasoSearchEventResults(results, maxItems = 10) {
-  const list = Array.isArray(results) ? results.slice(0, maxItems) : [];
+export function buildMetasoSearchEventResults(results, maxItems = 0) {
+  const list = Array.isArray(results)
+    ? (maxItems > 0 ? results.slice(0, maxItems) : results)
+    : [];
   return list
     .map((item) => ({ url: item.url, title: item.title || null }))
     .filter((item) => item.url);
@@ -77,8 +81,6 @@ export async function metasoSearch(query, options = {}) {
   const includeSummary = options.includeSummary !== false;
   const includeRawContent = options.includeRawContent === true;
   const conciseSnippet = options.conciseSnippet === true;
-  const searchFile = options.searchFile === true;
-
   const payload = {
     q: query,
     scope,
@@ -86,7 +88,6 @@ export async function metasoSearch(query, options = {}) {
     size,
     includeRawContent,
     conciseSnippet,
-    searchFile,
   };
 
   const controller = new AbortController();
