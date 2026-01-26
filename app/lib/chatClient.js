@@ -9,14 +9,12 @@ export function buildChatConfig({
   maxTokens,
   budgetTokens,
   webSearch,
-  claudeRoute,
 }) {
   const cfg = {};
   cfg.thinkingLevel = thinkingLevel;
   cfg.maxTokens = maxTokens;
   cfg.budgetTokens = budgetTokens;
   cfg.webSearch = webSearch === true;
-  cfg.claudeRoute = claudeRoute || "primary";
 
   const activeId = activePromptId == null ? null : String(activePromptId);
   const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
@@ -78,21 +76,11 @@ export async function runChat({
   let streamMsgId = null;
   let simulatedStreamTimer = null;
 
-  // 构建 Claude 路由参数
-  const claudeRouteLevel = provider === "claude" && config?.claudeRoute && config.claudeRoute !== "primary"
-    ? config.claudeRoute
-    : null;
-
-  // 如果指定了线路，添加到 payload
-  const finalPayload = claudeRouteLevel
-    ? { ...payload, routeLevel: claudeRouteLevel }
-    : payload;
-
   try {
     const res = await fetch(apiEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(finalPayload),
+      body: JSON.stringify(payload),
       signal,
     });
 
@@ -154,18 +142,16 @@ export async function runChat({
     let searchResults = null;
     let citations = null;
 
-    // Claude 超时检测：统一40秒
-    let claudeTimeoutId = null;
-    let claudeTimedOut = false;
-    if (provider === "claude") {
-      const timeoutMs = 40000;
-      claudeTimeoutId = setTimeout(() => {
-        if (!hasReceivedContent) {
-          claudeTimedOut = true;
-          reader.cancel();
-        }
-      }, timeoutMs);
-    }
+    // 通用超时检测：统一30秒
+    let timeoutId = null;
+    let timedOut = false;
+    const timeoutMs = 30000;
+    timeoutId = setTimeout(() => {
+      if (!hasReceivedContent) {
+        timedOut = true;
+        reader.cancel();
+      }
+    }, timeoutMs);
 
     // 模拟流式输出：控制文本逐步显示
     const SIMULATED_STREAM_INTERVAL = 8; // 每8ms显示一批字符
@@ -185,10 +171,10 @@ export async function runChat({
         const nowHasContent = displayedText.length > 0 || fullThought.length > 0 || isSearching || isDecidingSearch;
         if (nowHasContent && !hasReceivedContent) {
           hasReceivedContent = true;
-          // 收到内容，清除 Claude 超时定时器
-          if (claudeTimeoutId) {
-            clearTimeout(claudeTimeoutId);
-            claudeTimeoutId = null;
+          // 收到内容，清除超时定时器
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
           }
         }
         const nextMsg = {
@@ -323,9 +309,9 @@ export async function runChat({
       const { value, done: doneReading } = await reader.read();
       done = doneReading;
       if (signal?.aborted) break;
-      // 检查 Claude 超时
-      if (claudeTimedOut) {
-        throw new Error("CLAUDE_TIMEOUT");
+      // 检查超时
+      if (timedOut) {
+        throw new Error("API_TIMEOUT");
       }
       if (value) buffer += decoder.decode(value, { stream: true });
       consumeSseBuffer(false);
@@ -334,9 +320,9 @@ export async function runChat({
       scheduleFlush();
     }
 
-    // 检查 Claude 超时（在循环结束后再检查一次）
-    if (claudeTimedOut) {
-      throw new Error("CLAUDE_TIMEOUT");
+    // 检查超时（在循环结束后再检查一次）
+    if (timedOut) {
+      throw new Error("API_TIMEOUT");
     }
 
     // flush TextDecoder / 最后一段 buffer（避免最后一个事件未以空行结尾时被漏掉）
@@ -436,8 +422,8 @@ export async function runChat({
       // 根据错误类型给出准确的提示
       let errorMessage;
       const errMsg = err?.message || "";
-      if (errMsg === "CLAUDE_TIMEOUT") {
-        errorMessage = "Claude 响应超时，请尝试在设置中切换线路";
+      if (errMsg === "API_TIMEOUT") {
+        errorMessage = "AI 响应超时，请稍后重试";
       } else if (errMsg.includes("Failed to fetch") || errMsg.includes("NetworkError") || errMsg.includes("network")) {
         errorMessage = "网络连接失败，请检查网络后重试";
       } else if (errMsg.includes("rate limit") || errMsg.includes("429")) {
@@ -458,8 +444,8 @@ export async function runChat({
       if (streamMsgId !== null) {
         setMessages((prev) => prev.filter((msg) => msg.id !== streamMsgId));
       }
-      // Claude 超时：回滚本次用户消息，避免“悬空提问”扰乱上下文
-      if (errMsg === "CLAUDE_TIMEOUT" && provider === "claude" && mode !== "regenerate") {
+      // 超时：回滚本次用户消息，避免"悬空提问"扰乱上下文
+      if (errMsg === "API_TIMEOUT" && mode !== "regenerate") {
         const convIdForSync = newConvId || currentConversationId || conversationId;
         let nextMessagesForSync = null;
         setMessages((prev) => {

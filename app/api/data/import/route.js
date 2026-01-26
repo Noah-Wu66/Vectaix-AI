@@ -69,14 +69,6 @@ function sanitizeConversation(conv, idx, userId) {
   return out;
 }
 
-function validateSettings(settings) {
-  if (settings === null) return;
-  if (!isPlainObject(settings)) throw new Error('settings must be an object or null');
-  if (!isPlainObject(settings.thinkingLevels)) {
-    throw new Error('Outdated settings: missing thinkingLevels');
-  }
-}
-
 export async function POST(req) {
   await dbConnect();
   const user = await getAuthPayload();
@@ -91,7 +83,6 @@ export async function POST(req) {
 
   try {
     if (!isPlainObject(payload)) throw new Error('Body must be a JSON object');
-    if (payload.schemaVersion !== 1) throw new Error('Unsupported schemaVersion');
     if (!isPlainObject(payload.data)) throw new Error('Missing data');
 
     const conversationsSrc = payload.data.conversations;
@@ -102,7 +93,6 @@ export async function POST(req) {
     }
 
     const settingsSrc = payload.data.settings ?? null;
-    validateSettings(settingsSrc);
 
     const userId = user.userId;
     const conversations = conversationsSrc.map((c, ci) => sanitizeConversation(c, ci, userId));

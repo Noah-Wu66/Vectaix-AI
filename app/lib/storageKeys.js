@@ -8,4 +8,3 @@ export const UI_ACTIVE_PROMPT_ID_KEY = "vectaix_ui_activePromptId";
 export const UI_MAX_TOKENS_KEY = "vectaix_ui_maxTokens";
 export const UI_BUDGET_TOKENS_KEY = "vectaix_ui_budgetTokens";
 export const UI_WEB_SEARCH_KEY = "vectaix_ui_webSearch";
-export const UI_CLAUDE_ROUTE_KEY = "vectaix_ui_claudeRoute";

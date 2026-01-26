@@ -97,26 +97,13 @@ export async function POST(req) {
             return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
         }
 
-        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings, routeLevel } = body;
+        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings } = body;
 
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
         }
         if (!prompt || typeof prompt !== 'string') {
             return Response.json({ error: 'Prompt is required' }, { status: 400 });
-        }
-
-        // 三级路由配置：主线路 → 备用线路 → 保障线路
-        // routeLevel: null/undefined=主线路, "fallback"=备用线路, "guarantee"=保障线路
-        let apiConfig;
-        if (routeLevel === "guarantee") {
-            apiConfig = { apiKey: process.env.AIHUBMIX_API_KEY, baseURL: "https://aihubmix.com" };
-            console.log("[Claude] 使用保障线路 AIHUBMIX");
-        } else if (routeLevel === "fallback") {
-            apiConfig = { apiKey: process.env.RIGHTCODE_API_KEY, baseURL: "https://www.right.codes/claude-aws" };
-            console.log("[Claude] 使用备用线路 RIGHT.CODES-AWS");
-        } else {
-            apiConfig = { apiKey: process.env.RIGHTCODE_API_KEY, baseURL: "https://www.right.codes/claude" };
         }
 
         const auth = await getAuthPayload();
@@ -140,8 +127,8 @@ export async function POST(req) {
         let currentConversationId = conversationId;
 
         const client = new Anthropic({
-            apiKey: apiConfig.apiKey,
-            baseURL: apiConfig.baseURL,
+            apiKey: process.env.RIGHTCODE_API_KEY,
+            baseURL: "https://www.right.codes/claude-aws",
             defaultHeaders: {
                 "anthropic-beta": "extended-cache-ttl-2025-04-11"
             }
@@ -264,10 +251,7 @@ export async function POST(req) {
         // 构建请求参数（联网检索上下文将在流式开始前注入）
         const maxTokens = config?.maxTokens || 64000;
         const budgetTokens = config?.budgetTokens || 32000;
-        // Claude 使用内置系统提示词（保障线路使用独立的简化提示词）
-        const claudeSystemPrompt = routeLevel === "guarantee"
-            ? "You are a helpful AI assistant."
-            : "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";
+        const claudeSystemPrompt = "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         // 是否启用联网搜索

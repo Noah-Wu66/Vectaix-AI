@@ -5,7 +5,6 @@ import {
   UI_ACTIVE_PROMPT_ID_KEY,
   UI_ACTIVE_PROMPT_IDS_KEY,
   UI_BUDGET_TOKENS_KEY,
-  UI_CLAUDE_ROUTE_KEY,
   UI_FONT_SIZE_KEY,
   UI_HISTORY_LIMIT_KEY,
   UI_MAX_TOKENS_KEY,
@@ -22,7 +21,6 @@ const DEFAULT_THINKING_LEVELS = {
 };
 const DEFAULT_MAX_TOKENS = 65536;
 const DEFAULT_BUDGET_TOKENS = 32000;
-const DEFAULT_CLAUDE_ROUTE = "fallback"; // primary | fallback | guarantee
 
 // localStorage keys - 所有设置都本地存储，只有 systemPrompts 内容存数据库
 
@@ -81,7 +79,6 @@ export function useUserSettings() {
   const [maxTokens, _setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
   const [budgetTokens, _setBudgetTokens] = useState(DEFAULT_BUDGET_TOKENS);
   const [webSearch, _setWebSearch] = useState(true);
-  const [claudeRoute, _setClaudeRoute] = useState(DEFAULT_CLAUDE_ROUTE);
   const [avatar, _setAvatar] = useState(null);
   const [settingsError, setSettingsError] = useState(null);
 
@@ -115,10 +112,6 @@ export function useUserSettings() {
     if (localBudgetTokens !== null) _setBudgetTokens(Number(localBudgetTokens) || DEFAULT_BUDGET_TOKENS);
     if (localWebSearch === "true") _setWebSearch(true);
     else if (localWebSearch === "false") _setWebSearch(false);
-    const localClaudeRoute = readLocalSetting(UI_CLAUDE_ROUTE_KEY);
-    if (typeof localClaudeRoute === "string" && ["primary", "fallback", "guarantee"].includes(localClaudeRoute)) {
-      _setClaudeRoute(localClaudeRoute);
-    }
   }, []);
 
   const setModel = useCallback((m) => {
@@ -194,11 +187,6 @@ export function useUserSettings() {
   const setWebSearch = useCallback((enabled) => {
     _setWebSearch(enabled);
     writeLocalSetting(UI_WEB_SEARCH_KEY, String(enabled));
-  }, []);
-
-  const setClaudeRoute = useCallback((route) => {
-    _setClaudeRoute(route);
-    writeLocalSetting(UI_CLAUDE_ROUTE_KEY, route);
   }, []);
 
   const fetchSettings = useCallback(async () => {
@@ -389,8 +377,6 @@ export function useUserSettings() {
     setBudgetTokens,
     webSearch,
     setWebSearch,
-    claudeRoute,
-    setClaudeRoute,
     settingsError,
     setSettingsError,
     fetchSettings,

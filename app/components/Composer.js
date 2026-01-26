@@ -48,8 +48,6 @@ export default function Composer({
   setBudgetTokens,
   webSearch,
   setWebSearch,
-  claudeRoute,
-  setClaudeRoute,
   systemPrompts,
   activePromptIds,
   setActivePromptIds,
@@ -431,8 +429,8 @@ export default function Composer({
                     </div>
 
                     <div className="space-y-4">
-                      {/* System prompts - Claude 模型使用内置提示词 */}
-                      {model?.startsWith("claude-") ? (
+                      {/* System prompts - Claude 和 OpenAI 模型使用内置提示词 */}
+                      {model?.startsWith("claude-") || model?.startsWith("gpt-") || model?.startsWith("o1-") ? (
                         <div>
                           <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                             系统提示词
@@ -654,30 +652,6 @@ export default function Composer({
                         </>
                       ) : model?.startsWith("claude-") ? (
                         <>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              线路选择
-                            </label>
-                            <div className="flex gap-1">
-                              {[
-                                { id: "primary", label: "主线路" },
-                                { id: "fallback", label: "备用" },
-                                { id: "guarantee", label: "保障" },
-                              ].map((route) => (
-                                <button
-                                  key={route.id}
-                                  onClick={() => setClaudeRoute(route.id)}
-                                  type="button"
-                                  className={`flex-1 px-2 py-1.5 rounded-lg border transition-colors text-xs font-medium ${claudeRoute === route.id
-                                    ? "bg-zinc-600 text-white border-zinc-600"
-                                    : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                                    }`}
-                                >
-                                  {route.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
                           <div>
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                               思考深度
