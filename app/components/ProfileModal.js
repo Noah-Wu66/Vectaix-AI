@@ -15,6 +15,7 @@ import {
 
 import { upload } from "@vercel/blob/client";
 import { useToast } from "./ToastProvider";
+import ConfirmModal from "./ConfirmModal";
 
 export default function ProfileModal({
   open,
@@ -31,6 +32,8 @@ export default function ProfileModal({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
   const [showDataManager, setShowDataManager] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingImportFile, setPendingImportFile] = useState(null);
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -93,14 +96,16 @@ export default function ProfileModal({
 
   const onImportFile = async (file) => {
     if (!file) return;
-    const ok = window.confirm(
-      "导入会覆盖当前账号的所有聊天记录与个人设置，且不可撤销。是否继续？"
-    );
-    if (!ok) return;
+    setPendingImportFile(file);
+    setShowConfirmModal(true);
+  };
+
+  const confirmImport = async () => {
+    if (!pendingImportFile) return;
 
     setImportLoading(true);
     try {
-      const text = await file.text();
+      const text = await pendingImportFile.text();
       let json;
       try {
         json = JSON.parse(text);
@@ -121,6 +126,7 @@ export default function ProfileModal({
       toast.error(e?.message || "导入失败");
     } finally {
       setImportLoading(false);
+      setPendingImportFile(null);
     }
   };
 
@@ -186,22 +192,23 @@ export default function ProfileModal({
   };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
-          onClick={onClose}
-        >
+    <>
+      <AnimatePresence>
+        {open && (
           <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-md shadow-xl border border-zinc-200 relative"
-            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4"
+            onClick={onClose}
           >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-md shadow-xl border border-zinc-200 relative"
+              onClick={(e) => e.stopPropagation()}
+            >
             <button
               onClick={onClose}
               className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600"
@@ -451,6 +458,23 @@ export default function ProfileModal({
         </motion.div>
       )}
     </AnimatePresence>
+    <ConfirmModal
+      open={showConfirmModal}
+      onClose={() => {
+        setShowConfirmModal(false);
+        setPendingImportFile(null);
+      }}
+      onConfirm={() => {
+        setShowConfirmModal(false);
+        confirmImport();
+      }}
+      title="确认导入"
+      message="导入会覆盖当前账号的所有聊天记录与个人设置，且不可撤销。是否继续？"
+      confirmText="确定"
+      cancelText="取消"
+      danger
+    />
+  </>
   );
 }
 
