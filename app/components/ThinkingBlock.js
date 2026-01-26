@@ -92,11 +92,11 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, isDec
         ) : (
           "思考过程"
         )}
-        {collapsed ? (
+        {!(isSearching || isDeciding) && (collapsed ? (
           <ChevronDown size={12} className="sm:w-3.5 sm:h-3.5" />
         ) : (
           <ChevronUp size={12} className="sm:w-3.5 sm:h-3.5" />
-        )}
+        ))}
       </button>
 
       <AnimatePresence>
