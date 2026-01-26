@@ -101,3 +101,33 @@ export function sanitizeStoredMessages(messages) {
     if (!Array.isArray(messages)) return [];
     return messages.map(sanitizeStoredMessage).filter(Boolean);
 }
+
+export function injectCurrentTimeSystemReminder(systemText) {
+    if (typeof systemText !== 'string') return systemText;
+    if (systemText.includes("<system-reminder>")) return systemText;
+
+    let timeText = "";
+    try {
+        const formatter = new Intl.DateTimeFormat('zh-CN', {
+            timeZone: 'Asia/Shanghai',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        const parts = formatter.formatToParts(new Date());
+        const map = {};
+        for (const p of parts) map[p.type] = p.value;
+        timeText = `${map.year}-${map.month}-${map.day} ${map.hour}:${map.minute}:${map.second}`;
+    } catch {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        timeText = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    const reminder = `\n\n<system-reminder>\n当前时间：${timeText}（时区：Asia/Shanghai）。你必须以此为准进行判断与回答，不要把现在当成 2024 年。\n</system-reminder>`;
+    return `${systemText}${reminder}`;
+}
