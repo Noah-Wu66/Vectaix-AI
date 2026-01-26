@@ -59,6 +59,16 @@ export default function MessageList({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, index: null, role: null });
+  const prevMessagesRef = useRef([]);
+
+  useEffect(() => {
+    prevMessagesRef.current = messages;
+  }, [messages]);
+
+  const isNewMessage = (msg, index) => {
+    const prevMsgs = prevMessagesRef.current;
+    return !prevMsgs[index] || prevMsgs[index].id !== msg.id;
+  };
 
   const openLightbox = (src) => {
     if (!src) return;
@@ -218,7 +228,7 @@ export default function MessageList({
           return (
             <motion.div
               key={msg.id ?? i}
-              initial={{ opacity: 0, y: 10 }}
+              initial={isNewMessage(msg, i) ? { opacity: 0, y: 10 } : false}
               animate={{ opacity: 1, y: 0 }}
               className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
             >
