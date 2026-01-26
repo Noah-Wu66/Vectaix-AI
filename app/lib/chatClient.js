@@ -114,7 +114,7 @@ export async function runChat({
       fetchConversations();
     }
 
-    const enableDecideSearch = provider === "gemini" && config?.webSearch === true;
+    const enableDecideSearch = config?.webSearch === true;
     streamMsgId = Date.now();
     setMessages((prev) => [
       ...prev,
