@@ -8,20 +8,14 @@ import Markdown from "./Markdown";
 export default function ThinkingBlock({ thought, isStreaming, isSearching, searchQuery }) {
   const [collapsed, setCollapsed] = useState(true);
   const containerRef = useRef(null);
-  const prevSearchingRef = useRef(false);
   const safeThought = typeof thought === "string" ? thought : "";
 
-  // 联网搜索时自动折叠，搜索结束后自动展开
   useEffect(() => {
-    const wasSearching = prevSearchingRef.current;
     if (isSearching) {
       setCollapsed(true);
-    } else if (wasSearching && !isSearching) {
-      setCollapsed(false);
     } else {
       setCollapsed(!isStreaming);
     }
-    prevSearchingRef.current = isSearching;
   }, [isStreaming, isSearching]);
 
   useEffect(() => {
@@ -34,7 +28,11 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   return (
     <div className="mb-2 w-full max-w-full">
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => {
+          if (isSearching) return;
+          setCollapsed(!collapsed);
+        }}
+        disabled={isSearching}
         className="thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium mb-1.5 uppercase tracking-wider px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors text-zinc-500 hover:text-zinc-700 bg-zinc-100"
       >
         {isSearching ? (
