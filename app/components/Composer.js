@@ -619,7 +619,7 @@ export default function Composer({
                           <span className="font-medium">高级设置</span>
                           <ChevronUp
                             size={16}
-                            className={`transition-transform ${showAdvancedSettings ? "rotate-180" : ""}`}
+                            className={`transition-transform ${showAdvancedSettings ? "" : "rotate-180"}`}
                           />
                         </button>
 
