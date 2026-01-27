@@ -223,7 +223,7 @@ export default function MessageList({
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
-          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.isDecidingSearch) {
+          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching) {
             return null;
           }
           return (
@@ -245,7 +245,7 @@ export default function MessageList({
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
-              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.isDecidingSearch) && (
+              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching) && (
                 <div className="flex items-center gap-1.5">
                   <AIAvatar model={model} size={28} />
                   <span className="text-xs text-zinc-400 font-medium">AI</span>
@@ -258,12 +258,11 @@ export default function MessageList({
                   : "items-start w-full max-w-full"
                   }`}
               >
-                {msg.role === "model" && (msg.thought || msg.isSearching || msg.isDecidingSearch) && (
+                {msg.role === "model" && (msg.thought || msg.isSearching) && (
                   <ThinkingBlock
                     thought={msg.thought}
                     isStreaming={msg.isThinkingStreaming}
                     isSearching={msg.isSearching}
-                    isDeciding={msg.isDecidingSearch}
                     searchQuery={msg.searchQuery}
                   />
                 )}
@@ -512,7 +511,7 @@ export default function MessageList({
       )}
 
       {/* 只在有消息且加载中且没有正在流式输出或搜索的消息时显示加载指示器 */}
-      {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => (m.isStreaming && !m.isWaitingFirstChunk) || m.isSearching || m.isDecidingSearch) && (
+      {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => (m.isStreaming && !m.isWaitingFirstChunk) || m.isSearching) && (
         <div className="flex gap-2 sm:gap-3 items-start">
           <ResponsiveAIAvatar model={model} mobileSize={22} desktopSize={28} />
           <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">

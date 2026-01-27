@@ -131,7 +131,6 @@ export async function runChat({
       fetchConversations();
     }
 
-    const enableDecideSearch = config?.webSearch === true;
     streamMsgId = Date.now();
     setMessages((prev) => [
       ...prev,
@@ -145,7 +144,6 @@ export async function runChat({
         isWaitingFirstChunk: true,
         thought: "",
         isSearching: false,
-        isDecidingSearch: enableDecideSearch,
         searchQuery: null,
         searchResults: null,
         citations: null,
@@ -166,7 +164,6 @@ export async function runChat({
     let flushScheduled = false;
     let hasReceivedContent = false;
     let isSearching = false;
-    let isDecidingSearch = enableDecideSearch;
     let searchQuery = null;
     let searchResults = null;
     let citations = null;
@@ -197,7 +194,7 @@ export async function runChat({
         if (idx < 0) return prev;
 
         const base = prev[idx] || {};
-        const nowHasContent = displayedText.length > 0 || fullThought.length > 0 || isSearching || isDecidingSearch;
+        const nowHasContent = displayedText.length > 0 || fullThought.length > 0 || isSearching;
         if (nowHasContent && !hasReceivedContent) {
           hasReceivedContent = true;
           // 收到内容，清除超时定时器
@@ -213,7 +210,6 @@ export async function runChat({
           isThinkingStreaming: !thinkingEnded,
           isWaitingFirstChunk: !hasReceivedContent,
           isSearching,
-          isDecidingSearch,
           searchQuery,
           searchResults,
           citations,
@@ -224,7 +220,6 @@ export async function runChat({
           base.isThinkingStreaming === nextMsg.isThinkingStreaming &&
           base.isWaitingFirstChunk === nextMsg.isWaitingFirstChunk &&
           base.isSearching === nextMsg.isSearching &&
-          base.isDecidingSearch === nextMsg.isDecidingSearch &&
           base.searchQuery === nextMsg.searchQuery &&
           base.searchResults === nextMsg.searchResults &&
           base.citations === nextMsg.citations
@@ -273,30 +268,25 @@ export async function runChat({
       if (p === "[DONE]") {
         sawDone = true;
         isSearching = false;
-        isDecidingSearch = false;
         return;
       }
       try {
         const data = JSON.parse(p);
         if (data.type === "thought") {
           fullThought += data.content;
-          isDecidingSearch = false;
         } else if (data.type === "text") {
           fullText += data.content;
           if (!thinkingEnded) thinkingEnded = true;
           isSearching = false;
-          isDecidingSearch = false;
           // 启动模拟流式输出
           startSimulatedStream();
         } else if (data.type === "search_start") {
           isSearching = true;
-          isDecidingSearch = false;
           if (typeof data.query === "string" && data.query.trim()) {
             searchQuery = data.query.trim();
           }
         } else if (data.type === "search_result") {
           isSearching = false;
-          isDecidingSearch = enableDecideSearch;
           if (typeof data.query === "string" && data.query.trim()) {
             searchQuery = data.query.trim();
           }

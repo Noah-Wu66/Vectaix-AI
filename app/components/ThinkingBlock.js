@@ -2,21 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BrainCircuit, ChevronDown, ChevronUp, Compass, Globe } from "lucide-react";
+import { BrainCircuit, ChevronDown, ChevronUp, Globe } from "lucide-react";
 import Markdown from "./Markdown";
 
-export default function ThinkingBlock({ thought, isStreaming, isSearching, isDeciding, searchQuery }) {
+export default function ThinkingBlock({ thought, isStreaming, isSearching, searchQuery }) {
   const [collapsed, setCollapsed] = useState(true);
   const containerRef = useRef(null);
   const safeThought = typeof thought === "string" ? thought : "";
 
   useEffect(() => {
-    if (isSearching || isDeciding) {
+    if (isSearching) {
       setCollapsed(true);
     } else {
       setCollapsed(!isStreaming);
     }
-  }, [isStreaming, isSearching, isDeciding]);
+  }, [isStreaming, isSearching]);
 
   useEffect(() => {
     if (collapsed) return;
@@ -29,16 +29,14 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, isDec
     <div className="mb-2 w-full max-w-full">
       <button
         onClick={() => {
-          if (isSearching || isDeciding) return;
+          if (isSearching) return;
           setCollapsed(!collapsed);
         }}
-        disabled={isSearching || isDeciding}
+        disabled={isSearching}
         className="thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium mb-1.5 uppercase tracking-wider px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors text-zinc-500 hover:text-zinc-700 bg-zinc-100"
       >
         {isSearching ? (
           <Globe size={16} className="sm:w-5 sm:h-5" />
-        ) : isDeciding ? (
-          <Compass size={16} className="sm:w-5 sm:h-5" />
         ) : (
           <BrainCircuit size={16} className="sm:w-5 sm:h-5" />
         )}
@@ -51,24 +49,6 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, isDec
               <span className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce" style={{ animationDelay: "0ms" }} />
               <span className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce" style={{ animationDelay: "150ms" }} />
               <span className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce" style={{ animationDelay: "300ms" }} />
-            </span>
-          </span>
-        ) : isDeciding ? (
-          <span className="flex items-center gap-1 sm:gap-1.5">
-            自主决策中
-            <span className="flex gap-0.5">
-              <span
-                className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce"
-                style={{ animationDelay: "0ms" }}
-              />
-              <span
-                className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce"
-                style={{ animationDelay: "100ms" }}
-              />
-              <span
-                className="w-1 h-1 bg-zinc-500 rounded-full animate-dot-bounce"
-                style={{ animationDelay: "200ms" }}
-              />
             </span>
           </span>
         ) : isStreaming ? (
@@ -92,7 +72,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, isDec
         ) : (
           "思考过程"
         )}
-        {!(isSearching || isDeciding) && (collapsed ? (
+        {!isSearching && (collapsed ? (
           <ChevronDown size={12} className="sm:w-3.5 sm:h-3.5" />
         ) : (
           <ChevronUp size={12} className="sm:w-3.5 sm:h-3.5" />
