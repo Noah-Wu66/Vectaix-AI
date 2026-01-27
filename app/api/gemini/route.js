@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
+import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
@@ -19,6 +20,8 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 function extractJsonObject(text) {
     if (typeof text !== 'string') return null;
@@ -118,6 +121,23 @@ export async function POST(req) {
             return Response.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
+        const clientIP = getClientIP(req);
+        const rateLimitKey = `chat:${auth.userId}:${clientIP}`;
+        const { success, resetTime } = rateLimit(rateLimitKey, CHAT_RATE_LIMIT);
+        if (!success) {
+            const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
+            return Response.json(
+                { error: '请求过于频繁，请稍后再试' },
+                {
+                    status: 429,
+                    headers: {
+                        'Retry-After': String(retryAfter),
+                        'X-RateLimit-Remaining': '0',
+                    },
+                }
+            );
+        }
+
         let user = null;
         try {
             await dbConnect();
@@ -127,7 +147,7 @@ export async function POST(req) {
             }
             user = auth;
         } catch (dbError) {
-            console.error("Database connection error:", dbError);
+            console.error("Database connection error:", dbError?.message);
             return Response.json(
                 { error: 'Database connection failed' },
                 { status: 500 }
@@ -386,7 +406,7 @@ export async function POST(req) {
                                 });
                                 results = searchData?.results || [];
                             } catch (searchError) {
-                                console.error("[Gemini] MetaSo Search Error:", searchError);
+                                console.error("[Gemini] MetaSo Search Error:", searchError?.message);
                             }
 
                             const eventResults = buildMetasoSearchEventResults(results);
@@ -522,7 +542,6 @@ export async function POST(req) {
         console.error("Gemini API Error:", {
             message: error?.message,
             status: error?.status,
-            stack: error?.stack,
             name: error?.name,
             code: error?.code
         });

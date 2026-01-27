@@ -17,7 +17,7 @@ export async function GET() {
 
         return Response.json({ conversations });
     } catch (error) {
-        console.error('Failed to fetch conversations:', error);
+        console.error('Failed to fetch conversations:', error?.message);
         return Response.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

@@ -1,6 +1,7 @@
 import './globals.css';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
+import { headers } from 'next/headers';
 import { ToastProvider } from './components/ToastProvider';
 import { UI_THEME_MODE_KEY } from './lib/storageKeys';
 
@@ -27,11 +28,12 @@ export const viewport = {
 };
 
 export default function RootLayout({ children }) {
+    const nonce = headers().get('x-csp-nonce') || undefined;
     // Script to prevent theme flash by setting the theme class before React hydration
     const themeScript = `
-(function() {
-  try {
-    var mode = localStorage.getItem('${UI_THEME_MODE_KEY}');
+ (function() {
+   try {
+     var mode = localStorage.getItem('${UI_THEME_MODE_KEY}');
     // null means no preference set, treat as 'system' (the default)
     var isDark = mode === 'dark' || ((mode === 'system' || mode === null) && window.matchMedia('(prefers-color-scheme: dark)').matches);
     if (isDark) {
@@ -46,7 +48,7 @@ export default function RootLayout({ children }) {
     return (
         <html lang="en" suppressHydrationWarning>
             <head>
-                <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+                <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
                 <link rel="preconnect" href="https://fonts.googleapis.com" />
                 <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />

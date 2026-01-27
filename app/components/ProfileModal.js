@@ -6,11 +6,13 @@ import {
   ChevronDown,
   Download,
   Lock,
+  Settings,
   Palette,
   Type,
   Upload,
   X,
   Camera,
+  Volume2,
 } from "lucide-react";
 
 import { upload } from "@vercel/blob/client";
@@ -25,6 +27,8 @@ export default function ProfileModal({
   fontSize,
   onThemeModeChange,
   onFontSizeChange,
+  completionSoundVolume,
+  onCompletionSoundVolumeChange,
   avatar,
   onAvatarChange,
 }) {
@@ -44,6 +48,9 @@ export default function ProfileModal({
   const [importLoading, setImportLoading] = useState(false);
 
   const [avatarLoading, setAvatarLoading] = useState(false);
+  const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
+    ? Number(completionSoundVolume)
+    : 60;
 
   const emailInitial = useMemo(() => {
     const c = user?.email?.[0];
@@ -322,7 +329,7 @@ export default function ProfileModal({
                 className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
               >
                 <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
-                  <Palette size={14} /> 外观设置
+                  <Settings size={14} /> 系统设置
                 </span>
                 <ChevronDown
                   size={16}
@@ -389,6 +396,27 @@ export default function ProfileModal({
                               {f.label}
                             </button>
                           ))}
+                        </div>
+                      </div>
+
+                      {/* 提示音音量 */}
+                      <div>
+                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block flex items-center gap-1">
+                          <Volume2 size={12} /> 提示音音量
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={normalizedVolume}
+                            onChange={(e) => onCompletionSoundVolumeChange?.(Number(e.target.value))}
+                            className="w-full"
+                          />
+                          <span className="text-xs text-zinc-500 w-12 text-right">
+                            {normalizedVolume <= 0 ? "关闭" : `${normalizedVolume}%`}
+                          </span>
                         </div>
                       </div>
                     </div>

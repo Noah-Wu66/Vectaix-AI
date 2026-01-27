@@ -5,6 +5,7 @@ import {
   UI_ACTIVE_PROMPT_ID_KEY,
   UI_ACTIVE_PROMPT_IDS_KEY,
   UI_BUDGET_TOKENS_KEY,
+  UI_COMPLETION_SOUND_VOLUME_KEY,
   UI_FONT_SIZE_KEY,
   UI_HISTORY_LIMIT_KEY,
   UI_MAX_TOKENS_KEY,
@@ -21,6 +22,7 @@ const DEFAULT_THINKING_LEVELS = {
 };
 const DEFAULT_MAX_TOKENS = 65536;
 const DEFAULT_BUDGET_TOKENS = 32000;
+const DEFAULT_COMPLETION_SOUND_VOLUME = 60;
 
 // localStorage keys - 所有设置都本地存储，只有 systemPrompts 内容存数据库
 
@@ -80,6 +82,7 @@ export function useUserSettings() {
   const [budgetTokens, _setBudgetTokens] = useState(DEFAULT_BUDGET_TOKENS);
   const [webSearch, _setWebSearch] = useState(true);
   const [avatar, _setAvatar] = useState(null);
+  const [completionSoundVolume, _setCompletionSoundVolume] = useState(DEFAULT_COMPLETION_SOUND_VOLUME);
   const [settingsError, setSettingsError] = useState(null);
 
   const modelRef = useRef(model);
@@ -97,6 +100,7 @@ export function useUserSettings() {
     const localMaxTokens = readLocalSetting(UI_MAX_TOKENS_KEY);
     const localBudgetTokens = readLocalSetting(UI_BUDGET_TOKENS_KEY);
     const localWebSearch = readLocalSetting(UI_WEB_SEARCH_KEY);
+    const localCompletionSoundVolume = readLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY);
 
     if (typeof localTheme === "string") _setThemeMode(localTheme);
     if (typeof localFont === "string") _setFontSize(localFont);
@@ -112,6 +116,10 @@ export function useUserSettings() {
     if (localBudgetTokens !== null) _setBudgetTokens(Number(localBudgetTokens) || DEFAULT_BUDGET_TOKENS);
     if (localWebSearch === "true") _setWebSearch(true);
     else if (localWebSearch === "false") _setWebSearch(false);
+    if (localCompletionSoundVolume !== null) {
+      const parsed = Number(localCompletionSoundVolume);
+      _setCompletionSoundVolume(Number.isFinite(parsed) ? parsed : DEFAULT_COMPLETION_SOUND_VOLUME);
+    }
   }, []);
 
   const setModel = useCallback((m) => {
@@ -187,6 +195,11 @@ export function useUserSettings() {
   const setWebSearch = useCallback((enabled) => {
     _setWebSearch(enabled);
     writeLocalSetting(UI_WEB_SEARCH_KEY, String(enabled));
+  }, []);
+
+  const setCompletionSoundVolume = useCallback((volume) => {
+    _setCompletionSoundVolume(volume);
+    writeLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY, String(volume));
   }, []);
 
   const fetchSettings = useCallback(async () => {
@@ -377,6 +390,8 @@ export function useUserSettings() {
     setBudgetTokens,
     webSearch,
     setWebSearch,
+    completionSoundVolume,
+    setCompletionSoundVolume,
     settingsError,
     setSettingsError,
     fetchSettings,

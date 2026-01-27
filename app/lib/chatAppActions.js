@@ -1,5 +1,5 @@
 import { upload } from "@vercel/blob/client";
-import { buildChatConfig, runChat } from "./chatClient";
+import { buildChatConfig, runChat, unlockCompletionSound } from "./chatClient";
 import { getMessageImageSrcs, isDataImageUrl, isHttpUrl } from "./messageImage";
 
 let msgIdCounter = 0;
@@ -35,6 +35,7 @@ export function createChatAppActions({
   setEditingContent,
   setEditingImageAction,
   setEditingImage,
+  completionSoundVolume,
 }) {
   const stopStreaming = () => {
     chatAbortRef.current?.abort();
@@ -101,6 +102,8 @@ export function createChatAppActions({
   const handleSendFromComposer = async ({ text, images }) => {
     if ((!text && (!images || images.length === 0)) || loading || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
+
+    unlockCompletionSound();
 
     userInterruptedRef.current = false;
 
@@ -185,6 +188,7 @@ export function createChatAppActions({
           budgetTokens,
           activePromptId: activePromptId != null ? String(activePromptId) : null,
         } : undefined,
+        completionSoundVolume,
         onError: (msg) => toast.error(msg),
       });
     } catch (err) {
@@ -201,6 +205,7 @@ export function createChatAppActions({
   const regenerateModelMessage = async (index) => {
     if (loading || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
+    unlockCompletionSound();
     const userMsgIndex = index - 1;
     if (userMsgIndex < 0 || messages[userMsgIndex]?.role !== "user") {
       chatRequestLockRef.current = false;
@@ -241,6 +246,7 @@ export function createChatAppActions({
         mode: "regenerate",
         messagesForRegenerate: historyWithUser,
         provider: currentModelConfig?.provider,
+        completionSoundVolume,
         onError: (msg) => toast.error(msg),
       });
     } finally {
@@ -266,6 +272,7 @@ export function createChatAppActions({
   const submitEditAndRegenerate = async (index) => {
     if (loading || editingMsgIndex === null || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
+    unlockCompletionSound();
     const newContent = editingContent.trim();
     const oldMsg = messages[index];
     const existingImageSrcs = getMessageImageSrcs(oldMsg);
@@ -380,6 +387,7 @@ export function createChatAppActions({
         mode: "regenerate",
         messagesForRegenerate: nextMessages,
         provider: currentModelConfig?.provider,
+        completionSoundVolume,
         onError: (msg) => toast.error(msg),
       });
     } finally {

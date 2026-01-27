@@ -53,7 +53,7 @@ export async function GET() {
       user: { id: user._id, email: user.email },
     });
   } catch (error) {
-    console.error(error);
+    console.error("Enterprise auth error:", error?.message);
     return Response.json({ error: '企业登录失败，请稍后再试' }, { status: 500 });
   }
 }

@@ -28,7 +28,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
+  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
   useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -161,6 +161,7 @@ export default function ChatApp() {
     setEditingContent,
     setEditingImageAction,
     setEditingImage,
+    completionSoundVolume,
   });
 
   useEffect(() => {
@@ -502,6 +503,8 @@ export default function ChatApp() {
           fontSize={fontSize}
           onThemeModeChange={updateThemeMode}
           onFontSizeChange={updateFontSize}
+          completionSoundVolume={completionSoundVolume}
+          onCompletionSoundVolumeChange={setCompletionSoundVolume}
           sidebarOpen={sidebarOpen}
           conversations={conversations}
           currentConversationId={currentConversationId}

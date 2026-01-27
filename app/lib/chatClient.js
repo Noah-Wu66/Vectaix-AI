@@ -29,6 +29,25 @@ export function buildChatConfig({
   return cfg;
 }
 
+let completionSoundUnlocked = false;
+
+export function unlockCompletionSound() {
+  if (completionSoundUnlocked) return;
+  if (typeof Audio === "undefined") return;
+  const audio = new Audio("/audio/staplebops-01.aac");
+  audio.volume = 0;
+  const attempt = audio.play();
+  if (attempt && typeof attempt.then === "function") {
+    attempt
+      .then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        completionSoundUnlocked = true;
+      })
+      .catch(() => {});
+  }
+}
+
 export async function runChat({
   prompt,
   historyMessages,
@@ -46,8 +65,18 @@ export async function runChat({
   messagesForRegenerate,
   provider,
   settings,
+  completionSoundVolume,
   onError,
 }) {
+  const playCompletionSound = () => {
+    const rawVolume = Number(completionSoundVolume);
+    if (!Number.isFinite(rawVolume) || rawVolume <= 0) return;
+    if (typeof Audio === "undefined") return;
+    const audio = new Audio("/audio/staplebops-01.aac");
+    const normalized = Math.max(0, Math.min(1, rawVolume / 100));
+    audio.volume = normalized;
+    audio.play().catch(() => {});
+  };
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
     content: m.content,
@@ -373,6 +402,10 @@ export async function runChat({
     };
 
     await waitForSimulatedStream();
+
+    if (!signal?.aborted && (sawDone || fullText.length > 0)) {
+      playCompletionSound();
+    }
 
     // 流式结束后做一次"最终对齐"：移动端偶发断流/缓冲时，避免必须刷新才能看到完整内容
     if (!signal?.aborted && sawDone && convIdForSync) {

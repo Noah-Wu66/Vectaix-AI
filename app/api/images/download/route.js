@@ -1,4 +1,7 @@
 import { getAuthPayload } from "@/lib/auth";
+import dbConnect from "@/lib/db";
+import Conversation from "@/models/Conversation";
+import UserSettings from "@/models/UserSettings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +51,21 @@ function extFromContentType(contentType) {
   return "png";
 }
 
+async function isUrlOwnedByUser(userId, url) {
+  const conversationMatch = await Conversation.exists({
+    userId,
+    $or: [
+      { "messages.image": url },
+      { "messages.images": url },
+      { "messages.parts.inlineData.url": url },
+    ],
+  });
+  if (conversationMatch) return true;
+
+  const settingsMatch = await UserSettings.exists({ userId, avatar: url });
+  return Boolean(settingsMatch);
+}
+
 export async function GET(req) {
   const auth = await getAuthPayload();
   if (!auth) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -76,6 +94,17 @@ export async function GET(req) {
     );
   }
 
+  try {
+    await dbConnect();
+    const owned = await isUrlOwnedByUser(auth.userId, url);
+    if (!owned) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } catch (error) {
+    console.error("Failed to verify image ownership:", error?.message);
+    return Response.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+
   const upstream = await fetch(url, { cache: "no-store" });
   if (!upstream.ok || !upstream.body) {
     return Response.json(
@@ -93,6 +122,8 @@ export async function GET(req) {
   const len = upstream.headers.get("content-length");
   if (isNonEmptyString(len)) headers.set("Content-Length", len);
   headers.set("Content-Disposition", `attachment; filename="${filename}"`);
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Content-Type-Options", "nosniff");
 
   return new Response(upstream.body, { headers });
 }
