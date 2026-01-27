@@ -21,7 +21,7 @@ export function ResponsiveAIAvatar({ model, mobileSize = 22, desktopSize = 26 })
   );
 }
 
-function normalizeCopiedText(text) {
+export function normalizeCopiedText(text) {
   return (text ?? "")
     .replace(/\r\n/g, "\n")
     .replace(/\u00A0/g, " ")

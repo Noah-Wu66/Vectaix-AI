@@ -23,6 +23,7 @@ import {
   ResponsiveAIAvatar,
   buildCopyText,
   buildPlainText,
+  normalizeCopiedText,
   isSelectionFullyInsideElement,
   Thumb,
   Citations,
