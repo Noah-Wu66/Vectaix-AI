@@ -146,9 +146,14 @@ export function useUserSettings() {
       writeLocalSetting(UI_MAX_TOKENS_KEY, "128000");
       return;
     }
-    if (model.startsWith("gemini-") && maxTokens === 64000) {
-      _setMaxTokens(65536);
-      writeLocalSetting(UI_MAX_TOKENS_KEY, "65536");
+    if (model.startsWith("gemini-")) {
+      if (maxTokens > 65536) {
+        _setMaxTokens(65536);
+        writeLocalSetting(UI_MAX_TOKENS_KEY, "65536");
+      } else if (maxTokens === 64000) {
+        _setMaxTokens(65536);
+        writeLocalSetting(UI_MAX_TOKENS_KEY, "65536");
+      }
     }
   }, [model, maxTokens]);
 
