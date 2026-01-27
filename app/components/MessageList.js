@@ -267,6 +267,23 @@ export default function MessageList({
                   />
                 )}
 
+                {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !msg.image && !Array.isArray(msg.images) && (
+                  <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
+                    <span
+                      className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
+                      style={{ animationDelay: "0ms" }}
+                    />
+                    <span
+                      className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
+                      style={{ animationDelay: "150ms" }}
+                    />
+                    <span
+                      className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
+                      style={{ animationDelay: "300ms" }}
+                    />
+                  </div>
+                )}
+
                 {/* 编辑模式 */}
                 {editingMsgIndex === i && msg.role === "user" ? (
                   <div className="w-full space-y-2">

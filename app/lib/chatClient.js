@@ -426,9 +426,27 @@ export async function runChat({
               for (let i = next.length - 1; i >= 0; i -= 1) {
                 if (next[i]?.role === "model") {
                   next[i] = { ...next[i], id: streamMsgId };
-                  return next;
+                  break;
                 }
               }
+
+              // 同步上一条用户消息的 id，避免“上一条气泡”闪烁
+              if (prev.length >= 2 && next.length >= 2) {
+                const prevLast = prev[prev.length - 1];
+                const prevPrev = prev[prev.length - 2];
+                const nextPrev = next[next.length - 2];
+                if (
+                  prevLast?.id === streamMsgId &&
+                  prevPrev?.role === "user" &&
+                  prevPrev?.id != null &&
+                  nextPrev?.role === "user" &&
+                  typeof prevPrev?.content === "string" &&
+                  prevPrev.content === nextPrev?.content
+                ) {
+                  next[next.length - 2] = { ...nextPrev, id: prevPrev.id };
+                }
+              }
+
               return next;
             }
 
