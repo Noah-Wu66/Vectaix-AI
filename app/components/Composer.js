@@ -703,7 +703,7 @@ export default function Composer({
                                         min="0"
                                         max="6"
                                         step="1"
-                                        value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(budgetTokens)}
+                                        value={Math.max(0, [1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(budgetTokens))}
                                         onChange={(e) => setBudgetTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
                                         className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                                       />
@@ -720,7 +720,7 @@ export default function Composer({
                                         min="0"
                                         max="6"
                                         step="1"
-                                        value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(maxTokens)}
+                                        value={Math.max(0, [1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(maxTokens))}
                                         onChange={(e) => setMaxTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
                                         className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                                       />

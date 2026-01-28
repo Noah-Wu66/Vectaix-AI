@@ -359,12 +359,9 @@ export default function ChatApp() {
         // 其他参数：使用对话设置，否则使用默认值
         setHistoryLimit(settings.historyLimit ?? 0);
         const maxTokensValue = settings.maxTokens ?? (conversationProvider === "openai" ? 128000 : 65536);
-        const safeMaxTokens = conversationProvider === "claude" && maxTokensValue > 64000
-          ? 64000
-          : conversationProvider === "openai" && maxTokensValue > 128000
-            ? 128000
-            : maxTokensValue;
-        setMaxTokens(safeMaxTokens);
+        const providerLimits = { claude: 64000, openai: 128000, gemini: 65536 };
+        const maxAllowed = providerLimits[conversationProvider] || 65536;
+        setMaxTokens(Math.min(maxTokensValue, maxAllowed));
         setBudgetTokens(settings.budgetTokens ?? 32768);
         // activePromptId：优先使用对话存储的值
         if (settings.activePromptId !== undefined) {

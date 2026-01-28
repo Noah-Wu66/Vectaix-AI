@@ -106,14 +106,21 @@ export function useUserSettings() {
     if (typeof localFont === "string") _setFontSize(localFont);
     if (typeof localModel === "string") _setModel(localModel);
     if (isPlainObject(localThinkingLevels)) _setThinkingLevels(localThinkingLevels);
-    if (localHistoryLimit !== null) _setHistoryLimit(Number(localHistoryLimit) || 0);
+    if (localHistoryLimit !== null) {
+      const parsed = Number(localHistoryLimit);
+      _setHistoryLimit(Number.isFinite(parsed) ? parsed : 0);
+    }
     if (isPlainObject(localActivePromptIds)) _setActivePromptIds(localActivePromptIds);
     if (typeof localActivePromptId === "string") _setActivePromptId(localActivePromptId);
     if (localMaxTokens !== null) {
-      const parsed = Number(localMaxTokens) || DEFAULT_MAX_TOKENS;
-      _setMaxTokens(parsed === 64000 ? 65536 : parsed);
+      const parsed = Number(localMaxTokens);
+      const validParsed = Number.isFinite(parsed) ? parsed : DEFAULT_MAX_TOKENS;
+      _setMaxTokens(validParsed === 64000 ? 65536 : validParsed);
     }
-    if (localBudgetTokens !== null) _setBudgetTokens(Number(localBudgetTokens) || DEFAULT_BUDGET_TOKENS);
+    if (localBudgetTokens !== null) {
+      const parsed = Number(localBudgetTokens);
+      _setBudgetTokens(Number.isFinite(parsed) ? parsed : DEFAULT_BUDGET_TOKENS);
+    }
     if (localWebSearch === "true") _setWebSearch(true);
     else if (localWebSearch === "false") _setWebSearch(false);
     if (localCompletionSoundVolume !== null) {

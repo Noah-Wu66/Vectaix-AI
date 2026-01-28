@@ -68,6 +68,9 @@ export async function runChat({
   completionSoundVolume,
   onError,
 }) {
+  // 在函数开头声明，确保在整个函数范围内可用
+  let newConvId = null;
+
   const playCompletionSound = () => {
     const rawVolume = Number(completionSoundVolume);
     if (!Number.isFinite(rawVolume) || rawVolume <= 0) return;
@@ -125,7 +128,7 @@ export async function runChat({
     }
 
 
-    const newConvId = res.headers.get("X-Conversation-Id");
+    newConvId = res.headers.get("X-Conversation-Id");
     if (newConvId && !currentConversationId) {
       setCurrentConversationId(newConvId);
       fetchConversations();

@@ -33,6 +33,18 @@ export async function POST(req) {
         return Response.json({ error: 'Name and content are required' }, { status: 400 });
     }
 
+    // 输入验证：限制长度
+    const MAX_PROMPT_NAME_LENGTH = 50;
+    const MAX_PROMPT_CONTENT_LENGTH = 10000;
+    
+    if (typeof name !== 'string' || name.length > MAX_PROMPT_NAME_LENGTH) {
+        return Response.json({ error: `Name must be a string and cannot exceed ${MAX_PROMPT_NAME_LENGTH} characters` }, { status: 400 });
+    }
+    
+    if (typeof content !== 'string' || content.length > MAX_PROMPT_CONTENT_LENGTH) {
+        return Response.json({ error: `Content must be a string and cannot exceed ${MAX_PROMPT_CONTENT_LENGTH} characters` }, { status: 400 });
+    }
+
     let settings = await UserSettings.findOne({ userId: user.userId });
 
     if (!settings) {
@@ -106,6 +118,18 @@ export async function PATCH(req) {
     const { promptId, name, content } = await req.json();
     if (!promptId || !name || !content) {
         return Response.json({ error: 'promptId, name and content are required' }, { status: 400 });
+    }
+
+    // 输入验证：限制长度
+    const MAX_PROMPT_NAME_LENGTH = 50;
+    const MAX_PROMPT_CONTENT_LENGTH = 10000;
+    
+    if (typeof name !== 'string' || name.length > MAX_PROMPT_NAME_LENGTH) {
+        return Response.json({ error: `Name must be a string and cannot exceed ${MAX_PROMPT_NAME_LENGTH} characters` }, { status: 400 });
+    }
+    
+    if (typeof content !== 'string' || content.length > MAX_PROMPT_CONTENT_LENGTH) {
+        return Response.json({ error: `Content must be a string and cannot exceed ${MAX_PROMPT_CONTENT_LENGTH} characters` }, { status: 400 });
     }
 
     const settings = await UserSettings.findOne({ userId: user.userId });
