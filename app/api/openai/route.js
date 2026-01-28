@@ -166,7 +166,7 @@ export async function POST(req) {
             }
 
             const userMsgTime = Date.now();
-            const updatedConv = await Conversation.findByIdAndUpdate(currentConversationId, {
+            const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
                 $push: {
                     messages: {
                         role: 'user',
@@ -477,8 +477,8 @@ export async function POST(req) {
 
                     if (user && currentConversationId) {
                         const writeCondition = writePermitTime
-                            ? { _id: currentConversationId, updatedAt: { $lte: new Date(writePermitTime) } }
-                            : { _id: currentConversationId };
+                            ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
+                            : { _id: currentConversationId, userId: user.userId };
                         await Conversation.findOneAndUpdate(
                             writeCondition,
                             {
