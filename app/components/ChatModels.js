@@ -4,12 +4,14 @@ export const CHAT_MODELS = [
     name: "Flash",
     shortName: "Flash",
     provider: "gemini",
+    privacy: true,
   },
   {
     id: "gemini-3-pro-preview",
     name: "Pro",
     shortName: "Pro",
     provider: "gemini",
+    privacy: true,
   },
   {
     id: "claude-sonnet-4-5-20250929",
@@ -30,5 +32,3 @@ export const CHAT_MODELS = [
     provider: "openai",
   },
 ];
-
-
