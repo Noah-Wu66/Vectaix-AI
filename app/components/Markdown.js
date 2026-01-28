@@ -7,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import { Copy, Check } from "lucide-react";
 
 // Extended schema to allow KaTeX and highlight.js classes while sanitizing dangerous content (updated)
 const sanitizeSchema = {
@@ -68,9 +69,48 @@ export default function Markdown({ children, className = "", enableHighlight = t
               </code>
             );
           },
-          pre: ({ children }) => (
-            <pre className="rounded-lg overflow-x-auto p-4 my-3">{children}</pre>
-          ),
+          pre: ({ children }) => {
+            const [isCopied, setIsCopied] = useState(false);
+
+            const getCodeText = () => {
+              if (!children) return "";
+              if (typeof children === 'string') return children;
+              if (children.props?.children) {
+                const codeChildren = children.props.children;
+                if (typeof codeChildren === 'string') return codeChildren;
+                if (Array.isArray(codeChildren)) {
+                  return codeChildren.map(child =>
+                    typeof child === 'string' ? child : ''
+                  ).join('');
+                }
+              }
+              return "";
+            };
+
+            const handleCopy = async () => {
+              const text = getCodeText();
+              try {
+                await navigator.clipboard.writeText(text);
+                setIsCopied(true);
+                setTimeout(() => setIsCopied(false), 2000);
+              } catch (err) {
+                console.error('复制失败:', err);
+              }
+            };
+
+            return (
+              <div className="relative group">
+                <button
+                  onClick={handleCopy}
+                  className="absolute top-2 right-2 p-1.5 rounded-md bg-zinc-700/80 hover:bg-zinc-600 text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center gap-1"
+                  title={isCopied ? "已复制" : "复制代码"}
+                >
+                  {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                </button>
+                <pre className="rounded-lg overflow-x-auto p-4 my-3">{children}</pre>
+              </div>
+            );
+          },
         }}
       >
         {children ?? ""}

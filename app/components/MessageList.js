@@ -28,6 +28,7 @@ import {
   Thumb,
   Citations,
 } from "./MessageListHelpers";
+import { CHAT_MODELS } from "./ChatModels";
 
 
 export default function MessageList({
@@ -248,7 +249,9 @@ export default function MessageList({
               {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching) && (
                 <div className="flex items-center gap-1.5">
                   <AIAvatar model={model} size={28} />
-                  <span className="text-xs text-zinc-400 font-medium">AI</span>
+                  <span className="text-xs text-zinc-400 font-medium">
+                    {CHAT_MODELS.find((m) => m.id === model)?.name || "AI"}
+                  </span>
                 </div>
               )}
 
