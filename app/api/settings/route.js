@@ -72,6 +72,13 @@ export async function DELETE(req) {
     const settings = await UserSettings.findOne({ userId: user.userId });
     if (!settings) return Response.json({ error: 'Settings not found' }, { status: 404 });
 
+    const targetPrompt = settings.systemPrompts.find(p => p._id.toString() === promptId);
+    if (!targetPrompt) return Response.json({ error: 'Prompt not found' }, { status: 404 });
+
+    if (targetPrompt?.name === '默认助手') {
+        return Response.json({ error: 'Cannot delete the default prompt' }, { status: 400 });
+    }
+
     // 防止删除最后一个提示词
     if (settings.systemPrompts.length <= 1) {
         return Response.json({ error: 'Cannot delete the last prompt' }, { status: 400 });
@@ -137,6 +144,10 @@ export async function PATCH(req) {
 
     const p = settings.systemPrompts?.id?.(promptId);
     if (!p) return Response.json({ error: 'Prompt not found' }, { status: 404 });
+
+    if (p?.name === '默认助手') {
+        return Response.json({ error: 'Cannot edit the default prompt' }, { status: 400 });
+    }
 
     p.name = String(name);
     p.content = String(content);

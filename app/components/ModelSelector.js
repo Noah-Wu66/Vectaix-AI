@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronUp, Shield } from "lucide-react";
+import { ChevronUp, Shield, ShieldOff } from "lucide-react";
 import { Gemini, Claude, OpenAI } from "@lobehub/icons";
 import { CHAT_MODELS } from "./ChatModels";
 
@@ -43,22 +43,32 @@ export default function ModelSelector({ model, onModelChange }) {
         >
           <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
           {m.name}
-          {m.privacy && (
-            <span
-              className="ml-auto relative group"
-              tabIndex={0}
-              aria-label="您的数据不会被用于训练模型"
-            >
+          <button
+            className="ml-auto relative group"
+            type="button"
+            tabIndex={0}
+            aria-label={m.privacy ? "您的数据不会被用于训练模型" : "您的数据可能被用于训练模型"}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            {m.privacy ? (
               <Shield
                 size={14}
                 className={`${model === m.id ? "text-white/90" : "text-emerald-500"}`}
                 title="您的数据不会被用于训练模型"
               />
-              <span className="pointer-events-none absolute right-0 top-full mt-1 w-max max-w-[220px] rounded-md bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100">
-                您的数据不会被用于训练模型
-              </span>
+            ) : (
+              <ShieldOff
+                size={14}
+                className={`${model === m.id ? "text-white/90" : "text-red-500"}`}
+                title="您的数据可能被用于训练模型"
+              />
+            )}
+            <span className="pointer-events-none absolute right-0 top-full mt-1 w-max max-w-[220px] rounded-md bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100">
+              {m.privacy ? "您的数据不会被用于训练模型" : "您的数据可能被用于训练模型"}
             </span>
-          )}
+          </button>
         </button>
       ))}
     </>
