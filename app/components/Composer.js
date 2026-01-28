@@ -62,6 +62,7 @@ export default function Composer({
   const toast = useToast();
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showAddPrompt, setShowAddPrompt] = useState(false);
   const [showEditPrompt, setShowEditPrompt] = useState(false);
   const [newPromptName, setNewPromptName] = useState("");
@@ -590,152 +591,10 @@ export default function Composer({
                         </div>
                       )}
 
-                      {/* History limit */}
+                      {/* 智能联网 */}
                       <div>
                         <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                          历史限制
-                        </label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="20"
-                          step="2"
-                          value={historyLimit}
-                          onChange={(e) => setHistoryLimit(Number(e.target.value))}
-                          className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                        />
-                        <span className="text-xs text-right block mt-1 text-zinc-600">
-                          {historyLimit || "无限制"} 条
-                        </span>
-                      </div>
-
-                      {/* Model-specific settings */}
-                      {model === "gemini-3-flash-preview" ? (
-                        <>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              思考深度
-                            </label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="3"
-                              step="1"
-                              value={["minimal", "low", "medium", "high"].indexOf(thinkingLevel)}
-                              onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][e.target.value])}
-                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                            />
-                            <span className="text-xs text-right block mt-1 text-zinc-600">
-                              {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
-                            </span>
-                          </div>
-                        </>
-                      ) : model === "gemini-3-pro-preview" ? (
-                        <>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              思考深度
-                            </label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="1"
-                              step="1"
-                              value={thinkingLevel === "high" ? 1 : 0}
-                              onChange={(e) => setThinkingLevel(e.target.value === "1" ? "high" : "low")}
-                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                            />
-                            <span className="text-xs text-right block mt-1 text-zinc-600">
-                              {thinkingLevel === "high" ? "深度" : "快速"}
-                            </span>
-                          </div>
-                        </>
-                      ) : model?.startsWith("claude-") ? (
-                        <>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              思考深度
-                            </label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="6"
-                              step="1"
-                              value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(budgetTokens)}
-                              onChange={(e) => setBudgetTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
-                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                            />
-                            <span className="text-xs text-right block mt-1 text-zinc-600">
-                              {budgetTokens >= 1000 ? `${Math.round(budgetTokens / 1000)}K` : budgetTokens}
-                            </span>
-                          </div>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              最大输出
-                            </label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="6"
-                              step="1"
-                              value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(maxTokens)}
-                              onChange={(e) => setMaxTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
-                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                            />
-                            <span className="text-xs text-right block mt-1 text-zinc-600">
-                              {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
-                            </span>
-                          </div>
-                        </>
-                      ) : model?.startsWith("gpt-") ? (
-                        <>
-                          <div>
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                              思考深度
-                            </label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="3"
-                              step="1"
-                              value={(() => {
-                                const idx = ["minimal", "low", "medium", "high"].indexOf(thinkingLevel);
-                                return idx >= 0 ? idx : 3;
-                              })()}
-                              onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][Number(e.target.value)])}
-                              className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                            />
-                            <span className="text-xs text-right block mt-1 text-zinc-600">
-                              {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
-                            </span>
-                          </div>
-                        </>
-                      ) : null}
-
-                      {!model?.startsWith("claude-") && (
-                        <div>
-                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                            最大输出
-                          </label>
-                          <input
-                            type="range"
-                            min="0"
-                            max={maxTokenOptions.length - 1}
-                            step="1"
-                            value={maxTokenOptions.indexOf(maxTokens)}
-                            onChange={(e) => setMaxTokens(maxTokenOptions[e.target.value])}
-                            className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                          />
-                          <span className="text-xs text-right block mt-1 text-zinc-600">
-                            {isOpenAIModel
-                              ? (maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens)
-                              : (maxTokens >= 1024 ? `${Math.round(maxTokens / 1024)}K` : maxTokens)}
-                          </span>
-                        </div>
-                      )}
-                      <div>
-                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                          联网搜索
+                          智能联网
                         </label>
                         <button
                           onClick={() => setWebSearch(!webSearch)}
@@ -748,6 +607,178 @@ export default function Composer({
                           <Globe size={14} />
                           {webSearch ? "开" : "关"}
                         </button>
+                      </div>
+
+                      {/* 高级设置 */}
+                      <div className="border-t border-zinc-200 pt-3">
+                        <button
+                          onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                          type="button"
+                          className="w-full flex items-center justify-between text-sm text-zinc-600 hover:text-zinc-800 transition-colors"
+                        >
+                          <span className="font-medium">高级设置</span>
+                          <ChevronUp
+                            size={16}
+                            className={`transition-transform ${showAdvancedSettings ? "" : "rotate-180"}`}
+                          />
+                        </button>
+
+                        <AnimatePresence>
+                          {showAdvancedSettings && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="pt-3 space-y-4">
+                                {/* History limit */}
+                                <div>
+                                  <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                                    历史限制
+                                  </label>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="20"
+                                    step="2"
+                                    value={historyLimit}
+                                    onChange={(e) => setHistoryLimit(Number(e.target.value))}
+                                    className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                  />
+                                  <span className="text-xs text-right block mt-1 text-zinc-600">
+                                    {historyLimit || "无限制"} 条
+                                  </span>
+                                </div>
+
+                                {/* Model-specific settings */}
+                                {model === "gemini-3-flash-preview" ? (
+                                  <>
+                                    <div>
+                                      <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                                        思考深度
+                                      </label>
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="3"
+                                        step="1"
+                                        value={["minimal", "low", "medium", "high"].indexOf(thinkingLevel)}
+                                        onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][e.target.value])}
+                                        className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                      />
+                                      <span className="text-xs text-right block mt-1 text-zinc-600">
+                                        {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : model === "gemini-3-pro-preview" ? (
+                                  <>
+                                    <div>
+                                      <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                                        思考深度
+                                      </label>
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="1"
+                                        value={thinkingLevel === "high" ? 1 : 0}
+                                        onChange={(e) => setThinkingLevel(e.target.value === "1" ? "high" : "low")}
+                                        className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                      />
+                                      <span className="text-xs text-right block mt-1 text-zinc-600">
+                                        {thinkingLevel === "high" ? "深度" : "快速"}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : model?.startsWith("claude-") ? (
+                                  <>
+                                    <div>
+                                      <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                                        思考深度
+                                      </label>
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="6"
+                                        step="1"
+                                        value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(budgetTokens)}
+                                        onChange={(e) => setBudgetTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
+                                        className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                      />
+                                      <span className="text-xs text-right block mt-1 text-zinc-600">
+                                        {budgetTokens >= 1000 ? `${Math.round(budgetTokens / 1000)}K` : budgetTokens}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                                        最大输出
+                                      </label>
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="6"
+                                        step="1"
+                                        value={[1000, 2000, 4000, 8000, 16000, 32000, 64000].indexOf(maxTokens)}
+                                        onChange={(e) => setMaxTokens([1000, 2000, 4000, 8000, 16000, 32000, 64000][e.target.value])}
+                                        className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                      />
+                                      <span className="text-xs text-right block mt-1 text-zinc-600">
+                                        {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : model?.startsWith("gpt-") ? (
+                                  <>
+                                    <div>
+                                      <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                                        思考深度
+                                      </label>
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="3"
+                                        step="1"
+                                        value={(() => {
+                                          const idx = ["minimal", "low", "medium", "high"].indexOf(thinkingLevel);
+                                          return idx >= 0 ? idx : 3;
+                                        })()}
+                                        onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][Number(e.target.value)])}
+                                        className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                      />
+                                      <span className="text-xs text-right block mt-1 text-zinc-600">
+                                        {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : null}
+
+                                {!model?.startsWith("claude-") && (
+                                  <div>
+                                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                                      最大输出
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max={maxTokenOptions.length - 1}
+                                      step="1"
+                                      value={maxTokenOptions.indexOf(maxTokens)}
+                                      onChange={(e) => setMaxTokens(maxTokenOptions[e.target.value])}
+                                      className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                    />
+                                    <span className="text-xs text-right block mt-1 text-zinc-600">
+                                      {isOpenAIModel
+                                        ? (maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens)
+                                        : (maxTokens >= 1024 ? `${Math.round(maxTokens / 1024)}K` : maxTokens)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
                   </motion.div>
