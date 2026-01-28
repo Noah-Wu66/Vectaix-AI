@@ -71,24 +71,10 @@ export default function Markdown({ children, className = "", enableHighlight = t
           },
           pre: ({ children }) => {
             const [isCopied, setIsCopied] = useState(false);
-
-            const getCodeText = () => {
-              if (!children) return "";
-              if (typeof children === 'string') return children;
-              if (children.props?.children) {
-                const codeChildren = children.props.children;
-                if (typeof codeChildren === 'string') return codeChildren;
-                if (Array.isArray(codeChildren)) {
-                  return codeChildren.map(child =>
-                    typeof child === 'string' ? child : ''
-                  ).join('');
-                }
-              }
-              return "";
-            };
+            const preRef = useRef(null);
 
             const handleCopy = async () => {
-              const text = getCodeText();
+              const text = preRef.current?.textContent || "";
               try {
                 await navigator.clipboard.writeText(text);
                 setIsCopied(true);
@@ -107,7 +93,7 @@ export default function Markdown({ children, className = "", enableHighlight = t
                 >
                   {isCopied ? <Check size={14} /> : <Copy size={14} />}
                 </button>
-                <pre className="rounded-lg overflow-x-auto p-4 my-3">{children}</pre>
+                <pre ref={preRef} className="rounded-lg overflow-x-auto p-4 my-3">{children}</pre>
               </div>
             );
           },
