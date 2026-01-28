@@ -19,6 +19,7 @@ const DEFAULT_MODEL = "gemini-3-flash-preview";
 const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
   "gemini-3-pro-preview": "high",
+  "gpt-5.2": "medium",
 };
 const DEFAULT_MAX_TOKENS = 65536;
 const DEFAULT_BUDGET_TOKENS = 32000;

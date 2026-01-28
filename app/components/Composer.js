@@ -738,17 +738,17 @@ export default function Composer({
                                       <input
                                         type="range"
                                         min="0"
-                                        max="3"
+                                        max="4"
                                         step="1"
                                         value={(() => {
-                                          const idx = ["minimal", "low", "medium", "high"].indexOf(thinkingLevel);
-                                          return idx >= 0 ? idx : 3;
+                                          const idx = ["none", "low", "medium", "high", "xhigh"].indexOf(thinkingLevel);
+                                          return idx >= 0 ? idx : 2;
                                         })()}
-                                        onChange={(e) => setThinkingLevel(["minimal", "low", "medium", "high"][Number(e.target.value)])}
+                                        onChange={(e) => setThinkingLevel(["none", "low", "medium", "high", "xhigh"][Number(e.target.value)])}
                                         className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                                       />
                                       <span className="text-xs text-right block mt-1 text-zinc-600">
-                                        {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
+                                        {{ none: "无", low: "低", medium: "中", high: "高", xhigh: "超高" }[thinkingLevel] || "中"}
                                       </span>
                                     </div>
                                   </>

@@ -37,6 +37,13 @@ export function createChatAppActions({
   setEditingImage,
   completionSoundVolume,
 }) {
+  const getEffectiveThinkingLevel = (m) => {
+    const v = thinkingLevels?.[m];
+    if (typeof v === "string" && v) return v;
+    if (m?.startsWith("gpt-")) return "medium";
+    return undefined;
+  };
+
   const stopStreaming = () => {
     chatAbortRef.current?.abort();
     chatAbortRef.current = null;
@@ -156,7 +163,7 @@ export function createChatAppActions({
 
       const config = buildChatConfig({
         model,
-        thinkingLevel: thinkingLevels?.[model],
+        thinkingLevel: getEffectiveThinkingLevel(model),
         mediaResolution,
         systemPrompts,
         activePromptId,
@@ -182,7 +189,7 @@ export function createChatAppActions({
         signal: (chatAbortRef.current = new AbortController()).signal,
         provider: currentModelConfig?.provider,
         settings: !currentConversationId ? {
-          thinkingLevel: thinkingLevels?.[model] || null,
+          thinkingLevel: getEffectiveThinkingLevel(model) || null,
           historyLimit,
           maxTokens,
           budgetTokens,
@@ -220,7 +227,7 @@ export function createChatAppActions({
 
     const config = buildChatConfig({
       model,
-      thinkingLevel: thinkingLevels?.[model],
+      thinkingLevel: getEffectiveThinkingLevel(model),
       mediaResolution,
       systemPrompts,
       activePromptId,
@@ -361,7 +368,7 @@ export function createChatAppActions({
 
     const config = buildChatConfig({
       model,
-      thinkingLevel: thinkingLevels?.[model],
+      thinkingLevel: getEffectiveThinkingLevel(model),
       mediaResolution,
       systemPrompts,
       activePromptId,
