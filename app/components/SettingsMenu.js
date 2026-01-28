@@ -272,45 +272,50 @@ export default function SettingsMenu({
                       )}
                     </AnimatePresence>
 
-                    {activePromptId && (
-                      <div className="mt-2 flex items-center justify-between gap-2">
-                        {(() => {
-                          const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
-                          if (cur?.name === "默认助手") {
-                            return <span className="text-[11px] text-zinc-400">默认提示词不可删除</span>;
-                          }
-                          if (systemPrompts.length <= 1) {
-                            return <span className="text-[11px] text-zinc-400">仅剩 1 个提示词不可删除</span>;
-                          }
-                          return (
-                            <button
-                              onClick={deleteCurrentPrompt}
-                              className="text-xs text-red-500 hover:text-red-600"
-                              type="button"
-                            >
-                              删除当前提示词
-                            </button>
-                          );
-                        })()}
+                    {(() => {
+                      const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
+                      const isGemini = model?.startsWith("gemini-");
+                      const isDefault = cur?.name === "默认助手";
+                      const hideActions = isGemini && isDefault;
+                      if (!activePromptId || hideActions) return null;
+                      return (
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          {(() => {
+                            if (cur?.name === "默认助手") {
+                              return <span className="text-[11px] text-zinc-400">默认提示词不可删除</span>;
+                            }
+                            if (systemPrompts.length <= 1) {
+                              return <span className="text-[11px] text-zinc-400">仅剩 1 个提示词不可删除</span>;
+                            }
+                            return (
+                              <button
+                                onClick={deleteCurrentPrompt}
+                                className="text-xs text-red-500 hover:text-red-600"
+                                type="button"
+                              >
+                                删除当前提示词
+                              </button>
+                            );
+                          })()}
 
-                        {(() => {
-                          const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
-                          if (cur?.name === "默认助手") {
-                            return <span className="text-[11px] text-zinc-400">默认提示词不可编辑</span>;
-                          }
-                          return (
-                            <button
-                              onClick={openEditPrompt}
-                              className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-800"
-                              type="button"
-                            >
-                              <Pencil size={14} />
-                              编辑当前提示词
-                            </button>
-                          );
-                        })()}
-                      </div>
-                    )}
+                          {(() => {
+                            if (cur?.name === "默认助手") {
+                              return <span className="text-[11px] text-zinc-400">默认提示词不可编辑</span>;
+                            }
+                            return (
+                              <button
+                                onClick={openEditPrompt}
+                                className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-800"
+                                type="button"
+                              >
+                                <Pencil size={14} />
+                                编辑当前提示词
+                              </button>
+                            );
+                          })()}
+                        </div>
+                      );
+                    })()}
 
                     <AnimatePresence>
                       {showEditPrompt && activePromptId && (
