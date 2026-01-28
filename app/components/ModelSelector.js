@@ -44,11 +44,20 @@ export default function ModelSelector({ model, onModelChange }) {
           <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
           {m.name}
           {m.privacy && (
-            <Shield
-              size={14}
-              className={`ml-auto ${model === m.id ? "text-white/90" : "text-emerald-500"}`}
-              title="隐私保护模型"
-            />
+            <span
+              className="ml-auto relative group"
+              tabIndex={0}
+              aria-label="您的数据不会被用于训练模型"
+            >
+              <Shield
+                size={14}
+                className={`${model === m.id ? "text-white/90" : "text-emerald-500"}`}
+                title="您的数据不会被用于训练模型"
+              />
+              <span className="pointer-events-none absolute right-0 top-full mt-1 w-max max-w-[220px] rounded-md bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100">
+                您的数据不会被用于训练模型
+              </span>
+            </span>
           )}
         </button>
       ))}
