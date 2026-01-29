@@ -189,6 +189,7 @@ export function createChatAppActions({
         setLoading,
         signal: (chatAbortRef.current = new AbortController()).signal,
         provider: currentModelConfig?.provider,
+        userMessageId: userMsg.id,
         settings: !currentConversationId ? {
           thinkingLevel: getEffectiveThinkingLevel(model) || null,
           historyLimit,

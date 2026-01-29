@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 const MessageSchema = new mongoose.Schema({
+    id: { type: String },
     role: { type: String, required: true }, // 'user' or 'model'
     content: { type: String, default: '' },
     thought: { type: String }, // For model thinking blocks

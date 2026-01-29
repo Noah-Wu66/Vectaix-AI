@@ -9,6 +9,7 @@ import {
     isNonEmptyString,
     getStoredPartsFromMessage,
     sanitizeStoredMessages,
+    generateMessageId,
     injectCurrentTimeSystemReminder
 } from '@/app/api/chat/utils';
 import {
@@ -97,7 +98,7 @@ export async function POST(req) {
             );
         }
 
-        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings } = body;
+        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
 
         // Validate required fields
         if (!model || typeof model !== 'string') {
@@ -287,9 +288,13 @@ export async function POST(req) {
             }
 
             const userMsgTime = Date.now();
+            const resolvedUserMessageId = (isNonEmptyString(userMessageId) && userMessageId.length <= 128)
+                ? userMessageId
+                : generateMessageId();
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
                 $push: {
                     messages: {
+                        id: resolvedUserMessageId,
                         role: 'user',
                         content: prompt,
                         type: 'text',
@@ -490,11 +495,15 @@ export async function POST(req) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
                             : { _id: currentConversationId, userId: user.userId };
+                        const resolvedModelMessageId = (isNonEmptyString(modelMessageId) && modelMessageId.length <= 128)
+                            ? modelMessageId
+                            : generateMessageId();
                         await Conversation.findOneAndUpdate(
                             writeCondition,
                             {
                                 $push: {
                                     messages: {
+                                        id: resolvedModelMessageId,
                                         role: 'model',
                                         content: fullText,
                                         thought: fullThought || null,

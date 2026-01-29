@@ -75,6 +75,11 @@ export function isNonEmptyString(value) {
     return typeof value === 'string' && value.trim().length > 0;
 }
 
+export function generateMessageId() {
+    const rand = Math.random().toString(36).slice(2, 10);
+    return `msg_${Date.now()}_${rand}`;
+}
+
 export function getStoredPartsFromMessage(msg) {
     if (Array.isArray(msg?.parts) && msg.parts.length > 0) return msg.parts;
     return null;
@@ -88,6 +93,7 @@ export function sanitizeStoredMessage(msg) {
         content: typeof msg.content === 'string' ? msg.content : '',
         type: typeof msg.type === 'string' ? msg.type : 'text',
     };
+    if (isNonEmptyString(msg.id) && msg.id.length <= 128) out.id = msg.id;
     if (isNonEmptyString(msg.image)) out.image = msg.image;
     if (Array.isArray(msg.images) && msg.images.length > 0) out.images = msg.images;
     if (isNonEmptyString(msg.mimeType)) out.mimeType = msg.mimeType;

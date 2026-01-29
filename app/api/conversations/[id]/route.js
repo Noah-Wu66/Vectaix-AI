@@ -11,6 +11,7 @@ const ALLOWED_ROLES = new Set(['user', 'model']);
 const MAX_REQUEST_BYTES = 2_000_000;
 const MAX_MESSAGES = 500;
 const MAX_MESSAGE_CHARS = 20000;
+const MAX_MESSAGE_ID_CHARS = 128;
 const MAX_PART_TEXT_CHARS = 10000;
 const MAX_PARTS_PER_MESSAGE = 20;
 const MAX_IMAGES_PER_MESSAGE = 4;
@@ -55,6 +56,13 @@ function sanitizeMessage(msg, idx) {
     if (content.length > MAX_MESSAGE_CHARS) throw new Error(`messages[${idx}].content too long`);
 
     const out = { role, type, content };
+
+    if (typeof msg.id === 'string') {
+        if (!msg.id || msg.id.length > MAX_MESSAGE_ID_CHARS) {
+            throw new Error(`messages[${idx}].id invalid`);
+        }
+        out.id = msg.id;
+    }
 
     if (typeof msg.thought === 'string') {
         if (msg.thought.length > MAX_MESSAGE_CHARS) throw new Error(`messages[${idx}].thought too long`);

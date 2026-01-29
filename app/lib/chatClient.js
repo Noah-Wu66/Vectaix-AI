@@ -31,6 +31,8 @@ export function buildChatConfig({
 
 let completionSoundUnlocked = false;
 
+const generateMessageId = () => `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
 export function unlockCompletionSound() {
   if (completionSoundUnlocked) return;
   if (typeof Audio === "undefined") return;
@@ -69,6 +71,7 @@ export async function runChat({
   refusalRestoreMessages,
   onSensitiveRefusal,
   onError,
+  userMessageId,
 }) {
   // 在函数开头声明，确保在整个函数范围内可用
   let newConvId = null;
@@ -91,6 +94,8 @@ export async function runChat({
     parts: m.parts || null,
   }));
 
+  const modelMessageId = generateMessageId();
+
   const payload = {
     prompt,
     model,
@@ -101,13 +106,15 @@ export async function runChat({
     ...(mode ? { mode } : {}),
     ...(mode === "regenerate" ? { messages: messagesForRegenerate || [] } : {}),
     ...(!conversationId && settings ? { settings } : {}),
+    ...(userMessageId ? { userMessageId } : {}),
+    modelMessageId,
   };
 
   // 根据 provider 选择 API 端点
   const apiEndpoint = provider === "claude" ? "/api/claude" : provider === "openai" ? "/api/openai" : "/api/gemini";
 
   setLoading(true);
-  let streamMsgId = null;
+  let streamMsgId = modelMessageId;
   let simulatedStreamTimer = null;
 
   try {
@@ -136,7 +143,6 @@ export async function runChat({
       fetchConversations();
     }
 
-    streamMsgId = Date.now();
     setMessages((prev) => [
       ...prev,
       {
