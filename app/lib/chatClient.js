@@ -271,10 +271,18 @@ export async function runChat({
       if (p === "[DONE]") {
         sawDone = true;
         isSearching = false;
+        // Gemini 模型返回日志
+        if (provider === "gemini") {
+          console.log("[Gemini 返回完成]", { fullText, fullThought, citations });
+        }
         return;
       }
       try {
         const data = JSON.parse(p);
+        // Gemini 模型返回日志
+        if (provider === "gemini") {
+          console.log("[Gemini 返回]", data);
+        }
         if (data.type === "thought") {
           fullThought += data.content;
         } else if (data.type === "text") {
