@@ -408,7 +408,6 @@ export async function runChat({
 
     const isGeminiRefusal =
       provider === "gemini" &&
-      mode !== "regenerate" &&
       !signal?.aborted &&
       sawDone &&
       fullText.trim() === "" &&
