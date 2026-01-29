@@ -36,6 +36,7 @@ export function createChatAppActions({
   setEditingImageAction,
   setEditingImage,
   completionSoundVolume,
+  onSensitiveRefusal,
 }) {
   const getEffectiveThinkingLevel = (m) => {
     const v = thinkingLevels?.[m];
@@ -196,6 +197,7 @@ export function createChatAppActions({
           activePromptId: activePromptId != null ? String(activePromptId) : null,
         } : undefined,
         completionSoundVolume,
+        onSensitiveRefusal,
         onError: (msg) => toast.error(msg),
       });
     } catch (err) {
@@ -222,6 +224,7 @@ export function createChatAppActions({
     userInterruptedRef.current = false;
 
     const userMsg = messages[userMsgIndex];
+    const messagesBeforeRegenerate = messages.slice();
     const historyWithUser = messages.slice(0, index);
     setMessages(historyWithUser);
 
@@ -254,6 +257,8 @@ export function createChatAppActions({
         messagesForRegenerate: historyWithUser,
         provider: currentModelConfig?.provider,
         completionSoundVolume,
+        refusalRestoreMessages: messagesBeforeRegenerate,
+        onSensitiveRefusal,
         onError: (msg) => toast.error(msg),
       });
     } finally {
@@ -282,6 +287,7 @@ export function createChatAppActions({
     unlockCompletionSound();
     const newContent = editingContent.trim();
     const oldMsg = messages[index];
+    const messagesBeforeEdit = messages.slice();
     const existingImageSrcs = getMessageImageSrcs(oldMsg);
     const canKeepExistingImages = existingImageSrcs.length > 0 && existingImageSrcs.every((src) => isHttpUrl(src) || isDataImageUrl(src));
     const hasImageAfterEdit =
@@ -395,6 +401,8 @@ export function createChatAppActions({
         messagesForRegenerate: nextMessages,
         provider: currentModelConfig?.provider,
         completionSoundVolume,
+        refusalRestoreMessages: messagesBeforeEdit,
+        onSensitiveRefusal,
         onError: (msg) => toast.error(msg),
       });
     } finally {

@@ -40,6 +40,7 @@ export default function ChatApp() {
   const [editingImageAction, setEditingImageAction] = useState("keep");
   const [editingImage, setEditingImage] = useState(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [composerPrefill, setComposerPrefill] = useState({ text: "", nonce: 0 });
 
   const chatEndRef = useRef(null);
   const messageListRef = useRef(null);
@@ -131,6 +132,15 @@ export default function ChatApp() {
     }
   };
 
+  const handleSensitiveRefusal = (payload) => {
+    const promptText = typeof payload === "string" ? payload : payload?.prompt;
+    const shouldPrefill = typeof payload === "object" ? payload?.shouldPrefill !== false : true;
+    toast.warning("消息包含敏感内容，请修改后重新尝试");
+    if (shouldPrefill && typeof promptText === "string" && promptText.trim()) {
+      setComposerPrefill({ text: promptText, nonce: Date.now() });
+    }
+  };
+
   const actions = createChatAppActions({
     toast,
     messages,
@@ -162,6 +172,7 @@ export default function ChatApp() {
     setEditingImageAction,
     setEditingImage,
     completionSoundVolume,
+    onSensitiveRefusal: handleSensitiveRefusal,
   });
 
   useEffect(() => {
@@ -579,6 +590,7 @@ export default function ChatApp() {
             onUpdatePrompt: updatePrompt,
             onSend: actions.handleSendFromComposer,
             onStop: actions.stopStreaming,
+            prefill: composerPrefill,
           }}
         />
       )}

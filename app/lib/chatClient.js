@@ -66,6 +66,8 @@ export async function runChat({
   provider,
   settings,
   completionSoundVolume,
+  refusalRestoreMessages,
+  onSensitiveRefusal,
   onError,
 }) {
   // 在函数开头声明，确保在整个函数范围内可用
@@ -403,6 +405,67 @@ export async function runChat({
     };
 
     await waitForSimulatedStream();
+
+    const isGeminiRefusal =
+      provider === "gemini" &&
+      mode !== "regenerate" &&
+      !signal?.aborted &&
+      sawDone &&
+      fullText.trim() === "" &&
+      fullThought.trim() === "" &&
+      (!citations || citations.length === 0);
+
+    if (isGeminiRefusal) {
+      const convIdForSync = newConvId || currentConversationId || conversationId;
+      let nextMessagesForSync = null;
+      if (Array.isArray(refusalRestoreMessages)) {
+        setMessages(refusalRestoreMessages);
+        nextMessagesForSync = refusalRestoreMessages;
+      } else {
+        setMessages((prev) => {
+          if (!Array.isArray(prev) || prev.length === 0) return prev;
+          let next = prev.filter((msg) => msg.id !== streamMsgId);
+          const hasPromptText = typeof prompt === "string" && prompt.trim();
+          if (hasPromptText) {
+            for (let i = next.length - 1; i >= 0; i -= 1) {
+              const msg = next[i];
+              if (msg?.role === "user" && msg?.content === prompt) {
+                next.splice(i, 1);
+                break;
+              }
+            }
+          } else {
+            for (let i = next.length - 1; i >= 0; i -= 1) {
+              const msg = next[i];
+              if (msg?.role === "user" && typeof msg?.content === "string" && msg.content.trim() === "") {
+                next.splice(i, 1);
+                break;
+              }
+            }
+          }
+          nextMessagesForSync = next;
+          return next;
+        });
+      }
+
+      if (convIdForSync && Array.isArray(nextMessagesForSync)) {
+        try {
+          await fetch(`/api/conversations/${convIdForSync}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ messages: nextMessagesForSync }),
+            }
+          );
+        } catch (syncErr) {
+          console.error("Failed to rollback sensitive message:", syncErr);
+        }
+      }
+
+      const shouldPrefill = mode !== "regenerate" && !Array.isArray(refusalRestoreMessages);
+      onSensitiveRefusal?.({ prompt, shouldPrefill });
+      return;
+    }
 
     if (!signal?.aborted && (sawDone || fullText.length > 0)) {
       playCompletionSound();

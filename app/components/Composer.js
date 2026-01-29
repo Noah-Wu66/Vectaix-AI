@@ -36,6 +36,7 @@ export default function Composer({
   onUpdatePrompt,
   onSend,
   onStop,
+  prefill,
 }) {
   const toast = useToast();
   const [input, setInput] = useState("");
@@ -80,6 +81,16 @@ export default function Composer({
     if (!el) return;
     el.style.height = "auto"; const sh = el.scrollHeight; el.style.height = `${Math.min(sh, 160)}px`; el.style.overflowY = sh > 160 ? "auto" : "hidden";
   }, [input, model]);
+
+  useEffect(() => {
+    if (!prefill || typeof prefill.text !== "string") return;
+    setInput(prefill.text);
+    const el = textareaRef.current;
+    if (el) {
+      el.focus();
+      el.style.height = "auto"; const sh = el.scrollHeight; el.style.height = `${Math.min(sh, 160)}px`; el.style.overflowY = sh > 160 ? "auto" : "hidden";
+    }
+  }, [prefill?.nonce]);
   const MAX_IMAGE_SIZE_MB = 20;
   const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
   const SUPPORTED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
