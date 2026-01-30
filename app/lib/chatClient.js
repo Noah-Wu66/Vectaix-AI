@@ -30,23 +30,53 @@ export function buildChatConfig({
 }
 
 let completionSoundUnlocked = false;
+let completionSoundUnlocking = false;
+let completionSoundAudio = null;
+
+const getCompletionSoundAudio = () => {
+  if (typeof Audio === "undefined") return null;
+  if (!completionSoundAudio) {
+    completionSoundAudio = new Audio("/audio/staplebops-01.aac");
+    completionSoundAudio.preload = "auto";
+  }
+  return completionSoundAudio;
+};
 
 const generateMessageId = () => `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 export function unlockCompletionSound() {
-  if (completionSoundUnlocked) return;
-  if (typeof Audio === "undefined") return;
-  const audio = new Audio("/audio/staplebops-01.aac");
+  if (completionSoundUnlocked || completionSoundUnlocking) return;
+  const audio = getCompletionSoundAudio();
+  if (!audio) return;
+  completionSoundUnlocking = true;
+  const prevMuted = audio.muted;
+  const prevVolume = audio.volume;
+  audio.muted = true;
   audio.volume = 0;
   const attempt = audio.play();
+  const finalize = () => {
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {}
+    audio.muted = prevMuted;
+    audio.volume = prevVolume;
+  };
   if (attempt && typeof attempt.then === "function") {
     attempt
       .then(() => {
-        audio.pause();
-        audio.currentTime = 0;
+        finalize();
         completionSoundUnlocked = true;
+        completionSoundUnlocking = false;
       })
-      .catch(() => {});
+      .catch(() => {
+        finalize();
+        completionSoundUnlocking = false;
+      });
+  } else {
+    finalize();
+    completionSoundUnlocked = true;
+    completionSoundUnlocking = false;
   }
 }
 
@@ -79,10 +109,14 @@ export async function runChat({
   const playCompletionSound = () => {
     const rawVolume = Number(completionSoundVolume);
     if (!Number.isFinite(rawVolume) || rawVolume <= 0) return;
-    if (typeof Audio === "undefined") return;
-    const audio = new Audio("/audio/staplebops-01.aac");
+    const audio = getCompletionSoundAudio();
+    if (!audio) return;
     const normalized = Math.max(0, Math.min(1, rawVolume / 100));
     audio.volume = normalized;
+    audio.muted = false;
+    try {
+      audio.currentTime = 0;
+    } catch {}
     audio.play().catch(() => {});
   };
   const historyPayload = historyMessages.map((m) => ({
