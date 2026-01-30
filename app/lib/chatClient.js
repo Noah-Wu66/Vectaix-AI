@@ -31,52 +31,68 @@ export function buildChatConfig({
 
 let completionSoundUnlocked = false;
 let completionSoundUnlocking = false;
-let completionSoundAudio = null;
+let completionSoundContext = null;
+let completionSoundBuffer = null;
+let completionSoundBufferPromise = null;
 
-const getCompletionSoundAudio = () => {
-  if (typeof Audio === "undefined") return null;
-  if (!completionSoundAudio) {
-    completionSoundAudio = new Audio("/audio/staplebops-01.aac");
-    completionSoundAudio.preload = "auto";
-  }
-  return completionSoundAudio;
+const getCompletionSoundContext = () => {
+  if (typeof window === "undefined") return null;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!completionSoundContext) completionSoundContext = new AudioCtx();
+  return completionSoundContext;
+};
+
+const loadCompletionSoundBuffer = async () => {
+  if (completionSoundBuffer) return completionSoundBuffer;
+  if (completionSoundBufferPromise) return completionSoundBufferPromise;
+  const ctx = getCompletionSoundContext();
+  if (!ctx) return null;
+  completionSoundBufferPromise = fetch("/audio/staplebops-01.aac")
+    .then((res) => res.arrayBuffer())
+    .then((buf) => {
+      if (typeof ctx.decodeAudioData === "function") {
+        const decoded = ctx.decodeAudioData(buf);
+        if (decoded && typeof decoded.then === "function") return decoded;
+        return new Promise((resolve, reject) => {
+          ctx.decodeAudioData(buf, resolve, reject);
+        });
+      }
+      return null;
+    })
+    .then((decoded) => {
+      if (decoded) completionSoundBuffer = decoded;
+      return completionSoundBuffer;
+    })
+    .catch(() => null)
+    .finally(() => {
+      completionSoundBufferPromise = null;
+    });
+  return completionSoundBufferPromise;
 };
 
 const generateMessageId = () => `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 export function unlockCompletionSound() {
   if (completionSoundUnlocked || completionSoundUnlocking) return;
-  const audio = getCompletionSoundAudio();
-  if (!audio) return;
+  const ctx = getCompletionSoundContext();
+  if (!ctx) return;
   completionSoundUnlocking = true;
-  const prevMuted = audio.muted;
-  const prevVolume = audio.volume;
-  audio.muted = true;
-  audio.volume = 0;
-  const attempt = audio.play();
-  const finalize = () => {
-    audio.pause();
-    try {
-      audio.currentTime = 0;
-    } catch {}
-    audio.muted = prevMuted;
-    audio.volume = prevVolume;
-  };
+  const attempt = typeof ctx.resume === "function" ? ctx.resume() : null;
   if (attempt && typeof attempt.then === "function") {
     attempt
       .then(() => {
-        finalize();
         completionSoundUnlocked = true;
         completionSoundUnlocking = false;
+        loadCompletionSoundBuffer();
       })
       .catch(() => {
-        finalize();
         completionSoundUnlocking = false;
       });
   } else {
-    finalize();
     completionSoundUnlocked = true;
     completionSoundUnlocking = false;
+    loadCompletionSoundBuffer();
   }
 }
 
@@ -109,15 +125,23 @@ export async function runChat({
   const playCompletionSound = () => {
     const rawVolume = Number(completionSoundVolume);
     if (!Number.isFinite(rawVolume) || rawVolume <= 0) return;
-    const audio = getCompletionSoundAudio();
-    if (!audio) return;
+    const ctx = getCompletionSoundContext();
+    if (!ctx) return;
+    if (ctx.state === "suspended" && typeof ctx.resume === "function") {
+      ctx.resume().catch(() => {});
+    }
     const normalized = Math.max(0, Math.min(1, rawVolume / 100));
-    audio.volume = normalized;
-    audio.muted = false;
-    try {
-      audio.currentTime = 0;
-    } catch {}
-    audio.play().catch(() => {});
+    if (!completionSoundBuffer) {
+      loadCompletionSoundBuffer();
+      return;
+    }
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    gain.gain.value = normalized;
+    source.buffer = completionSoundBuffer;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    source.start(0);
   };
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
