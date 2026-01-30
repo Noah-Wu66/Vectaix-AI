@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp, Globe, Pencil, Plus, Settings2, X } from "lucide-react";
+import ConfirmModal from "./ConfirmModal";
 
 const OPENAI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 128000];
 const GEMINI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536];
@@ -39,6 +40,11 @@ export default function SettingsMenu({
   const [newPromptContent, setNewPromptContent] = useState("");
   const [editPromptName, setEditPromptName] = useState("");
   const [editPromptContent, setEditPromptContent] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState("");
+  const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmDanger, setConfirmDanger] = useState(false);
+  const confirmActionRef = useRef(null);
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
   const maxTokenOptions = isOpenAIModel ? OPENAI_TOKEN_OPTIONS : GEMINI_TOKEN_OPTIONS;
@@ -101,6 +107,17 @@ export default function SettingsMenu({
     await onDeletePrompt?.(activePromptId);
   };
 
+  const requestDeleteCurrentPrompt = () => {
+    if (!activePromptId || systemPrompts.length <= 1) return;
+    const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
+    if (cur?.name === "默认助手") return;
+    confirmActionRef.current = deleteCurrentPrompt;
+    setConfirmTitle("删除提示词");
+    setConfirmMessage(`确定要删除「${cur?.name || ""}」吗？此操作无法撤销。`);
+    setConfirmDanger(true);
+    setConfirmOpen(true);
+  };
+
   const openEditPrompt = () => {
     if (!activePromptId) return;
     const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
@@ -120,6 +137,18 @@ export default function SettingsMenu({
     const settings = await onUpdatePrompt?.({ promptId: activePromptId, name, content });
     if (!settings) return;
     setShowEditPrompt(false);
+  };
+
+  const requestUpdateCurrentPrompt = () => {
+    const name = editPromptName.trim();
+    const content = editPromptContent.trim();
+    if (!activePromptId || !name || !content) return;
+    const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
+    confirmActionRef.current = updateCurrentPrompt;
+    setConfirmTitle("保存修改");
+    setConfirmMessage(`确定要保存对「${cur?.name || ""}」的修改吗？`);
+    setConfirmDanger(false);
+    setConfirmOpen(true);
   };
 
   const closeSettings = () => {
@@ -289,7 +318,7 @@ export default function SettingsMenu({
                             }
                             return (
                               <button
-                                onClick={deleteCurrentPrompt}
+                                onClick={requestDeleteCurrentPrompt}
                                 className="text-xs text-red-500 hover:text-red-600"
                                 type="button"
                               >
@@ -342,7 +371,7 @@ export default function SettingsMenu({
                             />
                             <div className="flex gap-2">
                               <button
-                                onClick={updateCurrentPrompt}
+                                onClick={requestUpdateCurrentPrompt}
                                 className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white text-xs py-1.5 rounded-lg transition-colors"
                                 type="button"
                               >
@@ -547,6 +576,16 @@ export default function SettingsMenu({
           </>
         )}
       </AnimatePresence>
+      <ConfirmModal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => confirmActionRef.current?.()}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmText={confirmDanger ? "删除" : "确定"}
+        cancelText="取消"
+        danger={confirmDanger}
+      />
     </div>
   );
 }
