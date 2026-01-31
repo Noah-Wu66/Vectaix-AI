@@ -77,6 +77,37 @@ export default function SettingsMenu({
     }
   }, [model, maxTokens, maxTokenOptions, setMaxTokens]);
 
+  useEffect(() => {
+    if (!model || !Array.isArray(systemPrompts) || systemPrompts.length === 0) return;
+    const promptIds = systemPrompts.map((p) => String(p?._id));
+    const rememberedId = activePromptIds?.[model];
+    const rememberedMatch = rememberedId && promptIds.includes(String(rememberedId));
+    const activeMatch = activePromptId && promptIds.includes(String(activePromptId));
+    const defaultPrompt = systemPrompts.find((p) => p?.name === "默认助手");
+    const fallbackId = String((defaultPrompt?._id ?? systemPrompts[0]?._id) || "");
+    const nextId = rememberedMatch
+      ? String(rememberedId)
+      : activeMatch
+        ? String(activePromptId)
+        : fallbackId;
+    if (!nextId) return;
+    if (String(activePromptId || "") !== nextId) {
+      setActivePromptId(nextId);
+    }
+    if (String(rememberedId || "") !== nextId) {
+      setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
+    }
+  }, [model, systemPrompts, activePromptId, activePromptIds, setActivePromptId, setActivePromptIds]);
+
+  // 当切换提示词时，如果正在编辑，自动关闭编辑框并重置状态
+  useEffect(() => {
+    if (showEditPrompt) {
+      setShowEditPrompt(false);
+      setEditPromptName("");
+      setEditPromptContent("");
+    }
+  }, [activePromptId]);
+
   const addPrompt = async () => {
     if (!newPromptName.trim() || !newPromptContent.trim()) return;
     const settings = await onAddPrompt?.({
@@ -104,7 +135,16 @@ export default function SettingsMenu({
     if (!activePromptId || systemPrompts.length <= 1) return;
     const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
     if (cur?.name === "默认助手") return;
-    await onDeletePrompt?.(activePromptId);
+    const settings = await onDeletePrompt?.(activePromptId);
+    const prompts = settings?.systemPrompts;
+    if (Array.isArray(prompts) && prompts.length > 0) {
+      const defaultPrompt = prompts.find((p) => p?.name === "默认助手");
+      const nextId = String((defaultPrompt?._id ?? prompts[0]?._id) || "");
+      if (nextId) {
+        setActivePromptId(nextId);
+        setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
+      }
+    }
   };
 
   const requestDeleteCurrentPrompt = () => {
@@ -152,6 +192,12 @@ export default function SettingsMenu({
   };
 
   const closeSettings = () => {
+    // 如果确认弹窗是打开的，先关闭弹窗并清空 action，不执行其他清理
+    if (confirmOpen) {
+      setConfirmOpen(false);
+      confirmActionRef.current = null;
+      return;
+    }
     setShowSettings(false);
     setShowAdvancedSettings(false);
     setShowAddPrompt(false);
@@ -160,6 +206,7 @@ export default function SettingsMenu({
     setNewPromptContent("");
     setEditPromptName("");
     setEditPromptContent("");
+    confirmActionRef.current = null;
   };
 
   const toggleSettings = () => {
@@ -306,7 +353,7 @@ export default function SettingsMenu({
                       const isGemini = model?.startsWith("gemini-");
                       const isDefault = cur?.name === "默认助手";
                       const hideActions = isGemini && isDefault;
-                      if (!activePromptId || hideActions) return null;
+                      if (!activePromptId || !cur || hideActions) return null;
                       return (
                         <div className="mt-2 flex items-center justify-between gap-2">
                           {(() => {
@@ -578,8 +625,14 @@ export default function SettingsMenu({
       </AnimatePresence>
       <ConfirmModal
         open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => confirmActionRef.current?.()}
+        onClose={() => {
+          setConfirmOpen(false);
+          confirmActionRef.current = null;
+        }}
+        onConfirm={() => {
+          confirmActionRef.current?.();
+          confirmActionRef.current = null;
+        }}
         title={confirmTitle}
         message={confirmMessage}
         confirmText={confirmDanger ? "删除" : "确定"}
