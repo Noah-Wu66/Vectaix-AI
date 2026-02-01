@@ -80,16 +80,19 @@ export default function SettingsMenu({
   useEffect(() => {
     if (!model || !Array.isArray(systemPrompts) || systemPrompts.length === 0) return;
     const promptIds = systemPrompts.map((p) => String(p?._id));
+    
+    // 如果当前 activePromptId 有效，不自动切换
+    if (activePromptId && promptIds.includes(String(activePromptId))) {
+      return;
+    }
+    
     const rememberedId = activePromptIds?.[model];
     const rememberedMatch = rememberedId && promptIds.includes(String(rememberedId));
-    const activeMatch = activePromptId && promptIds.includes(String(activePromptId));
     const defaultPrompt = systemPrompts.find((p) => p?.name === "默认助手");
     const fallbackId = String((defaultPrompt?._id ?? systemPrompts[0]?._id) || "");
     const nextId = rememberedMatch
       ? String(rememberedId)
-      : activeMatch
-        ? String(activePromptId)
-        : fallbackId;
+      : fallbackId;
     if (!nextId) return;
     if (String(activePromptId || "") !== nextId) {
       setActivePromptId(nextId);

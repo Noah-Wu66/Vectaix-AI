@@ -39,7 +39,9 @@ const getCompletionSoundContext = () => {
   if (typeof window === "undefined") return null;
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtx) return null;
-  if (!completionSoundContext) completionSoundContext = new AudioCtx();
+  if (!completionSoundContext || completionSoundContext.state === "closed") {
+    completionSoundContext = new AudioCtx();
+  }
   return completionSoundContext;
 };
 
@@ -51,20 +53,21 @@ const loadCompletionSoundBuffer = async () => {
   completionSoundBufferPromise = fetch("/audio/staplebops-01.aac")
     .then((res) => res.arrayBuffer())
     .then((buf) => {
-      if (typeof ctx.decodeAudioData === "function") {
-        const decoded = ctx.decodeAudioData(buf);
-        if (decoded && typeof decoded.then === "function") return decoded;
-        return new Promise((resolve, reject) => {
-          ctx.decodeAudioData(buf, resolve, reject);
-        });
-      }
-      return null;
+      if (typeof ctx.decodeAudioData !== "function") return null;
+      const decoded = ctx.decodeAudioData(buf);
+      if (decoded && typeof decoded.then === "function") return decoded;
+      return new Promise((resolve, reject) => {
+        ctx.decodeAudioData(buf, resolve, reject);
+      });
     })
     .then((decoded) => {
       if (decoded) completionSoundBuffer = decoded;
       return completionSoundBuffer;
     })
-    .catch(() => null)
+    .catch((e) => {
+      console.error("[completionSound] decode failed:", e);
+      return null;
+    })
     .finally(() => {
       completionSoundBufferPromise = null;
     });
@@ -122,26 +125,35 @@ export async function runChat({
   // 在函数开头声明，确保在整个函数范围内可用
   let newConvId = null;
 
-  const playCompletionSound = () => {
+  const playCompletionSound = async () => {
     const rawVolume = Number(completionSoundVolume);
     if (!Number.isFinite(rawVolume) || rawVolume <= 0) return;
     const ctx = getCompletionSoundContext();
     if (!ctx) return;
+    // Safari mobile: resume AudioContext first and wait for it
     if (ctx.state === "suspended" && typeof ctx.resume === "function") {
-      ctx.resume().catch(() => {});
+      try {
+        await ctx.resume();
+      } catch {
+        return;
+      }
     }
     const normalized = Math.max(0, Math.min(1, rawVolume / 100));
     if (!completionSoundBuffer) {
-      loadCompletionSoundBuffer();
-      return;
+      await loadCompletionSoundBuffer();
     }
-    const source = ctx.createBufferSource();
-    const gain = ctx.createGain();
-    gain.gain.value = normalized;
-    source.buffer = completionSoundBuffer;
-    source.connect(gain);
-    gain.connect(ctx.destination);
-    source.start(0);
+    if (!completionSoundBuffer) return;
+    try {
+      const source = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      gain.gain.value = normalized;
+      source.buffer = completionSoundBuffer;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start(0);
+    } catch (e) {
+      console.error("[completionSound] play failed:", e);
+    }
   };
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
@@ -531,7 +543,7 @@ export async function runChat({
     }
 
     if (!signal?.aborted && (sawDone || fullText.length > 0)) {
-      playCompletionSound();
+      await playCompletionSound();
     }
 
     // 流式结束后做一次"最终对齐"：移动端偶发断流/缓冲时，避免必须刷新才能看到完整内容

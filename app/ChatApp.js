@@ -374,9 +374,21 @@ export default function ChatApp() {
         const maxAllowed = providerLimits[conversationProvider] || 65536;
         setMaxTokens(Math.min(maxTokensValue, maxAllowed));
         setBudgetTokens(settings.budgetTokens ?? 32768);
-        // activePromptId：优先使用对话存储的值
+        // activePromptId：优先使用对话存储的值，但需验证该提示词是否仍存在
         if (settings.activePromptId !== undefined) {
-          setActivePromptId(settings.activePromptId);
+          const promptExists = systemPrompts.some(
+            (p) => String(p?._id) === String(settings.activePromptId)
+          );
+          if (promptExists) {
+            setActivePromptId(settings.activePromptId);
+          } else {
+            // 提示词已删除，使用默认提示词
+            const defaultPrompt = systemPrompts.find((p) => p?.name === "默认助手");
+            const fallbackId = String((defaultPrompt?._id ?? systemPrompts[0]?._id) || "");
+            if (fallbackId) {
+              setActivePromptId(fallbackId);
+            }
+          }
         }
       }
     } catch (e) {
