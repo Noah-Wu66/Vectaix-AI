@@ -32,7 +32,7 @@ export async function POST(req) {
         const { email, password } = await req.json();
 
         // Normalize email to match stored format
-        const normalizedEmail = (email || '').trim().toLowerCase();
+        const normalizedEmail = email.trim().toLowerCase();
 
         const user = await User.findOne({ email: normalizedEmail });
         if (!user) {

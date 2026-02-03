@@ -227,14 +227,14 @@ export default function ChatApp() {
     // 记录触摸开始时的位置和滚动位置
     const handleTouchStart = (e) => {
       lastUserScrollAtRef.current = Date.now();
-      touchStartY = e.touches?.[0]?.clientY ?? 0;
+      touchStartY = e.touches?.[0]?.clientY;
       touchStartScrollTop = el.scrollTop;
     };
     // 移动端触摸滑动时：检测向上滑动意图（手指向下移动 = 内容向上滚动）
     const handleTouchMove = (e) => {
       lastUserScrollAtRef.current = Date.now();
       if (!isStreamingRef.current) return;
-      const currentY = e.touches?.[0]?.clientY ?? 0;
+      const currentY = e.touches?.[0]?.clientY;
       const deltaY = currentY - touchStartY;
       // deltaY > 0 表示手指向下移动，即用户想向上滚动查看历史
       // 同时检测 scrollTop 是否减少或用户意图明显（移动超过 10px）
@@ -298,7 +298,7 @@ export default function ChatApp() {
       fetchConversations();
       fetchSettings();
     } else {
-      toast.error(data.error || "登录失败，请重试");
+      toast.error(data.error);
     }
   };
 
@@ -323,9 +323,9 @@ export default function ChatApp() {
     if (window.innerWidth < 768) setSidebarOpen(false); // 移动端立即折叠侧边栏
     try {
       const res = await fetch(`/api/conversations/${id}`);
-      const data = await res.json(); if (!res.ok) throw new Error(data?.error || res.statusText);
+      const data = await res.json(); if (!res.ok) throw new Error(data?.error);
       if (data.conversation) {
-        const nextMessages = data.conversation.messages || [];
+        const nextMessages = data.conversation.messages;
         userInterruptedRef.current = false;
         setMessages(nextMessages);
         setCurrentConversationId(id);
@@ -358,22 +358,22 @@ export default function ChatApp() {
         }
 
         // 恢复对话的参数设置（使用默认值填充缺失的字段）
-        const settings = data.conversation.settings || {};
+        const settings = data.conversation.settings;
         // 思考级别：恢复对话存储的值
         if (settings.thinkingLevel !== undefined && conversationModel) {
           const defaultThinkingLevel = conversationModel.includes("gemini") ? "high" : null;
           setThinkingLevels((prev) => ({
-            ...(prev || {}),
-            [targetModel]: settings.thinkingLevel ?? defaultThinkingLevel
+            ...prev,
+            [targetModel]: settings.thinkingLevel
           }));
         }
         // 其他参数：使用对话设置，否则使用默认值
-        setHistoryLimit(settings.historyLimit ?? 0);
-        const maxTokensValue = settings.maxTokens ?? (conversationProvider === "openai" ? 128000 : 65536);
+        setHistoryLimit(settings.historyLimit);
+        const maxTokensValue = settings.maxTokens;
         const providerLimits = { claude: 64000, openai: 128000, gemini: 65536 };
-        const maxAllowed = providerLimits[conversationProvider] || 65536;
+        const maxAllowed = providerLimits[conversationProvider];
         setMaxTokens(Math.min(maxTokensValue, maxAllowed));
-        setBudgetTokens(settings.budgetTokens ?? 32768);
+        setBudgetTokens(settings.budgetTokens);
         // activePromptId：优先使用对话存储的值，但需验证该提示词是否仍存在
         if (settings.activePromptId !== undefined) {
           const promptExists = systemPrompts.some(
@@ -384,16 +384,16 @@ export default function ChatApp() {
           } else {
             // 提示词已删除，使用默认提示词
             const defaultPrompt = systemPrompts.find((p) => p?.name === "默认助手");
-            const fallbackId = String((defaultPrompt?._id ?? systemPrompts[0]?._id) || "");
-            if (fallbackId) {
-              setActivePromptId(fallbackId);
+            const defaultId = String(defaultPrompt?._id);
+            if (defaultId) {
+              setActivePromptId(defaultId);
             }
           }
         }
       }
     } catch (e) {
       console.error(e);
-      toast.error(`加载会话失败：${e?.message || "数据格式错误"}`);
+      toast.error(`加载会话失败：${e?.message}`);
     } finally {
       setLoading(false);
     }
@@ -468,7 +468,7 @@ export default function ChatApp() {
       const providerNames = { gemini: "Gemini", claude: "Claude", openai: "OpenAI" };
       setConfirmModalConfig({
         title: "切换模型",
-        message: `切换到 ${providerNames[nextProvider] || nextProvider} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider] || currentProvider} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,
+        message: `切换到 ${providerNames[nextProvider]} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider]} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,
         onConfirm: () => {
           userInterruptedRef.current = false;
           setCurrentConversationId(null);
@@ -547,7 +547,7 @@ export default function ChatApp() {
           editingContent={editingContent}
           editingImageAction={editingImageAction}
           editingImage={editingImage}
-          fontSizeClass={FONT_SIZE_CLASSES[fontSize] || ""}
+          fontSizeClass={FONT_SIZE_CLASSES[fontSize]}
           onEditingContentChange={setEditingContent}
           onEditingImageSelect={actions.onEditingImageSelect}
           onEditingImageRemove={actions.onEditingImageRemove}
@@ -569,7 +569,7 @@ export default function ChatApp() {
             onModelChange: requestModelChange,
             thinkingLevel: thinkingLevels?.[model],
             setThinkingLevel: (v) => {
-              setThinkingLevels((prev) => ({ ...(prev || {}), [model]: v }));
+              setThinkingLevels((prev) => ({ ...prev, [model]: v }));
               syncConversationSettings({ thinkingLevel: v });
             },
             historyLimit,

@@ -41,7 +41,6 @@ export function createChatAppActions({
   const getEffectiveThinkingLevel = (m) => {
     const v = thinkingLevels?.[m];
     if (typeof v === "string" && v) return v;
-    if (m?.startsWith("gpt-")) return "medium";
     return undefined;
   };
 
@@ -51,13 +50,13 @@ export function createChatAppActions({
     chatRequestLockRef.current = false;
     setLoading(false);
     setMessages((prev) => prev
-      .filter((m) => !m.isStreaming || (m.content || "").trim() || (m.thought || "").trim())
+      .filter((m) => !m.isStreaming || m.content.trim() || m.thought.trim())
       .map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)));
   };
 
   const onEditingImageSelect = (img) => {
     setEditingImageAction("new");
-    setEditingImage(img || null);
+    setEditingImage(img);
   };
 
   const onEditingImageRemove = () => {
@@ -115,7 +114,7 @@ export function createChatAppActions({
 
     userInterruptedRef.current = false;
 
-    const firstImagePreview = images?.[0]?.preview || null;
+    const firstImagePreview = images?.[0]?.preview;
 
     const userMsg = {
       id: generateMsgId(),
@@ -123,7 +122,7 @@ export function createChatAppActions({
       content: text,
       type: "text",
       image: firstImagePreview,
-      images: images?.map((img) => img.preview) || [],
+      images: images?.map((img) => img.preview),
     };
 
     const historyBeforeUser = messages;
@@ -153,7 +152,7 @@ export function createChatAppActions({
             if (m?.role === "user" && m?.id === userMsg.id) {
               next[i] = {
                 ...m,
-                image: imageUrls[0] || null,
+                image: imageUrls[0],
                 images: imageUrls,
               };
               break;
@@ -169,11 +168,11 @@ export function createChatAppActions({
         mediaResolution,
         systemPrompts,
         activePromptId,
-        imageUrl: imageUrls[0] || null,
-        imageUrls: imageUrls.length > 0 ? imageUrls : null,
+        imageUrl: imageUrls[0],
+        imageUrls: imageUrls,
         maxTokens,
         budgetTokens,
-        webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-") || model?.startsWith("gemini-")) ? webSearch : false,
+        webSearch: webSearch,
       });
 
       await runChat({
@@ -192,7 +191,7 @@ export function createChatAppActions({
         provider: currentModelConfig?.provider,
         userMessageId: userMsg.id,
         settings: !currentConversationId ? {
-          thinkingLevel: getEffectiveThinkingLevel(model) || null,
+          thinkingLevel: getEffectiveThinkingLevel(model),
           historyLimit,
           maxTokens,
           budgetTokens,
@@ -204,8 +203,8 @@ export function createChatAppActions({
       });
     } catch (err) {
       console.error(err);
-      const errMsg = err?.message || "发送失败";
-      const friendlyMsg = errMsg.includes("Failed to fetch") ? "网络连接失败，请检查网络后重试" : errMsg;
+      const errMsg = err?.message;
+      const friendlyMsg = errMsg?.includes("Failed to fetch") ? "网络连接失败，请检查网络后重试" : errMsg;
       toast.error(friendlyMsg);
       setLoading(false);
     } finally {
@@ -238,7 +237,7 @@ export function createChatAppActions({
       activePromptId,
       maxTokens,
       budgetTokens,
-      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-") || model?.startsWith("gemini-")) ? webSearch : false,
+      webSearch: webSearch,
     });
 
     try {
@@ -271,7 +270,7 @@ export function createChatAppActions({
   const startEdit = (index, msg) => {
     if (loading) return;
     setEditingMsgIndex(index);
-    setEditingContent(msg?.content || "");
+    setEditingContent(msg?.content);
     setEditingImageAction("keep");
     setEditingImage(null);
   };
@@ -318,7 +317,7 @@ export function createChatAppActions({
           clientPayload: JSON.stringify({ kind: "chat" }),
         });
         nextImageUrls = [blob.url];
-        nextMimeType = editingImage.mimeType || editingImage.file.type || null;
+        nextMimeType = editingImage.mimeType;
       } else if (editingImageAction === "keep") {
         if (typeof oldMsg?.mimeType === "string" && oldMsg.mimeType) nextMimeType = oldMsg.mimeType;
 
@@ -328,8 +327,8 @@ export function createChatAppActions({
           } else if (isDataImageUrl(src)) {
             const resp = await fetch(src);
             const b = await resp.blob();
-            const mime = b.type || nextMimeType || "image/png";
-            const ext = (mime.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "") || "png";
+            const mime = b.type;
+            const ext = mime.split("/")[1].replace(/[^a-z0-9]/gi, "");
             const file = new File([b], `edit-${Date.now()}-${nextImageUrls.length}.${ext}`, { type: mime });
             const uploaded = await upload(file.name, file, {
               access: "public",
@@ -367,7 +366,7 @@ export function createChatAppActions({
       console.error(e);
       chatRequestLockRef.current = false;
       setLoading(false);
-      const errMsg = e?.message || "图片处理失败";
+      const errMsg = e?.message;
       const friendlyMsg = errMsg.includes("Failed to fetch") ? "网络连接失败，请检查网络后重试" : `图片上传失败：${errMsg}`;
       toast.error(friendlyMsg);
       return;
@@ -384,7 +383,7 @@ export function createChatAppActions({
       activePromptId,
       maxTokens,
       budgetTokens,
-      webSearch: (model?.startsWith("claude-") || model?.startsWith("gpt-") || model?.startsWith("gemini-")) ? webSearch : false,
+      webSearch: webSearch,
     });
 
     try {

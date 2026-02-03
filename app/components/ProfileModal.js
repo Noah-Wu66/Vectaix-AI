@@ -61,7 +61,7 @@ export default function ProfileModal({
   const parseDownloadFilename = (contentDisposition) => {
     if (!contentDisposition || typeof contentDisposition !== "string") return null;
     const m = contentDisposition.match(/filename="([^"]+)"/i);
-    return m?.[1] || null;
+    return m?.[1];
   };
 
   const triggerDownload = (blob, filename) => {
@@ -85,17 +85,16 @@ export default function ProfileModal({
           const j = await res.json();
           errText = j?.error ? String(j.error) : "";
         } catch { }
-        throw new Error(errText || "导出失败");
+        throw new Error(errText);
       }
       const blob = await res.blob();
       const filename =
-        parseDownloadFilename(res.headers.get("content-disposition")) ||
-        "vectaix-export.json";
+        parseDownloadFilename(res.headers.get("content-disposition"));
       triggerDownload(blob, filename);
       toast.success("导出成功");
     } catch (e) {
       console.error(e);
-      toast.error(e?.message || "导出失败");
+      toast.error(e?.message);
     } finally {
       setExportLoading(false);
     }
@@ -126,11 +125,11 @@ export default function ProfileModal({
         body: JSON.stringify(json),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "导入失败");
-      toast.success(`导入成功（会话：${data?.imported?.conversationsCount ?? 0}）`);
+      if (!res.ok) throw new Error(data?.error);
+      toast.success(`导入成功（会话：${data?.imported?.conversationsCount}）`);
     } catch (e) {
       console.error(e);
-      toast.error(e?.message || "导入失败");
+      toast.error(e?.message);
     } finally {
       setImportLoading(false);
       setPendingImportFile(null);
@@ -161,7 +160,7 @@ export default function ProfileModal({
       toast.success("头像更新成功");
     } catch (err) {
       console.error(err);
-      toast.error(err?.message || "头像上传失败");
+      toast.error(err?.message);
     } finally {
       setAvatarLoading(false);
       if (avatarFileInputRef.current) avatarFileInputRef.current.value = "";
@@ -189,7 +188,7 @@ export default function ProfileModal({
         setNewPassword("");
         setConfirmNewPassword("");
       } else {
-        toast.error(data.error || "密码修改失败");
+        toast.error(data.error);
       }
     } catch (err) {
       console.error(err);
@@ -469,7 +468,7 @@ export default function ProfileModal({
                             className="hidden"
                             disabled={exportLoading || importLoading}
                             onChange={(e) =>
-                              onImportFile(e.target.files?.[0] || null)
+                              onImportFile(e.target.files?.[0])
                             }
                           />
                         </label>
@@ -506,4 +505,3 @@ export default function ProfileModal({
   </>
   );
 }
-

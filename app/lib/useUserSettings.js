@@ -226,7 +226,7 @@ export function useUserSettings() {
       }
 
       if (!res.ok) {
-        setSettingsError(data?.error || res.statusText || "Settings error");
+        setSettingsError(data?.error);
         return null;
       }
 
@@ -242,12 +242,12 @@ export function useUserSettings() {
         setSystemPrompts(settings.systemPrompts);
       }
       if (settings.avatar !== undefined) {
-        _setAvatar(settings.avatar || null);
+        _setAvatar(settings.avatar);
       }
 
       return settings;
     } catch (e) {
-      setSettingsError(e?.message || "Settings error");
+      setSettingsError(e?.message);
       return null;
     }
   }, []);
@@ -268,7 +268,7 @@ export function useUserSettings() {
       }
 
       if (!res.ok) {
-        setSettingsError(data?.error || res.statusText || "Settings error");
+        setSettingsError(data?.error);
         return null;
       }
 
@@ -277,9 +277,9 @@ export function useUserSettings() {
       if (settings && Array.isArray(settings.systemPrompts)) {
         setSystemPrompts(settings.systemPrompts);
       }
-      return settings ?? null;
+      return settings;
     } catch (e) {
-      setSettingsError(e?.message || "Settings error");
+      setSettingsError(e?.message);
       return null;
     }
   }, []);
@@ -300,7 +300,7 @@ export function useUserSettings() {
       }
 
       if (!res.ok) {
-        setSettingsError(data?.error || res.statusText || "Settings error");
+        setSettingsError(data?.error);
         return null;
       }
 
@@ -309,9 +309,9 @@ export function useUserSettings() {
       if (settings && Array.isArray(settings.systemPrompts)) {
         setSystemPrompts(settings.systemPrompts);
       }
-      return settings ?? null;
+      return settings;
     } catch (e) {
-      setSettingsError(e?.message || "Settings error");
+      setSettingsError(e?.message);
       return null;
     }
   }, []);
@@ -332,7 +332,7 @@ export function useUserSettings() {
       }
 
       if (!res.ok) {
-        setSettingsError(data?.error || res.statusText || "Settings error");
+        setSettingsError(data?.error);
         return null;
       }
 
@@ -341,9 +341,9 @@ export function useUserSettings() {
       if (settings && Array.isArray(settings.systemPrompts)) {
         setSystemPrompts(settings.systemPrompts);
       }
-      return settings ?? null;
+      return settings;
     } catch (e) {
-      setSettingsError(e?.message || "Settings error");
+      setSettingsError(e?.message);
       return null;
     }
   }, []);
@@ -364,18 +364,18 @@ export function useUserSettings() {
       }
 
       if (!res.ok) {
-        setSettingsError(data?.error || res.statusText || "Avatar update error");
+        setSettingsError(data?.error);
         return null;
       }
 
       setSettingsError(null);
       const settings = data?.settings;
       if (settings?.avatar !== undefined) {
-        _setAvatar(settings.avatar || null);
+        _setAvatar(settings.avatar);
       }
-      return settings ?? null;
+      return settings;
     } catch (e) {
-      setSettingsError(e?.message || "Avatar update error");
+      setSettingsError(e?.message);
       return null;
     }
   }, []);

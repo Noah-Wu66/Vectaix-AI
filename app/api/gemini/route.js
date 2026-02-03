@@ -54,7 +54,7 @@ async function storedPartToRequestPart(part) {
     const url = part?.inlineData?.url;
     if (isNonEmptyString(url)) {
         const { base64Data, mimeType: fetchedMimeType } = await fetchImageAsBase64(url);
-        const mimeType = part.inlineData?.mimeType || fetchedMimeType;
+        const mimeType = part.inlineData?.mimeType;
         const p = { inlineData: { mimeType, data: base64Data } };
         if (isNonEmptyString(part.thoughtSignature)) p.thoughtSignature = part.thoughtSignature;
         return p;
@@ -65,7 +65,7 @@ async function storedPartToRequestPart(part) {
 
 async function buildGeminiContentsFromMessages(messages) {
     const contents = [];
-    for (const msg of messages || []) {
+    for (const msg of messages) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
         const storedParts = getStoredPartsFromMessage(msg);
@@ -98,7 +98,7 @@ export async function POST(req) {
             );
         }
 
-        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
+        const { prompt, model, config, history, historyLimit, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
 
         // Validate required fields
         if (!model || typeof model !== 'string') {
@@ -161,12 +161,12 @@ export async function POST(req) {
 
         // 1) Ensure Conversation exists (for logged-in users)
         if (user && !currentConversationId) {
-            const title = (prompt || '').length > 30 ? (prompt || '').substring(0, 30) + '...' : (prompt || '');
+            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
                 title: title,
                 model: model,
-                settings: settings || {},
+                settings: settings,
                 messages: []
             });
             currentConversationId = newConv._id.toString();
@@ -187,13 +187,13 @@ export async function POST(req) {
                 { new: true }
             ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
-            storedMessagesForRegenerate = conv.messages || [];
+            storedMessagesForRegenerate = conv.messages;
             // 记录写入许可时间：只有 updatedAt 仍为此值时才允许写入 model 消息
-            writePermitTime = conv.updatedAt?.getTime?.() || regenerateTime;
+            writePermitTime = conv.updatedAt?.getTime?.();
         }
 
         if (isRegenerateMode) {
-            const msgs = storedMessagesForRegenerate || [];
+            const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
             // 使用 buildGeminiContentsFromMessages 正确处理图片消息
             contents = await buildGeminiContentsFromMessages(effectiveMsgs);
@@ -245,7 +245,7 @@ export async function POST(req) {
 
         // 2. Prepare Payload
         const baseSystemText = injectCurrentTimeSystemReminder(
-            config?.systemPrompt || "You are a helpful AI assistant."
+            config?.systemPrompt
         );
         const baseConfig = {
             systemInstruction: {
@@ -280,7 +280,7 @@ export async function POST(req) {
                 for (const entry of dbImageEntries) {
                     storedUserParts.push({
                         inlineData: {
-                            mimeType: entry.mimeType || 'image/jpeg',
+                            mimeType: entry.mimeType,
                             url: entry.url,
                         },
                     });
@@ -288,9 +288,7 @@ export async function POST(req) {
             }
 
             const userMsgTime = Date.now();
-            const resolvedUserMessageId = (isNonEmptyString(userMessageId) && userMessageId.length <= 128)
-                ? userMessageId
-                : generateMessageId();
+            const resolvedUserMessageId = userMessageId;
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
                 $push: {
                     messages: {
@@ -306,7 +304,7 @@ export async function POST(req) {
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
             // 记录写入许可时间
-            writePermitTime = updatedConv?.updatedAt?.getTime?.() || userMsgTime;
+            writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
         const encoder = new TextEncoder();
@@ -349,10 +347,10 @@ export async function POST(req) {
                     };
 
                     const pushCitations = (items) => {
-                        for (const item of items || []) {
+                        for (const item of items) {
                             if (!item?.url || seenUrls.has(item.url)) continue;
                             seenUrls.add(item.url);
-                            citations.push({ url: item.url, title: item.title || null });
+                            citations.push({ url: item.url, title: item.title });
                         }
                     };
 
@@ -369,8 +367,8 @@ export async function POST(req) {
 
                         for await (const chunk of decisionStream) {
                             if (clientAborted) break;
-                            const candidate = chunk.candidates?.[0] || {};
-                            const parts = candidate?.content?.parts || [];
+                            const candidate = chunk.candidates?.[0];
+                            const parts = candidate?.content?.parts;
                             for (const part of parts) {
                                 if (clientAborted) break;
                                 if (part.thought && part.text) {
@@ -391,7 +389,7 @@ export async function POST(req) {
                         );
                         const decisionUser = `用户问题：${prompt}\n\n判断是否必须联网检索才能回答。\n- 需要联网：输出 {"needSearch": true, "query": "精炼检索词"}\n- 不需要联网：输出 {"needSearch": false}`;
                         const decisionText = await runDecisionStream(decisionSystem, decisionUser);
-                        const decision = parseJsonFromText(decisionText) || {};
+                        const decision = parseJsonFromText(decisionText);
                         let needSearch = decision?.needSearch === true;
                         let nextQuery = typeof decision?.query === 'string' ? decision.query.trim() : "";
 
@@ -409,7 +407,7 @@ export async function POST(req) {
                                     includeRawContent: false,
                                     conciseSnippet: false
                                 });
-                                results = searchData?.results || [];
+                                results = searchData?.results;
                             } catch (searchError) {
                                 console.error("[Gemini] MetaSo Search Error:", searchError?.message);
                             }
@@ -429,9 +427,9 @@ export async function POST(req) {
                             const enoughSystem = injectCurrentTimeSystemReminder(
                                 "你是联网检索补充决策器。必须只输出严格 JSON，不要输出任何多余文本。"
                             );
-                            const enoughUser = `用户问题：${prompt}\n\n已获得的检索摘要：\n${recentContext || "(无)"}\n\n判断这些信息是否足够回答。\n- 足够：输出 {"enough": true}\n- 不足：输出 {"enough": false, "nextQuery": "新的检索词"}`;
+                            const enoughUser = `用户问题：${prompt}\n\n已获得的检索摘要：\n${recentContext}\n\n判断这些信息是否足够回答。\n- 足够：输出 {"enough": true}\n- 不足：输出 {"enough": false, "nextQuery": "新的检索词"}`;
                             const enoughText = await runDecisionStream(enoughSystem, enoughUser);
-                            const enoughDecision = parseJsonFromText(enoughText) || {};
+                            const enoughDecision = parseJsonFromText(enoughText);
                             if (enoughDecision?.enough === true) break;
                             const candidateQuery = typeof enoughDecision?.nextQuery === 'string'
                                 ? enoughDecision.nextQuery.trim()
@@ -465,8 +463,8 @@ export async function POST(req) {
 
                     for await (const chunk of streamResult) {
                         if (clientAborted) break;
-                        const candidate = chunk.candidates?.[0] || {};
-                        const parts = candidate?.content?.parts || [];
+                        const candidate = chunk.candidates?.[0];
+                        const parts = candidate?.content?.parts;
 
                         for (const part of parts) {
                             if (clientAborted) break;
@@ -506,7 +504,7 @@ export async function POST(req) {
                                         id: resolvedModelMessageId,
                                         role: 'model',
                                         content: fullText,
-                                        thought: fullThought || null,
+                                        thought: fullThought,
                                         citations: citations.length > 0 ? citations : null,
                                         type: 'text',
                                         parts: [{ text: fullText }]
@@ -558,7 +556,7 @@ export async function POST(req) {
         const status = typeof error?.status === 'number' ? error.status : 500;
 
         // Provide user-friendly error messages
-        let errorMessage = error?.message || "Internal Server Error";
+        let errorMessage = error?.message;
 
         // Add context for common errors
         if (error?.message?.includes('API_KEY')) {

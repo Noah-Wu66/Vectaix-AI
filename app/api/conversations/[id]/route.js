@@ -48,7 +48,7 @@ function sanitizeMessage(msg, idx) {
     if (!isPlainObject(msg)) throw new Error(`messages[${idx}] must be an object`);
 
     const role = msg.role;
-    const type = msg.type ?? 'text';
+    const type = msg.type;
     if (!ALLOWED_ROLES.has(role)) throw new Error(`messages[${idx}].role invalid`);
     if (!ALLOWED_MESSAGE_TYPES.has(type)) throw new Error(`messages[${idx}].type invalid`);
 
@@ -94,7 +94,7 @@ function sanitizeMessage(msg, idx) {
             const title = typeof c.title === 'string' ? c.title : '';
             const citedText = typeof c.cited_text === 'string' ? c.cited_text : '';
             if (!url || url.length > MAX_URL_CHARS) continue;
-            const entry = { url, title: title.slice(0, MAX_CITATION_TITLE_CHARS) || null };
+            const entry = { url, title: title.slice(0, MAX_CITATION_TITLE_CHARS) };
             if (citedText) entry.cited_text = citedText.slice(0, MAX_CITATION_TEXT_CHARS);
             citations.push(entry);
         }
@@ -143,7 +143,7 @@ function sanitizeMessages(messages) {
 
 function sanitizeSettings(settings) {
     const updates = {};
-    for (const [settingKey, settingValue] of Object.entries(settings || {})) {
+    for (const [settingKey, settingValue] of Object.entries(settings)) {
         if (!ALLOWED_SETTINGS_KEYS.has(settingKey)) continue;
         if (settingKey === 'thinkingLevel') {
             if (typeof settingValue !== 'string' || settingValue.length > 20) {
@@ -247,7 +247,7 @@ export async function PUT(req, { params }) {
         try {
             updateObj.messages = sanitizeMessages(body.messages);
         } catch (e) {
-            return Response.json({ error: e?.message || 'Invalid messages' }, { status: 400 });
+            return Response.json({ error: e?.message }, { status: 400 });
         }
     }
 
@@ -256,7 +256,7 @@ export async function PUT(req, { params }) {
             const settingsUpdates = sanitizeSettings(body.settings);
             Object.assign(updateObj, settingsUpdates);
         } catch (e) {
-            return Response.json({ error: e?.message || 'Invalid settings' }, { status: 400 });
+            return Response.json({ error: e?.message }, { status: 400 });
         }
     }
 

@@ -57,7 +57,7 @@ export async function GET(req) {
     exportedAt: new Date().toISOString(),
     data: {
       conversations,
-      settings: settings || null,
+      settings: settings,
     },
   };
 
@@ -73,5 +73,4 @@ export async function GET(req) {
     },
   });
 }
-
 

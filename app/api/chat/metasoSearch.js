@@ -14,7 +14,7 @@ export function normalizeMetasoResults(webpages) {
   if (!Array.isArray(webpages)) return [];
   return webpages
     .map((item) => {
-      const url = item?.link || item?.url || "";
+      const url = item?.link;
       return {
         title: typeof item?.title === "string" ? item.title : "",
         url,
@@ -28,16 +28,16 @@ export function normalizeMetasoResults(webpages) {
 }
 
 export function buildMetasoContext(results, options = {}) {
-  const maxItems = Number.isFinite(options.maxItems) ? options.maxItems : 0;
-  const maxSummaryChars = Number.isFinite(options.maxSummaryChars) ? options.maxSummaryChars : 0;
-  const maxSnippetChars = Number.isFinite(options.maxSnippetChars) ? options.maxSnippetChars : 0;
+  const maxItems = options.maxItems;
+  const maxSummaryChars = options.maxSummaryChars;
+  const maxSnippetChars = options.maxSnippetChars;
   const items = Array.isArray(results)
     ? (maxItems > 0 ? results.slice(0, maxItems) : results)
-    : [];
+    : results;
   return items
     .map((item, idx) => {
       const lines = [];
-      const title = item.title || "未命名";
+      const title = item.title;
       lines.push(`【${idx + 1}】${title}`);
       lines.push(`URL: ${item.url}`);
       const summary = clipText(item.summary, maxSummaryChars);
@@ -53,10 +53,10 @@ export function buildMetasoContext(results, options = {}) {
 export function buildMetasoCitations(results) {
   const citations = [];
   const seen = new Set();
-  for (const item of results || []) {
+  for (const item of results) {
     if (!item?.url || seen.has(item.url)) continue;
     seen.add(item.url);
-    citations.push({ url: item.url, title: item.title || null });
+    citations.push({ url: item.url, title: item.title });
   }
   return citations;
 }
@@ -64,9 +64,9 @@ export function buildMetasoCitations(results) {
 export function buildMetasoSearchEventResults(results, maxItems = 0) {
   const list = Array.isArray(results)
     ? (maxItems > 0 ? results.slice(0, maxItems) : results)
-    : [];
+    : results;
   return list
-    .map((item) => ({ url: item.url, title: item.title || null }))
+    .map((item) => ({ url: item.url, title: item.title }))
     .filter((item) => item.url);
 }
 
@@ -75,9 +75,9 @@ export async function metasoSearch(query, options = {}) {
   if (!apiKey) {
     throw new Error("METASO_API_KEY is not set");
   }
-  const baseUrl = process.env.METASO_BASE_URL || "https://metaso.cn";
-  const size = Number.isFinite(options.size) ? options.size : DEFAULT_SIZE;
-  const scope = typeof options.scope === "string" ? options.scope : DEFAULT_SCOPE;
+  const baseUrl = process.env.METASO_BASE_URL;
+  const size = options.size;
+  const scope = options.scope;
   const includeSummary = options.includeSummary !== false;
   const includeRawContent = options.includeRawContent === true;
   const conciseSnippet = options.conciseSnippet === true;
@@ -91,7 +91,7 @@ export async function metasoSearch(query, options = {}) {
   };
 
   const controller = new AbortController();
-  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs;
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
@@ -112,11 +112,11 @@ export async function metasoSearch(query, options = {}) {
     }
 
     const data = await res.json();
-    const results = normalizeMetasoResults(data?.webpages || []);
+    const results = normalizeMetasoResults(data?.webpages);
     return {
-      credits: data?.credits ?? null,
+      credits: data?.credits,
       results,
-      raw: data || null,
+      raw: data,
     };
   } finally {
     clearTimeout(timeoutId);

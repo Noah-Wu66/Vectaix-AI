@@ -183,7 +183,7 @@ export default function Sidebar({
                 />
               ) : (
                 <div className="w-8 h-8 rounded-lg bg-zinc-500 flex items-center justify-center text-xs font-semibold text-white">
-                  {user?.email?.[0]?.toUpperCase?.() ?? "?"}
+                  {user?.email?.[0]?.toUpperCase?.()}
                 </div>
               )}
               <div className="text-xs truncate max-w-[100px] text-zinc-600 font-medium">

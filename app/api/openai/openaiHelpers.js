@@ -22,7 +22,7 @@ export async function storedPartToOpenAIPart(part, role) {
     if (isNonEmptyString(url)) {
       const { base64Data, mimeType: fetchedMimeType } =
         await fetchImageAsBase64(url);
-      const mimeType = part.inlineData?.mimeType || fetchedMimeType;
+      const mimeType = part.inlineData?.mimeType;
       return {
         type: "input_image",
         image_url: `data:${mimeType};base64,${base64Data}`,
@@ -35,7 +35,7 @@ export async function storedPartToOpenAIPart(part, role) {
 
 export async function buildOpenAIInputFromHistory(messages) {
   const input = [];
-  for (const msg of messages || []) {
+  for (const msg of messages) {
     if (msg?.role !== "user" && msg?.role !== "model") continue;
 
     const storedParts = getStoredPartsFromMessage(msg);

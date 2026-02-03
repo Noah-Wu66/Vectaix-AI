@@ -20,6 +20,8 @@ const MAX_PROMPTS = 50;
 const MAX_PROMPT_NAME_CHARS = 80;
 const MAX_PROMPT_CONTENT_CHARS = 8000;
 
+const DEFAULT_PROMPT = { name: '默认助手', content: 'You are a helpful AI assistant.' };
+
 const IMPORT_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 const ALLOWED_MESSAGE_TYPES = new Set(['text', 'parts', 'error']);
@@ -48,10 +50,19 @@ function isAllowedImageUrl(url) {
   }
 }
 
+function ensureDefaultFirst(prompts) {
+  const list = Array.isArray(prompts) ? [...prompts] : [];
+  const idx = list.findIndex((p) => p?.name === '默认助手');
+  if (idx === -1) return [DEFAULT_PROMPT, ...list];
+  if (idx === 0) return list;
+  const [defaultPrompt] = list.splice(idx, 1);
+  return [defaultPrompt, ...list];
+}
+
 function sanitizeMessage(msg, idx) {
   if (!isPlainObject(msg)) throw new Error(`messages[${idx}] must be an object`);
   const role = msg.role;
-  const type = msg.type ?? 'text';
+  const type = msg.type;
   if (!ALLOWED_ROLES.has(role)) throw new Error(`messages[${idx}].role invalid`);
   if (!ALLOWED_MESSAGE_TYPES.has(type)) throw new Error(`messages[${idx}].type invalid`);
 
@@ -174,10 +185,8 @@ function sanitizeSettings(settingsSrc, userId) {
 
   return {
     userId,
-    avatar: avatar || null,
-    systemPrompts: sanitizedPrompts.length > 0
-      ? sanitizedPrompts
-      : [{ name: '默认助手', content: 'You are a helpful AI assistant.' }],
+    avatar: avatar,
+    systemPrompts: ensureDefaultFirst(sanitizedPrompts),
     updatedAt: new Date(),
   };
 }
@@ -227,7 +236,7 @@ export async function POST(req) {
       throw new Error(`Too many conversations (max ${MAX_CONVERSATIONS})`);
     }
 
-    const settingsSrc = payload.data.settings ?? null;
+    const settingsSrc = payload.data.settings;
 
     const userId = user.userId;
     const conversations = conversationsSrc.map((c, ci) => sanitizeConversation(c, ci, userId));
@@ -255,8 +264,6 @@ export async function POST(req) {
       },
     });
   } catch (e) {
-    return Response.json({ error: e?.message || 'Bad Request' }, { status: 400 });
+    return Response.json({ error: e?.message }, { status: 400 });
   }
 }
-
-

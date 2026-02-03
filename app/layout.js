@@ -28,7 +28,7 @@ export const viewport = {
 };
 
 export default function RootLayout({ children }) {
-    const nonce = headers().get('x-csp-nonce') || undefined;
+    const nonce = headers().get('x-csp-nonce');
     // Script to prevent theme flash by setting the theme class before React hydration
     const themeScript = `
  (function() {

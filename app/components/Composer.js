@@ -57,8 +57,8 @@ export default function Composer({
     const setAppHeight = () => {
       const vv = window.visualViewport;
       if (isMainInputFocused) {
-        document.documentElement.style.setProperty("--app-height", `${Math.round(vv?.height || window.innerHeight)}px`);
-        document.documentElement.style.setProperty("--app-offset-top", `${Math.round(vv?.offsetTop || 0)}px`);
+        document.documentElement.style.setProperty("--app-height", `${Math.round(vv?.height)}px`);
+        document.documentElement.style.setProperty("--app-offset-top", `${Math.round(vv?.offsetTop)}px`);
       } else {
         // 非主输入框聚焦时，重置为默认值
         document.documentElement.style.setProperty("--app-height", "100dvh");
@@ -125,7 +125,7 @@ export default function Composer({
   };
 
   const handleFileSelect = async (e) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from(e.target.files);
     if (!files.length) return;
 
     // 计算还能添加多少张图片（最多4张）

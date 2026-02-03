@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronUp, Globe, Pencil, Plus, Settings2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Globe, Pencil, Settings2, Trash2, X } from "lucide-react";
 import ConfirmModal from "./ConfirmModal";
+import PromptEditorModal from "./PromptEditorModal";
 
 const OPENAI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 128000];
 const GEMINI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536];
@@ -34,20 +35,24 @@ export default function SettingsMenu({
 }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
-  const [showAddPrompt, setShowAddPrompt] = useState(false);
-  const [showEditPrompt, setShowEditPrompt] = useState(false);
-  const [newPromptName, setNewPromptName] = useState("");
-  const [newPromptContent, setNewPromptContent] = useState("");
-  const [editPromptName, setEditPromptName] = useState("");
-  const [editPromptContent, setEditPromptContent] = useState("");
+  const [showPromptList, setShowPromptList] = useState(false);
+  const [promptModalOpen, setPromptModalOpen] = useState(false);
+  const [promptModalMode, setPromptModalMode] = useState("create");
+  const [promptModalPromptId, setPromptModalPromptId] = useState(null);
+  const [promptModalName, setPromptModalName] = useState("");
+  const [promptModalContent, setPromptModalContent] = useState("");
+  const [promptModalSaving, setPromptModalSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmDanger, setConfirmDanger] = useState(false);
   const confirmActionRef = useRef(null);
+  const promptListRef = useRef(null);
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
   const maxTokenOptions = isOpenAIModel ? OPENAI_TOKEN_OPTIONS : GEMINI_TOKEN_OPTIONS;
+  const activePrompt = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
+  const activePromptName = activePrompt?.name;
 
   useEffect(() => {
     if (!model) return;
@@ -89,108 +94,117 @@ export default function SettingsMenu({
     const rememberedId = activePromptIds?.[model];
     const rememberedMatch = rememberedId && promptIds.includes(String(rememberedId));
     const defaultPrompt = systemPrompts.find((p) => p?.name === "默认助手");
-    const fallbackId = String((defaultPrompt?._id ?? systemPrompts[0]?._id) || "");
+    const defaultId = String(defaultPrompt?._id);
     const nextId = rememberedMatch
       ? String(rememberedId)
-      : fallbackId;
+      : defaultId;
     if (!nextId) return;
-    if (String(activePromptId || "") !== nextId) {
+    if (String(activePromptId) !== nextId) {
       setActivePromptId(nextId);
     }
-    if (String(rememberedId || "") !== nextId) {
-      setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
+    if (String(rememberedId) !== nextId) {
+      setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
     }
   }, [model, systemPrompts, activePromptId, activePromptIds, setActivePromptId, setActivePromptIds]);
 
-  // 当切换提示词时，如果正在编辑，自动关闭编辑框并重置状态
   useEffect(() => {
-    if (showEditPrompt) {
-      setShowEditPrompt(false);
-      setEditPromptName("");
-      setEditPromptContent("");
-    }
-  }, [activePromptId]);
-
-  const addPrompt = async () => {
-    if (!newPromptName.trim() || !newPromptContent.trim()) return;
-    const settings = await onAddPrompt?.({
-      name: newPromptName.trim(),
-      content: newPromptContent.trim(),
-    });
-    if (!settings) return;
-
-    const prompts = settings.systemPrompts;
-    if (Array.isArray(prompts) && prompts.length > 0) {
-      const newPrompt = prompts[prompts.length - 1];
-      if (newPrompt && newPrompt._id) {
-        const nextId = String(newPrompt._id);
-        setActivePromptId(nextId);
-        setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
+    if (!showPromptList) return;
+    const handleClickOutside = (e) => {
+      if (!promptListRef.current) return;
+      if (!promptListRef.current.contains(e.target)) {
+        setShowPromptList(false);
       }
-    }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showPromptList]);
 
-    setNewPromptName("");
-    setNewPromptContent("");
-    setShowAddPrompt(false);
+  const closePromptModal = () => {
+    if (promptModalSaving) return;
+    setPromptModalOpen(false);
+    setPromptModalPromptId(null);
+    setPromptModalName("");
+    setPromptModalContent("");
+    setPromptModalMode("create");
   };
 
-  const deleteCurrentPrompt = async () => {
-    if (!activePromptId || systemPrompts.length <= 1) return;
-    const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
+  const openCreatePromptModal = () => {
+    setShowPromptList(false);
+    setPromptModalMode("create");
+    setPromptModalPromptId(null);
+    setPromptModalName("");
+    setPromptModalContent("");
+    setPromptModalOpen(true);
+  };
+
+  const openEditPromptModal = (prompt) => {
+    if (!prompt || prompt?.name === "默认助手") return;
+    setShowPromptList(false);
+    setPromptModalMode("edit");
+    setPromptModalPromptId(String(prompt?._id));
+    setPromptModalName(prompt?.name);
+    setPromptModalContent(prompt?.content);
+    setPromptModalOpen(true);
+  };
+
+  const savePromptModal = async () => {
+    const name = promptModalName.trim();
+    const content = promptModalContent.trim();
+    if (!name || !content) return;
+    if (promptModalMode === "edit" && !promptModalPromptId) return;
+    setPromptModalSaving(true);
+    try {
+      if (promptModalMode === "create") {
+        const settings = await onAddPrompt?.({ name, content });
+        if (!settings) return;
+        const prompts = settings.systemPrompts;
+        if (Array.isArray(prompts) && prompts.length > 0) {
+          const newPrompt = prompts[prompts.length - 1];
+          if (newPrompt && newPrompt._id) {
+            const nextId = String(newPrompt._id);
+            setActivePromptId(nextId);
+            setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
+          }
+        }
+      } else {
+        const settings = await onUpdatePrompt?.({
+          promptId: promptModalPromptId,
+          name,
+          content,
+        });
+        if (!settings) return;
+      }
+      closePromptModal();
+    } finally {
+      setPromptModalSaving(false);
+    }
+  };
+
+  const deletePromptById = async (promptId) => {
+    if (!promptId) return;
+    const cur = systemPrompts.find((p) => String(p?._id) === String(promptId));
     if (cur?.name === "默认助手") return;
-    const settings = await onDeletePrompt?.(activePromptId);
+    const settings = await onDeletePrompt?.(promptId);
+    if (String(promptId) !== String(activePromptId)) return;
     const prompts = settings?.systemPrompts;
     if (Array.isArray(prompts) && prompts.length > 0) {
       const defaultPrompt = prompts.find((p) => p?.name === "默认助手");
-      const nextId = String((defaultPrompt?._id ?? prompts[0]?._id) || "");
+      const nextId = String(defaultPrompt?._id);
       if (nextId) {
         setActivePromptId(nextId);
-        setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
+        setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
       }
     }
   };
 
-  const requestDeleteCurrentPrompt = () => {
-    if (!activePromptId || systemPrompts.length <= 1) return;
-    const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
-    if (cur?.name === "默认助手") return;
-    confirmActionRef.current = deleteCurrentPrompt;
+  const requestDeletePromptById = (prompt) => {
+    if (!prompt?._id) return;
+    if (prompt?.name === "默认助手") return;
+    setShowPromptList(false);
+    confirmActionRef.current = () => deletePromptById(String(prompt?._id));
     setConfirmTitle("删除提示词");
-    setConfirmMessage(`确定要删除「${cur?.name || ""}」吗？此操作无法撤销。`);
+    setConfirmMessage(`确定要删除「${prompt?.name}」吗？此操作无法撤销。`);
     setConfirmDanger(true);
-    setConfirmOpen(true);
-  };
-
-  const openEditPrompt = () => {
-    if (!activePromptId) return;
-    const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
-    if (cur?.name === "默认助手") return;
-    setEditPromptName(cur?.name || "");
-    setEditPromptContent(cur?.content || "");
-    setShowAddPrompt(false);
-    setNewPromptName("");
-    setNewPromptContent("");
-    setShowEditPrompt((v) => !v);
-  };
-
-  const updateCurrentPrompt = async () => {
-    const name = editPromptName.trim();
-    const content = editPromptContent.trim();
-    if (!activePromptId || !name || !content) return;
-    const settings = await onUpdatePrompt?.({ promptId: activePromptId, name, content });
-    if (!settings) return;
-    setShowEditPrompt(false);
-  };
-
-  const requestUpdateCurrentPrompt = () => {
-    const name = editPromptName.trim();
-    const content = editPromptContent.trim();
-    if (!activePromptId || !name || !content) return;
-    const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
-    confirmActionRef.current = updateCurrentPrompt;
-    setConfirmTitle("保存修改");
-    setConfirmMessage(`确定要保存对「${cur?.name || ""}」的修改吗？`);
-    setConfirmDanger(false);
     setConfirmOpen(true);
   };
 
@@ -203,12 +217,8 @@ export default function SettingsMenu({
     }
     setShowSettings(false);
     setShowAdvancedSettings(false);
-    setShowAddPrompt(false);
-    setShowEditPrompt(false);
-    setNewPromptName("");
-    setNewPromptContent("");
-    setEditPromptName("");
-    setEditPromptContent("");
+    setShowPromptList(false);
+    closePromptModal();
     confirmActionRef.current = null;
   };
 
@@ -278,167 +288,80 @@ export default function SettingsMenu({
                     <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                       系统提示词
                     </label>
-                    <div className="flex gap-2">
-                      <select
-                        value={activePromptId || ""}
-                        onChange={(e) => {
-                          const nextId = e.target.value;
-                          setActivePromptId(nextId);
-                          setActivePromptIds?.((prev) => ({ ...(prev || {}), [model]: nextId }));
-                        }}
-                        className="flex-1 bg-zinc-50 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-700"
-                      >
-                        {systemPrompts.map((p) => (
-                          <option key={p._id} value={p._id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="relative" ref={promptListRef}>
                       <button
-                        onClick={() => setShowAddPrompt(!showAddPrompt)}
-                        className="px-2.5 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 rounded-lg text-zinc-600 transition-colors"
+                        onClick={() => setShowPromptList((v) => !v)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-700 flex items-center justify-between"
                         type="button"
                       >
-                        <Plus size={16} />
+                        <span className="truncate pr-2">{activePromptName}</span>
+                        <ChevronDown size={16} className={`transition-transform ${showPromptList ? "rotate-180" : ""}`} />
                       </button>
+
+                      <AnimatePresence>
+                        {showPromptList && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            className="absolute left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-lg shadow-lg p-1 z-10"
+                          >
+                            <div className="max-h-56 overflow-auto">
+                              {systemPrompts.map((p) => {
+                                const isDefault = p?.name === "默认助手";
+                                const isActive = String(p?._id) === String(activePromptId);
+                                return (
+                                  <div
+                                    key={p._id}
+                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${isActive ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
+                                  >
+                                    <button
+                                      onClick={() => {
+                                        const nextId = String(p?._id);
+                                        setActivePromptId(nextId);
+                                        setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
+                                        setShowPromptList(false);
+                                      }}
+                                      className="flex-1 text-left text-sm text-zinc-700 truncate"
+                                      type="button"
+                                    >
+                                      {p?.name}
+                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => openEditPromptModal(p)}
+                                        disabled={isDefault}
+                                        title={isDefault ? "默认提示词不可编辑" : "编辑提示词"}
+                                        className="p-1 text-zinc-500 hover:text-zinc-700 disabled:text-zinc-300"
+                                        type="button"
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        onClick={() => requestDeletePromptById(p)}
+                                        disabled={isDefault}
+                                        title={isDefault ? "默认提示词不可删除" : "删除提示词"}
+                                        className="p-1 text-zinc-500 hover:text-red-600 disabled:text-zinc-300"
+                                        type="button"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <button
+                              onClick={openCreatePromptModal}
+                              className="w-full mt-1 px-2 py-2 text-left text-sm text-zinc-600 hover:text-zinc-800 hover:bg-zinc-50 rounded-md"
+                              type="button"
+                            >
+                              + 新建提示词
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-
-                    <AnimatePresence>
-                      {showAddPrompt && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
-                            <input
-                              type="text"
-                              placeholder="名称"
-                              value={newPromptName}
-                              onChange={(e) => setNewPromptName(e.target.value)}
-                              className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm focus:outline-none focus:border-zinc-400"
-                            />
-                            <textarea
-                              placeholder="提示词内容..."
-                              value={newPromptContent}
-                              onChange={(e) => setNewPromptContent(e.target.value)}
-                              className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:border-zinc-400"
-                              rows={2}
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                onClick={addPrompt}
-                                className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white text-xs py-1.5 rounded-lg transition-colors"
-                                type="button"
-                              >
-                                添加
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowAddPrompt(false);
-                                  setNewPromptName("");
-                                  setNewPromptContent("");
-                                }}
-                                className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-600 text-xs py-1.5 rounded-lg transition-colors"
-                                type="button"
-                              >
-                                取消
-                              </button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {(() => {
-                      const cur = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
-                      const isGemini = model?.startsWith("gemini-");
-                      const isDefault = cur?.name === "默认助手";
-                      const hideActions = isGemini && isDefault;
-                      if (!activePromptId || !cur || hideActions) return null;
-                      return (
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          {(() => {
-                            if (cur?.name === "默认助手") {
-                              return <span className="text-[11px] text-zinc-400">默认提示词不可删除</span>;
-                            }
-                            if (systemPrompts.length <= 1) {
-                              return <span className="text-[11px] text-zinc-400">仅剩 1 个提示词不可删除</span>;
-                            }
-                            return (
-                              <button
-                                onClick={requestDeleteCurrentPrompt}
-                                className="text-xs text-red-500 hover:text-red-600"
-                                type="button"
-                              >
-                                删除当前提示词
-                              </button>
-                            );
-                          })()}
-
-                          {(() => {
-                            if (cur?.name === "默认助手") {
-                              return <span className="text-[11px] text-zinc-400">默认提示词不可编辑</span>;
-                            }
-                            return (
-                              <button
-                                onClick={openEditPrompt}
-                                className="inline-flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-800"
-                                type="button"
-                              >
-                                <Pencil size={14} />
-                                编辑当前提示词
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      );
-                    })()}
-
-                    <AnimatePresence>
-                      {showEditPrompt && activePromptId && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
-                            <input
-                              type="text"
-                              placeholder="名称"
-                              value={editPromptName}
-                              onChange={(e) => setEditPromptName(e.target.value)}
-                              className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm focus:outline-none focus:border-zinc-400"
-                            />
-                            <textarea
-                              placeholder="提示词内容..."
-                              value={editPromptContent}
-                              onChange={(e) => setEditPromptContent(e.target.value)}
-                              className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-sm resize-none focus:outline-none focus:border-zinc-400"
-                              rows={3}
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                onClick={requestUpdateCurrentPrompt}
-                                className="flex-1 bg-zinc-600 hover:bg-zinc-500 text-white text-xs py-1.5 rounded-lg transition-colors"
-                                type="button"
-                              >
-                                保存
-                              </button>
-                              <button
-                                onClick={() => setShowEditPrompt(false)}
-                                className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-600 text-xs py-1.5 rounded-lg transition-colors"
-                                type="button"
-                              >
-                                取消
-                              </button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
                   </div>
                 )}
 
@@ -495,7 +418,7 @@ export default function SettingsMenu({
                               className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                             />
                             <span className="text-xs text-right block mt-1 text-zinc-600">
-                              {historyLimit || "无限制"} 条
+                              {historyLimit} 条
                             </span>
                           </div>
 
@@ -514,7 +437,7 @@ export default function SettingsMenu({
                                 className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                               />
                               <span className="text-xs text-right block mt-1 text-zinc-600">
-                                {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel] || "深度"}
+                                {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel]}
                               </span>
                             </div>
                           ) : model === "gemini-3-pro-preview" ? (
@@ -590,7 +513,7 @@ export default function SettingsMenu({
                                 className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                               />
                               <span className="text-xs text-right block mt-1 text-zinc-600">
-                                {{ none: "无", low: "低", medium: "中", high: "高", xhigh: "超高" }[thinkingLevel] || "中"}
+                                {{ none: "无", low: "低", medium: "中", high: "高", xhigh: "超高" }[thinkingLevel]}
                               </span>
                             </div>
                           ) : null}
@@ -645,6 +568,17 @@ export default function SettingsMenu({
         confirmText={confirmDanger ? "删除" : "确定"}
         cancelText="取消"
         danger={confirmDanger}
+      />
+      <PromptEditorModal
+        open={promptModalOpen}
+        title={promptModalMode === "create" ? "新建提示词" : "编辑提示词"}
+        name={promptModalName}
+        content={promptModalContent}
+        onNameChange={setPromptModalName}
+        onContentChange={setPromptModalContent}
+        onClose={closePromptModal}
+        onSave={savePromptModal}
+        saving={promptModalSaving}
       />
     </div>
   );

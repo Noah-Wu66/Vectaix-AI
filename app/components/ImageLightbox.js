@@ -76,7 +76,7 @@ export default function ImageLightbox({ open, onClose, src }) {
 
             <div className="w-full h-full max-h-[80vh] flex items-center justify-center p-3">
               <img
-                src={src || ""}
+                src={src}
                 alt=""
                 className="max-w-[90vw] max-h-[80vh] object-contain rounded-xl bg-black/40"
                 draggable={false}

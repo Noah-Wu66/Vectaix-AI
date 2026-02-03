@@ -14,9 +14,9 @@ const sanitizeSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
-    code: [...(defaultSchema.attributes?.code || []), "className"],
-    span: [...(defaultSchema.attributes?.span || []), "className", "style"],
-    div: [...(defaultSchema.attributes?.div || []), "className"],
+    code: [...defaultSchema.attributes?.code, "className"],
+    span: [...defaultSchema.attributes?.span, "className", "style"],
+    div: [...defaultSchema.attributes?.div, "className"],
   },
 };
 
@@ -74,7 +74,7 @@ export default function Markdown({ children, className = "", enableHighlight = t
             const preRef = useRef(null);
 
             const handleCopy = async () => {
-              const text = preRef.current?.textContent || "";
+              const text = preRef.current?.textContent;
               try {
                 await navigator.clipboard.writeText(text);
                 setIsCopied(true);
@@ -99,7 +99,7 @@ export default function Markdown({ children, className = "", enableHighlight = t
           },
         }}
       >
-        {children ?? ""}
+        {children}
       </ReactMarkdown>
     </div>
   );

@@ -169,7 +169,7 @@ export default function MessageList({
     if (!el) return;
     if (!isSelectionFullyInsideElement(el)) return;
 
-    const selText = window.getSelection?.()?.toString?.() ?? "";
+    const selText = window.getSelection?.()?.toString?.();
     if (!selText) return;
 
     e.preventDefault();
@@ -229,7 +229,7 @@ export default function MessageList({
           }
           return (
             <motion.div
-              key={msg.id ?? i}
+              key={msg.id}
               initial={isNewMessage(msg, i) ? { opacity: 0, y: 10 } : false}
               animate={{ opacity: 1, y: 0 }}
               className={`flex flex-col gap-1.5 ${msg.role === "user" ? "items-end" : "items-start"}`}
@@ -250,7 +250,7 @@ export default function MessageList({
                 <div className="flex items-center gap-1.5">
                   <AIAvatar model={model} size={28} />
                   <span className="text-xs text-zinc-400 font-medium">
-                    {CHAT_MODELS.find((m) => m.id === model)?.name || "AI"}
+                    {CHAT_MODELS.find((m) => m.id === model)?.name}
                   </span>
                 </div>
               )}

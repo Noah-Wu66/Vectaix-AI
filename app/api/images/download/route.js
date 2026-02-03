@@ -29,26 +29,26 @@ function isAllowedDomain(url) {
   }
 }
 
-function pickFilenameFromUrl(url, fallbackExt = "png") {
+function pickFilenameFromUrl(url, fallbackExt) {
   try {
     const u = new URL(url);
-    const raw = u.pathname.split("/").filter(Boolean).pop() || "";
+    const raw = u.pathname.split("/").filter(Boolean).pop();
     const cleaned = raw.replace(/[^\w.\-]/g, "").slice(0, 128);
     if (cleaned && cleaned.includes(".")) return cleaned;
     if (cleaned) return `${cleaned}.${fallbackExt}`;
   } catch {
     // ignore
   }
-  return `image.${fallbackExt}`;
+  return;
 }
 
 function extFromContentType(contentType) {
-  const ct = (contentType || "").split(";")[0].trim().toLowerCase();
+  const ct = contentType.split(";")[0].trim().toLowerCase();
   if (ct === "image/jpeg") return "jpg";
   if (ct === "image/png") return "png";
   if (ct === "image/webp") return "webp";
   if (ct === "image/gif") return "gif";
-  return "png";
+  return;
 }
 
 async function isUrlOwnedByUser(userId, url) {
@@ -109,11 +109,11 @@ export async function GET(req) {
   if (!upstream.ok || !upstream.body) {
     return Response.json(
       { error: "Failed to fetch image" },
-      { status: upstream.status || 502 }
+      { status: upstream.status }
     );
   }
 
-  const contentType = upstream.headers.get("content-type") || "application/octet-stream";
+  const contentType = upstream.headers.get("content-type");
   const ext = extFromContentType(contentType);
   const filename = pickFilenameFromUrl(url, ext);
 
@@ -127,5 +127,3 @@ export async function GET(req) {
 
   return new Response(upstream.body, { headers });
 }
-
-

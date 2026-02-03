@@ -37,7 +37,7 @@ let completionSoundBufferPromise = null;
 
 const getCompletionSoundContext = () => {
   if (typeof window === "undefined") return null;
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const AudioCtx = window.AudioContext;
   if (!AudioCtx) return null;
   if (!completionSoundContext || completionSoundContext.state === "closed") {
     completionSoundContext = new AudioCtx();
@@ -158,10 +158,10 @@ export async function runChat({
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
     content: m.content,
-    image: m.image || null,
-    images: m.images || null,
-    mimeType: m.mimeType || null,
-    parts: m.parts || null,
+    image: m.image,
+    images: m.images,
+    mimeType: m.mimeType,
+    parts: m.parts,
   }));
 
   const modelMessageId = generateMessageId();
@@ -174,7 +174,7 @@ export async function runChat({
     historyLimit,
     conversationId,
     ...(mode ? { mode } : {}),
-    ...(mode === "regenerate" ? { messages: messagesForRegenerate || [] } : {}),
+    ...(mode === "regenerate" ? { messages: messagesForRegenerate } : {}),
     ...(!conversationId && settings ? { settings } : {}),
     ...(userMessageId ? { userMessageId } : {}),
     modelMessageId,
@@ -199,7 +199,7 @@ export async function runChat({
       let errorMessage = res.statusText;
       try {
         const errorData = await res.json();
-        errorMessage = errorData.error || errorData.message || errorMessage;
+        errorMessage = errorData.error;
       } catch (e) {
         console.error("Failed to parse error response:", e);
       }
@@ -240,7 +240,7 @@ export async function runChat({
     let buffer = "";
     let thinkingEnded = false;
     let sawDone = false;
-    const convIdForSync = newConvId || currentConversationId || conversationId;
+    const convIdForSync = newConvId;
 
     let flushScheduled = false;
     let hasReceivedContent = false;
@@ -274,7 +274,7 @@ export async function runChat({
         const idx = isLast ? lastIdx : prev.findIndex((m) => m?.id === streamMsgId);
         if (idx < 0) return prev;
 
-        const base = prev[idx] || {};
+        const base = prev[idx];
         const nowHasContent = displayedText.length > 0 || fullThought.length > 0 || isSearching;
         if (nowHasContent && !hasReceivedContent) {
           hasReceivedContent = true;
@@ -344,7 +344,7 @@ export async function runChat({
     };
 
     const applyEventPayload = (payload) => {
-      const p = (payload ?? "").trim();
+      const p = payload.trim();
       if (!p) return;
       if (p === "[DONE]") {
         sawDone = true;
@@ -379,9 +379,9 @@ export async function runChat({
           if (typeof data.query === "string" && data.query.trim()) {
             searchQuery = data.query.trim();
           }
-          searchResults = data.results || [];
+          searchResults = data.results;
         } else if (data.type === "citations") {
-          citations = data.citations || [];
+          citations = data.citations;
         }
       } catch {
         // ignore
@@ -391,11 +391,11 @@ export async function runChat({
     const consumeSseBuffer = (final = false) => {
       // 兼容 \n\n 和 \r\n\r\n 的分隔
       const blocks = buffer.split(/\r?\n\r?\n/);
-      if (!final) buffer = blocks.pop() || "";
+      if (!final) buffer = blocks.pop();
       else buffer = "";
 
       for (const block of blocks) {
-        const trimmedBlock = (block ?? "").trim();
+        const trimmedBlock = block.trim();
         if (!trimmedBlock) continue;
 
         // SSE 允许多行 data:，需要合并
@@ -491,7 +491,7 @@ export async function runChat({
       (!citations || citations.length === 0);
 
     if (isGeminiRefusal) {
-      const convIdForSync = newConvId || currentConversationId || conversationId;
+    const convIdForSync = newConvId;
       let nextMessagesForSync = null;
       if (Array.isArray(refusalRestoreMessages)) {
         setMessages(refusalRestoreMessages);
@@ -558,7 +558,7 @@ export async function runChat({
 
           const lastModelLen = (arr) => {
             for (let i = arr.length - 1; i >= 0; i -= 1) {
-              if (arr[i]?.role === "model") return (arr[i]?.content || "").length;
+              if (arr[i]?.role === "model") return arr[i]?.content.length;
             }
             return 0;
           };
@@ -611,18 +611,18 @@ export async function runChat({
       console.error(err);
       // 根据错误类型给出准确的提示
       let errorMessage;
-      const errMsg = err?.message || "";
+      const errMsg = err?.message;
       if (errMsg === "API_TIMEOUT") {
         errorMessage = "AI 响应超时，请稍后重试";
-      } else if (errMsg.includes("Failed to fetch") || errMsg.includes("NetworkError") || errMsg.includes("network")) {
+      } else if (errMsg?.includes("Failed to fetch") || errMsg?.includes("NetworkError") || errMsg?.includes("network")) {
         errorMessage = "网络连接失败，请检查网络后重试";
-      } else if (errMsg.includes("rate limit") || errMsg.includes("429")) {
+      } else if (errMsg?.includes("rate limit") || errMsg?.includes("429")) {
         errorMessage = "请求过于频繁，请稍后再试";
-      } else if (errMsg.includes("401") || errMsg.includes("Unauthorized")) {
+      } else if (errMsg?.includes("401") || errMsg?.includes("Unauthorized")) {
         errorMessage = "登录已过期，请刷新页面重新登录";
-      } else if (errMsg.includes("500") || errMsg.includes("Internal Server Error")) {
+      } else if (errMsg?.includes("500") || errMsg?.includes("Internal Server Error")) {
         errorMessage = "服务器内部错误，请稍后再试";
-      } else if (errMsg.includes("503") || errMsg.includes("Service Unavailable")) {
+      } else if (errMsg?.includes("503") || errMsg?.includes("Service Unavailable")) {
         errorMessage = "服务暂时不可用，请稍后再试";
       } else if (errMsg) {
         // 有具体错误信息时直接显示
@@ -636,7 +636,7 @@ export async function runChat({
       }
       // 超时：回滚本次用户消息，避免"悬空提问"扰乱上下文
       if (errMsg === "API_TIMEOUT" && mode !== "regenerate") {
-        const convIdForSync = newConvId || currentConversationId || conversationId;
+        const convIdForSync = newConvId;
         let nextMessagesForSync = null;
         setMessages((prev) => {
           if (!Array.isArray(prev) || prev.length === 0) return prev;

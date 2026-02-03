@@ -29,8 +29,8 @@ export async function GET() {
     }
 
     const { payload } = await jwtVerify(oaToken, secretKey);
-    const rawEmail = String(payload?.email || '').trim().toLowerCase();
-    const rawEmployeeId = String(payload?.employeeId || '').trim();
+    const rawEmail = String(payload?.email).trim().toLowerCase();
+    const rawEmployeeId = String(payload?.employeeId).trim();
     const email = rawEmail || (rawEmployeeId ? `oa-${rawEmployeeId}@oa.vectaix.com` : '');
     if (!email) {
       return Response.json({ error: '企业登录信息缺少邮箱/工号' }, { status: 400 });
@@ -57,4 +57,3 @@ export async function GET() {
     return Response.json({ error: '企业登录失败，请稍后再试' }, { status: 500 });
   }
 }
-

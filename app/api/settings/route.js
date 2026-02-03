@@ -2,6 +2,17 @@ import dbConnect from '@/lib/db';
 import UserSettings from '@/models/UserSettings';
 import { getAuthPayload } from '@/lib/auth';
 
+const DEFAULT_PROMPT = { name: '默认助手', content: 'You are a helpful AI assistant.' };
+
+function ensureDefaultFirst(prompts) {
+    const list = Array.isArray(prompts) ? [...prompts] : [];
+    const idx = list.findIndex((p) => p?.name === '默认助手');
+    if (idx === -1) return [DEFAULT_PROMPT, ...list];
+    if (idx === 0) return list;
+    const [defaultPrompt] = list.splice(idx, 1);
+    return [defaultPrompt, ...list];
+}
+
 // 获取用户设置（只返回系统提示词）
 export async function GET() {
     await dbConnect();
@@ -14,7 +25,7 @@ export async function GET() {
     if (!settings) {
         settings = await UserSettings.create({
             userId: user.userId,
-            systemPrompts: [{ name: '默认助手', content: 'You are a helpful AI assistant.' }]
+            systemPrompts: [DEFAULT_PROMPT]
         });
     }
 
@@ -50,10 +61,12 @@ export async function POST(req) {
     if (!settings) {
         settings = await UserSettings.create({
             userId: user.userId,
-            systemPrompts: [{ name, content }]
+            systemPrompts: ensureDefaultFirst([{ name, content }])
         });
     } else {
-        settings.systemPrompts.push({ name, content });
+        const normalizedPrompts = ensureDefaultFirst(settings.systemPrompts);
+        normalizedPrompts.push({ name, content });
+        settings.systemPrompts = normalizedPrompts;
         settings.updatedAt = Date.now();
         await settings.save();
     }
@@ -79,12 +92,9 @@ export async function DELETE(req) {
         return Response.json({ error: 'Cannot delete the default prompt' }, { status: 400 });
     }
 
-    // 防止删除最后一个提示词
-    if (settings.systemPrompts.length <= 1) {
-        return Response.json({ error: 'Cannot delete the last prompt' }, { status: 400 });
-    }
-
-    settings.systemPrompts = settings.systemPrompts.filter(p => p._id.toString() !== promptId);
+    settings.systemPrompts = ensureDefaultFirst(
+        settings.systemPrompts.filter(p => p._id.toString() !== promptId)
+    );
     settings.updatedAt = Date.now();
     await settings.save();
 
@@ -104,11 +114,12 @@ export async function PUT(req) {
     if (!settings) {
         settings = await UserSettings.create({
             userId: user.userId,
-            avatar: avatar || null,
-            systemPrompts: [{ name: '默认助手', content: 'You are a helpful AI assistant.' }]
+            avatar: avatar,
+            systemPrompts: [DEFAULT_PROMPT]
         });
     } else {
-        settings.avatar = avatar || null;
+        settings.avatar = avatar;
+        settings.systemPrompts = ensureDefaultFirst(settings.systemPrompts);
         settings.updatedAt = Date.now();
         await settings.save();
     }
@@ -151,6 +162,7 @@ export async function PATCH(req) {
 
     p.name = String(name);
     p.content = String(content);
+    settings.systemPrompts = ensureDefaultFirst(settings.systemPrompts);
     settings.updatedAt = Date.now();
     await settings.save();
 

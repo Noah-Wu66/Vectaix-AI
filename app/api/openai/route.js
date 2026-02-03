@@ -39,7 +39,7 @@ export async function POST(req) {
             return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
         }
 
-        const { prompt, model, config, history = [], historyLimit = 0, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
+        const { prompt, model, config, history, historyLimit, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
 
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
@@ -87,12 +87,12 @@ export async function POST(req) {
 
         // 创建新会话
         if (user && !currentConversationId) {
-            const title = (prompt || '').length > 30 ? (prompt || '').substring(0, 30) + '...' : (prompt || '');
+            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
                 title: title,
                 model: model,
-                settings: settings || {},
+                settings: settings,
                 messages: []
             });
             currentConversationId = newConv._id.toString();
@@ -112,12 +112,12 @@ export async function POST(req) {
                 { new: true }
             ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
-            storedMessagesForRegenerate = conv.messages || [];
-            writePermitTime = conv.updatedAt?.getTime?.() || regenerateTime;
+            storedMessagesForRegenerate = conv.messages;
+            writePermitTime = conv.updatedAt?.getTime?.();
         }
 
         if (isRegenerateMode) {
-            const msgs = storedMessagesForRegenerate || [];
+            const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
             openaiInput = await buildOpenAIInputFromHistory(effectiveMsgs);
         } else {
@@ -159,7 +159,7 @@ export async function POST(req) {
                 for (const entry of dbImageEntries) {
                     storedUserParts.push({
                         inlineData: {
-                            mimeType: entry.mimeType || 'image/jpeg',
+                            mimeType: entry.mimeType,
                             url: entry.url,
                         },
                     });
@@ -167,9 +167,7 @@ export async function POST(req) {
             }
 
             const userMsgTime = Date.now();
-            const resolvedUserMessageId = (isNonEmptyString(userMessageId) && userMessageId.length <= 128)
-                ? userMessageId
-                : generateMessageId();
+            const resolvedUserMessageId = userMessageId;
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
                 $push: {
                     messages: {
@@ -184,11 +182,11 @@ export async function POST(req) {
                 },
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
-            writePermitTime = updatedConv?.updatedAt?.getTime?.() || userMsgTime;
+            writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
         // 构建 Responses API 请求
-        const maxTokens = config?.maxTokens || 128000;
+        const maxTokens = config?.maxTokens;
         const thinkingLevel = config?.thinkingLevel;
 
         const claudeSystemPrompt = "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";
@@ -260,10 +258,10 @@ export async function POST(req) {
                     };
 
                     const pushCitations = (items) => {
-                        for (const item of items || []) {
+                        for (const item of items) {
                             if (!item?.url) continue;
                             if (!citations.some(c => c.url === item.url)) {
-                                citations.push({ url: item.url, title: item.title || null });
+                                citations.push({ url: item.url, title: item.title });
                             }
                         }
                     };
@@ -307,7 +305,7 @@ export async function POST(req) {
 
                             buffer += decoder.decode(value, { stream: true });
                             const lines = buffer.split('\n');
-                            buffer = lines.pop() || "";
+                            buffer = lines.pop();
 
                             for (const line of lines) {
                                 if (!line.trim() || line.startsWith(':')) continue;
@@ -319,11 +317,11 @@ export async function POST(req) {
                                 try {
                                     const event = JSON.parse(dataStr);
                                     if (event.type === 'response.reasoning.delta') {
-                                        const thought = event.delta || '';
+                                        const thought = event.delta;
                                         fullThought += thought;
                                         sendEvent({ type: 'thought', content: thought });
                                     } else if (event.type === 'response.output_text.delta') {
-                                        decisionText += event.delta || '';
+                                        decisionText += event.delta;
                                     }
                                 } catch { /* ignore parse errors */ }
                             }
@@ -339,7 +337,7 @@ export async function POST(req) {
                         );
                         const decisionUser = `用户问题：${prompt}\n\n判断是否必须联网检索才能回答。\n- 需要联网：输出 {"needSearch": true, "query": "精炼检索词"}\n- 不需要联网：输出 {"needSearch": false}`;
                         const decisionText = await runDecisionStream(decisionSystem, decisionUser);
-                        const decision = parseJsonFromText(decisionText) || {};
+                        const decision = parseJsonFromText(decisionText);
                         let needSearch = decision?.needSearch === true;
                         let nextQuery = typeof decision?.query === 'string' ? decision.query.trim() : "";
 
@@ -357,7 +355,7 @@ export async function POST(req) {
                                     includeRawContent: false,
                                     conciseSnippet: false
                                 });
-                                results = searchData?.results || [];
+                                results = searchData?.results;
                             } catch (searchError) {
                                 console.error("[OpenAI] MetaSo Search Error:", searchError?.message);
                             }
@@ -377,9 +375,9 @@ export async function POST(req) {
                             const enoughSystem = injectCurrentTimeSystemReminder(
                                 "你是联网检索补充决策器。必须只输出严格 JSON，不要输出任何多余文本。"
                             );
-                            const enoughUser = `用户问题：${prompt}\n\n已获得的检索摘要：\n${recentContext || "(无)"}\n\n判断这些信息是否足够回答。\n- 足够：输出 {"enough": true}\n- 不足：输出 {"enough": false, "nextQuery": "新的检索词"}`;
+                            const enoughUser = `用户问题：${prompt}\n\n已获得的检索摘要：\n${recentContext}\n\n判断这些信息是否足够回答。\n- 足够：输出 {"enough": true}\n- 不足：输出 {"enough": false, "nextQuery": "新的检索词"}`;
                             const enoughText = await runDecisionStream(enoughSystem, enoughUser);
-                            const enoughDecision = parseJsonFromText(enoughText) || {};
+                            const enoughDecision = parseJsonFromText(enoughText);
                             if (enoughDecision?.enough === true) break;
                             const candidateQuery = typeof enoughDecision?.nextQuery === 'string'
                                 ? enoughDecision.nextQuery.trim()
@@ -431,7 +429,7 @@ export async function POST(req) {
 
                         buffer += decoder.decode(value, { stream: true });
                         const lines = buffer.split('\n');
-                        buffer = lines.pop() || "";
+                        buffer = lines.pop();
 
                         for (const line of lines) {
                             if (!line.trim() || line.startsWith(':')) continue;
@@ -445,11 +443,11 @@ export async function POST(req) {
 
                                 // 处理 Responses API 事件
                                 if (event.type === 'response.output_text.delta') {
-                                    const text = event.delta || '';
+                                    const text = event.delta;
                                     fullText += text;
                                     sendEvent({ type: 'text', content: text });
                                 } else if (event.type === 'response.reasoning.delta') {
-                                    const thought = event.delta || '';
+                                    const thought = event.delta;
                                     fullThought += thought;
                                     sendEvent({ type: 'thought', content: thought });
                                 } else if (event.type === 'response.output_text.annotation.added') {
@@ -458,7 +456,7 @@ export async function POST(req) {
                                     if (ann?.type === 'url_citation' && ann?.url) {
                                         const exists = citations.some(c => c?.url === ann.url);
                                         if (!exists) {
-                                            citations.push({ url: ann.url, title: ann.title || null });
+                                            citations.push({ url: ann.url, title: ann.title });
                                             sendEvent({ type: 'citations', citations });
                                         }
                                     }
@@ -484,9 +482,7 @@ export async function POST(req) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
                             : { _id: currentConversationId, userId: user.userId };
-                        const resolvedModelMessageId = (isNonEmptyString(modelMessageId) && modelMessageId.length <= 128)
-                            ? modelMessageId
-                            : generateMessageId();
+                        const resolvedModelMessageId = modelMessageId;
                         await Conversation.findOneAndUpdate(
                             writeCondition,
                             {
@@ -495,7 +491,7 @@ export async function POST(req) {
                                         id: resolvedModelMessageId,
                                         role: 'model',
                                         content: fullText,
-                                        thought: fullThought || null,
+                                        thought: fullThought,
                                         citations: citations.length > 0 ? citations : null,
                                         type: 'text',
                                         parts: [{ text: fullText }]
@@ -544,7 +540,7 @@ export async function POST(req) {
         });
 
         const status = typeof error?.status === 'number' ? error.status : 500;
-        let errorMessage = error?.message || "Internal Server Error";
+        let errorMessage = error?.message;
 
         if (error?.message?.includes('API_KEY')) {
             errorMessage = "API configuration error. Please check your API keys.";

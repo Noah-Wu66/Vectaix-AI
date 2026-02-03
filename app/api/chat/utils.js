@@ -59,7 +59,7 @@ export async function fetchImageAsBase64(url) {
         }
 
         const base64Data = Buffer.from(arrayBuffer).toString("base64");
-        const mimeType = imgRes.headers.get("content-type") || "image/jpeg";
+        const mimeType = imgRes.headers.get("content-type");
         return { base64Data, mimeType };
     } catch (error) {
         if (error?.name === "AbortError") {

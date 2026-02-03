@@ -8,7 +8,7 @@ const RETENTION_DAYS = 90;
 const BATCH_SIZE = 200;
 
 function isCronRequest(request) {
-    const ua = request.headers.get('user-agent') || '';
+    const ua = request.headers.get('user-agent');
     return ua.includes('vercel-cron/1.0');
 }
 

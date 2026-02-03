@@ -69,7 +69,7 @@ export async function POST(request) {
                             $setOnInsert: {
                                 userId,
                                 url: blob.url,
-                                pathname: blob.pathname || null,
+                                pathname: blob.pathname,
                                 kind,
                                 createdAt: new Date(),
                             },
