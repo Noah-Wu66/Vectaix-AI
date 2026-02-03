@@ -1,6 +1,8 @@
 import { handleUpload } from '@vercel/blob/client';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
+import dbConnect from '@/lib/db';
+import BlobFile from '@/models/BlobFile';
 
 const UPLOAD_RATE_LIMIT = { limit: 30, windowMs: 10 * 60 * 1000 };
 
@@ -29,21 +31,54 @@ export async function POST(request) {
         const jsonResponse = await handleUpload({
             body,
             request,
-            onBeforeGenerateToken: async () => {
+            onBeforeGenerateToken: async (pathname, clientPayload) => {
                 // Authenticate
                 if (!user) {
                     throw new Error('Not authorized');
+                }
+
+                let kind = 'chat';
+                if (typeof clientPayload === 'string' && clientPayload) {
+                    try {
+                        const parsed = JSON.parse(clientPayload);
+                        if (parsed?.kind === 'avatar') kind = 'avatar';
+                    } catch {
+                        // ignore invalid payload
+                    }
                 }
 
                 return {
                     allowedContentTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
                     tokenPayload: JSON.stringify({
                         userId: user.userId,
+                        kind,
                     }),
                 };
             },
-            onUploadCompleted: async () => {
-                // 上传完成回调，Vercel Blob 服务器会调用此方法通知上传完成
+            onUploadCompleted: async ({ blob, tokenPayload }) => {
+                try {
+                    const payload = tokenPayload ? JSON.parse(tokenPayload) : null;
+                    const userId = payload?.userId;
+                    const kind = payload?.kind === 'avatar' ? 'avatar' : 'chat';
+                    if (!userId || !blob?.url) return;
+
+                    await dbConnect();
+                    await BlobFile.findOneAndUpdate(
+                        { url: blob.url },
+                        {
+                            $setOnInsert: {
+                                userId,
+                                url: blob.url,
+                                pathname: blob.pathname || null,
+                                kind,
+                                createdAt: new Date(),
+                            },
+                        },
+                        { upsert: true }
+                    );
+                } catch (err) {
+                    console.error('Blob upload completed handler failed:', err?.message);
+                }
             },
         });
 

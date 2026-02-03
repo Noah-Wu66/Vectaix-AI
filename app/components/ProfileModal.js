@@ -155,6 +155,7 @@ export default function ProfileModal({
       const blob = await upload(file.name, file, {
         access: "public",
         handleUploadUrl: "/api/upload",
+        clientPayload: JSON.stringify({ kind: "avatar" }),
       });
       await onAvatarChange?.(blob.url);
       toast.success("头像更新成功");
@@ -505,5 +506,4 @@ export default function ProfileModal({
   </>
   );
 }
-
 

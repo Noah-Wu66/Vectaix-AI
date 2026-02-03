@@ -138,6 +138,7 @@ export function createChatAppActions({
             const blob = await upload(image.file.name, image.file, {
               access: "public",
               handleUploadUrl: "/api/upload",
+              clientPayload: JSON.stringify({ kind: "chat" }),
             });
             imageUrls.push(blob.url);
           }
@@ -314,6 +315,7 @@ export function createChatAppActions({
         const blob = await upload(editingImage.file.name, editingImage.file, {
           access: "public",
           handleUploadUrl: "/api/upload",
+          clientPayload: JSON.stringify({ kind: "chat" }),
         });
         nextImageUrls = [blob.url];
         nextMimeType = editingImage.mimeType || editingImage.file.type || null;
@@ -332,6 +334,7 @@ export function createChatAppActions({
             const uploaded = await upload(file.name, file, {
               access: "public",
               handleUploadUrl: "/api/upload",
+              clientPayload: JSON.stringify({ kind: "chat" }),
             });
             nextImageUrls.push(uploaded.url);
             if (!nextMimeType) nextMimeType = mime;
