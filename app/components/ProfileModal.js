@@ -93,7 +93,6 @@ export default function ProfileModal({
       triggerDownload(blob, filename);
       toast.success("导出成功");
     } catch (e) {
-      console.error(e);
       toast.error(e?.message);
     } finally {
       setExportLoading(false);
@@ -128,7 +127,6 @@ export default function ProfileModal({
       if (!res.ok) throw new Error(data?.error);
       toast.success(`导入成功（会话：${data?.imported?.conversationsCount}）`);
     } catch (e) {
-      console.error(e);
       toast.error(e?.message);
     } finally {
       setImportLoading(false);
@@ -159,7 +157,6 @@ export default function ProfileModal({
       await onAvatarChange?.(blob.url);
       toast.success("头像更新成功");
     } catch (err) {
-      console.error(err);
       toast.error(err?.message);
     } finally {
       setAvatarLoading(false);
@@ -191,7 +188,6 @@ export default function ProfileModal({
         toast.error(data.error);
       }
     } catch (err) {
-      console.error(err);
       toast.error("密码修改失败");
     } finally {
       setPwLoading(false);

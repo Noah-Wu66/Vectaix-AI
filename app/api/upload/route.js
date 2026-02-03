@@ -76,9 +76,7 @@ export async function POST(request) {
                         },
                         { upsert: true }
                     );
-                } catch (err) {
-                    console.error('Blob upload completed handler failed:', err?.message);
-                }
+                } catch { }
             },
         });
 

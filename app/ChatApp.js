@@ -103,8 +103,7 @@ export default function ChatApp() {
           setShowAuthModal(true);
         }
       })
-      .catch((err) => {
-        console.error("Auth check failed:", err);
+      .catch(() => {
         setShowAuthModal(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,9 +126,7 @@ export default function ChatApp() {
       const res = await fetch("/api/conversations");
       const data = await res.json();
       if (data.conversations) setConversations(data.conversations);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch { }
   };
 
   const handleSensitiveRefusal = (payload) => {
@@ -392,7 +389,6 @@ export default function ChatApp() {
         }
       }
     } catch (e) {
-      console.error(e);
       toast.error(`加载会话失败：${e?.message}`);
     } finally {
       setLoading(false);
@@ -429,9 +425,7 @@ export default function ChatApp() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ settings: toSync }),
         });
-      } catch (err) {
-        console.error("Failed to sync settings:", err);
-      }
+      } catch { }
     }, 500);
   };
 
@@ -444,9 +438,7 @@ export default function ChatApp() {
         setCurrentConversationId(null);
         setMessages([]);
       }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch { }
   };
 
   const startNewChat = () => {
@@ -499,9 +491,7 @@ export default function ChatApp() {
       setConversations((prev) =>
         prev.map((c) => (c._id === id ? { ...c, title: newTitle } : c))
       );
-    } catch (err) {
-      console.error(err);
-    }
+    } catch { }
   };
 
   const updateThemeMode = (mode) => {

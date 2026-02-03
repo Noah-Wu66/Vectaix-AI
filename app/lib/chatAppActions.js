@@ -72,9 +72,7 @@ export function createChatAppActions({
   const copyMessage = async (content) => {
     try {
       await navigator.clipboard.writeText(content);
-    } catch (e) {
-      console.error("复制失败", e);
-    }
+    } catch { }
   };
 
   const syncConversationMessages = async (nextMessages) => {
@@ -87,9 +85,7 @@ export function createChatAppActions({
           body: JSON.stringify({ messages: nextMessages }),
         }
       );
-    } catch (e) {
-      console.error(e);
-    }
+    } catch { }
   };
 
   const deleteModelMessage = async (index) => {
@@ -202,7 +198,6 @@ export function createChatAppActions({
         onError: (msg) => toast.error(msg),
       });
     } catch (err) {
-      console.error(err);
       const errMsg = err?.message;
       const friendlyMsg = errMsg?.includes("Failed to fetch") ? "网络连接失败，请检查网络后重试" : errMsg;
       toast.error(friendlyMsg);
@@ -363,7 +358,6 @@ export function createChatAppActions({
       if (nextMimeType) updatedMsg.mimeType = nextMimeType;
       else if (editingImageAction === "remove") delete updatedMsg.mimeType;
     } catch (e) {
-      console.error(e);
       chatRequestLockRef.current = false;
       setLoading(false);
       const errMsg = e?.message;

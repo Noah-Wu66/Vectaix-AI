@@ -64,10 +64,7 @@ const loadCompletionSoundBuffer = async () => {
       if (decoded) completionSoundBuffer = decoded;
       return completionSoundBuffer;
     })
-    .catch((e) => {
-      console.error("[completionSound] decode failed:", e);
-      return null;
-    })
+    .catch(() => null)
     .finally(() => {
       completionSoundBufferPromise = null;
     });
@@ -151,9 +148,7 @@ export async function runChat({
       source.connect(gain);
       gain.connect(ctx.destination);
       source.start(0);
-    } catch (e) {
-      console.error("[completionSound] play failed:", e);
-    }
+    } catch { }
   };
   const historyPayload = historyMessages.map((m) => ({
     role: m.role,
@@ -200,9 +195,7 @@ export async function runChat({
       try {
         const errorData = await res.json();
         errorMessage = errorData.error;
-      } catch (e) {
-        console.error("Failed to parse error response:", e);
-      }
+      } catch { }
       throw new Error(errorMessage);
     }
 
@@ -349,18 +342,10 @@ export async function runChat({
       if (p === "[DONE]") {
         sawDone = true;
         isSearching = false;
-        // Gemini 模型返回日志
-        if (provider === "gemini") {
-          console.log("[Gemini 返回完成]", { fullText, fullThought, citations });
-        }
         return;
       }
       try {
         const data = JSON.parse(p);
-        // Gemini 模型返回日志
-        if (provider === "gemini") {
-          console.log("[Gemini 返回]", data);
-        }
         if (data.type === "thought") {
           fullThought += data.content;
         } else if (data.type === "text") {
@@ -532,9 +517,7 @@ export async function runChat({
               body: JSON.stringify({ messages: nextMessagesForSync }),
             }
           );
-        } catch (syncErr) {
-          console.error("Failed to rollback sensitive message:", syncErr);
-        }
+        } catch { }
       }
 
       const shouldPrefill = mode !== "regenerate" && !Array.isArray(refusalRestoreMessages);
@@ -608,7 +591,6 @@ export async function runChat({
     }
   } catch (err) {
     if (err?.name !== "AbortError") {
-      console.error(err);
       // 根据错误类型给出准确的提示
       let errorMessage;
       const errMsg = err?.message;
@@ -656,9 +638,7 @@ export async function runChat({
                 body: JSON.stringify({ messages: nextMessagesForSync }),
               }
             );
-          } catch (syncErr) {
-            console.error("Failed to rollback user message:", syncErr);
-          }
+          } catch { }
         }
       }
       // 通过回调通知错误（由调用方显示 toast）

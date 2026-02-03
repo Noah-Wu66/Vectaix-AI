@@ -90,8 +90,7 @@ export async function POST(req) {
         let body;
         try {
             body = await req.json();
-        } catch (jsonError) {
-            console.error("Invalid JSON in request body:", jsonError);
+        } catch {
             return Response.json(
                 { error: 'Invalid JSON in request body' },
                 { status: 400 }
@@ -102,7 +101,6 @@ export async function POST(req) {
 
         // Validate required fields
         if (!model || typeof model !== 'string') {
-            console.error("Missing or invalid model field");
             return Response.json(
                 { error: 'Model is required and must be a string' },
                 { status: 400 }
@@ -110,7 +108,6 @@ export async function POST(req) {
         }
 
         if (!prompt || typeof prompt !== 'string') {
-            console.error("Missing or invalid prompt field");
             return Response.json(
                 { error: 'Prompt is required and must be a string' },
                 { status: 400 }
@@ -408,9 +405,7 @@ export async function POST(req) {
                                     conciseSnippet: false
                                 });
                                 results = searchData?.results;
-                            } catch (searchError) {
-                                console.error("[Gemini] MetaSo Search Error:", searchError?.message);
-                            }
+                            } catch { }
 
                             const eventResults = buildMetasoSearchEventResults(results);
                             sendEvent({ type: 'search_result', query: nextQuery, results: eventResults });

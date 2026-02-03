@@ -86,9 +86,7 @@ export default function Markdown({ children, className = "", enableHighlight = t
                 await navigator.clipboard.writeText(text);
                 setIsCopied(true);
                 setTimeout(() => setIsCopied(false), 2000);
-              } catch (err) {
-                console.error('复制失败:', err);
-              }
+              } catch { }
             };
 
             return (
