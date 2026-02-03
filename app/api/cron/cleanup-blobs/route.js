@@ -1,14 +1,11 @@
-import { del, list } from '@vercel/blob';
+import { del } from '@vercel/blob';
 import dbConnect from '@/lib/db';
 import BlobFile from '@/models/BlobFile';
-import BlobCleanupState from '@/models/BlobCleanupState';
-import UserSettings from '@/models/UserSettings';
 
 export const runtime = 'nodejs';
 
-const RETENTION_DAYS = 30;
+const RETENTION_DAYS = 90;
 const BATCH_SIZE = 200;
-const LIST_LIMIT = 1000;
 
 function isCronRequest(request) {
     const ua = request.headers.get('user-agent') || '';
@@ -21,53 +18,6 @@ export async function GET(request) {
     }
 
     await dbConnect();
-
-    let initialDeleted = 0;
-    let initialPreserved = 0;
-    const initialState = await BlobCleanupState.findOne({ key: 'initial-cleanup' });
-    if (!initialState) {
-        const avatarSettings = await UserSettings.find({ avatar: { $type: 'string' } })
-            .select('avatar');
-        const avatarUrls = new Set(
-            avatarSettings
-                .map((s) => (typeof s.avatar === 'string' ? s.avatar.trim() : ''))
-                .filter(Boolean)
-        );
-
-        let cursor;
-        while (true) {
-            const result = await list({ limit: LIST_LIMIT, cursor });
-            const urls = (result?.blobs || []).map((b) => b.url).filter(Boolean);
-            const toDelete = [];
-            for (const url of urls) {
-                if (avatarUrls.has(url)) {
-                    initialPreserved += 1;
-                } else {
-                    toDelete.push(url);
-                }
-            }
-
-            if (toDelete.length > 0) {
-                await del(toDelete);
-                initialDeleted += toDelete.length;
-            }
-
-            if (!result?.hasMore) break;
-            cursor = result?.cursor;
-        }
-
-        if (avatarUrls.size > 0) {
-            await BlobFile.deleteMany({ url: { $nin: Array.from(avatarUrls) } });
-        } else {
-            await BlobFile.deleteMany({});
-        }
-
-        await BlobCleanupState.updateOne(
-            { key: 'initial-cleanup' },
-            { $set: { doneAt: new Date() } },
-            { upsert: true }
-        );
-    }
 
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
@@ -94,7 +44,5 @@ export async function GET(request) {
     return Response.json({
         success: true,
         deleted: totalDeleted,
-        initialDeleted,
-        initialPreserved,
     });
 }
