@@ -14,11 +14,18 @@ const sanitizeSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
-    code: [...defaultSchema.attributes?.code, "className"],
-    span: [...defaultSchema.attributes?.span, "className", "style"],
-    div: [...defaultSchema.attributes?.div, "className"],
   },
 };
+
+if (Array.isArray(sanitizeSchema.attributes?.code)) {
+  sanitizeSchema.attributes.code = [...sanitizeSchema.attributes.code, "className"];
+}
+if (Array.isArray(sanitizeSchema.attributes?.span)) {
+  sanitizeSchema.attributes.span = [...sanitizeSchema.attributes.span, "className", "style"];
+}
+if (Array.isArray(sanitizeSchema.attributes?.div)) {
+  sanitizeSchema.attributes.div = [...sanitizeSchema.attributes.div, "className"];
+}
 
 export default function Markdown({ children, className = "", enableHighlight = true }) {
   // 使用 ref 记住上一次的 enableHighlight 值，避免重复触发
