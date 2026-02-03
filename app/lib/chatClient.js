@@ -181,6 +181,8 @@ export async function runChat({
   setLoading(true);
   let streamMsgId = modelMessageId;
   let simulatedStreamTimer = null;
+  const debugTag = "[chat-stream]";
+  const logProgressStep = 500;
 
   try {
     const res = await fetch(apiEndpoint, {
@@ -241,6 +243,16 @@ export async function runChat({
     let searchQuery = null;
     let searchResults = null;
     let citations = null;
+    let lastTextLogLen = 0;
+    let lastThoughtLogLen = 0;
+
+    console.log(debugTag, "response ok", {
+      status: res.status,
+      endpoint: apiEndpoint,
+      conversationId: newConvId,
+      provider,
+      model,
+    });
 
     // 通用超时检测：统一30秒
     let timeoutId = null;
@@ -342,34 +354,60 @@ export async function runChat({
       if (p === "[DONE]") {
         sawDone = true;
         isSearching = false;
+        console.log(debugTag, "sse done", {
+          fullTextLen: fullText.length,
+          fullThoughtLen: fullThought.length,
+          hasCitations: Array.isArray(citations) ? citations.length : 0,
+        });
         return;
       }
       try {
         const data = JSON.parse(p);
         if (data.type === "thought") {
           fullThought += data.content;
+          if (fullThought.length === data.content.length) {
+            console.log(debugTag, "thought start", { len: fullThought.length });
+          } else if (fullThought.length - lastThoughtLogLen >= logProgressStep) {
+            lastThoughtLogLen = fullThought.length;
+            console.log(debugTag, "thought progress", { len: fullThought.length });
+          }
         } else if (data.type === "text") {
           fullText += data.content;
+          if (fullText.length === data.content.length) {
+            console.log(debugTag, "text start", { len: fullText.length });
+          } else if (fullText.length - lastTextLogLen >= logProgressStep) {
+            lastTextLogLen = fullText.length;
+            console.log(debugTag, "text progress", { len: fullText.length });
+          }
           if (!thinkingEnded) thinkingEnded = true;
           isSearching = false;
           // 启动模拟流式输出
           startSimulatedStream();
         } else if (data.type === "search_start") {
           isSearching = true;
+          console.log(debugTag, "search start", { query: data.query });
           if (typeof data.query === "string" && data.query.trim()) {
             searchQuery = data.query.trim();
           }
         } else if (data.type === "search_result") {
           isSearching = false;
+          console.log(debugTag, "search result", {
+            query: data.query,
+            resultCount: Array.isArray(data.results) ? data.results.length : 0,
+          });
           if (typeof data.query === "string" && data.query.trim()) {
             searchQuery = data.query.trim();
           }
           searchResults = data.results;
         } else if (data.type === "citations") {
           citations = data.citations;
+          console.log(debugTag, "citations", {
+            count: Array.isArray(citations) ? citations.length : 0,
+          });
         }
       } catch {
-        // ignore
+        const preview = p.length > 200 ? `${p.slice(0, 200)}...` : p;
+        console.warn(debugTag, "invalid sse payload", preview);
       }
     };
 
@@ -421,6 +459,12 @@ export async function runChat({
     // flush TextDecoder / 最后一段 buffer（避免最后一个事件未以空行结尾时被漏掉）
     buffer += decoder.decode();
     consumeSseBuffer(true);
+    console.log(debugTag, "stream finished", {
+      sawDone,
+      fullTextLen: fullText.length,
+      fullThoughtLen: fullThought.length,
+      timedOut,
+    });
 
     // 等待模拟流式输出完成
     const waitForSimulatedStream = () => {
