@@ -49,9 +49,13 @@ export default function Sidebar({
     setDeleteConfirm({ open: true, id: conv._id, title: conv.title });
   };
 
-  const handleConfirmDelete = () => {
-    if (deleteConfirm.id) {
-      onDeleteConversation(deleteConfirm.id);
+  const handleConfirmDelete = async () => {
+    try {
+      if (deleteConfirm.id) {
+        await onDeleteConversation(deleteConfirm.id);
+      }
+    } finally {
+      setDeleteConfirm({ open: false, id: null, title: "" });
     }
   };
 

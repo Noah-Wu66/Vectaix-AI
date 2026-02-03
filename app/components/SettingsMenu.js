@@ -632,9 +632,13 @@ export default function SettingsMenu({
           setConfirmOpen(false);
           confirmActionRef.current = null;
         }}
-        onConfirm={() => {
-          confirmActionRef.current?.();
-          confirmActionRef.current = null;
+        onConfirm={async () => {
+          try {
+            await confirmActionRef.current?.();
+          } finally {
+            confirmActionRef.current = null;
+            setConfirmOpen(false);
+          }
         }}
         title={confirmTitle}
         message={confirmMessage}
