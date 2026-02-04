@@ -160,26 +160,24 @@ export default function Sidebar({
               ) : (
                 <>
                    <button
-                     onClick={() => onLoadConversation(conv._id)}
-                     className={`flex-1 flex items-center gap-1.5 text-left py-3 pl-3 pr-1 text-sm min-w-0 ${currentConversationId === conv._id
-                       ? "text-zinc-900 font-medium"
-                       : "text-zinc-600"
+                      onClick={() => onLoadConversation(conv._id)}
+                      className={`flex-1 flex items-center gap-1.5 text-left py-3 pl-3 pr-1 text-sm min-w-0 ${currentConversationId === conv._id
+                        ? "text-zinc-900 font-medium"
+                        : "text-zinc-600"
+                        }`}
+                    >
+                      <span className="shrink-0"><ConversationIcon model={conv.model} /></span>
+                      <span className="truncate">{conv.title}</span>
+                    </button>
+                   <button
+                     onClick={(e) => handlePinClick(conv, e)}
+                     className={`p-2 transition-opacity ${conv.pinned
+                       ? "opacity-100 text-blue-600 hover:text-blue-700"
+                       : "opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-zinc-600"
                        }`}
                    >
-                     <span className="shrink-0"><ConversationIcon model={conv.model} /></span>
-                     {conv.pinned && (
-                       <span className="shrink-0 text-zinc-400">
-                         <Pin size={12} />
-                       </span>
-                     )}
-                     <span className="truncate">{conv.title}</span>
+                     <Pin size={14} fill={conv.pinned ? "currentColor" : "none"} />
                    </button>
-                  <button
-                    onClick={(e) => handlePinClick(conv, e)}
-                    className={`p-2 transition-opacity ${conv.pinned ? "opacity-100 text-zinc-700 hover:text-zinc-900" : "opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-zinc-600"}`}
-                  >
-                    <Pin size={14} />
-                  </button>
                   <button
                     onClick={(e) => handleEditClick(conv, e)}
                     className="p-2 text-zinc-400 hover:text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity"
