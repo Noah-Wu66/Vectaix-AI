@@ -60,14 +60,7 @@ export default function Markdown({ children, className = "", enableHighlight = t
             // inline prop is passed by react-markdown for inline code
             // For code blocks without language, className is undefined but inline is false
             if (inline) {
-              return (
-                <code
-                  className="px-1.5 py-0.5 rounded bg-zinc-200 text-zinc-800 text-sm font-mono"
-                  {...props}
-                >
-                  {children}
-                </code>
-              );
+              return <code {...props}>{children}</code>;
             }
 
             return (

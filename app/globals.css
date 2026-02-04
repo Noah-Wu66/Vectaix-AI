@@ -163,15 +163,16 @@ h6 {
   margin-top: 0.5em;
 }
 
-.prose code {
+.prose :not(pre) > code {
   background: #f4f4f5;
   padding: 0.2em 0.4em;
   border-radius: 4px;
   font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .prose pre {
-  background: #52525b;
+  background: var(--code-bg, #52525b);
   color: #fafafa;
   padding: 1em;
   border-radius: var(--radius);
@@ -204,10 +205,14 @@ h6 {
 
 /* Enhanced Markdown Table */
 .prose table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
   font-size: 0.9em;
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .prose th,
@@ -275,7 +280,7 @@ h6 {
 }
 
 .prose pre code.hljs {
-  padding: 1em;
+  padding: 0;
   background: transparent;
 }
 
@@ -361,7 +366,7 @@ h6 {
   color: var(--text-primary);
 }
 
-.dark-mode .prose code {
+.dark-mode .prose :not(pre) > code {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }
@@ -385,6 +390,7 @@ h6 {
 
 .thinking-prose.prose {
   color: #a1a1aa;
+  --code-bg: #3f3f46;
 }
 
 .thinking-prose.prose p,
@@ -399,6 +405,7 @@ h6 {
 
 .dark-mode .thinking-prose.prose {
   color: #71717a;
+  --code-bg: #1f2937;
 }
 
 .dark-mode .thinking-prose.prose p,

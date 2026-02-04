@@ -420,7 +420,9 @@ export default function MessageList({
                                 }
                                 if (part && typeof part.text === "string" && part.text.trim()) {
                                   return isUser ? (
-                                    <span key={idx} className="whitespace-pre-wrap break-words">{part.text}</span>
+                                    <Markdown key={idx} enableHighlight={false}>
+                                      {part.text}
+                                    </Markdown>
                                   ) : (
                                     <Markdown key={idx} enableHighlight={!msg.isStreaming}>
                                       {part.text}
@@ -447,7 +449,7 @@ export default function MessageList({
                             )}
 
                             {msg.role === "user" ? (
-                              <span className="whitespace-pre-wrap break-words">{msg.content}</span>
+                              <Markdown enableHighlight={false}>{msg.content}</Markdown>
                             ) : (
                               <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
                             )}

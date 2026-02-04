@@ -1,4 +1,5 @@
-import { ExternalLink, Globe } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink, Globe, X } from "lucide-react";
 import { Gemini, Claude, OpenAI } from "@lobehub/icons";
 
 export function AIAvatar({ model, size = 24 }) {
@@ -100,6 +101,8 @@ export function Thumb({ src, className = "", onClick }) {
 export function Citations({ citations }) {
   if (!citations || !Array.isArray(citations) || citations.length === 0) return null;
 
+  const [open, setOpen] = useState(false);
+
   const uniqueCitations = [];
   const seenUrls = new Set();
   for (const c of citations) {
@@ -111,41 +114,102 @@ export function Citations({ citations }) {
 
   if (uniqueCitations.length === 0) return null;
 
+  const previewCount = Math.min(5, uniqueCitations.length);
+  const previewItems = uniqueCitations.slice(0, previewCount);
+  const getDomain = (url) => {
+    try {
+      return new URL(url).hostname.replace('www.', '');
+    } catch {
+      return url;
+    }
+  };
+
   return (
     <div className="mt-3 pt-3 border-t border-zinc-200">
-      <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-2">
-        <Globe size={12} />
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full text-xs transition-colors"
+        title="查看全部来源"
+      >
+        <Globe size={12} className="text-zinc-500" />
         <span>信息来源</span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {uniqueCitations.slice(0, 5).map((citation, idx) => {
-          const domain = (() => {
-            try {
-              return new URL(citation.url).hostname.replace('www.', '');
-            } catch {
-              return citation.url;
-            }
-          })();
-          return (
-            <a
-              key={idx}
-              href={citation.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-2 py-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-xs transition-colors max-w-[200px]"
-              title={citation.title || citation.url}
-            >
-              <ExternalLink size={10} className="flex-shrink-0" />
-              <span className="truncate">{citation.title || domain}</span>
-            </a>
-          );
-        })}
-        {uniqueCitations.length > 5 && (
-          <span className="px-2 py-1 text-xs text-zinc-400">
-            +{uniqueCitations.length - 5} 更多来源
-          </span>
+        <span className="flex -space-x-1.5">
+          {previewItems.map((citation, idx) => {
+            const domain = getDomain(citation.url);
+            const iconUrl = `https://${domain}/favicon.ico`;
+            return (
+              <img
+                key={idx}
+                src={iconUrl}
+                alt=""
+                className="w-4 h-4 rounded-full border border-white bg-white"
+                loading="lazy"
+                decoding="async"
+              />
+            );
+          })}
+        </span>
+        {uniqueCitations.length > previewCount && (
+          <span className="text-zinc-500">+{uniqueCitations.length - previewCount}</span>
         )}
-      </div>
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setOpen(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl border border-zinc-200 w-full max-w-md p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-sm text-zinc-700 font-medium">
+                <Globe size={14} />
+                信息来源
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100"
+                title="关闭"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
+              <div className="flex flex-col gap-2">
+                {uniqueCitations.map((citation, idx) => {
+                  const domain = getDomain(citation.url);
+                  const iconUrl = `https://${domain}/favicon.ico`;
+                  return (
+                    <a
+                      key={idx}
+                      href={citation.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-2.5 py-2 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 rounded-lg text-sm text-zinc-700 transition-colors"
+                      title={citation.title || citation.url}
+                    >
+                      <img
+                        src={iconUrl}
+                        alt=""
+                        className="w-5 h-5 rounded-full border border-white bg-white flex-shrink-0"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      <span className="truncate flex-1">
+                        {citation.title || domain}
+                      </span>
+                      <ExternalLink size={14} className="text-zinc-400" />
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
