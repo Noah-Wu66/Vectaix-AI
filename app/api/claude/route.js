@@ -467,7 +467,7 @@ export async function POST(req) {
                                 sendEvent({ type: 'thought', content: delta.thinking });
                             } else if (delta.type === 'text_delta') {
                                 fullText += delta.text;
-                                const citationData = delta.citations;
+                                const citationData = Array.isArray(delta.citations) ? delta.citations : [];
                                 if (citationData.length > 0) {
                                     for (const c of citationData) {
                                         if (c?.type === 'web_search_result_location') {
