@@ -92,6 +92,16 @@ export async function metasoSearch(query, options = {}) {
 
   const controller = new AbortController();
   const timeoutMs = options.timeoutMs;
+  console.info("MetaSo search request", {
+    query,
+    baseUrl,
+    scope,
+    size,
+    includeSummary,
+    includeRawContent,
+    conciseSnippet,
+    timeoutMs,
+  });
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
@@ -108,11 +118,21 @@ export async function metasoSearch(query, options = {}) {
 
     if (!res.ok) {
       const errorText = await res.text();
+      console.error("MetaSo search response error", {
+        status: res.status,
+        statusText: res.statusText,
+        errorText,
+      });
       throw new Error(`MetaSo API error: ${res.status} ${errorText}`);
     }
 
     const data = await res.json();
     const results = normalizeMetasoResults(data?.webpages);
+    console.info("MetaSo search response ok", {
+      status: res.status,
+      credits: data?.credits,
+      resultCount: Array.isArray(results) ? results.length : 0,
+    });
     return {
       credits: data?.credits,
       results,
