@@ -18,6 +18,7 @@ import {
     buildMetasoCitations,
     buildMetasoSearchEventResults
 } from '@/app/api/chat/metasoSearch';
+import { BASE_SYSTEM_PROMPT_TEXT } from '@/app/api/chat/systemPrompts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -273,7 +274,7 @@ export async function POST(req) {
         // 构建请求参数（联网检索上下文将在流式开始前注入）
         const maxTokens = config?.maxTokens;
         const budgetTokens = config?.budgetTokens;
-        const claudeSystemPrompt = "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";
+        const baseSystemPromptText = BASE_SYSTEM_PROMPT_TEXT;
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         // 是否启用联网搜索
@@ -432,7 +433,7 @@ export async function POST(req) {
                         ? `\n\nWeb search results:\n${searchContextText}`
                         : "";
                     const systemPrompt = injectCurrentTimeSystemReminder(
-                        `${claudeSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`
+                        `${baseSystemPromptText}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`
                     );
                     const requestParams = {
                         model: model,

@@ -274,16 +274,7 @@ export default function SettingsMenu({
               </div>
 
               <div className="space-y-4">
-                {model?.startsWith("claude-") || model?.startsWith("gpt-") || model?.startsWith("o1-") ? (
-                  <div>
-                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                      系统提示词
-                    </label>
-                    <div className="bg-zinc-100 border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-400 cursor-not-allowed">
-                      内置提示词（不可修改）
-                    </div>
-                  </div>
-                ) : (
+                {model?.startsWith("claude-") || model?.startsWith("gpt-") ? null : (
                   <div>
                     <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                       系统提示词
@@ -327,26 +318,28 @@ export default function SettingsMenu({
                                     >
                                       {p?.name}
                                     </button>
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        onClick={() => openEditPromptModal(p)}
-                                        disabled={isDefault}
-                                        title={isDefault ? "默认提示词不可编辑" : "编辑提示词"}
-                                        className="p-1 text-zinc-500 hover:text-zinc-700 disabled:text-zinc-300"
-                                        type="button"
-                                      >
-                                        <Pencil size={14} />
-                                      </button>
-                                      <button
-                                        onClick={() => requestDeletePromptById(p)}
-                                        disabled={isDefault}
-                                        title={isDefault ? "默认提示词不可删除" : "删除提示词"}
-                                        className="p-1 text-zinc-500 hover:text-red-600 disabled:text-zinc-300"
-                                        type="button"
-                                      >
-                                        <Trash2 size={14} />
-                                      </button>
-                                    </div>
+                                    {isDefault ? (
+                                      <div className="w-12" />
+                                    ) : (
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          onClick={() => openEditPromptModal(p)}
+                                          title="编辑提示词"
+                                          className="p-1 text-zinc-500 hover:text-zinc-700"
+                                          type="button"
+                                        >
+                                          <Pencil size={14} />
+                                        </button>
+                                        <button
+                                          onClick={() => requestDeletePromptById(p)}
+                                          title="删除提示词"
+                                          className="p-1 text-zinc-500 hover:text-red-600"
+                                          type="button"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}

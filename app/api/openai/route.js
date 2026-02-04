@@ -18,6 +18,7 @@ import {
 } from '@/app/api/chat/metasoSearch';
 
 import { buildOpenAIInputFromHistory, parseJsonFromText } from '@/app/api/openai/openaiHelpers';
+import { BASE_SYSTEM_PROMPT_TEXT } from '@/app/api/chat/systemPrompts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -188,11 +189,11 @@ export async function POST(req) {
         const maxTokens = config?.maxTokens;
         const thinkingLevel = config?.thinkingLevel;
 
-        const claudeSystemPrompt = "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";
+        const baseSystemPromptText = BASE_SYSTEM_PROMPT_TEXT;
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         const baseSystemPrompt = injectCurrentTimeSystemReminder(
-            `${claudeSystemPrompt}\n\n${formattingGuard}`
+            `${baseSystemPromptText}\n\n${formattingGuard}`
         );
         const baseInputWithInstructions = [
             { role: 'developer', content: [{ type: 'input_text', text: baseSystemPrompt }] },
