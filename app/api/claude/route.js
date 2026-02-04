@@ -379,6 +379,12 @@ export async function POST(req) {
                         const decision = parseJsonFromText(decisionText);
                         let needSearch = decision?.needSearch === true;
                         let nextQuery = typeof decision?.query === 'string' ? decision.query.trim() : "";
+                        console.info("Claude web search decision", {
+                            needSearch,
+                            hasQuery: Boolean(nextQuery),
+                            model,
+                            conversationId: currentConversationId
+                        });
 
                         const searchContextParts = [];
                         const maxSearchRounds = 10;
@@ -395,7 +401,20 @@ export async function POST(req) {
                                     conciseSnippet: false
                                 });
                                 results = searchData?.results;
-                            } catch { }
+                            } catch (searchError) {
+                                console.error("Claude web search failed", {
+                                    query: nextQuery,
+                                    message: searchError?.message,
+                                    name: searchError?.name
+                                });
+                            }
+
+                            if (!Array.isArray(results) || results.length === 0) {
+                                console.warn("Claude web search empty results", {
+                                    query: nextQuery,
+                                    round: round + 1
+                                });
+                            }
 
                             const eventResults = buildMetasoSearchEventResults(results);
                             sendEvent({ type: 'search_result', query: nextQuery, results: eventResults });
@@ -424,6 +443,13 @@ export async function POST(req) {
                         }
 
                         searchContextText = searchContextParts.join("\n\n");
+                        if (!searchContextText) {
+                            console.warn("Claude web search produced no context", {
+                                needSearch,
+                                lastQuery: nextQuery,
+                                rounds: searchContextParts.length
+                            });
+                        }
                     }
 
                     if (clientAborted) {
