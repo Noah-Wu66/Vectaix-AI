@@ -3,6 +3,7 @@ import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
+import { encryptMessage, encryptMessages, encryptString } from '@/lib/encryption';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
@@ -90,7 +91,7 @@ export async function POST(req) {
             const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
-                title: title,
+                title: encryptString(title),
                 model: model,
                 settings: settings,
                 messages: []
@@ -108,11 +109,11 @@ export async function POST(req) {
             const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },
-                { $set: { messages: sanitized, updatedAt: regenerateTime } },
+                { $set: { messages: encryptMessages(sanitized), updatedAt: regenerateTime } },
                 { new: true }
             ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
-            storedMessagesForRegenerate = conv.messages;
+            storedMessagesForRegenerate = sanitized;
             writePermitTime = conv.updatedAt?.getTime?.();
         }
 
@@ -168,17 +169,18 @@ export async function POST(req) {
 
             const userMsgTime = Date.now();
             const resolvedUserMessageId = userMessageId;
+            const encryptedUserMessage = encryptMessage({
+                id: resolvedUserMessageId,
+                role: 'user',
+                content: prompt,
+                type: 'text',
+                images: dbImageEntries.map(e => e.url),
+                ...(dbImageMimeType ? { mimeType: dbImageMimeType } : {}),
+                parts: storedUserParts
+            });
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
                 $push: {
-                    messages: {
-                        id: resolvedUserMessageId,
-                        role: 'user',
-                        content: prompt,
-                        type: 'text',
-                        images: dbImageEntries.map(e => e.url),
-                        ...(dbImageMimeType ? { mimeType: dbImageMimeType } : {}),
-                        parts: storedUserParts
-                    }
+                    messages: encryptedUserMessage
                 },
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
@@ -481,19 +483,20 @@ export async function POST(req) {
                             ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
                             : { _id: currentConversationId, userId: user.userId };
                         const resolvedModelMessageId = modelMessageId;
+                        const encryptedModelMessage = encryptMessage({
+                            id: resolvedModelMessageId,
+                            role: 'model',
+                            content: fullText,
+                            thought: fullThought,
+                            citations: citations.length > 0 ? citations : null,
+                            type: 'text',
+                            parts: [{ text: fullText }]
+                        });
                         await Conversation.findOneAndUpdate(
                             writeCondition,
                             {
                                 $push: {
-                                    messages: {
-                                        id: resolvedModelMessageId,
-                                        role: 'model',
-                                        content: fullText,
-                                        thought: fullThought,
-                                        citations: citations.length > 0 ? citations : null,
-                                        type: 'text',
-                                        parts: [{ text: fullText }]
-                                    }
+                                    messages: encryptedModelMessage
                                 },
                                 updatedAt: Date.now()
                             }

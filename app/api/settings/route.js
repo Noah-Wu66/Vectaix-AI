@@ -1,6 +1,7 @@
 import dbConnect from '@/lib/db';
 import UserSettings from '@/models/UserSettings';
 import { getAuthPayload } from '@/lib/auth';
+import { decryptSettings, encryptSystemPrompts } from '@/lib/encryption';
 
 const DEFAULT_PROMPT = { name: '默认助手', content: 'You are a helpful AI assistant.' };
 
@@ -25,11 +26,11 @@ export async function GET() {
     if (!settings) {
         settings = await UserSettings.create({
             userId: user.userId,
-            systemPrompts: [DEFAULT_PROMPT]
+            systemPrompts: encryptSystemPrompts([DEFAULT_PROMPT])
         });
     }
 
-    return Response.json({ settings });
+    return Response.json({ settings: decryptSettings(settings.toObject()) });
 }
 
 // 添加系统提示词
@@ -61,17 +62,17 @@ export async function POST(req) {
     if (!settings) {
         settings = await UserSettings.create({
             userId: user.userId,
-            systemPrompts: ensureDefaultFirst([{ name, content }])
+            systemPrompts: encryptSystemPrompts(ensureDefaultFirst([{ name, content }]))
         });
     } else {
         const normalizedPrompts = ensureDefaultFirst(settings.systemPrompts);
         normalizedPrompts.push({ name, content });
-        settings.systemPrompts = normalizedPrompts;
+        settings.systemPrompts = encryptSystemPrompts(normalizedPrompts);
         settings.updatedAt = Date.now();
         await settings.save();
     }
 
-    return Response.json({ settings });
+    return Response.json({ settings: decryptSettings(settings.toObject()) });
 }
 
 // 删除系统提示词
@@ -98,7 +99,7 @@ export async function DELETE(req) {
     settings.updatedAt = Date.now();
     await settings.save();
 
-    return Response.json({ settings });
+    return Response.json({ settings: decryptSettings(settings.toObject()) });
 }
 
 // 更新用户头像
@@ -115,16 +116,16 @@ export async function PUT(req) {
         settings = await UserSettings.create({
             userId: user.userId,
             avatar: avatar,
-            systemPrompts: [DEFAULT_PROMPT]
+            systemPrompts: encryptSystemPrompts([DEFAULT_PROMPT])
         });
     } else {
         settings.avatar = avatar;
-        settings.systemPrompts = ensureDefaultFirst(settings.systemPrompts);
+        settings.systemPrompts = encryptSystemPrompts(ensureDefaultFirst(settings.systemPrompts));
         settings.updatedAt = Date.now();
         await settings.save();
     }
 
-    return Response.json({ settings });
+    return Response.json({ settings: decryptSettings(settings.toObject()) });
 }
 
 // 编辑系统提示词
@@ -162,9 +163,9 @@ export async function PATCH(req) {
 
     p.name = String(name);
     p.content = String(content);
-    settings.systemPrompts = ensureDefaultFirst(settings.systemPrompts);
+    settings.systemPrompts = encryptSystemPrompts(ensureDefaultFirst(settings.systemPrompts));
     settings.updatedAt = Date.now();
     await settings.save();
 
-    return Response.json({ settings });
+    return Response.json({ settings: decryptSettings(settings.toObject()) });
 }
