@@ -411,7 +411,7 @@ export default function SettingsMenu({
                               className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                             />
                             <span className="text-xs text-right block mt-1 text-zinc-600">
-                              {historyLimit} 条
+                              {historyLimit === 0 ? "∞" : `${historyLimit} 条`}
                             </span>
                           </div>
 
