@@ -75,7 +75,7 @@ export async function metasoSearch(query, options = {}) {
   if (!apiKey) {
     throw new Error("METASO_API_KEY is not set");
   }
-  const baseUrl = process.env.METASO_BASE_URL;
+  const baseUrl = "https://metaso.cn";
   const size = options.size;
   const scope = options.scope;
   const includeSummary = options.includeSummary !== false;
@@ -91,7 +91,9 @@ export async function metasoSearch(query, options = {}) {
   };
 
   const controller = new AbortController();
-  const timeoutMs = options.timeoutMs;
+  const timeoutMs = Number.isFinite(options.timeoutMs)
+    ? options.timeoutMs
+    : DEFAULT_TIMEOUT_MS;
   console.info("MetaSo search request", {
     query,
     baseUrl,
