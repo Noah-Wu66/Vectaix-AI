@@ -37,6 +37,7 @@ export function createChatAppActions({
   setEditingImage,
   completionSoundVolume,
   onSensitiveRefusal,
+  onConversationActivity,
 }) {
   const getEffectiveThinkingLevel = (m) => {
     const v = thinkingLevels?.[m];
@@ -105,6 +106,10 @@ export function createChatAppActions({
   const handleSendFromComposer = async ({ text, images }) => {
     if ((!text && (!images || images.length === 0)) || loading || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
+
+    if (currentConversationId) {
+      onConversationActivity?.(currentConversationId);
+    }
 
     unlockCompletionSound();
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { LogOut, Pencil, Plus, Trash2, X, Check } from "lucide-react";
+import { LogOut, Pencil, Pin, Plus, Trash2, X, Check } from "lucide-react";
 import { Gemini, Claude, OpenAI } from "@lobehub/icons";
 import ConfirmModal from "./ConfirmModal";
 
@@ -31,8 +31,10 @@ export default function Sidebar({
   onOpenProfile,
   onLogout,
   onClose,
+  onTogglePinConversation,
 }) {
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, title: "" });
+  const [pinConfirm, setPinConfirm] = useState({ open: false, id: null, title: "", nextPinned: false });
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState("");
   const editInputRef = useRef(null);
@@ -63,6 +65,22 @@ export default function Sidebar({
     e.stopPropagation();
     setEditingId(conv._id);
     setEditingTitle(conv.title);
+  };
+
+  const handlePinClick = (conv, e) => {
+    e.stopPropagation();
+    const nextPinned = !conv.pinned;
+    setPinConfirm({ open: true, id: conv._id, title: conv.title, nextPinned });
+  };
+
+  const handleConfirmPin = async () => {
+    try {
+      if (pinConfirm.id) {
+        await onTogglePinConversation(pinConfirm.id, pinConfirm.nextPinned);
+      }
+    } finally {
+      setPinConfirm({ open: false, id: null, title: "", nextPinned: false });
+    }
   };
 
   const handleSaveEdit = () => {
@@ -141,15 +159,26 @@ export default function Sidebar({
                 </div>
               ) : (
                 <>
+                   <button
+                     onClick={() => onLoadConversation(conv._id)}
+                     className={`flex-1 flex items-center gap-1.5 text-left py-3 pl-3 pr-1 text-sm min-w-0 ${currentConversationId === conv._id
+                       ? "text-zinc-900 font-medium"
+                       : "text-zinc-600"
+                       }`}
+                   >
+                     <span className="shrink-0"><ConversationIcon model={conv.model} /></span>
+                     {conv.pinned && (
+                       <span className="shrink-0 text-zinc-400">
+                         <Pin size={12} />
+                       </span>
+                     )}
+                     <span className="truncate">{conv.title}</span>
+                   </button>
                   <button
-                    onClick={() => onLoadConversation(conv._id)}
-                    className={`flex-1 flex items-center gap-1.5 text-left py-3 pl-3 pr-1 text-sm min-w-0 ${currentConversationId === conv._id
-                      ? "text-zinc-900 font-medium"
-                      : "text-zinc-600"
-                      }`}
+                    onClick={(e) => handlePinClick(conv, e)}
+                    className={`p-2 transition-opacity ${conv.pinned ? "opacity-100 text-zinc-700 hover:text-zinc-900" : "opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-zinc-600"}`}
                   >
-                    <span className="shrink-0"><ConversationIcon model={conv.model} /></span>
-                    <span className="truncate">{conv.title}</span>
+                    <Pin size={14} />
                   </button>
                   <button
                     onClick={(e) => handleEditClick(conv, e)}
@@ -208,6 +237,16 @@ export default function Sidebar({
         message={`确定要删除「${deleteConfirm.title}」吗？此操作无法撤销。`}
         confirmText="删除"
         danger
+      />
+      <ConfirmModal
+        open={pinConfirm.open}
+        onClose={() => setPinConfirm({ open: false, id: null, title: "", nextPinned: false })}
+        onConfirm={handleConfirmPin}
+        title={pinConfirm.nextPinned ? "置顶对话" : "取消置顶"}
+        message={pinConfirm.nextPinned
+          ? `确定要置顶「${pinConfirm.title}」吗？`
+          : `确定要取消置顶「${pinConfirm.title}」吗？`}
+        confirmText={pinConfirm.nextPinned ? "置顶" : "取消置顶"}
       />
     </>
   );

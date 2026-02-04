@@ -38,6 +38,10 @@ const ConversationSchema = new mongoose.Schema({
         budgetTokens: { type: Number, default: null },
         activePromptId: { type: String, default: null },
     },
+    pinned: {
+        type: Boolean,
+        default: false,
+    },
     messages: [MessageSchema],
     updatedAt: {
         type: Date,

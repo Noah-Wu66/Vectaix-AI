@@ -138,6 +138,7 @@ function sanitizeConversation(conv, idx, userId) {
     throw new Error(`conversations[${idx}].title too long`);
   }
   const messagesSrc = Array.isArray(conv.messages) ? conv.messages : [];
+  const pinned = typeof conv.pinned === 'boolean' ? conv.pinned : false;
 
   if (messagesSrc.length > MAX_MESSAGES_PER_CONVERSATION) {
     throw new Error(`conversations[${idx}] has too many messages (max ${MAX_MESSAGES_PER_CONVERSATION})`);
@@ -149,6 +150,7 @@ function sanitizeConversation(conv, idx, userId) {
     userId,
     title,
     messages,
+    pinned,
   };
 
   if (conv.updatedAt) {

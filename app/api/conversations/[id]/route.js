@@ -3,7 +3,7 @@ import Conversation from '@/models/Conversation';
 import { getAuthPayload } from '@/lib/auth';
 import mongoose from 'mongoose';
 
-const ALLOWED_UPDATE_KEYS = new Set(['title', 'messages', 'settings']);
+const ALLOWED_UPDATE_KEYS = new Set(['title', 'messages', 'settings', 'pinned']);
 const ALLOWED_SETTINGS_KEYS = new Set(['thinkingLevel', 'historyLimit', 'maxTokens', 'budgetTokens', 'activePromptId']);
 const ALLOWED_MESSAGE_TYPES = new Set(['text', 'parts', 'error']);
 const ALLOWED_ROLES = new Set(['user', 'model']);
@@ -228,6 +228,10 @@ export async function PUT(req, { params }) {
         return Response.json({ error: 'messages must be an array' }, { status: 400 });
     }
 
+    if (body?.pinned !== undefined && typeof body.pinned !== 'boolean') {
+        return Response.json({ error: 'pinned must be a boolean' }, { status: 400 });
+    }
+
     if (body?.settings !== undefined) {
         if (typeof body.settings !== 'object' || body.settings === null || Array.isArray(body.settings)) {
             return Response.json({ error: 'settings must be an object' }, { status: 400 });
@@ -249,6 +253,10 @@ export async function PUT(req, { params }) {
         } catch (e) {
             return Response.json({ error: e?.message }, { status: 400 });
         }
+    }
+
+    if (typeof body.pinned === 'boolean') {
+        updateObj.pinned = body.pinned;
     }
 
     if (body.settings && typeof body.settings === 'object') {

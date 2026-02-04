@@ -121,11 +121,23 @@ export default function ChatApp() {
     };
   }, []);
 
+  const sortConversations = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.slice().sort((a, b) => {
+      const ap = a?.pinned ? 1 : 0;
+      const bp = b?.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+      const at = new Date(a?.updatedAt || 0).getTime();
+      const bt = new Date(b?.updatedAt || 0).getTime();
+      return bt - at;
+    });
+  };
+
   const fetchConversations = async () => {
     try {
       const res = await fetch("/api/conversations");
       const data = await res.json();
-      if (data.conversations) setConversations(data.conversations);
+      if (data.conversations) setConversations(sortConversations(data.conversations));
     } catch { }
   };
 
@@ -170,6 +182,15 @@ export default function ChatApp() {
     setEditingImage,
     completionSoundVolume,
     onSensitiveRefusal: handleSensitiveRefusal,
+    onConversationActivity: (id) => {
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c._id === id);
+        if (idx < 0) return prev;
+        const next = prev.slice();
+        next[idx] = { ...next[idx], updatedAt: new Date().toISOString() };
+        return sortConversations(next);
+      });
+    },
   });
 
   useEffect(() => {
@@ -494,6 +515,22 @@ export default function ChatApp() {
     } catch { }
   };
 
+  const togglePinConversation = async (id, nextPinned) => {
+    try {
+      await fetch(`/api/conversations/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pinned: nextPinned }),
+      });
+      setConversations((prev) => {
+        const next = prev.map((c) =>
+          c._id === id ? { ...c, pinned: nextPinned, updatedAt: new Date().toISOString() } : c
+        );
+        return sortConversations(next);
+      });
+    } catch { }
+  };
+
   const updateThemeMode = (mode) => {
     setThemeMode(mode);
   };
@@ -522,6 +559,7 @@ export default function ChatApp() {
           onLoadConversation={loadConversation}
           onDeleteConversation={deleteConversation}
           onRenameConversation={renameConversation}
+          onTogglePinConversation={togglePinConversation}
           onOpenProfile={() => setShowProfileModal(true)}
           onLogout={handleLogout}
           onCloseSidebar={() => setSidebarOpen(false)}

@@ -12,8 +12,8 @@ export async function GET() {
         if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
         const conversations = await Conversation.find({ userId: user.userId })
-            .sort({ updatedAt: -1 })
-            .select('title model updatedAt');
+            .sort({ pinned: -1, updatedAt: -1 })
+            .select('title model updatedAt pinned');
 
         return Response.json({ conversations });
     } catch (error) {
