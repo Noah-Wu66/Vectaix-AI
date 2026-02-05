@@ -223,6 +223,7 @@ export async function runChat({
         searchQuery: null,
         searchResults: null,
         citations: null,
+        searchError: null,
       },
     ]);
 
@@ -243,6 +244,7 @@ export async function runChat({
     let searchQuery = null;
     let searchResults = null;
     let citations = null;
+    let searchError = null;
     let lastTextLogLen = 0;
     let lastThoughtLogLen = 0;
 
@@ -280,7 +282,7 @@ export async function runChat({
         if (idx < 0) return prev;
 
         const base = prev[idx];
-        const nowHasContent = displayedText.length > 0 || fullThought.length > 0 || isSearching;
+        const nowHasContent = displayedText.length > 0 || fullThought.length > 0 || isSearching || searchError;
         if (nowHasContent && !hasReceivedContent) {
           hasReceivedContent = true;
           // 收到内容，清除超时定时器
@@ -299,6 +301,7 @@ export async function runChat({
           searchQuery,
           searchResults,
           citations,
+          searchError,
         };
         if (
           base.content === nextMsg.content &&
@@ -308,7 +311,8 @@ export async function runChat({
           base.isSearching === nextMsg.isSearching &&
           base.searchQuery === nextMsg.searchQuery &&
           base.searchResults === nextMsg.searchResults &&
-          base.citations === nextMsg.citations
+          base.citations === nextMsg.citations &&
+          base.searchError === nextMsg.searchError
         ) {
           return prev;
         }
@@ -389,6 +393,7 @@ export async function runChat({
           if (typeof data.query === "string" && data.query.trim()) {
             searchQuery = data.query.trim();
           }
+          searchError = null;
         } else if (data.type === "search_result") {
           isSearching = false;
           console.log(debugTag, "search result", {
@@ -399,6 +404,13 @@ export async function runChat({
             searchQuery = data.query.trim();
           }
           searchResults = data.results;
+        } else if (data.type === "search_error") {
+          isSearching = false;
+          if (typeof data.message === "string" && data.message.trim()) {
+            searchError = data.message.trim();
+          } else {
+            searchError = "检索失败，请稍后再试";
+          }
         } else if (data.type === "citations") {
           citations = data.citations;
           console.log(debugTag, "citations", {

@@ -11,7 +11,8 @@ import {
     getStoredPartsFromMessage,
     sanitizeStoredMessages,
     generateMessageId,
-    injectCurrentTimeSystemReminder
+    injectCurrentTimeSystemReminder,
+    buildWebSearchContextBlock
 } from '@/app/api/chat/utils';
 import {
     metasoSearch,
@@ -345,6 +346,13 @@ export async function POST(req) {
                         controller.enqueue(encoder.encode(data));
                     };
 
+                    let searchErrorSent = false;
+                    const sendSearchError = (message) => {
+                        if (searchErrorSent) return;
+                        searchErrorSent = true;
+                        sendEvent({ type: 'search_error', message });
+                    };
+
                     const pushCitations = (items) => {
                         for (const item of items) {
                             if (!item?.url || seenUrls.has(item.url)) continue;
@@ -398,6 +406,7 @@ export async function POST(req) {
                             if (clientAborted) break;
                             sendEvent({ type: 'search_start', query: nextQuery });
                             let results = [];
+                            let searchFailed = false;
                             try {
                                 const searchData = await metasoSearch(nextQuery, {
                                     scope: "webpage",
@@ -407,7 +416,20 @@ export async function POST(req) {
                                     conciseSnippet: false
                                 });
                                 results = searchData?.results;
-                            } catch { }
+                            } catch (searchError) {
+                                console.error("Gemini web search failed", {
+                                    query: nextQuery,
+                                    message: searchError?.message,
+                                    name: searchError?.name
+                                });
+                                const msg = searchError?.message?.includes("METASO_API_KEY")
+                                    ? "未配置搜索服务"
+                                    : "检索失败，请稍后再试";
+                                sendSearchError(msg);
+                                searchFailed = true;
+                            }
+
+                            if (searchFailed) break;
 
                             const eventResults = buildMetasoSearchEventResults(results);
                             sendEvent({ type: 'search_result', query: nextQuery, results: eventResults });
@@ -444,7 +466,7 @@ export async function POST(req) {
                     }
 
                     const searchContextSection = searchContextText
-                        ? `\n\nWeb search results:\n${searchContextText}`
+                        ? buildWebSearchContextBlock(searchContextText)
                         : "";
                     const finalSystemText = `${baseSystemText}${webSearchGuide}${searchContextSection}`;
                     const finalConfig = {

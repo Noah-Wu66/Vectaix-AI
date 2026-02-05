@@ -7,6 +7,7 @@ import {
   Edit3,
   Paperclip,
   RotateCcw,
+  Shield,
   Sparkles,
   Trash2,
   Type,
@@ -62,6 +63,7 @@ export default function MessageList({
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, index: null, role: null });
   const prevMessagesRef = useRef([]);
+  const isPrivacyModel = Boolean(CHAT_MODELS.find((m) => m.id === model)?.privacy);
 
   useEffect(() => {
     prevMessagesRef.current = messages;
@@ -223,8 +225,9 @@ export default function MessageList({
       ) : (
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
+          const showPrivacyBadge = isPrivacyModel && msg.role === "model";
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
-          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching) {
+          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError) {
             return null;
           }
           return (
@@ -246,7 +249,7 @@ export default function MessageList({
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
-              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching) && (
+              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError) && (
                 <div className="flex items-center gap-1.5">
                   <AIAvatar model={model} size={28} />
                   <span className="text-xs text-zinc-400 font-medium">
@@ -261,12 +264,13 @@ export default function MessageList({
                   : "items-start w-full max-w-full"
                   }`}
               >
-                {msg.role === "model" && (msg.thought || msg.isSearching) && (
+                {msg.role === "model" && (msg.thought || msg.isSearching || msg.searchError) && (
                   <ThinkingBlock
                     thought={msg.thought}
                     isStreaming={msg.isThinkingStreaming}
                     isSearching={msg.isSearching}
                     searchQuery={msg.searchQuery}
+                    searchError={msg.searchError}
                   />
                 )}
 
@@ -392,7 +396,7 @@ export default function MessageList({
                   <>
                     {(hasParts || msg.content || msg.image) && (
                       <div
-                        className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
+                        className={`msg-bubble px-4 py-3 ${showPrivacyBadge ? "relative pb-6" : ""} rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
                           : "bg-zinc-100 text-zinc-800 max-w-full"
                           }`}
@@ -458,6 +462,13 @@ export default function MessageList({
 
                         {msg.role === "model" && !msg.isStreaming && msg.citations && (
                           <Citations citations={msg.citations} />
+                        )}
+
+                        {showPrivacyBadge && (
+                          <div className="pointer-events-none absolute bottom-2 right-3 flex items-center gap-1 text-[10px] font-medium text-emerald-600">
+                            <Shield size={12} className="text-emerald-500" />
+                            <span>会话已加密</span>
+                          </div>
                         )}
                       </div>
                     )}
