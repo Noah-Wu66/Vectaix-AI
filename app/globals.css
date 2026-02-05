@@ -139,6 +139,49 @@ h6 {
   overflow-wrap: break-word;
 }
 
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  line-height: 1.3;
+  margin: 1em 0 0.5em;
+}
+
+.prose h1 {
+  font-size: 1.5em;
+}
+
+.prose h2 {
+  font-size: 1.3em;
+}
+
+.prose h3 {
+  font-size: 1.15em;
+}
+
+.prose h4 {
+  font-size: 1.05em;
+}
+
+.prose h5 {
+  font-size: 1em;
+}
+
+.prose h6 {
+  font-size: 0.95em;
+}
+
+.prose h1:first-child,
+.prose h2:first-child,
+.prose h3:first-child,
+.prose h4:first-child,
+.prose h5:first-child,
+.prose h6:first-child {
+  margin-top: 0;
+}
+
 .prose p {
   margin-top: 0;
   margin-bottom: 0.5em;
@@ -177,6 +220,7 @@ h6 {
   padding: 1em;
   border-radius: var(--radius);
   overflow-x: auto;
+  margin: 0.75em 0;
 }
 
 .prose pre code {
@@ -206,7 +250,7 @@ h6 {
 /* Enhanced Markdown Table */
 .prose table {
   width: max-content;
-  min-width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
   font-size: 0.9em;
@@ -268,6 +312,15 @@ h6 {
 .prose ol {
   padding-left: 1.5em;
   margin: 0.75em 0;
+  list-style-position: outside;
+}
+
+.prose ul {
+  list-style-type: disc;
+}
+
+.prose ol {
+  list-style-type: decimal;
 }
 
 .prose li {

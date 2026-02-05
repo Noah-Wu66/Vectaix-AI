@@ -9,7 +9,7 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { Copy, Check } from "lucide-react";
 
-// Extended schema to allow KaTeX and highlight.js classes while sanitizing dangerous content (updated)
+// Sanitize user markdown before rendering KaTeX/highlight output
 const sanitizeSchema = {
   ...defaultSchema,
   attributes: {
@@ -17,15 +17,26 @@ const sanitizeSchema = {
   },
 };
 
-if (Array.isArray(sanitizeSchema.attributes?.code)) {
-  sanitizeSchema.attributes.code = [...sanitizeSchema.attributes.code, "className"];
+const codeAttributes = Array.isArray(defaultSchema.attributes?.code)
+  ? [...defaultSchema.attributes.code]
+  : [];
+const codeClassIndex = codeAttributes.findIndex(
+  (entry) => Array.isArray(entry) && entry[0] === "className"
+);
+
+if (codeClassIndex >= 0) {
+  const current = codeAttributes[codeClassIndex];
+  codeAttributes[codeClassIndex] = [
+    "className",
+    ...current.slice(1),
+    "math-inline",
+    "math-display",
+  ];
+} else {
+  codeAttributes.push(["className", "math-inline", "math-display"]);
 }
-if (Array.isArray(sanitizeSchema.attributes?.span)) {
-  sanitizeSchema.attributes.span = [...sanitizeSchema.attributes.span, "className", "style"];
-}
-if (Array.isArray(sanitizeSchema.attributes?.div)) {
-  sanitizeSchema.attributes.div = [...sanitizeSchema.attributes.div, "className"];
-}
+
+sanitizeSchema.attributes.code = codeAttributes;
 
 export default function Markdown({ children, className = "", enableHighlight = true }) {
   // 使用 ref 记住上一次的 enableHighlight 值，避免重复触发
@@ -44,10 +55,10 @@ export default function Markdown({ children, className = "", enableHighlight = t
     prevEnableRef.current = enableHighlight;
   }, [enableHighlight]);
 
-  // Sanitize must be last to clean content from all preceding plugins (KaTeX CVE-2020-28170 etc.)
+  // Sanitize first, then render KaTeX/highlight output
   const rehypePlugins = actualHighlight
-    ? [rehypeKatex, rehypeHighlight, [rehypeSanitize, sanitizeSchema]]
-    : [rehypeKatex, [rehypeSanitize, sanitizeSchema]];
+    ? [[rehypeSanitize, sanitizeSchema], rehypeKatex, rehypeHighlight]
+    : [[rehypeSanitize, sanitizeSchema], rehypeKatex];
   return (
     <div
       className={`prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none ${className}`}
