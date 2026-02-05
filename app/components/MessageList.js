@@ -8,6 +8,7 @@ import {
   Paperclip,
   RotateCcw,
   Shield,
+  ShieldOff,
   Sparkles,
   Trash2,
   Type,
@@ -225,7 +226,10 @@ export default function MessageList({
       ) : (
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
-          const showPrivacyBadge = isPrivacyModel && msg.role === "model";
+          const showPrivacyBadge = msg.role === "model";
+          const privacyGlow = isPrivacyModel
+            ? "0 0 0 1px rgba(16, 185, 129, 0.14), 0 0 12px rgba(16, 185, 129, 0.12)"
+            : "0 0 0 1px rgba(239, 68, 68, 0.14), 0 0 12px rgba(239, 68, 68, 0.12)";
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
           if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError) {
             return null;
@@ -400,7 +404,7 @@ export default function MessageList({
                           ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
                           : "bg-zinc-100 text-zinc-800 max-w-full"
                           }`}
-                        style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                        style={{ overflowWrap: "anywhere", wordBreak: "break-word", boxShadow: showPrivacyBadge ? privacyGlow : undefined }}
                         onCopy={handleBubbleCopy}
                       >
                         {hasParts ? (
@@ -465,9 +469,15 @@ export default function MessageList({
                         )}
 
                         {showPrivacyBadge && (
-                          <div className="pointer-events-none absolute bottom-2 right-3 flex items-center gap-1 text-[10px] font-medium text-emerald-600">
-                            <Shield size={12} className="text-emerald-500" />
-                            <span>会话已加密</span>
+                          <div
+                            className={`pointer-events-none absolute bottom-2 right-3 flex items-center gap-1 text-[10px] font-medium ${isPrivacyModel ? "text-emerald-600" : "text-red-500"}`}
+                          >
+                            {isPrivacyModel ? (
+                              <Shield size={12} className="text-emerald-500" />
+                            ) : (
+                              <ShieldOff size={12} className="text-red-500" />
+                            )}
+                            <span>{isPrivacyModel ? "会话已加密" : "会话未加密"}</span>
                           </div>
                         )}
                       </div>
