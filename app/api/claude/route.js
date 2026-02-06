@@ -277,6 +277,8 @@ export async function POST(req) {
         // 构建请求参数（联网检索上下文将在流式开始前注入）
         const maxTokens = config?.maxTokens;
         const budgetTokens = config?.budgetTokens;
+        const thinkingLevel = config?.thinkingLevel;
+        const isOpus = typeof model === "string" && model.startsWith("claude-opus-4-6");
         const baseSystemPromptText = BASE_SYSTEM_PROMPT_TEXT;
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
@@ -355,10 +357,10 @@ export async function POST(req) {
                                 { role: 'user', content: [{ type: 'text', text: userText }] }
                             ],
                             stream: true,
-                            thinking: {
-                                type: "enabled",
-                                budget_tokens: 1024
-                            }
+                            ...(isOpus
+                                ? { thinking: { type: "adaptive" }, output_config: { effort: "low" } }
+                                : { thinking: { type: "enabled", budget_tokens: 1024 } }
+                            )
                         });
 
                         for await (const event of decisionStream) {
@@ -494,10 +496,27 @@ export async function POST(req) {
                         ],
                         messages: claudeMessages,
                         stream: true,
-                        thinking: {
-                            type: "enabled",
-                            budget_tokens: budgetTokens
-                        }
+                        ...(isOpus
+                            ? {
+                                thinking: { type: "adaptive" },
+                                output_config: {
+                                    effort: (() => {
+                                        const allowed = new Set(["low", "medium", "high", "max"]);
+                                        if (typeof thinkingLevel === "string" && allowed.has(thinkingLevel)) {
+                                            return thinkingLevel;
+                                        }
+                                        const v = Number(budgetTokens);
+                                        if (!Number.isFinite(v) || v <= 2000) return "low";
+                                        if (v <= 8000) return "medium";
+                                        if (v <= 32000) return "high";
+                                        return "max";
+                                    })()
+                                }
+                            }
+                            : {
+                                thinking: { type: "enabled", budget_tokens: budgetTokens }
+                            }
+                        )
                     };
 
                     const stream = await client.messages.stream(requestParams);

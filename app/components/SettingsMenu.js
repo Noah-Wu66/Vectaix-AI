@@ -10,9 +10,11 @@ const GEMINI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536];
 const CLAUDE_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000];
 const GEMINI_FLASH_THINKING_LEVELS = ["minimal", "low", "medium", "high"];
 const GEMINI_PRO_THINKING_LEVELS = ["low", "high"];
+const CLAUDE_THINKING_LEVELS = ["low", "medium", "high", "max"];
 const GPT_52_THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 const GPT_53_CODEX_THINKING_LEVELS = ["low", "medium", "high", "xhigh"];
 const GPT_THINKING_LEVEL_LABELS = { none: "无", low: "低", medium: "中", high: "高", xhigh: "超高" };
+const CLAUDE_THINKING_LEVEL_LABELS = { low: "低", medium: "中", high: "高", max: "最大" };
 
 function getOpenAIThinkingLevels(model) {
   if (model === "gpt-5.3-codex") return GPT_53_CODEX_THINKING_LEVELS;
@@ -57,6 +59,7 @@ export default function SettingsMenu({
   const promptListRef = useRef(null);
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
+  const isClaudeOpus = typeof model === "string" && model.startsWith("claude-opus-4-6");
   const openAIThinkingLevels = isOpenAIModel ? getOpenAIThinkingLevels(model) : [];
   const maxTokenOptions = isOpenAIModel ? OPENAI_TOKEN_OPTIONS : GEMINI_TOKEN_OPTIONS;
   const activePrompt = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
@@ -73,6 +76,12 @@ export default function SettingsMenu({
     if (model === "gemini-3-pro-preview") {
       if (!GEMINI_PRO_THINKING_LEVELS.includes(thinkingLevel)) {
         setThinkingLevel("high");
+      }
+      return;
+    }
+    if (isClaudeOpus) {
+      if (!CLAUDE_THINKING_LEVELS.includes(thinkingLevel)) {
+        setThinkingLevel("medium");
       }
       return;
     }
@@ -466,32 +475,51 @@ export default function SettingsMenu({
                                 <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                                   思考深度
                                 </label>
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max="6"
-                                    step="1"
-                                    value={Math.max(0, CLAUDE_TOKEN_OPTIONS.indexOf(budgetTokens))}
-                                    onChange={(e) => setBudgetTokens(CLAUDE_TOKEN_OPTIONS[e.target.value])}
-                                    className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                                  />
-                                <span className="text-xs text-right block mt-1 text-zinc-600">
-                                  {budgetTokens >= 1000 ? `${Math.round(budgetTokens / 1000)}K` : budgetTokens}
-                                </span>
+                                {isClaudeOpus ? (
+                                  <>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="3"
+                                      step="1"
+                                      value={Math.max(0, CLAUDE_THINKING_LEVELS.indexOf(thinkingLevel))}
+                                      onChange={(e) => setThinkingLevel(CLAUDE_THINKING_LEVELS[Number(e.target.value)])}
+                                      className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                    />
+                                    <span className="text-xs text-right block mt-1 text-zinc-600">
+                                      {CLAUDE_THINKING_LEVEL_LABELS[thinkingLevel] || CLAUDE_THINKING_LEVEL_LABELS.medium}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="6"
+                                      step="1"
+                                      value={Math.max(0, CLAUDE_TOKEN_OPTIONS.indexOf(budgetTokens))}
+                                      onChange={(e) => setBudgetTokens(CLAUDE_TOKEN_OPTIONS[e.target.value])}
+                                      className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                    />
+                                    <span className="text-xs text-right block mt-1 text-zinc-600">
+                                      {budgetTokens >= 1000 ? `${Math.round(budgetTokens / 1000)}K` : budgetTokens}
+                                    </span>
+                                  </>
+                                )}
                               </div>
                               <div>
                                 <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                                   最大输出
                                 </label>
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max="6"
-                                    step="1"
-                                    value={Math.max(0, CLAUDE_TOKEN_OPTIONS.indexOf(maxTokens))}
-                                    onChange={(e) => setMaxTokens(CLAUDE_TOKEN_OPTIONS[e.target.value])}
-                                    className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                                  />
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="6"
+                                  step="1"
+                                  value={Math.max(0, CLAUDE_TOKEN_OPTIONS.indexOf(maxTokens))}
+                                  onChange={(e) => setMaxTokens(CLAUDE_TOKEN_OPTIONS[e.target.value])}
+                                  className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                />
                                 <span className="text-xs text-right block mt-1 text-zinc-600">
                                   {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
                                 </span>

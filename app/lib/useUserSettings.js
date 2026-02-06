@@ -19,6 +19,7 @@ const DEFAULT_MODEL = "gemini-3-flash-preview";
 const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
   "gemini-3-pro-preview": "high",
+  "claude-opus-4-6-20260205": "medium",
   "gpt-5.2": "medium",
   "gpt-5.3-codex": "medium",
 };
