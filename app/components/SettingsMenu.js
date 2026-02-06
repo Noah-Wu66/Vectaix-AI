@@ -10,7 +10,14 @@ const GEMINI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536];
 const CLAUDE_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000];
 const GEMINI_FLASH_THINKING_LEVELS = ["minimal", "low", "medium", "high"];
 const GEMINI_PRO_THINKING_LEVELS = ["low", "high"];
-const GPT_THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
+const GPT_52_THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
+const GPT_53_CODEX_THINKING_LEVELS = ["low", "medium", "high", "xhigh"];
+const GPT_THINKING_LEVEL_LABELS = { none: "无", low: "低", medium: "中", high: "高", xhigh: "超高" };
+
+function getOpenAIThinkingLevels(model) {
+  if (model === "gpt-5.3-codex") return GPT_53_CODEX_THINKING_LEVELS;
+  return GPT_52_THINKING_LEVELS;
+}
 
 export default function SettingsMenu({
   model,
@@ -50,6 +57,7 @@ export default function SettingsMenu({
   const promptListRef = useRef(null);
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
+  const openAIThinkingLevels = isOpenAIModel ? getOpenAIThinkingLevels(model) : [];
   const maxTokenOptions = isOpenAIModel ? OPENAI_TOKEN_OPTIONS : GEMINI_TOKEN_OPTIONS;
   const activePrompt = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
   const activePromptName = activePrompt?.name;
@@ -69,7 +77,8 @@ export default function SettingsMenu({
       return;
     }
     if (model.startsWith("gpt-")) {
-      if (!GPT_THINKING_LEVELS.includes(thinkingLevel)) {
+      const allowedLevels = getOpenAIThinkingLevels(model);
+      if (!allowedLevels.includes(thinkingLevel)) {
         setThinkingLevel("medium");
       }
     }
@@ -496,17 +505,19 @@ export default function SettingsMenu({
                               <input
                                 type="range"
                                 min="0"
-                                max="4"
+                                max={openAIThinkingLevels.length - 1}
                                 step="1"
                                 value={(() => {
-                                  const idx = ["none", "low", "medium", "high", "xhigh"].indexOf(thinkingLevel);
-                                  return idx >= 0 ? idx : 2;
+                                  const idx = openAIThinkingLevels.indexOf(thinkingLevel);
+                                  if (idx >= 0) return idx;
+                                  const mediumIdx = openAIThinkingLevels.indexOf("medium");
+                                  return mediumIdx >= 0 ? mediumIdx : 0;
                                 })()}
-                                onChange={(e) => setThinkingLevel(["none", "low", "medium", "high", "xhigh"][Number(e.target.value)])}
+                                onChange={(e) => setThinkingLevel(openAIThinkingLevels[Number(e.target.value)])}
                                 className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                               />
                               <span className="text-xs text-right block mt-1 text-zinc-600">
-                                {{ none: "无", low: "低", medium: "中", high: "高", xhigh: "超高" }[thinkingLevel]}
+                                {GPT_THINKING_LEVEL_LABELS[thinkingLevel] || GPT_THINKING_LEVEL_LABELS.medium}
                               </span>
                             </div>
                           ) : null}

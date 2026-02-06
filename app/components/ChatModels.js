@@ -20,7 +20,7 @@ export const CHAT_MODELS = [
     provider: "claude",
   },
   {
-    id: "claude-opus-4-5-20251101",
+    id: "claude-opus-4-6-20260205",
     name: "Opus",
     shortName: "Opus",
     provider: "claude",
@@ -29,6 +29,12 @@ export const CHAT_MODELS = [
     id: "gpt-5.2",
     name: "GPT",
     shortName: "GPT",
+    provider: "openai",
+  },
+  {
+    id: "gpt-5.3-codex",
+    name: "Codex",
+    shortName: "Codex",
     provider: "openai",
   },
 ];

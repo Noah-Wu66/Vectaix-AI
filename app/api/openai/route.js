@@ -27,6 +27,10 @@ export const dynamic = 'force-dynamic';
 
 const OPENAI_BASE_URL = 'https://www.right.codes/codex/v1';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
+const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
+const MODEL_REASONING_EFFORTS = {
+    'gpt-5.3-codex': new Set(['low', 'medium', 'high', 'xhigh']),
+};
 
 
 
@@ -214,7 +218,7 @@ export async function POST(req) {
         };
 
         // Map UI thinkingLevel to Responses API reasoning.effort
-        const allowedEfforts = new Set(["none", "low", "medium", "high", "xhigh"]);
+        const allowedEfforts = MODEL_REASONING_EFFORTS[model] || DEFAULT_REASONING_EFFORTS;
         if (allowedEfforts.has(thinkingLevel)) {
             baseRequestBody.reasoning.effort = thinkingLevel;
         }
