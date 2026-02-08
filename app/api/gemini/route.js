@@ -17,6 +17,8 @@ import {
 import {
     metasoSearch,
     buildMetasoContext,
+    metasoReader,
+    buildMetasoReaderContext,
     buildMetasoCitations,
     buildMetasoSearchEventResults
 } from '@/app/api/chat/metasoSearch';
@@ -401,6 +403,7 @@ export async function POST(req) {
                         let nextQuery = typeof decision?.query === 'string' ? decision.query.trim() : "";
 
                         const searchContextParts = [];
+                        const readUrlSet = new Set();
                         const maxSearchRounds = 10;
                         for (let round = 0; round < maxSearchRounds && needSearch && nextQuery; round++) {
                             if (clientAborted) break;
@@ -410,10 +413,10 @@ export async function POST(req) {
                             try {
                                 const searchData = await metasoSearch(nextQuery, {
                                     scope: "webpage",
-                                    includeSummary: true,
+                                    includeSummary: false,
                                     size: 100,
                                     includeRawContent: false,
-                                    conciseSnippet: false
+                                    conciseSnippet: true
                                 });
                                 results = searchData?.results;
                             } catch (searchError) {
@@ -435,9 +438,84 @@ export async function POST(req) {
                             sendEvent({ type: 'search_result', query: nextQuery, results: eventResults });
                             pushCitations(buildMetasoCitations(results));
 
+                            const roundContextBlocks = [];
                             const contextBlock = buildMetasoContext(results);
                             if (contextBlock) {
-                                searchContextParts.push(`检索词: ${nextQuery}\n${contextBlock}`);
+                                roundContextBlocks.push(contextBlock);
+                            }
+
+                            const readerCandidates = Array.isArray(results) ? results.slice(0, 8) : [];
+                            if (readerCandidates.length > 0) {
+                                try {
+                                    const readerSystem = injectCurrentTimeSystemReminder(
+                                        "你是网页全文查看决策器。必须只输出严格 JSON，不要输出任何多余文本。"
+                                    );
+                                    const candidateText = readerCandidates
+                                        .map((item, idx) => {
+                                            const title = typeof item?.title === 'string' ? item.title : '';
+                                            const url = typeof item?.url === 'string' ? item.url : '';
+                                            const rawSnippet = typeof item?.snippet === 'string' && item.snippet.trim()
+                                                ? item.snippet.trim()
+                                                : (typeof item?.summary === 'string' ? item.summary.trim() : '');
+                                            const snippet = rawSnippet.length > 240 ? `${rawSnippet.slice(0, 240)}...` : rawSnippet;
+                                            return `[${idx + 1}] ${title}\nURL: ${url}\n片段: ${snippet || '（无）'}`;
+                                        })
+                                        .join("\n\n");
+                                    const alreadyRead = Array.from(readUrlSet);
+                                    const readerUser = `用户问题：${prompt}\n当前检索词：${nextQuery}\n\n候选结果：\n${candidateText}\n\n已查看过的 URL：\n${alreadyRead.length > 0 ? alreadyRead.join("\n") : "无"}\n\n判断是否需要查看更多正文来提升答案质量。\n- 需要：输出 {"needRead": true, "url": "候选URL"}\n- 不需要：输出 {"needRead": false}`;
+                                    const readerDecisionText = await runDecisionStream(readerSystem, readerUser);
+                                    const readerDecision = parseJsonFromText(readerDecisionText);
+                                    const selectedUrl = typeof readerDecision?.url === 'string'
+                                        ? readerDecision.url.trim()
+                                        : '';
+                                    const shouldRead = readerDecision?.needRead === true;
+                                    const selectedItem = readerCandidates.find((item) => item?.url === selectedUrl);
+
+                                    if (shouldRead && selectedItem && !readUrlSet.has(selectedItem.url)) {
+                                        sendEvent({ type: 'search_reader_start', url: selectedItem.url, title: selectedItem.title });
+                                        try {
+                                            const readerData = await metasoReader(selectedItem.url, { timeoutMs: 20000 });
+                                            const readerContext = buildMetasoReaderContext(
+                                                {
+                                                    title: selectedItem.title,
+                                                    url: selectedItem.url,
+                                                    content: readerData?.content,
+                                                },
+                                                { maxContentChars: 8000 }
+                                            );
+                                            if (readerContext) {
+                                                const readerExcerpt = typeof readerData?.content === 'string'
+                                                    ? readerData.content.slice(0, 800)
+                                                    : "";
+                                                roundContextBlocks.push(readerContext);
+                                                readUrlSet.add(selectedItem.url);
+                                                sendEvent({
+                                                    type: 'search_reader_result',
+                                                    url: selectedItem.url,
+                                                    title: selectedItem.title,
+                                                    excerpt: readerExcerpt
+                                                });
+                                            }
+                                        } catch (readerError) {
+                                            console.error("Gemini web reader failed", {
+                                                url: selectedItem.url,
+                                                message: readerError?.message,
+                                                name: readerError?.name
+                                            });
+                                            sendEvent({ type: 'search_reader_error', url: selectedItem.url, title: selectedItem.title });
+                                        }
+                                    }
+                                } catch (readerDecisionError) {
+                                    console.error("Gemini web reader decision failed", {
+                                        query: nextQuery,
+                                        message: readerDecisionError?.message,
+                                        name: readerDecisionError?.name
+                                    });
+                                }
+                            }
+
+                            if (roundContextBlocks.length > 0) {
+                                searchContextParts.push(`检索词: ${nextQuery}\n${roundContextBlocks.join("\n\n")}`);
                             }
 
                             if (round === maxSearchRounds - 1) break;

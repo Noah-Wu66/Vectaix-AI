@@ -230,8 +230,9 @@ export default function MessageList({
           const privacyGlow = isPrivacyModel
             ? "0 0 0 1px rgba(16, 185, 129, 0.14), 0 0 12px rgba(16, 185, 129, 0.12)"
             : "0 0 0 1px rgba(239, 68, 68, 0.14), 0 0 12px rgba(239, 68, 68, 0.12)";
+          const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline) && msg.thinkingTimeline.length > 0;
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
-          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError) {
+          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline) {
             return null;
           }
           return (
@@ -253,7 +254,7 @@ export default function MessageList({
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
-              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError) && (
+              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline) && (
                 <div className="flex items-center gap-1.5">
                   <AIAvatar model={model} size={28} />
                   <span className="text-xs text-zinc-400 font-medium">
@@ -268,17 +269,18 @@ export default function MessageList({
                   : "items-start w-full max-w-full"
                   }`}
               >
-                {msg.role === "model" && (msg.thought || msg.isSearching || msg.searchError) && (
+                {msg.role === "model" && (msg.thought || msg.isSearching || msg.searchError || hasThinkingTimeline) && (
                   <ThinkingBlock
                     thought={msg.thought}
                     isStreaming={msg.isThinkingStreaming}
                     isSearching={msg.isSearching}
                     searchQuery={msg.searchQuery}
                     searchError={msg.searchError}
+                    timeline={msg.thinkingTimeline}
                   />
                 )}
 
-                {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !msg.image && !Array.isArray(msg.images) && (
+                {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !msg.image && !Array.isArray(msg.images) && !hasThinkingTimeline && (
                   <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
                     <span
                       className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"

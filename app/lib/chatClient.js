@@ -222,6 +222,7 @@ export async function runChat({
         isSearching: false,
         searchQuery: null,
         searchResults: null,
+        thinkingTimeline: [],
         citations: null,
         searchError: null,
       },
@@ -245,8 +246,91 @@ export async function runChat({
     let searchResults = null;
     let citations = null;
     let searchError = null;
+    let thinkingTimeline = [];
+    let timelineStepSeq = 0;
     let lastTextLogLen = 0;
     let lastThoughtLogLen = 0;
+
+    const nextTimelineId = () => `timeline_${Date.now()}_${++timelineStepSeq}`;
+
+    const updateThinkingTimeline = (updater) => {
+      const base = Array.isArray(thinkingTimeline) ? thinkingTimeline : [];
+      const next = updater(base);
+      if (Array.isArray(next)) {
+        thinkingTimeline = next;
+      }
+    };
+
+    const appendTimelineStep = (step) => {
+      if (!step || typeof step !== "object") return;
+      updateThinkingTimeline((prev) => [...prev, { id: nextTimelineId(), ...step }]);
+    };
+
+    const getLastTimelineStep = () => {
+      if (!Array.isArray(thinkingTimeline) || thinkingTimeline.length === 0) return null;
+      return thinkingTimeline[thinkingTimeline.length - 1] || null;
+    };
+
+    const ensureSyntheticThoughtRunning = () => {
+      const last = getLastTimelineStep();
+      if (last?.kind === "thought" && last?.status === "streaming") return;
+      appendTimelineStep({
+        kind: "thought",
+        status: "streaming",
+        content: "",
+        synthetic: true,
+      });
+    };
+
+    const patchLastRunningStep = (kind, patch) => {
+      let updated = false;
+      updateThinkingTimeline((prev) => {
+        for (let i = prev.length - 1; i >= 0; i -= 1) {
+          const item = prev[i];
+          if (item?.kind === kind && item?.status === "running") {
+            const next = prev.slice();
+            next[i] = { ...item, ...patch };
+            updated = true;
+            return next;
+          }
+        }
+        return prev;
+      });
+      return updated;
+    };
+
+    const appendThoughtStep = (deltaText) => {
+      if (typeof deltaText !== "string" || !deltaText) return;
+      updateThinkingTimeline((prev) => {
+        if (prev.length > 0) {
+          const last = prev[prev.length - 1];
+          if (last?.kind === "thought" && last?.status === "streaming") {
+            const next = prev.slice();
+            next[next.length - 1] = {
+              ...last,
+              synthetic: false,
+              content: `${typeof last.content === "string" ? last.content : ""}${deltaText}`,
+            };
+            return next;
+          }
+        }
+        return [...prev, { id: nextTimelineId(), kind: "thought", status: "streaming", content: deltaText, synthetic: false }];
+      });
+    };
+
+    const closeStreamingThoughtSteps = () => {
+      updateThinkingTimeline((prev) => {
+        let changed = false;
+        const next = prev.map((item) => {
+          if (item?.kind === "thought" && item?.status === "streaming") {
+            changed = true;
+            return { ...item, status: "done" };
+          }
+          return item;
+        });
+        return changed ? next : prev;
+      });
+    };
 
     console.log(debugTag, "response ok", {
       status: res.status,
@@ -282,7 +366,12 @@ export async function runChat({
         if (idx < 0) return prev;
 
         const base = prev[idx];
-        const nowHasContent = displayedText.length > 0 || fullThought.length > 0 || isSearching || searchError;
+        const nowHasContent =
+          displayedText.length > 0 ||
+          fullThought.length > 0 ||
+          isSearching ||
+          searchError ||
+          (Array.isArray(thinkingTimeline) && thinkingTimeline.length > 0);
         if (nowHasContent && !hasReceivedContent) {
           hasReceivedContent = true;
           // 收到内容，清除超时定时器
@@ -300,6 +389,7 @@ export async function runChat({
           isSearching,
           searchQuery,
           searchResults,
+          thinkingTimeline,
           citations,
           searchError,
         };
@@ -311,6 +401,7 @@ export async function runChat({
           base.isSearching === nextMsg.isSearching &&
           base.searchQuery === nextMsg.searchQuery &&
           base.searchResults === nextMsg.searchResults &&
+          base.thinkingTimeline === nextMsg.thinkingTimeline &&
           base.citations === nextMsg.citations &&
           base.searchError === nextMsg.searchError
         ) {
@@ -358,6 +449,9 @@ export async function runChat({
       if (p === "[DONE]") {
         sawDone = true;
         isSearching = false;
+        patchLastRunningStep("search", { status: "done" });
+        patchLastRunningStep("reader", { status: "done" });
+        closeStreamingThoughtSteps();
         console.log(debugTag, "sse done", {
           fullTextLen: fullText.length,
           fullThoughtLen: fullThought.length,
@@ -368,49 +462,147 @@ export async function runChat({
       try {
         const data = JSON.parse(p);
         if (data.type === "thought") {
-          fullThought += data.content;
-          if (fullThought.length === data.content.length) {
+          const delta = typeof data.content === "string" ? data.content : "";
+          fullThought += delta;
+          appendThoughtStep(delta);
+          if (fullThought.length === delta.length) {
             console.log(debugTag, "thought start", { len: fullThought.length });
           } else if (fullThought.length - lastThoughtLogLen >= logProgressStep) {
             lastThoughtLogLen = fullThought.length;
             console.log(debugTag, "thought progress", { len: fullThought.length });
           }
         } else if (data.type === "text") {
-          fullText += data.content;
-          if (fullText.length === data.content.length) {
+          const delta = typeof data.content === "string" ? data.content : "";
+          fullText += delta;
+          if (fullText.length === delta.length) {
             console.log(debugTag, "text start", { len: fullText.length });
           } else if (fullText.length - lastTextLogLen >= logProgressStep) {
             lastTextLogLen = fullText.length;
             console.log(debugTag, "text progress", { len: fullText.length });
           }
-          if (!thinkingEnded) thinkingEnded = true;
+          if (!thinkingEnded) {
+            ensureSyntheticThoughtRunning();
+            thinkingEnded = true;
+            closeStreamingThoughtSteps();
+          }
           isSearching = false;
           // 启动模拟流式输出
           startSimulatedStream();
         } else if (data.type === "search_start") {
           isSearching = true;
           console.log(debugTag, "search start", { query: data.query });
-          if (typeof data.query === "string" && data.query.trim()) {
-            searchQuery = data.query.trim();
-          }
+          const query = typeof data.query === "string" ? data.query.trim() : "";
+          if (query) searchQuery = query;
+          ensureSyntheticThoughtRunning();
+          closeStreamingThoughtSteps();
+          appendTimelineStep({
+            kind: "search",
+            status: "running",
+            query: query || "（空检索词）",
+          });
           searchError = null;
         } else if (data.type === "search_result") {
           isSearching = false;
+          const resultCount = Array.isArray(data.results) ? data.results.length : 0;
           console.log(debugTag, "search result", {
             query: data.query,
-            resultCount: Array.isArray(data.results) ? data.results.length : 0,
+            resultCount,
           });
-          if (typeof data.query === "string" && data.query.trim()) {
-            searchQuery = data.query.trim();
+          const query = typeof data.query === "string" ? data.query.trim() : "";
+          if (query) searchQuery = query;
+          const updated = patchLastRunningStep("search", {
+            status: "done",
+            query: query || undefined,
+            resultCount,
+          });
+          if (!updated) {
+            appendTimelineStep({
+              kind: "search",
+              status: "done",
+              query: query || "（空检索词）",
+              resultCount,
+            });
           }
           searchResults = data.results;
+          if (!thinkingEnded) ensureSyntheticThoughtRunning();
+        } else if (data.type === "search_reader_start") {
+          isSearching = true;
+          const title = typeof data.title === "string" ? data.title.trim() : "";
+          const url = typeof data.url === "string" ? data.url.trim() : "";
+          searchQuery = title ? `查看全文：${title}` : (url ? `查看全文：${url}` : "查看全文");
+          ensureSyntheticThoughtRunning();
+          closeStreamingThoughtSteps();
+          appendTimelineStep({
+            kind: "reader",
+            status: "running",
+            title,
+            url,
+          });
+          searchError = null;
+        } else if (data.type === "search_reader_result") {
+          isSearching = false;
+          const title = typeof data.title === "string" ? data.title.trim() : "";
+          const url = typeof data.url === "string" ? data.url.trim() : "";
+          const excerpt = typeof data.excerpt === "string" ? data.excerpt.trim() : "";
+          const updated = patchLastRunningStep("reader", {
+            status: "done",
+            title: title || undefined,
+            url: url || undefined,
+            excerpt: excerpt || undefined,
+          });
+          if (!updated) {
+            appendTimelineStep({
+              kind: "reader",
+              status: "done",
+              title,
+              url,
+              excerpt,
+            });
+          }
+          if (!thinkingEnded) ensureSyntheticThoughtRunning();
+        } else if (data.type === "search_reader_error") {
+          isSearching = false;
+          const title = typeof data.title === "string" ? data.title.trim() : "";
+          const url = typeof data.url === "string" ? data.url.trim() : "";
+          const message = "网页全文读取失败，已继续使用检索摘要";
+          const updated = patchLastRunningStep("reader", {
+            status: "error",
+            title: title || undefined,
+            url: url || undefined,
+            message,
+          });
+          if (!updated) {
+            appendTimelineStep({
+              kind: "reader",
+              status: "error",
+              title,
+              url,
+              message,
+            });
+          }
+          searchError = message;
+          if (!thinkingEnded) ensureSyntheticThoughtRunning();
         } else if (data.type === "search_error") {
           isSearching = false;
-          if (typeof data.message === "string" && data.message.trim()) {
-            searchError = data.message.trim();
-          } else {
-            searchError = "检索失败，请稍后再试";
+          const query = typeof data.query === "string" ? data.query.trim() : "";
+          const message = typeof data.message === "string" && data.message.trim()
+            ? data.message.trim()
+            : "检索失败，请稍后再试";
+          const updated = patchLastRunningStep("search", {
+            status: "error",
+            query: query || undefined,
+            message,
+          });
+          if (!updated) {
+            appendTimelineStep({
+              kind: "search",
+              status: "error",
+              query: query || searchQuery || "（空检索词）",
+              message,
+            });
           }
+          searchError = message;
+          if (!thinkingEnded) ensureSyntheticThoughtRunning();
         } else if (data.type === "citations") {
           citations = data.citations;
           console.log(debugTag, "citations", {
@@ -607,13 +799,25 @@ export async function runChat({
             // 如果用户已经发了下一条消息，就不要覆盖，避免竞态把新消息"抹掉"
             if (idx !== -1 && idx !== prev.length - 1) return prev;
             if (lastModelLen(serverMessages) < lastModelLen(prev)) return prev;
+            const streamMsg = idx >= 0 ? prev[idx] : null;
+            const streamTimeline = Array.isArray(streamMsg?.thinkingTimeline)
+              ? streamMsg.thinkingTimeline
+              : null;
+            const streamSearchError = typeof streamMsg?.searchError === "string"
+              ? streamMsg.searchError
+              : null;
 
             // 保留流式消息的 id，避免 MessageList key 变化导致整条气泡重新挂载（framer-motion 入场动画 => "闪一下"）
             if (streamMsgId != null) {
               const next = serverMessages.slice();
               for (let i = next.length - 1; i >= 0; i -= 1) {
                 if (next[i]?.role === "model") {
-                  next[i] = { ...next[i], id: streamMsgId };
+                  next[i] = {
+                    ...next[i],
+                    id: streamMsgId,
+                    ...(streamTimeline?.length ? { thinkingTimeline: streamTimeline } : {}),
+                    ...(streamSearchError ? { searchError: streamSearchError } : {}),
+                  };
                   break;
                 }
               }
