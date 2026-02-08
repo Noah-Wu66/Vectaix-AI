@@ -230,7 +230,8 @@ export default function MessageList({
           const privacyGlow = isPrivacyModel
             ? "0 0 0 1px rgba(16, 185, 129, 0.14), 0 0 12px rgba(16, 185, 129, 0.12)"
             : "0 0 0 1px rgba(239, 68, 68, 0.14), 0 0 12px rgba(239, 68, 68, 0.12)";
-          const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline) && msg.thinkingTimeline.length > 0;
+          const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline)
+            && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader");
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
           if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline) {
             return null;

@@ -42,7 +42,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   const safeThought = typeof thought === "string" ? thought : "";
   const safeSearchError = typeof searchError === "string" ? searchError : "";
   const timelineItems = normalizeTimeline(timeline);
-  const hasTimeline = timelineItems.length > 0;
+  const hasTimeline = timelineItems.some((step) => step.kind === "search" || step.kind === "reader");
   const activeReaderStep = [...timelineItems].reverse().find((step) => step.kind === "reader" && step.status === "running");
 
   useEffect(() => {
