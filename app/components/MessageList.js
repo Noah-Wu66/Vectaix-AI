@@ -473,7 +473,7 @@ export default function MessageList({
 
                         {showPrivacyBadge && (
                           <div
-                            className={`pointer-events-none absolute bottom-2 right-3 flex items-center gap-1 text-[10px] font-medium ${isPrivacyModel ? "text-emerald-600" : "text-red-500"}`}
+                            className={`pointer-events-none absolute bottom-2 right-3 flex items-center gap-1 text-[10px] font-medium transition-opacity duration-500 ${isPrivacyModel ? "text-emerald-600" : "text-red-500"} ${msg.isStreaming ? 'opacity-0' : 'opacity-100'}`}
                           >
                             {isPrivacyModel ? (
                               <Shield size={12} className="text-emerald-500" />

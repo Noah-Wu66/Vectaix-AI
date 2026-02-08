@@ -54,6 +54,20 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     }
   }, [thought, timeline, collapsed]);
 
+  // 自动展开最新的思考过程
+  useEffect(() => {
+    if (!hasTimeline) return;
+    
+    // 找到最后一个有内容的 thought 步骤
+    const lastThoughtStep = [...timelineItems]
+      .reverse()
+      .find((step) => step.kind === "thought" && step.content);
+    
+    if (lastThoughtStep) {
+      setExpandedTimelineId(lastThoughtStep.id);
+    }
+  }, [hasTimeline, timelineItems]);
+
   const headerText = (() => {
     if (isSearching) {
       if (activeReaderStep) {
