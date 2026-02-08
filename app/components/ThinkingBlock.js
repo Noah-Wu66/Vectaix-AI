@@ -144,6 +144,14 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     return null;
   };
 
+  if (hasTimeline) {
+    return (
+      <div className="mb-2 w-full max-w-[800px] flex flex-col gap-2">
+        {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
+      </div>
+    );
+  }
+
   return (
     <div className="mb-2 w-full max-w-full">
       <button
@@ -187,15 +195,9 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
             className="thinking-content bg-zinc-100 border border-zinc-200 rounded-2xl p-3 overflow-y-auto max-h-[260px] w-full max-w-[800px] text-xs text-zinc-400"
             ref={containerRef}
           >
-            {hasTimeline ? (
-              <div className="flex flex-col gap-2">
-                {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
-              </div>
-            ) : (
-              <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
-                {safeThought}
-              </Markdown>
-            )}
+            <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
+              {safeThought}
+            </Markdown>
           </motion.div>
         )}
       </AnimatePresence>
