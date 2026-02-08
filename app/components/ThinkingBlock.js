@@ -46,7 +46,9 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   const activeReaderStep = [...timelineItems].reverse().find((step) => step.kind === "reader" && step.status === "running");
 
   useEffect(() => {
-    setCollapsed(!(isStreaming || isSearching));
+    if (isStreaming || isSearching) {
+      setCollapsed(false);
+    }
   }, [isStreaming, isSearching]);
 
   useEffect(() => {
