@@ -65,6 +65,13 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     setExpandedTimelineId(last?.id || null);
   }, [hasTimeline, timelineItems]);
 
+  useEffect(() => {
+    if (!hasTimeline) return;
+    if (!isStreaming) {
+      setExpandedTimelineId(null);
+    }
+  }, [hasTimeline, isStreaming]);
+
   const headerText = (() => {
     if (isSearching) {
       if (activeReaderStep) {
@@ -99,12 +106,12 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     const titleText = getTitle();
 
     const icon = step.kind === "reader"
-      ? <FileText size={12} />
+      ? <FileText size={16} className="sm:w-5 sm:h-5" />
       : step.kind === "search"
-        ? <Globe size={12} />
-        : <BrainCircuit size={12} />;
+        ? <Globe size={16} className="sm:w-5 sm:h-5" />
+        : <BrainCircuit size={16} className="sm:w-5 sm:h-5" />;
 
-    const capsuleClass = `inline-flex w-fit max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${isError ? "border-red-200 bg-red-50 text-red-600" : "border-zinc-200 bg-white text-zinc-600"}`;
+    const capsuleClass = `thinking-btn inline-flex w-fit max-w-full items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors ${isError ? "bg-red-50 text-red-600" : "bg-zinc-100 text-zinc-500"}`;
 
     if (step.kind === "thought") {
       const isSynthetic = step.synthetic === true;
