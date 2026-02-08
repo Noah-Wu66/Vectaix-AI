@@ -37,6 +37,7 @@ function LoadingDots() {
 
 export default function ThinkingBlock({ thought, isStreaming, isSearching, searchQuery, searchError, timeline }) {
   const [collapsed, setCollapsed] = useState(true);
+  const [expandedTimelineId, setExpandedTimelineId] = useState(null);
   const containerRef = useRef(null);
   const safeThought = typeof thought === "string" ? thought : "";
   const safeSearchError = typeof searchError === "string" ? searchError : "";
@@ -55,6 +56,15 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
   }, [thought, timeline, collapsed]);
 
+  useEffect(() => {
+    if (!hasTimeline) {
+      setExpandedTimelineId(null);
+      return;
+    }
+    const last = timelineItems[timelineItems.length - 1];
+    setExpandedTimelineId(last?.id || null);
+  }, [hasTimeline, timelineItems]);
+
   const headerText = (() => {
     if (isSearching) {
       if (activeReaderStep) {
@@ -68,75 +78,82 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   })();
 
   const renderTimelineStep = (step, idx) => {
+    const isExpanded = expandedTimelineId === step.id;
+    const isRunning = step.status === "running";
+    const isError = step.status === "error";
+
+    const getTitle = () => {
+      if (step.kind === "thought") return "思考过程";
+      if (step.kind === "search") return isRunning ? "联网搜索中" : (isError ? "联网搜索失败" : "联网搜索完成");
+      if (step.kind === "reader") return isRunning ? "查看网页中" : (isError ? "网页读取失败" : "网页正文已读取");
+      return "处理中";
+    };
+
+    const hasDetail = (() => {
+      if (step.kind === "thought") return Boolean(step.content);
+      if (step.kind === "search") return Boolean(step.query || Number.isFinite(step.resultCount) || (isError && step.message));
+      if (step.kind === "reader") return Boolean((step.title || step.url || step.excerpt) || (isError && step.message));
+      return false;
+    })();
+
+    const titleText = getTitle();
+
+    const icon = step.kind === "reader"
+      ? <FileText size={12} />
+      : step.kind === "search"
+        ? <Globe size={12} />
+        : <BrainCircuit size={12} />;
+
+    const capsuleClass = `inline-flex w-fit max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${isError ? "border-red-200 bg-red-50 text-red-600" : "border-zinc-200 bg-white text-zinc-600"}`;
+
     if (step.kind === "thought") {
       const isSynthetic = step.synthetic === true;
-      if (!step.content && !isSynthetic) return null;
-
-      if (isSynthetic) {
-        return (
-          <div
-            key={step.id || `thought-${idx}`}
-            className="inline-flex w-fit max-w-full items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600"
-          >
-            <BrainCircuit size={12} />
-            <span>思考中</span>
-            {step.status === "streaming" ? <LoadingDots /> : null}
-          </div>
-        );
-      }
-
       return (
-        <div key={step.id || `thought-${idx}`} className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
-          <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-zinc-500">
-            <BrainCircuit size={12} />
-            <span>思考过程</span>
-            {step.status === "streaming" ? <LoadingDots /> : null}
-          </div>
-          <Markdown enableHighlight={step.status !== "streaming"} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
-            {step.content}
-          </Markdown>
+        <div key={step.id || `thought-${idx}`} className="w-full max-w-[800px]">
+          <button
+            type="button"
+            onClick={() => {
+              if (!hasDetail) return;
+              setExpandedTimelineId((prev) => (prev === step.id ? null : step.id));
+            }}
+            className={`${capsuleClass} ${hasDetail ? "cursor-pointer" : "cursor-default"}`}
+          >
+            {icon}
+            <span>{isSynthetic ? "思考中" : titleText}</span>
+            {isRunning ? <LoadingDots /> : null}
+            {hasDetail ? (isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null}
+          </button>
+          {hasDetail && isExpanded ? (
+            <div className="thinking-content mt-1.5 bg-zinc-100 border border-zinc-200 rounded-2xl p-3 overflow-y-auto max-h-[200px] w-full max-w-[800px] text-xs text-zinc-400" ref={containerRef}>
+              <Markdown enableHighlight={step.status !== "streaming"} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
+                {step.content}
+              </Markdown>
+            </div>
+          ) : null}
         </div>
       );
     }
 
     if (step.kind === "search") {
-      const isRunning = step.status === "running";
-      const isError = step.status === "error";
-      const label = isRunning ? "联网搜索中" : (isError ? "联网搜索失败" : "联网搜索完成");
       return (
-        <div key={step.id || `search-${idx}`} className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-          <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-wide ${isError ? "text-red-600" : "text-zinc-600"}`}>
-            <Globe size={12} />
-            <span>{label}</span>
+        <div key={step.id || `search-${idx}`} className="w-full max-w-[800px]">
+          <div className={capsuleClass}>
+            {icon}
+            <span>{titleText}</span>
             {isRunning ? <LoadingDots /> : null}
           </div>
-          {step.query ? <div className="mt-1 text-xs text-zinc-700 break-words">{step.query}</div> : null}
-          {Number.isFinite(step.resultCount) ? <div className="mt-1 text-xs text-zinc-500">结果 {step.resultCount} 条</div> : null}
-          {isError && step.message ? <div className="mt-1 text-xs text-red-600 break-words">{step.message}</div> : null}
         </div>
       );
     }
 
     if (step.kind === "reader") {
-      const isRunning = step.status === "running";
-      const isError = step.status === "error";
-      const label = isRunning ? "查看网页中" : (isError ? "网页读取失败" : "网页正文已读取");
-      const target = step.title || step.url;
       return (
-        <div key={step.id || `reader-${idx}`} className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2">
-          <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-wide ${isError ? "text-red-600" : "text-zinc-600"}`}>
-            <FileText size={12} />
-            <span>{label}</span>
+        <div key={step.id || `reader-${idx}`} className="w-full max-w-[800px]">
+          <div className={capsuleClass}>
+            {icon}
+            <span>{titleText}</span>
             {isRunning ? <LoadingDots /> : null}
           </div>
-          {target ? <div className="mt-1 text-xs text-zinc-700 break-words">{target}</div> : null}
-          {step.status === "done" && step.excerpt ? (
-            <div className="mt-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-2">
-              <div className="text-[11px] uppercase tracking-wide text-zinc-500">正文摘录</div>
-              <div className="mt-1 text-xs text-zinc-700 whitespace-pre-wrap break-words">{step.excerpt}</div>
-            </div>
-          ) : null}
-          {isError && step.message ? <div className="mt-1 text-xs text-red-600 break-words">{step.message}</div> : null}
         </div>
       );
     }
