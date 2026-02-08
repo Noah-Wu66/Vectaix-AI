@@ -36,11 +36,9 @@ function LoadingDots() {
 }
 
 export default function ThinkingBlock({ thought, isStreaming, isSearching, searchQuery, searchError, timeline }) {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
   const containerRef = useRef(null);
-  const prevIsStreamingRef = useRef(isStreaming);
-  const prevThoughtLenRef = useRef(0);
   const safeThought = typeof thought === "string" ? thought : "";
   const safeSearchError = typeof searchError === "string" ? searchError : "";
   const timelineItems = normalizeTimeline(timeline);
@@ -48,51 +46,13 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   const activeReaderStep = [...timelineItems].reverse().find((step) => step.kind === "reader" && step.status === "running");
 
   useEffect(() => {
-    if (hasTimeline) {
-      prevIsStreamingRef.current = isStreaming;
-      prevThoughtLenRef.current = safeThought.length;
-      return;
+    if (!collapsed) {
+      const el = containerRef.current;
+      if (el) {
+        el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+      }
     }
-
-    const prevIsStreaming = prevIsStreamingRef.current;
-    const prevThoughtLen = prevThoughtLenRef.current;
-    const currThoughtLen = safeThought.length;
-
-    if (prevIsStreaming && !isStreaming) {
-      setCollapsed(true);
-    } else if (
-      (isStreaming && (currThoughtLen > 0 || isSearching)) ||
-      (prevThoughtLen === 0 && currThoughtLen > 0)
-    ) {
-      setCollapsed(false);
-    }
-
-    prevIsStreamingRef.current = isStreaming;
-    prevThoughtLenRef.current = currThoughtLen;
-  }, [hasTimeline, isStreaming, isSearching, safeThought]);
-
-  useEffect(() => {
-    if (collapsed) return;
-    const el = containerRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
   }, [thought, timeline, collapsed]);
-
-  useEffect(() => {
-    if (!hasTimeline) {
-      setExpandedTimelineId(null);
-      return;
-    }
-    const last = timelineItems[timelineItems.length - 1];
-    setExpandedTimelineId(last?.id || null);
-  }, [hasTimeline, timelineItems]);
-
-  useEffect(() => {
-    if (!hasTimeline) return;
-    if (!isStreaming) {
-      setExpandedTimelineId(null);
-    }
-  }, [hasTimeline, isStreaming]);
 
   const headerText = (() => {
     if (isSearching) {
