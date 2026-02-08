@@ -401,7 +401,7 @@ export default function MessageList({
                   </div>
                 ) : (
                   <>
-                    {(hasParts || msg.content || msg.image) && (
+                    {(hasParts || (typeof msg.content === 'string' && msg.content.trim().length > 0) || msg.image) && (
                       <div
                         className={`msg-bubble px-4 py-3 ${showPrivacyBadge ? "relative pb-6" : ""} rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
