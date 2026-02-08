@@ -39,6 +39,8 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   const [collapsed, setCollapsed] = useState(true);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
   const containerRef = useRef(null);
+  const prevIsStreamingRef = useRef(isStreaming);
+  const prevThoughtLenRef = useRef(0);
   const safeThought = typeof thought === "string" ? thought : "";
   const safeSearchError = typeof searchError === "string" ? searchError : "";
   const timelineItems = normalizeTimeline(timeline);
@@ -46,10 +48,28 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   const activeReaderStep = [...timelineItems].reverse().find((step) => step.kind === "reader" && step.status === "running");
 
   useEffect(() => {
-    if (isStreaming || isSearching) {
+    if (hasTimeline) {
+      prevIsStreamingRef.current = isStreaming;
+      prevThoughtLenRef.current = safeThought.length;
+      return;
+    }
+
+    const prevIsStreaming = prevIsStreamingRef.current;
+    const prevThoughtLen = prevThoughtLenRef.current;
+    const currThoughtLen = safeThought.length;
+
+    if (prevIsStreaming && !isStreaming) {
+      setCollapsed(true);
+    } else if (
+      (isStreaming && (currThoughtLen > 0 || isSearching)) ||
+      (prevThoughtLen === 0 && currThoughtLen > 0)
+    ) {
       setCollapsed(false);
     }
-  }, [isStreaming, isSearching]);
+
+    prevIsStreamingRef.current = isStreaming;
+    prevThoughtLenRef.current = currThoughtLen;
+  }, [hasTimeline, isStreaming, isSearching, safeThought]);
 
   useEffect(() => {
     if (collapsed) return;
