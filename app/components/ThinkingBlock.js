@@ -61,13 +61,14 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     if (!hasTimeline) return;
     if (autoCollapsedRef.current) return;
 
-    const lastThoughtStep = [...timelineItems]
+    const timelineForExpand = normalizeTimeline(timeline);
+    const lastThoughtStep = [...timelineForExpand]
       .reverse()
-      .find((step) => step.kind === "thought" && step.content);
+      .find((step) => step.kind === "thought");
 
     if (!lastThoughtStep?.id) return;
     setExpandedTimelineId((prev) => (prev === lastThoughtStep.id ? prev : lastThoughtStep.id));
-  }, [hasTimeline, timelineItems]);
+  }, [hasTimeline, timeline]);
 
   // 正文开始输出后，自动折叠思考过程
   useEffect(() => {
