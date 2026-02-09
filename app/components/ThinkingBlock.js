@@ -131,8 +131,9 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
       if (step.kind === "reader") return Boolean((step.title || step.url || step.excerpt) || (isError && step.message));
       return false;
     })();
+    const isThoughtStreaming = step.status === "streaming";
     const isManualExpanded = manualExpandedStepIdRef.current === step.id;
-    const showThoughtDots = !hasDetail || (isExpanded && !isManualExpanded);
+    const showThoughtDots = isThoughtStreaming && (!hasDetail || (isExpanded && !isManualExpanded));
 
     const titleText = getTitle();
 
@@ -146,6 +147,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
 
     if (step.kind === "thought") {
       const isSynthetic = step.synthetic === true;
+      const showThinkingTitle = isSynthetic && isThoughtStreaming;
       return (
         <div key={step.id || `thought-${idx}`} className="w-full max-w-[800px]">
           <button
@@ -164,7 +166,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
             className={`${capsuleClass} ${hasDetail ? "cursor-pointer" : "cursor-default"}`}
           >
             {icon}
-            <span>{isSynthetic ? "思考中" : titleText}</span>
+            <span>{showThinkingTitle ? "思考中" : titleText}</span>
             {showThoughtDots ? <LoadingDots /> : null}
             {hasDetail ? (isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null}
           </button>
@@ -236,7 +238,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
         )}
         <span className="flex items-center gap-1 sm:gap-1.5">
           <span className="truncate max-w-[240px]">{headerText}</span>
-          {!collapsed && !manualOpenMainRef.current ? <LoadingDots /> : null}
+          {!collapsed && !manualOpenMainRef.current && (isStreaming || isSearching) ? <LoadingDots /> : null}
         </span>
         {collapsed ? (
           <ChevronDown size={12} className="sm:w-3.5 sm:h-3.5" />
