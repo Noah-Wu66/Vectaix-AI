@@ -62,6 +62,12 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     if (autoCollapsedRef.current) return;
 
     const timelineForExpand = normalizeTimeline(timeline);
+    const lastStep = timelineForExpand[timelineForExpand.length - 1] || null;
+    if (lastStep && lastStep.kind !== "thought") {
+      setExpandedTimelineId((prev) => (prev === null ? prev : null));
+      return;
+    }
+
     const lastThoughtStep = [...timelineForExpand]
       .reverse()
       .find((step) => step.kind === "thought");
@@ -138,7 +144,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
           >
             {icon}
             <span>{isSynthetic ? "思考中" : titleText}</span>
-            {isRunning ? <LoadingDots /> : null}
+            <LoadingDots />
             {hasDetail ? (isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null}
           </button>
           {hasDetail && isExpanded ? (
@@ -200,14 +206,10 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
         ) : (
           <BrainCircuit size={16} className="sm:w-5 sm:h-5" />
         )}
-        {isStreaming || isSearching ? (
-          <span className="flex items-center gap-1 sm:gap-1.5">
-            <span className="truncate max-w-[240px]">{headerText}</span>
-            <LoadingDots />
-          </span>
-        ) : (
-          headerText
-        )}
+        <span className="flex items-center gap-1 sm:gap-1.5">
+          <span className="truncate max-w-[240px]">{headerText}</span>
+          <LoadingDots />
+        </span>
         {collapsed ? (
           <ChevronDown size={12} className="sm:w-3.5 sm:h-3.5" />
         ) : (
