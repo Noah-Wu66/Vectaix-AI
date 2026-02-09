@@ -58,18 +58,16 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
 
   // 自动展开最新的思考过程
   useEffect(() => {
-    if (!isStreaming && !isSearching) return;
     if (!hasTimeline) return;
-    
-    // 找到最后一个有内容的 thought 步骤
+    if (safeBodyText.length > 0) return;
+
     const lastThoughtStep = [...timelineItems]
       .reverse()
       .find((step) => step.kind === "thought" && step.content);
-    
-    if (lastThoughtStep) {
-      setExpandedTimelineId(lastThoughtStep.id);
-    }
-  }, [hasTimeline, timelineItems, isStreaming, isSearching]);
+
+    if (!lastThoughtStep?.id) return;
+    setExpandedTimelineId((prev) => (prev === lastThoughtStep.id ? prev : lastThoughtStep.id));
+  }, [hasTimeline, timelineItems, safeBodyText]);
 
   // 正文开始输出后，自动折叠思考过程
   useEffect(() => {
