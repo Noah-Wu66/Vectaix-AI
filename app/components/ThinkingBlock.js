@@ -35,11 +35,13 @@ function LoadingDots() {
   );
 }
 
-export default function ThinkingBlock({ thought, isStreaming, isSearching, searchQuery, searchError, timeline }) {
+export default function ThinkingBlock({ thought, isStreaming, isSearching, searchQuery, searchError, timeline, bodyText }) {
   const [collapsed, setCollapsed] = useState(false);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
   const containerRef = useRef(null);
+  const bodyLengthRef = useRef(typeof bodyText === "string" ? bodyText.length : 0);
   const safeThought = typeof thought === "string" ? thought : "";
+  const safeBodyText = typeof bodyText === "string" ? bodyText : "";
   const safeSearchError = typeof searchError === "string" ? searchError : "";
   const timelineItems = normalizeTimeline(timeline);
   const hasTimeline = timelineItems.some((step) => step.kind === "search" || step.kind === "reader");
@@ -56,6 +58,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
 
   // 自动展开最新的思考过程
   useEffect(() => {
+    if (!isStreaming && !isSearching) return;
     if (!hasTimeline) return;
     
     // 找到最后一个有内容的 thought 步骤
@@ -66,7 +69,18 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     if (lastThoughtStep) {
       setExpandedTimelineId(lastThoughtStep.id);
     }
-  }, [hasTimeline, timelineItems]);
+  }, [hasTimeline, timelineItems, isStreaming, isSearching]);
+
+  // 正文开始输出后，自动折叠思考过程
+  useEffect(() => {
+    const prevLength = bodyLengthRef.current;
+    const currentLength = safeBodyText.length;
+    if (prevLength === 0 && currentLength > 0) {
+      setCollapsed(true);
+      setExpandedTimelineId(null);
+    }
+    bodyLengthRef.current = currentLength;
+  }, [safeBodyText]);
 
   const headerText = (() => {
     if (isSearching) {

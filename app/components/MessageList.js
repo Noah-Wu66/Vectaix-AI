@@ -278,6 +278,7 @@ export default function MessageList({
                     searchQuery={msg.searchQuery}
                     searchError={msg.searchError}
                     timeline={msg.thinkingTimeline}
+                    bodyText={msg.content}
                   />
                 )}
 
