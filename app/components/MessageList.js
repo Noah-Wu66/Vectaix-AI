@@ -226,6 +226,9 @@ export default function MessageList({
       ) : (
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
+          const hasBodyOutput =
+            (typeof msg.content === "string" && msg.content.length > 0)
+            || (hasParts && msg.parts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
           const showPrivacyBadge = msg.role === "model";
           const privacyGlow = isPrivacyModel
             ? "0 0 0 1px rgba(16, 185, 129, 0.14), 0 0 12px rgba(16, 185, 129, 0.12)"
@@ -278,7 +281,7 @@ export default function MessageList({
                     searchQuery={msg.searchQuery}
                     searchError={msg.searchError}
                     timeline={msg.thinkingTimeline}
-                    bodyText={msg.content}
+                    bodyText={hasBodyOutput ? "1" : ""}
                   />
                 )}
 
