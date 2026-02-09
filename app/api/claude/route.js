@@ -484,7 +484,7 @@ export async function POST(req) {
                                                     url: selectedItem.url,
                                                     content: readerData?.content,
                                                 },
-                                                { maxContentChars: 8000 }
+                                                { maxContentChars: 10000 }
                                             );
                                             if (readerContext) {
                                                 const readerExcerpt = typeof readerData?.content === 'string'
