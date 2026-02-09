@@ -148,6 +148,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     if (step.kind === "thought") {
       const isSynthetic = step.synthetic === true;
       const showThinkingTitle = isSynthetic && isThoughtStreaming;
+      const showDoneTitle = isSynthetic && !isThoughtStreaming && !hasDetail;
       return (
         <div key={step.id || `thought-${idx}`} className="w-full max-w-[800px]">
           <button
@@ -166,7 +167,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
             className={`${capsuleClass} ${hasDetail ? "cursor-pointer" : "cursor-default"}`}
           >
             {icon}
-            <span>{showThinkingTitle ? "思考中" : titleText}</span>
+            <span>{showThinkingTitle ? "思考中" : (showDoneTitle ? "已思考" : titleText)}</span>
             {showThoughtDots ? <LoadingDots /> : null}
             {hasDetail ? (isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null}
           </button>
