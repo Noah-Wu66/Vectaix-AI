@@ -39,6 +39,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   const [collapsed, setCollapsed] = useState(false);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
   const containerRef = useRef(null);
+  const autoCollapsedRef = useRef(false);
   const safeThought = typeof thought === "string" ? thought : "";
   const safeBodyText = typeof bodyText === "string" ? bodyText : "";
   const safeSearchError = typeof searchError === "string" ? searchError : "";
@@ -58,7 +59,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   // 自动展开最新的思考过程
   useEffect(() => {
     if (!hasTimeline) return;
-    if (safeBodyText.length > 0) return;
+    if (autoCollapsedRef.current) return;
 
     const lastThoughtStep = [...timelineItems]
       .reverse()
@@ -66,14 +67,18 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
 
     if (!lastThoughtStep?.id) return;
     setExpandedTimelineId((prev) => (prev === lastThoughtStep.id ? prev : lastThoughtStep.id));
-  }, [hasTimeline, timelineItems, safeBodyText]);
+  }, [hasTimeline, timelineItems]);
 
   // 正文开始输出后，自动折叠思考过程
   useEffect(() => {
     const currentLength = safeBodyText.length;
-    if (currentLength > 0) {
+    if (currentLength > 0 && !autoCollapsedRef.current) {
+      autoCollapsedRef.current = true;
       setCollapsed(true);
       setExpandedTimelineId(null);
+    }
+    if (currentLength === 0) {
+      autoCollapsedRef.current = false;
     }
   }, [safeBodyText]);
 

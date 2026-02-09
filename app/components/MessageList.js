@@ -227,7 +227,7 @@ export default function MessageList({
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
           const hasBodyOutput =
-            (typeof msg.content === "string" && msg.content.length > 0)
+            (typeof msg.content === "string" && msg.content.trim().length > 0)
             || (hasParts && msg.parts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
           const showPrivacyBadge = msg.role === "model";
           const privacyGlow = isPrivacyModel
