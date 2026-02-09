@@ -5,6 +5,7 @@ const MessageSchema = new mongoose.Schema({
     role: { type: String, required: true }, // 'user' or 'model'
     content: { type: String, default: '' },
     thought: { type: String }, // For model thinking blocks
+    thinkingTimeline: { type: [mongoose.Schema.Types.Mixed] }, // 联网模式多步骤流程
     citations: { type: [mongoose.Schema.Types.Mixed] },
     type: { type: String, default: 'text', enum: ['text', 'parts', 'error'] },
     image: { type: String }, // URL

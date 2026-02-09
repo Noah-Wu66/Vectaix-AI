@@ -21,6 +21,11 @@ const MAX_TITLE_CHARS = 200;
 const MAX_CITATIONS = 20;
 const MAX_CITATION_TITLE_CHARS = 200;
 const MAX_CITATION_TEXT_CHARS = 1000;
+const MAX_TIMELINE_STEPS = 50;
+const MAX_TIMELINE_CONTENT_CHARS = 20000;
+const MAX_TIMELINE_STRING_CHARS = 2048;
+const ALLOWED_TIMELINE_KINDS = new Set(['thought', 'search', 'reader']);
+const ALLOWED_TIMELINE_STATUSES = new Set(['streaming', 'running', 'done', 'error']);
 
 const ALLOWED_IMAGE_DOMAINS = [
     'blob.vercel-storage.com',
@@ -100,6 +105,32 @@ function sanitizeMessage(msg, idx) {
             citations.push(entry);
         }
         if (citations.length > 0) out.citations = citations;
+    }
+
+    if (Array.isArray(msg.thinkingTimeline) && msg.thinkingTimeline.length > 0) {
+        if (msg.thinkingTimeline.length > MAX_TIMELINE_STEPS) throw new Error(`messages[${idx}].thinkingTimeline too many`);
+        const timeline = [];
+        for (const step of msg.thinkingTimeline) {
+            if (!isPlainObject(step)) continue;
+            const kind = typeof step.kind === 'string' ? step.kind : '';
+            if (!ALLOWED_TIMELINE_KINDS.has(kind)) continue;
+            let status = typeof step.status === 'string' ? step.status : 'done';
+            if (!ALLOWED_TIMELINE_STATUSES.has(status)) status = 'done';
+            // 持久化时将 streaming 状态标记为 done
+            if (status === 'streaming' || status === 'running') status = 'done';
+            const entry = { kind, status };
+            if (typeof step.id === 'string' && step.id.length <= MAX_MESSAGE_ID_CHARS) entry.id = step.id;
+            if (typeof step.content === 'string') entry.content = step.content.slice(0, MAX_TIMELINE_CONTENT_CHARS);
+            if (typeof step.query === 'string') entry.query = step.query.slice(0, MAX_TIMELINE_STRING_CHARS);
+            if (typeof step.title === 'string') entry.title = step.title.slice(0, MAX_TIMELINE_STRING_CHARS);
+            if (typeof step.url === 'string') entry.url = step.url.slice(0, MAX_URL_CHARS);
+            if (typeof step.message === 'string') entry.message = step.message.slice(0, MAX_TIMELINE_STRING_CHARS);
+            if (typeof step.excerpt === 'string') entry.excerpt = step.excerpt.slice(0, MAX_TIMELINE_STRING_CHARS);
+            if (Number.isFinite(step.resultCount)) entry.resultCount = step.resultCount;
+            if (step.synthetic === true) entry.synthetic = true;
+            timeline.push(entry);
+        }
+        if (timeline.length > 0) out.thinkingTimeline = timeline;
     }
 
     if (Array.isArray(msg.parts)) {

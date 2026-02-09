@@ -78,6 +78,27 @@ function sanitizeMessage(msg, idx) {
   }
 
   if (typeof msg.thought === 'string' && msg.thought) out.thought = msg.thought;
+  if (Array.isArray(msg.thinkingTimeline) && msg.thinkingTimeline.length > 0) {
+    const ALLOWED_KINDS = ['thought', 'search', 'reader'];
+    const timeline = [];
+    for (const step of msg.thinkingTimeline.slice(0, 50)) {
+      if (!step || typeof step !== 'object' || Array.isArray(step)) continue;
+      const kind = typeof step.kind === 'string' ? step.kind : '';
+      if (!ALLOWED_KINDS.includes(kind)) continue;
+      const entry = { kind, status: 'done' };
+      if (typeof step.id === 'string' && step.id.length <= 128) entry.id = step.id;
+      if (typeof step.content === 'string') entry.content = step.content.slice(0, 20000);
+      if (typeof step.query === 'string') entry.query = step.query.slice(0, 2048);
+      if (typeof step.title === 'string') entry.title = step.title.slice(0, 2048);
+      if (typeof step.url === 'string') entry.url = step.url.slice(0, 2048);
+      if (typeof step.message === 'string') entry.message = step.message.slice(0, 2048);
+      if (typeof step.excerpt === 'string') entry.excerpt = step.excerpt.slice(0, 2048);
+      if (Number.isFinite(step.resultCount)) entry.resultCount = step.resultCount;
+      if (step.synthetic === true) entry.synthetic = true;
+      timeline.push(entry);
+    }
+    if (timeline.length > 0) out.thinkingTimeline = timeline;
+  }
   if (typeof msg.image === 'string' && msg.image) {
     if (!isAllowedImageUrl(msg.image)) throw new Error(`messages[${idx}].image invalid`);
     out.image = msg.image;

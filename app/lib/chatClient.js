@@ -794,6 +794,30 @@ export async function runChat({
             return 0;
           };
 
+          // 将 thinkingTimeline 回写到服务器，使切换对话后能恢复完整流程展示
+          const hasTimelineToSave = Array.isArray(thinkingTimeline) && thinkingTimeline.length > 0
+            && thinkingTimeline.some((s) => s?.kind === "search" || s?.kind === "reader");
+          if (hasTimelineToSave) {
+            const nextMsgs = serverMessages.slice();
+            let patched = false;
+            for (let i = nextMsgs.length - 1; i >= 0; i -= 1) {
+              if (nextMsgs[i]?.role === "model") {
+                nextMsgs[i] = { ...nextMsgs[i], thinkingTimeline };
+                patched = true;
+                break;
+              }
+            }
+            if (patched) {
+              try {
+                await fetch(`/api/conversations/${convIdForSync}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ messages: nextMsgs }),
+                });
+              } catch { /* ignore */ }
+            }
+          }
+
           setMessages((prev) => {
             const idx = prev.findIndex((m) => m?.id === streamMsgId);
             // 如果用户已经发了下一条消息，就不要覆盖，避免竞态把新消息"抹掉"
@@ -822,7 +846,7 @@ export async function runChat({
                 }
               }
 
-              // 同步上一条用户消息的 id，避免“上一条气泡”闪烁
+              // 同步上一条用户消息的 id，避免"上一条气泡"闪烁
               if (prev.length >= 2 && next.length >= 2) {
                 const prevLast = prev[prev.length - 1];
                 const prevPrev = prev[prev.length - 2];
