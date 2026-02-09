@@ -40,6 +40,8 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
   const containerRef = useRef(null);
   const autoCollapsedRef = useRef(false);
+  const manualExpandedStepIdRef = useRef(null);
+  const manualOpenMainRef = useRef(false);
   const safeThought = typeof thought === "string" ? thought : "";
   const safeBodyText = typeof bodyText === "string" ? bodyText : "";
   const safeSearchError = typeof searchError === "string" ? searchError : "";
@@ -64,7 +66,11 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     const timelineForExpand = normalizeTimeline(timeline);
     const lastStep = timelineForExpand[timelineForExpand.length - 1] || null;
     if (lastStep && lastStep.kind !== "thought") {
-      setExpandedTimelineId((prev) => (prev === null ? prev : null));
+      setExpandedTimelineId((prev) => {
+        if (prev === null) return prev;
+        manualExpandedStepIdRef.current = null;
+        return null;
+      });
       return;
     }
 
@@ -73,7 +79,11 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
       .find((step) => step.kind === "thought");
 
     if (!lastThoughtStep?.id) return;
-    setExpandedTimelineId((prev) => (prev === lastThoughtStep.id ? prev : lastThoughtStep.id));
+    setExpandedTimelineId((prev) => {
+      if (prev === lastThoughtStep.id) return prev;
+      manualExpandedStepIdRef.current = null;
+      return lastThoughtStep.id;
+    });
   }, [hasTimeline, timeline]);
 
   // 正文开始输出后，自动折叠思考过程
@@ -81,6 +91,8 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     const currentLength = safeBodyText.length;
     if (currentLength > 0 && !autoCollapsedRef.current) {
       autoCollapsedRef.current = true;
+      manualExpandedStepIdRef.current = null;
+      manualOpenMainRef.current = false;
       setCollapsed(true);
       setExpandedTimelineId(null);
     }
@@ -119,6 +131,8 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
       if (step.kind === "reader") return Boolean((step.title || step.url || step.excerpt) || (isError && step.message));
       return false;
     })();
+    const isManualExpanded = manualExpandedStepIdRef.current === step.id;
+    const showThoughtDots = !hasDetail || (isExpanded && !isManualExpanded);
 
     const titleText = getTitle();
 
@@ -138,13 +152,20 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
             type="button"
             onClick={() => {
               if (!hasDetail) return;
-              setExpandedTimelineId((prev) => (prev === step.id ? null : step.id));
+              setExpandedTimelineId((prev) => {
+                if (prev === step.id) {
+                  manualExpandedStepIdRef.current = null;
+                  return null;
+                }
+                manualExpandedStepIdRef.current = step.id;
+                return step.id;
+              });
             }}
             className={`${capsuleClass} ${hasDetail ? "cursor-pointer" : "cursor-default"}`}
           >
             {icon}
             <span>{isSynthetic ? "思考中" : titleText}</span>
-            <LoadingDots />
+            {showThoughtDots ? <LoadingDots /> : null}
             {hasDetail ? (isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null}
           </button>
           {hasDetail && isExpanded ? (
@@ -196,7 +217,14 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   return (
     <div className="mb-2 w-full max-w-full">
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => {
+          if (collapsed) {
+            manualOpenMainRef.current = true;
+          } else {
+            manualOpenMainRef.current = false;
+          }
+          setCollapsed(!collapsed);
+        }}
         className="thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium mb-1.5 uppercase tracking-wider px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors text-zinc-500 hover:text-zinc-700 bg-zinc-100"
       >
         {activeReaderStep ? (
@@ -208,7 +236,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
         )}
         <span className="flex items-center gap-1 sm:gap-1.5">
           <span className="truncate max-w-[240px]">{headerText}</span>
-          <LoadingDots />
+          {!collapsed && !manualOpenMainRef.current ? <LoadingDots /> : null}
         </span>
         {collapsed ? (
           <ChevronDown size={12} className="sm:w-3.5 sm:h-3.5" />
