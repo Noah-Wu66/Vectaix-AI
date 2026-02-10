@@ -81,13 +81,13 @@ export default function Markdown({
 
     const now = Date.now();
     const elapsed = now - lastPulseAtRef.current;
-    const shouldPulse = delta >= 20 || elapsed >= 520;
+    const shouldPulse = delta >= 8 || elapsed >= 80;
     if (!shouldPulse) return;
     lastPulseAtRef.current = now;
 
     setStreamPulse(false);
     const rafId = requestAnimationFrame(() => setStreamPulse(true));
-    const timer = setTimeout(() => setStreamPulse(false), 680);
+    const timer = setTimeout(() => setStreamPulse(false), 600);
     return () => {
       cancelAnimationFrame(rafId);
       clearTimeout(timer);
