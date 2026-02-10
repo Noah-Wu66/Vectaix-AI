@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BrainCircuit, ChevronDown, ChevronUp, FileText, Globe } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Lightbulb, Search } from "lucide-react";
 import Markdown from "./Markdown";
 
 function normalizeTimeline(timeline) {
@@ -87,6 +87,15 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     });
   }, [hasTimeline, timeline]);
 
+  // 简单模式：思考流式输出时自动展开内层思考气泡
+  useEffect(() => {
+    if (hasTimeline) return;
+    if (autoCollapsedRef.current) return;
+    if (isStreaming || safeThought) {
+      setExpandedTimelineId("__simple__");
+    }
+  }, [hasTimeline, isStreaming, safeThought]);
+
   // 正文开始输出后，自动折叠外层容器
   useEffect(() => {
     const currentLength = safeBodyText.length;
@@ -117,9 +126,9 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
 
   // ── 外层图标 ──
   const headerIcon = (() => {
-    if (activeReaderStep) return <FileText size={16} className="sm:w-5 sm:h-5" />;
-    if (isSearching) return <Globe size={16} className="sm:w-5 sm:h-5" />;
-    return <BrainCircuit size={16} className="sm:w-5 sm:h-5" />;
+    if (activeReaderStep) return <BookOpen size={16} className="sm:w-5 sm:h-5" />;
+    if (isSearching) return <Search size={16} className="sm:w-5 sm:h-5" />;
+    return <Lightbulb size={16} className="sm:w-5 sm:h-5" />;
   })();
 
   // ── 渲染时间线内的单个步骤（第二层折叠项）──
@@ -153,10 +162,10 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     const titleText = getTitle();
 
     const icon = step.kind === "reader"
-      ? <FileText size={14} className="sm:w-4 sm:h-4" />
+      ? <BookOpen size={14} className="sm:w-4 sm:h-4" />
       : step.kind === "search"
-        ? <Globe size={14} className="sm:w-4 sm:h-4" />
-        : <BrainCircuit size={14} className="sm:w-4 sm:h-4" />;
+        ? <Search size={14} className="sm:w-4 sm:h-4" />
+        : <Lightbulb size={14} className="sm:w-4 sm:h-4" />;
 
     const capsuleClass = `thinking-btn inline-flex w-fit max-w-full items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md transition-colors ${isError ? "bg-red-50/80 text-red-600" : "bg-white/60 text-zinc-500 hover:bg-white/90"}`;
 
@@ -276,14 +285,33 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
                 {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
               </div>
             ) : (
-              /* 简单模式：思考内容直接展示 */
-              <div
-                className="thinking-content bg-zinc-100 border border-zinc-200 rounded-2xl p-3 overflow-y-auto max-h-[260px] w-full max-w-[800px] text-xs text-zinc-400"
-                ref={containerRef}
-              >
-                <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
-                  {safeThought}
-                </Markdown>
+              /* 简单模式：内嵌一个"思考过程"气泡（第二层） */
+              <div className="flex flex-col gap-1.5 ml-1 pl-3 border-l-2 border-zinc-200/80 py-1">
+                <div className="w-full max-w-[760px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!safeThought) return;
+                      setExpandedTimelineId((prev) => prev === "__simple__" ? null : "__simple__");
+                    }}
+                    className={`thinking-btn inline-flex w-fit max-w-full items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md transition-colors bg-white/60 text-zinc-500 hover:bg-white/90 ${safeThought ? "cursor-pointer" : "cursor-default"}`}
+                  >
+                    <Lightbulb size={14} className="sm:w-4 sm:h-4" />
+                    <span>{isStreaming ? "思考中" : "思考过程"}</span>
+                    {isStreaming && expandedTimelineId !== "__simple__" ? <LoadingDots /> : null}
+                    {safeThought ? (expandedTimelineId === "__simple__" ? <ChevronUp size={10} /> : <ChevronDown size={10} />) : null}
+                  </button>
+                  {expandedTimelineId === "__simple__" && safeThought ? (
+                    <div
+                      className="thinking-content mt-1 bg-white/60 border border-zinc-200/60 rounded-xl p-2.5 overflow-y-auto max-h-[200px] w-full max-w-[760px] text-xs text-zinc-400"
+                      ref={containerRef}
+                    >
+                      <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
+                        {safeThought}
+                      </Markdown>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             )}
           </motion.div>
