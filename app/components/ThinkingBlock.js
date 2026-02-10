@@ -49,6 +49,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   const hasTimeline = timelineItems.some((step) => step.kind === "search" || step.kind === "reader");
   const activeReaderStep = [...timelineItems].reverse().find((step) => step.kind === "reader" && step.status === "running");
 
+  // 滚动到容器底部（仅简单模式的思考内容）
   useEffect(() => {
     if (!collapsed) {
       const el = containerRef.current;
@@ -58,7 +59,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     }
   }, [thought, timeline, collapsed]);
 
-  // 自动展开最新的思考过程
+  // 时间线模式：自动展开最新的思考步骤
   useEffect(() => {
     if (!hasTimeline) return;
     if (autoCollapsedRef.current) return;
@@ -86,7 +87,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     });
   }, [hasTimeline, timeline]);
 
-  // 正文开始输出后，自动折叠思考过程
+  // 正文开始输出后，自动折叠外层容器
   useEffect(() => {
     const currentLength = safeBodyText.length;
     if (currentLength > 0 && !autoCollapsedRef.current) {
@@ -101,6 +102,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     }
   }, [safeBodyText]);
 
+  // ── 外层标题文本 ──
   const headerText = (() => {
     if (isSearching) {
       if (activeReaderStep) {
@@ -110,9 +112,17 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
       return searchQuery ? `联网处理中：${searchQuery}` : "联网处理中";
     }
     if (isStreaming) return "思考中";
-    return "思考过程";
+    return "执行过程";
   })();
 
+  // ── 外层图标 ──
+  const headerIcon = (() => {
+    if (activeReaderStep) return <FileText size={16} className="sm:w-5 sm:h-5" />;
+    if (isSearching) return <Globe size={16} className="sm:w-5 sm:h-5" />;
+    return <BrainCircuit size={16} className="sm:w-5 sm:h-5" />;
+  })();
+
+  // ── 渲染时间线内的单个步骤（第二层折叠项）──
   const renderTimelineStep = (step, idx) => {
     const isExpanded = expandedTimelineId === step.id;
     const isRunning = step.status === "running";
@@ -143,19 +153,19 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     const titleText = getTitle();
 
     const icon = step.kind === "reader"
-      ? <FileText size={16} className="sm:w-5 sm:h-5" />
+      ? <FileText size={14} className="sm:w-4 sm:h-4" />
       : step.kind === "search"
-        ? <Globe size={16} className="sm:w-5 sm:h-5" />
-        : <BrainCircuit size={16} className="sm:w-5 sm:h-5" />;
+        ? <Globe size={14} className="sm:w-4 sm:h-4" />
+        : <BrainCircuit size={14} className="sm:w-4 sm:h-4" />;
 
-    const capsuleClass = `thinking-btn inline-flex w-fit max-w-full items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors ${isError ? "bg-red-50 text-red-600" : "bg-zinc-100 text-zinc-500"}`;
+    const capsuleClass = `thinking-btn inline-flex w-fit max-w-full items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md transition-colors ${isError ? "bg-red-50/80 text-red-600" : "bg-white/60 text-zinc-500 hover:bg-white/90"}`;
 
     if (step.kind === "thought") {
       const isSynthetic = step.synthetic === true;
       const showThinkingTitle = isSynthetic && isThoughtStreaming;
       const showDoneTitle = isSynthetic && !isThoughtStreaming && !hasDetail;
       return (
-        <div key={step.id || `thought-${idx}`} className="w-full max-w-[800px]">
+        <div key={step.id || `thought-${idx}`} className="w-full max-w-[760px]">
           <button
             type="button"
             onClick={() => {
@@ -174,10 +184,10 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
             {icon}
             <span>{showThinkingTitle ? "思考中" : (showDoneTitle ? "已思考" : titleText)}</span>
             {showThoughtDots ? <LoadingDots /> : null}
-            {hasDetail ? (isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null}
+            {hasDetail ? (isExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />) : null}
           </button>
           {hasDetail && isExpanded ? (
-            <div className="thinking-content mt-1.5 bg-zinc-100 border border-zinc-200 rounded-2xl p-3 overflow-y-auto max-h-[200px] w-full max-w-[800px] text-xs text-zinc-400" ref={containerRef}>
+            <div className="thinking-content mt-1 bg-white/60 border border-zinc-200/60 rounded-xl p-2.5 overflow-y-auto max-h-[200px] w-full max-w-[760px] text-xs text-zinc-400" ref={containerRef}>
               <Markdown enableHighlight={step.status !== "streaming"} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
                 {step.content}
               </Markdown>
@@ -189,7 +199,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
 
     if (step.kind === "search") {
       return (
-        <div key={step.id || `search-${idx}`} className="w-full max-w-[800px]">
+        <div key={step.id || `search-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
             <span>{titleText}</span>
@@ -201,7 +211,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
 
     if (step.kind === "reader") {
       return (
-        <div key={step.id || `reader-${idx}`} className="w-full max-w-[800px]">
+        <div key={step.id || `reader-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
             <span>{titleText}</span>
@@ -214,16 +224,12 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     return null;
   };
 
-  if (hasTimeline) {
-    return (
-      <div className="mb-2 w-full max-w-[800px] flex flex-col gap-2">
-        {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
-      </div>
-    );
-  }
-
+  // ══════════════════════════════════════════
+  //  统一渲染：外层执行过程容器 + 内层步骤
+  // ══════════════════════════════════════════
   return (
     <div className="mb-2 w-full max-w-full">
+      {/* ── 第一层：外层折叠按钮 ── */}
       <button
         onClick={() => {
           if (collapsed) {
@@ -233,15 +239,9 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
           }
           setCollapsed(!collapsed);
         }}
-        className="thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium mb-1.5 uppercase tracking-wider px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-colors text-zinc-500 hover:text-zinc-700 bg-zinc-100"
+        className="thinking-btn flex items-center gap-2 sm:gap-3 text-xs sm:text-sm font-medium mb-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-colors text-zinc-500 hover:text-zinc-700 bg-zinc-100"
       >
-        {activeReaderStep ? (
-          <FileText size={16} className="sm:w-5 sm:h-5" />
-        ) : isSearching ? (
-          <Globe size={16} className="sm:w-5 sm:h-5" />
-        ) : (
-          <BrainCircuit size={16} className="sm:w-5 sm:h-5" />
-        )}
+        {headerIcon}
         <span className="flex items-center gap-1 sm:gap-1.5">
           <span className="truncate max-w-[240px]">{headerText}</span>
           {!collapsed && !manualOpenMainRef.current && (isStreaming || isSearching) ? <LoadingDots /> : null}
@@ -253,24 +253,39 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
         )}
       </button>
 
+      {/* 搜索错误提示（非时间线模式） */}
       {!hasTimeline && !isSearching && safeSearchError ? (
         <div className="mt-1.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
           联网检索失败：{safeSearchError}
         </div>
       ) : null}
 
+      {/* ── 内层内容（第二层折叠区域）── */}
       <AnimatePresence>
         {!collapsed && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="thinking-content bg-zinc-100 border border-zinc-200 rounded-2xl p-3 overflow-y-auto max-h-[260px] w-full max-w-[800px] text-xs text-zinc-400"
-            ref={containerRef}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+            className="overflow-hidden"
           >
-            <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
-              {safeThought}
-            </Markdown>
+            {hasTimeline ? (
+              /* 时间线模式：内层各步骤气泡（每个可独立折叠 = 第二层） */
+              <div className="flex flex-col gap-1.5 ml-1 pl-3 border-l-2 border-zinc-200/80 py-1">
+                {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
+              </div>
+            ) : (
+              /* 简单模式：思考内容直接展示 */
+              <div
+                className="thinking-content bg-zinc-100 border border-zinc-200 rounded-2xl p-3 overflow-y-auto max-h-[260px] w-full max-w-[800px] text-xs text-zinc-400"
+                ref={containerRef}
+              >
+                <Markdown enableHighlight={!isStreaming} className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose">
+                  {safeThought}
+                </Markdown>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
