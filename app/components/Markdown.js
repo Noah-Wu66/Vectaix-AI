@@ -70,7 +70,7 @@ export default function Markdown({
 
     setStreamPulse(false);
     const rafId = requestAnimationFrame(() => setStreamPulse(true));
-    const timer = setTimeout(() => setStreamPulse(false), 340);
+    const timer = setTimeout(() => setStreamPulse(false), 260);
     return () => {
       cancelAnimationFrame(rafId);
       clearTimeout(timer);
@@ -82,7 +82,9 @@ export default function Markdown({
     ? [[rehypeSanitize, sanitizeSchema], rehypeKatex, rehypeHighlight]
     : [[rehypeSanitize, sanitizeSchema], rehypeKatex];
 
-  const streamClass = streamPulse ? "stream-reveal" : "";
+  const streamClass = streaming
+    ? `stream-flow ${streamPulse ? "stream-flow-pulse" : ""}`
+    : "";
 
   return (
     <div

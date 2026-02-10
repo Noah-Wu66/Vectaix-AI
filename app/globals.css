@@ -535,23 +535,47 @@ h6 {
   animation: dotBounce 1.2s ease-in-out infinite;
 }
 
-@keyframes streamReveal {
+@keyframes streamTailPulse {
   from {
-    opacity: 0.4;
-    filter: blur(3px);
+    opacity: 0.9;
     transform: translateY(2px);
   }
 
   to {
-    opacity: 1;
-    filter: blur(0);
+    opacity: 0;
     transform: translateY(0);
   }
 }
 
-.stream-reveal {
-  animation: streamReveal 320ms ease-out;
-  will-change: opacity, transform, filter;
+.stream-flow {
+  position: relative;
+  isolation: isolate;
+}
+
+.stream-flow-pulse::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1.8em;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.14) 42%,
+      rgba(255, 255, 255, 0.28) 100%);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: streamTailPulse 260ms ease-out forwards;
+}
+
+.dark-mode .stream-flow-pulse::after {
+  background: linear-gradient(180deg,
+      rgba(24, 24, 27, 0) 0%,
+      rgba(24, 24, 27, 0.16) 42%,
+      rgba(24, 24, 27, 0.32) 100%);
 }
 
 /* Mobile responsive adjustments */
