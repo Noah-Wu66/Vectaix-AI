@@ -76,6 +76,7 @@ export default function TokenCounter({
     let contentTokens = 0;
     let thoughtTokens = 0;
     let imageCount = 0;
+    let searchContextTokens = 0;
 
     for (const msg of effectiveMessages) {
       if (!msg) continue;
@@ -96,6 +97,11 @@ export default function TokenCounter({
       } else if (msg.image) {
         imageCount += 1;
       }
+
+      // 联网搜索注入的上下文 tokens（由后端计算）
+      if (typeof msg.searchContextTokens === "number" && msg.searchContextTokens > 0) {
+        searchContextTokens += msg.searchContextTokens;
+      }
     }
 
     const imageTokens = imageCount * 1000;
@@ -103,7 +109,7 @@ export default function TokenCounter({
     const overheadTokens = effectiveMessages.length * 4;
 
     const totalTokens =
-      systemTokens + contentTokens + thoughtTokens + imageTokens + overheadTokens;
+      systemTokens + contentTokens + thoughtTokens + imageTokens + searchContextTokens + overheadTokens;
     const maxTokens = contextWindow || 1000000;
     const percentage = Math.min(100, (totalTokens / maxTokens) * 100);
 
@@ -113,6 +119,7 @@ export default function TokenCounter({
       thoughtTokens,
       imageTokens,
       imageCount,
+      searchContextTokens,
       overheadTokens,
       totalTokens,
       maxTokens,
@@ -251,6 +258,14 @@ export default function TokenCounter({
                 </span>
                 <span className="token-tooltip-value">
                   ~{formatTokensDetail(tokenData.imageTokens)}
+                </span>
+              </div>
+            )}
+            {tokenData.searchContextTokens > 0 && (
+              <div className="token-tooltip-row">
+                <span className="token-tooltip-label">联网搜索</span>
+                <span className="token-tooltip-value">
+                  ~{formatTokensDetail(tokenData.searchContextTokens)}
                 </span>
               </div>
             )}

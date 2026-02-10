@@ -12,7 +12,8 @@ import {
     sanitizeStoredMessages,
     generateMessageId,
     injectCurrentTimeSystemReminder,
-    buildWebSearchContextBlock
+    buildWebSearchContextBlock,
+    estimateTokens
 } from '@/app/api/chat/utils';
 import {
     metasoSearch,
@@ -400,6 +401,7 @@ export async function POST(req) {
 
                         const searchContextParts = [];
                         const readUrlSet = new Set();
+                        const MAX_READ_PAGES = 10;
                         const maxSearchRounds = 10;
                         for (let round = 0; round < maxSearchRounds && needSearch && nextQuery; round++) {
                             if (clientAborted) break;
@@ -448,11 +450,12 @@ export async function POST(req) {
                             }
 
                             const readerCandidates = Array.isArray(results) ? results.slice(0, 8) : [];
-                            if (readerCandidates.length > 0) {
+                            if (readerCandidates.length > 0 && readUrlSet.size < MAX_READ_PAGES) {
                                 try {
                                     const readerSystem = injectCurrentTimeSystemReminder(
                                         "你是网页全文查看决策器。必须只输出严格 JSON，不要输出任何多余文本。"
                                     );
+                                    const remainingQuota = MAX_READ_PAGES - readUrlSet.size;
                                     const candidateText = readerCandidates
                                         .map((item, idx) => {
                                             const title = typeof item?.title === 'string' ? item.title : '';
@@ -465,47 +468,52 @@ export async function POST(req) {
                                         })
                                         .join("\n\n");
                                     const alreadyRead = Array.from(readUrlSet);
-                                    const readerUser = `用户问题：${prompt}\n当前检索词：${nextQuery}\n\n候选结果：\n${candidateText}\n\n已查看过的 URL：\n${alreadyRead.length > 0 ? alreadyRead.join("\n") : "无"}\n\n判断是否需要查看更多正文来提升答案质量。\n- 需要：输出 {"needRead": true, "url": "候选URL"}\n- 不需要：输出 {"needRead": false}`;
+                                    const readerUser = `用户问题：${prompt}\n当前检索词：${nextQuery}\n\n候选结果：\n${candidateText}\n\n已查看过的 URL：\n${alreadyRead.length > 0 ? alreadyRead.join("\n") : "无"}\n\n剩余可查看配额：${remainingQuota} 个网页\n\n判断是否需要查看网页正文来提升答案质量。可以同时选择多个网页（不超过剩余配额）。\n- 需要：输出 {"needRead": true, "urls": ["候选URL1", "候选URL2", ...]}\n- 不需要：输出 {"needRead": false}`;
                                     const readerDecisionText = await runDecisionStream(readerSystem, readerUser);
                                     const readerDecision = parseJsonFromText(readerDecisionText);
-                                    const selectedUrl = typeof readerDecision?.url === 'string'
-                                        ? readerDecision.url.trim()
-                                        : '';
                                     const shouldRead = readerDecision?.needRead === true;
-                                    const selectedItem = readerCandidates.find((item) => item?.url === selectedUrl);
+                                    const selectedUrls = Array.isArray(readerDecision?.urls)
+                                        ? readerDecision.urls.map(u => typeof u === 'string' ? u.trim() : '').filter(Boolean)
+                                        : [];
 
-                                    if (shouldRead && selectedItem && !readUrlSet.has(selectedItem.url)) {
-                                        sendEvent({ type: 'search_reader_start', url: selectedItem.url, title: selectedItem.title });
-                                        try {
-                                            const readerData = await metasoReader(selectedItem.url, { timeoutMs: 20000 });
-                                            const readerContext = buildMetasoReaderContext(
-                                                {
-                                                    title: selectedItem.title,
+                                    if (shouldRead && selectedUrls.length > 0) {
+                                        for (const selectedUrl of selectedUrls) {
+                                            if (readUrlSet.size >= MAX_READ_PAGES) break;
+                                            if (readUrlSet.has(selectedUrl)) continue;
+                                            const selectedItem = readerCandidates.find((item) => item?.url === selectedUrl);
+                                            if (!selectedItem) continue;
+                                            sendEvent({ type: 'search_reader_start', url: selectedItem.url, title: selectedItem.title });
+                                            try {
+                                                const readerData = await metasoReader(selectedItem.url, { timeoutMs: 20000 });
+                                                const readerContext = buildMetasoReaderContext(
+                                                    {
+                                                        title: selectedItem.title,
+                                                        url: selectedItem.url,
+                                                        content: readerData?.content,
+                                                    },
+                                                    { maxContentChars: 10000 }
+                                                );
+                                                if (readerContext) {
+                                                    const readerExcerpt = typeof readerData?.content === 'string'
+                                                        ? readerData.content.slice(0, 800)
+                                                        : "";
+                                                    roundContextBlocks.push(readerContext);
+                                                    readUrlSet.add(selectedItem.url);
+                                                    sendEvent({
+                                                        type: 'search_reader_result',
+                                                        url: selectedItem.url,
+                                                        title: selectedItem.title,
+                                                        excerpt: readerExcerpt
+                                                    });
+                                                }
+                                            } catch (readerError) {
+                                                console.error("Claude web reader failed", {
                                                     url: selectedItem.url,
-                                                    content: readerData?.content,
-                                                },
-                                                { maxContentChars: 10000 }
-                                            );
-                                            if (readerContext) {
-                                                const readerExcerpt = typeof readerData?.content === 'string'
-                                                    ? readerData.content.slice(0, 800)
-                                                    : "";
-                                                roundContextBlocks.push(readerContext);
-                                                readUrlSet.add(selectedItem.url);
-                                                sendEvent({
-                                                    type: 'search_reader_result',
-                                                    url: selectedItem.url,
-                                                    title: selectedItem.title,
-                                                    excerpt: readerExcerpt
+                                                    message: readerError?.message,
+                                                    name: readerError?.name
                                                 });
+                                                sendEvent({ type: 'search_reader_error', url: selectedItem.url, title: selectedItem.title });
                                             }
-                                        } catch (readerError) {
-                                            console.error("Claude web reader failed", {
-                                                url: selectedItem.url,
-                                                message: readerError?.message,
-                                                name: readerError?.name
-                                            });
-                                            sendEvent({ type: 'search_reader_error', url: selectedItem.url, title: selectedItem.title });
                                         }
                                     }
                                 } catch (readerDecisionError) {
@@ -556,6 +564,9 @@ export async function POST(req) {
                     const searchContextSection = searchContextText
                         ? buildWebSearchContextBlock(searchContextText)
                         : "";
+                    if (searchContextSection) {
+                        sendEvent({ type: 'search_context_tokens', tokens: estimateTokens(searchContextSection) });
+                    }
                     const systemPrompt = injectCurrentTimeSystemReminder(
                         `${baseSystemPromptText}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`
                     );

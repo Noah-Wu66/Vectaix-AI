@@ -421,6 +421,7 @@ export async function runChat({
     let citations = null;
     let searchError = null;
     let streamErrorMessage = null; // 流内错误消息（来自 stream_error 事件）
+    let searchContextTokens = 0; // 联网搜索注入的上下文 token 数
     let thinkingTimeline = [];
     let timelineStepSeq = 0;
     let lastTextLogLen = 0;
@@ -567,6 +568,7 @@ export async function runChat({
           thinkingTimeline,
           citations,
           searchError,
+          searchContextTokens: searchContextTokens || undefined,
         };
         if (
           base.content === nextMsg.content &&
@@ -578,7 +580,8 @@ export async function runChat({
           base.searchResults === nextMsg.searchResults &&
           base.thinkingTimeline === nextMsg.thinkingTimeline &&
           base.citations === nextMsg.citations &&
-          base.searchError === nextMsg.searchError
+          base.searchError === nextMsg.searchError &&
+          base.searchContextTokens === nextMsg.searchContextTokens
         ) {
           return prev;
         }
@@ -783,6 +786,9 @@ export async function runChat({
           console.log(debugTag, "citations", {
             count: Array.isArray(citations) ? citations.length : 0,
           });
+        } else if (data.type === "search_context_tokens") {
+          const tokens = typeof data.tokens === "number" ? data.tokens : 0;
+          if (tokens > 0) searchContextTokens = tokens;
         } else if (data.type === "stream_error") {
           // 流内错误：记录错误信息，后续在主循环中处理
           streamErrorMessage = typeof data.message === "string" ? data.message : "Unknown stream error";
