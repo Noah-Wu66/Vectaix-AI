@@ -396,6 +396,7 @@ export async function POST(req) {
                             pushCitations(buildMetasoCitations(results));
 
                             const roundContextBlocks = [];
+                            let skipEnoughCheck = false;
                             const contextBlock = buildMetasoContext(results);
                             if (contextBlock) {
                                 roundContextBlocks.push(contextBlock);
@@ -429,7 +430,8 @@ export async function POST(req) {
                                         : [];
 
                                     if (shouldRead && selectedUrls.length > 0) {
-                                        for (const selectedUrl of selectedUrls) {
+                                        for (let ri = 0; ri < selectedUrls.length; ri++) {
+                                            const selectedUrl = selectedUrls[ri];
                                             if (readUrlSet.size >= MAX_READ_PAGES) break;
                                             if (readUrlSet.has(selectedUrl)) continue;
                                             const selectedItem = readerCandidates.find((item) => item?.url === selectedUrl);
@@ -466,6 +468,34 @@ export async function POST(req) {
                                                 });
                                                 sendEvent({ type: 'search_reader_error', url: selectedItem.url, title: selectedItem.title });
                                             }
+                                            // 读完一个后，如果后面还有待读的，判断是否还需要继续
+                                            const remainingUrls = selectedUrls.slice(ri + 1).filter(u => !readUrlSet.has(u));
+                                            if (remainingUrls.length > 0 && readUrlSet.size < MAX_READ_PAGES) {
+                                                try {
+                                                    const continueSystem = injectCurrentTimeSystemReminder(
+                                                        "你是网页阅读继续决策器。必须只输出严格 JSON，不要输出任何多余文本。"
+                                                    );
+                                                    const readSoFar = Array.from(readUrlSet).join("\n");
+                                                    const pendingList = remainingUrls.join("\n");
+                                                    const continueUser = `用户问题：${prompt}\n\n已查看的网页内容摘要：\n${roundContextBlocks.slice(-3).join("\n\n")}\n\n待查看的 URL：\n${pendingList}\n\n已读过的全部 URL：\n${readSoFar}\n\n根据已获取的信息，判断：\n1. 是否还需要继续查看剩余网页\n2. 当前信息是否已足够回答用户问题，是否还需要下一轮搜索\n\n- 继续查看剩余网页：输出 {"continueRead": true}\n- 不再查看，但信息不够需要换词搜索：输出 {"continueRead": false, "enough": false, "nextQuery": "新的检索词"}\n- 不再查看，信息已足够：输出 {"continueRead": false, "enough": true}`;
+                                                    const continueText = await runDecisionStream(continueSystem, continueUser);
+                                                    const continueDecision = parseJsonFromText(continueText);
+                                                    if (continueDecision?.continueRead === false) {
+                                                        if (continueDecision?.enough === true) {
+                                                            skipEnoughCheck = true;
+                                                            needSearch = false;
+                                                        } else if (continueDecision?.enough === false && typeof continueDecision?.nextQuery === 'string' && continueDecision.nextQuery.trim()) {
+                                                            skipEnoughCheck = true;
+                                                            nextQuery = continueDecision.nextQuery.trim();
+                                                        }
+                                                        break;
+                                                    }
+                                                } catch (continueError) {
+                                                    console.error("OpenAI continue-read decision failed", {
+                                                        message: continueError?.message
+                                                    });
+                                                }
+                                            }
                                         }
                                     }
                                 } catch (readerDecisionError) {
@@ -482,6 +512,8 @@ export async function POST(req) {
                             }
 
                             if (round === maxSearchRounds - 1) break;
+
+                            if (skipEnoughCheck) continue;
 
                             const recentContext = searchContextParts.slice(-2).join("\n\n");
                             const enoughSystem = injectCurrentTimeSystemReminder(
