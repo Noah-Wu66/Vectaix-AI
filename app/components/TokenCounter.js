@@ -40,8 +40,8 @@ function formatTokensDetail(n) {
 }
 
 // SVG 圆环参数
-const SIZE = 28;
-const STROKE = 3;
+const SIZE = 22;
+const STROKE = 2.5;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 

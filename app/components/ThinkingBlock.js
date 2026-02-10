@@ -153,7 +153,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
         ? <Search size={14} className="sm:w-4 sm:h-4" />
         : <Lightbulb size={14} className="sm:w-4 sm:h-4" />;
 
-    const capsuleClass = `thinking-btn inline-flex w-fit max-w-full items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md transition-colors ${isError ? "bg-red-50/80 text-red-600" : "bg-white/60 text-zinc-500 hover:bg-white/90"}`;
+    const capsuleClass = `thinking-btn inline-flex w-fit max-w-full items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md transition-colors ${isError ? "thinking-btn-error bg-red-50/80 text-red-600" : "bg-white/60 text-zinc-500 hover:bg-white/90"}`;
 
     if (step.kind === "thought") {
       const isSynthetic = step.synthetic === true;
@@ -267,12 +267,12 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
           >
             {hasTimeline ? (
               /* 时间线模式：内层各步骤气泡（每个可独立折叠 = 第二层） */
-              <div className="flex flex-col gap-1.5 ml-1 pl-3 border-l-2 border-zinc-200/80 py-1">
+              <div className="thinking-timeline flex flex-col gap-1.5 ml-1 pl-3 border-l-2 border-zinc-200/80 py-1">
                 {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
               </div>
             ) : (
               /* 简单模式：内嵌一个"思考过程"气泡（第二层） */
-              <div className="flex flex-col gap-1.5 ml-1 pl-3 border-l-2 border-zinc-200/80 py-1">
+              <div className="thinking-timeline flex flex-col gap-1.5 ml-1 pl-3 border-l-2 border-zinc-200/80 py-1">
                 <div className="w-full max-w-[760px]">
                   <button
                     type="button"

@@ -454,6 +454,25 @@ h6 {
 
 .dark-mode .thinking-content {
   color: #71717a;
+  background-color: rgba(39, 39, 42, 0.6) !important;
+  border-color: var(--border-color) !important;
+}
+
+.dark-mode .thinking-btn {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.dark-mode .thinking-btn:hover {
+  background-color: #52525b !important;
+}
+
+.dark-mode .thinking-btn-error {
+  background-color: rgba(127, 29, 29, 0.4) !important;
+  color: #fca5a5 !important;
+}
+
+.dark-mode .thinking-timeline {
+  border-color: var(--border-color) !important;
 }
 
 .dark-mode .thinking-prose.prose {

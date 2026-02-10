@@ -9,8 +9,6 @@ function isContextOverflowError(errorMessage) {
     lower.includes("context window") ||
     lower.includes("too many tokens") ||
     lower.includes("token limit") ||
-    lower.includes("too long") ||
-    lower.includes("too large") ||
     lower.includes("max_tokens") ||
     lower.includes("content_length") ||
     lower.includes("request too large") ||
@@ -340,36 +338,37 @@ export async function runChat({
             } catch { /* ignore sync error */ }
           }
 
-          // 用压缩后的摘要重新发送请求
-          return runChat({
-            prompt,
-            historyMessages: compressedMessages,
-            conversationId: newConvId || currentConversationId || conversationId,
-            model,
-            config,
-            historyLimit,
-            currentConversationId: newConvId || currentConversationId,
-            setCurrentConversationId,
-            fetchConversations,
-            setMessages,
-            setLoading,
-            signal,
-            mode,
-            messagesForRegenerate,
-            provider,
-            completionSoundVolume,
-            refusalRestoreMessages,
-            onSensitiveRefusal,
-            onError,
-            userMessageId,
-            _isCompressedRetry: true,
-            _compressedSummary: summary,
-          });
-        } catch (compressErr) {
-          console.error(debugTag, "compression failed", compressErr?.message);
-          // 移除压缩状态消息
-          setMessages((prev) => prev.filter((m) => m.id !== compressMsgId));
-          throw new Error("对话上下文过长，自动压缩失败：" + (compressErr?.message || "未知错误"));
+           // 用压缩后的摘要重新发送请求
+           return runChat({
+             prompt,
+             historyMessages: compressedMessages,
+             conversationId: newConvId || currentConversationId || conversationId,
+             model,
+             config,
+             historyLimit,
+             currentConversationId: newConvId || currentConversationId,
+             setCurrentConversationId,
+             fetchConversations,
+             setMessages,
+             setLoading,
+             signal,
+             mode,
+             messagesForRegenerate,
+             provider,
+             settings,
+             completionSoundVolume,
+             refusalRestoreMessages,
+             onSensitiveRefusal,
+             onError,
+             userMessageId,
+             _isCompressedRetry: true,
+             _compressedSummary: summary,
+           });
+         } catch (compressErr) {
+           console.error(debugTag, "compression failed", compressErr?.message);
+           // 移除压缩状态消息
+           setMessages((prev) => prev.filter((m) => m.id !== compressMsgId));
+           throw new Error("对话上下文过长，自动压缩失败：" + (compressErr?.message || "未知错误"));
         }
       }
 
@@ -1168,6 +1167,7 @@ export async function runChat({
             mode,
             messagesForRegenerate,
             provider,
+            settings,
             completionSoundVolume,
             refusalRestoreMessages,
             onSensitiveRefusal,
