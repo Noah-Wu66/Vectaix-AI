@@ -153,7 +153,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
         ? <Search size={14} className="sm:w-4 sm:h-4" />
         : <Lightbulb size={14} className="sm:w-4 sm:h-4" />;
 
-    const capsuleClass = `thinking-btn inline-flex w-fit max-w-full items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md transition-colors ${isError ? "thinking-btn-error bg-red-50/80 text-red-600" : "bg-white/60 text-zinc-500 hover:bg-white/90"}`;
+    const capsuleClass = `inline-flex w-fit max-w-full items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium py-0.5 transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`;
 
     if (step.kind === "thought") {
       const isSynthetic = step.synthetic === true;
@@ -280,7 +280,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
                       if (!safeThought) return;
                       setExpandedTimelineId((prev) => prev === "__simple__" ? null : "__simple__");
                     }}
-                    className={`thinking-btn inline-flex w-fit max-w-full items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-md transition-colors bg-white/60 text-zinc-500 hover:bg-white/90 ${safeThought ? "cursor-pointer" : "cursor-default"}`}
+                    className={`inline-flex w-fit max-w-full items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium py-0.5 transition-colors text-zinc-500 ${safeThought ? "cursor-pointer" : "cursor-default"}`}
                   >
                     <Lightbulb size={14} className="sm:w-4 sm:h-4" />
                     <span>{isStreaming ? "思考中" : "思考过程"}</span>
