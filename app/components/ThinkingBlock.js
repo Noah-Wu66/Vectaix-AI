@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, ChevronDown, ChevronUp, Lightbulb, Search } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Lightbulb, Search, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 
 function normalizeTimeline(timeline) {
@@ -111,25 +111,11 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     }
   }, [safeBodyText]);
 
-  // ── 外层标题文本 ──
-  const headerText = (() => {
-    if (isSearching) {
-      if (activeReaderStep) {
-        const target = activeReaderStep.title || activeReaderStep.url;
-        return target ? `查看网页中：${target}` : "查看网页中";
-      }
-      return searchQuery ? `联网处理中：${searchQuery}` : "联网处理中";
-    }
-    if (isStreaming) return "思考中";
-    return "执行过程";
-  })();
+  // ── 外层标题文本（始终固定） ──
+  const headerText = "执行过程";
 
-  // ── 外层图标 ──
-  const headerIcon = (() => {
-    if (activeReaderStep) return <BookOpen size={16} className="sm:w-5 sm:h-5" />;
-    if (isSearching) return <Search size={16} className="sm:w-5 sm:h-5" />;
-    return <Lightbulb size={16} className="sm:w-5 sm:h-5" />;
-  })();
+  // ── 外层图标（始终固定） ──
+  const headerIcon = <Zap size={16} className="sm:w-5 sm:h-5" />;
 
   // ── 渲染时间线内的单个步骤（第二层折叠项）──
   const renderTimelineStep = (step, idx) => {
