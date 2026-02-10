@@ -47,6 +47,8 @@ export default function Markdown({
 }) {
   // 使用 ref 记住上一次的 enableHighlight 值，避免重复触发
   const prevEnableRef = useRef(enableHighlight);
+  const prevStreamKeyRef = useRef(streamKey);
+  const lastPulseAtRef = useRef(0);
   const [actualHighlight, setActualHighlight] = useState(enableHighlight);
   const [streamPulse, setStreamPulse] = useState(false);
 
@@ -64,13 +66,28 @@ export default function Markdown({
 
   useEffect(() => {
     if (!streaming) {
+      prevStreamKeyRef.current = streamKey;
+      lastPulseAtRef.current = 0;
       setStreamPulse(false);
       return;
     }
 
+    const prevKey = Number.isFinite(prevStreamKeyRef.current) ? prevStreamKeyRef.current : 0;
+    const nextKey = Number.isFinite(streamKey) ? streamKey : 0;
+    const delta = Math.max(0, nextKey - prevKey);
+    prevStreamKeyRef.current = nextKey;
+
+    if (delta <= 0) return;
+
+    const now = Date.now();
+    const elapsed = now - lastPulseAtRef.current;
+    const shouldPulse = delta >= 16 || elapsed >= 360;
+    if (!shouldPulse) return;
+    lastPulseAtRef.current = now;
+
     setStreamPulse(false);
     const rafId = requestAnimationFrame(() => setStreamPulse(true));
-    const timer = setTimeout(() => setStreamPulse(false), 260);
+    const timer = setTimeout(() => setStreamPulse(false), 420);
     return () => {
       cancelAnimationFrame(rafId);
       clearTimeout(timer);

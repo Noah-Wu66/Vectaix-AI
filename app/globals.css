@@ -537,8 +537,8 @@ h6 {
 
 @keyframes streamTailPulse {
   from {
-    opacity: 0.9;
-    transform: translateY(2px);
+    opacity: 0.55;
+    transform: translateY(3px);
   }
 
   to {
@@ -558,24 +558,24 @@ h6 {
   left: 0;
   right: 0;
   bottom: -1px;
-  height: 1.8em;
+  height: 2.2em;
   pointer-events: none;
   z-index: 2;
   opacity: 0;
   background: linear-gradient(180deg,
       rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.14) 42%,
-      rgba(255, 255, 255, 0.28) 100%);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  animation: streamTailPulse 260ms ease-out forwards;
+      rgba(255, 255, 255, 0.08) 45%,
+      rgba(255, 255, 255, 0.18) 100%);
+  backdrop-filter: blur(1.2px);
+  -webkit-backdrop-filter: blur(1.2px);
+  animation: streamTailPulse 420ms cubic-bezier(0.2, 0.72, 0.2, 1) forwards;
 }
 
 .dark-mode .stream-flow-pulse::after {
   background: linear-gradient(180deg,
       rgba(24, 24, 27, 0) 0%,
-      rgba(24, 24, 27, 0.16) 42%,
-      rgba(24, 24, 27, 0.32) 100%);
+      rgba(24, 24, 27, 0.1) 45%,
+      rgba(24, 24, 27, 0.22) 100%);
 }
 
 /* Mobile responsive adjustments */
