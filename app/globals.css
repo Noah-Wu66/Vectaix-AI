@@ -537,8 +537,8 @@ h6 {
 
 @keyframes streamTailPulse {
   from {
-    opacity: 0.55;
-    transform: translateY(3px);
+    opacity: 0.48;
+    transform: translateY(6px);
   }
 
   to {
@@ -568,7 +568,7 @@ h6 {
       rgba(255, 255, 255, 0.18) 100%);
   backdrop-filter: blur(1.2px);
   -webkit-backdrop-filter: blur(1.2px);
-  animation: streamTailPulse 420ms cubic-bezier(0.2, 0.72, 0.2, 1) forwards;
+  animation: streamTailPulse 680ms cubic-bezier(0.16, 0.84, 0.22, 1) forwards;
 }
 
 .dark-mode .stream-flow-pulse::after {
