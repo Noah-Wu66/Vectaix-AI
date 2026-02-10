@@ -238,7 +238,6 @@ export async function runChat({
 
   setLoading(true);
   let streamMsgId = modelMessageId;
-  let simulatedStreamTimer = null;
   const debugTag = "[chat-stream]";
   const logProgressStep = 500;
 
@@ -527,10 +526,6 @@ export async function runChat({
       }
     }, timeoutMs);
 
-    // 模拟流式输出：控制文本逐步显示
-    const SIMULATED_STREAM_INTERVAL = 8; // 每8ms显示一批字符
-    const SIMULATED_STREAM_BATCH = 3; // 每批显示3个字符
-
     const flushStreamingMessage = () => {
       flushScheduled = false;
       setMessages((prev) => {
@@ -599,28 +594,6 @@ export async function runChat({
       else setTimeout(flushStreamingMessage, 0);
     };
 
-    // 启动模拟流式输出定时器
-    const startSimulatedStream = () => {
-      if (simulatedStreamTimer) return;
-      simulatedStreamTimer = setInterval(() => {
-        // 检查是否已中止，如果已中止则立即停止定时器
-        if (signal?.aborted) {
-          clearInterval(simulatedStreamTimer);
-          simulatedStreamTimer = null;
-          return;
-        }
-        if (displayedText.length < fullText.length) {
-          const remaining = fullText.length - displayedText.length;
-          const batchSize = Math.min(SIMULATED_STREAM_BATCH, remaining);
-          displayedText = fullText.slice(0, displayedText.length + batchSize);
-          scheduleFlush();
-        } else if (sawDone && displayedText.length >= fullText.length) {
-          clearInterval(simulatedStreamTimer);
-          simulatedStreamTimer = null;
-        }
-      }, SIMULATED_STREAM_INTERVAL);
-    };
-
     const applyEventPayload = (payload) => {
       const p = payload.trim();
       if (!p) return;
@@ -652,6 +625,7 @@ export async function runChat({
         } else if (data.type === "text") {
           const delta = typeof data.content === "string" ? data.content : "";
           fullText += delta;
+          displayedText = fullText;
           if (fullText.length === delta.length) {
             console.log(debugTag, "text start", { len: fullText.length });
           } else if (fullText.length - lastTextLogLen >= logProgressStep) {
@@ -664,8 +638,7 @@ export async function runChat({
             closeStreamingThoughtSteps();
           }
           isSearching = false;
-          // 启动模拟流式输出
-          startSimulatedStream();
+          scheduleFlush();
         } else if (data.type === "search_start") {
           isSearching = true;
           console.log(debugTag, "search start", { query: data.query });
@@ -848,6 +821,8 @@ export async function runChat({
     // flush TextDecoder / 最后一段 buffer（避免最后一个事件未以空行结尾时被漏掉）
     buffer += decoder.decode();
     consumeSseBuffer(true);
+    displayedText = fullText;
+    flushStreamingMessage();
     console.log(debugTag, "stream finished", {
       sawDone,
       fullTextLen: fullText.length,
@@ -865,51 +840,6 @@ export async function runChat({
       }
       throw new Error(streamErrorMessage);
     }
-
-    // 等待模拟流式输出完成
-    const waitForSimulatedStream = () => {
-      return new Promise((resolve) => {
-        const checkComplete = () => {
-          // 如果已中止，立即完成
-          if (signal?.aborted) {
-            if (simulatedStreamTimer) {
-              clearInterval(simulatedStreamTimer);
-              simulatedStreamTimer = null;
-            }
-            resolve();
-            return;
-          }
-          if (displayedText.length >= fullText.length) {
-            if (simulatedStreamTimer) {
-              clearInterval(simulatedStreamTimer);
-              simulatedStreamTimer = null;
-            }
-            // 确保显示完整内容
-            displayedText = fullText;
-            flushStreamingMessage();
-            resolve();
-          } else {
-            setTimeout(checkComplete, 20);
-          }
-        };
-        // 如果已中止、没有内容或者没有启动定时器，直接完成
-        if (signal?.aborted || fullText.length === 0 || !simulatedStreamTimer) {
-          if (simulatedStreamTimer) {
-            clearInterval(simulatedStreamTimer);
-            simulatedStreamTimer = null;
-          }
-          if (!signal?.aborted) {
-            displayedText = fullText;
-            flushStreamingMessage();
-          }
-          resolve();
-        } else {
-          checkComplete();
-        }
-      });
-    };
-
-    await waitForSimulatedStream();
 
     const isGeminiRefusal =
       provider === "gemini" &&
@@ -1245,11 +1175,6 @@ export async function runChat({
       streamMsgId = null;
     }
   } finally {
-    // 清理定时器
-    if (simulatedStreamTimer) {
-      clearInterval(simulatedStreamTimer);
-      simulatedStreamTimer = null;
-    }
     if (streamMsgId !== null) {
       setMessages((prev) =>
         prev.map((msg) =>

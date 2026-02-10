@@ -439,7 +439,12 @@ export default function MessageList({
                                       {part.text}
                                     </Markdown>
                                   ) : (
-                                    <Markdown key={idx} enableHighlight={!msg.isStreaming}>
+                                    <Markdown
+                                      key={idx}
+                                      enableHighlight={!msg.isStreaming}
+                                      streaming={msg.isStreaming}
+                                      streamKey={part.text.length}
+                                    >
                                       {part.text}
                                     </Markdown>
                                   );
@@ -466,7 +471,13 @@ export default function MessageList({
                             {msg.role === "user" ? (
                               <Markdown enableHighlight={false}>{msg.content}</Markdown>
                             ) : (
-                              <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
+                              <Markdown
+                                enableHighlight={!msg.isStreaming}
+                                streaming={msg.isStreaming}
+                                streamKey={msg.content?.length || 0}
+                              >
+                                {msg.content}
+                              </Markdown>
                             )}
                           </>
                         )}

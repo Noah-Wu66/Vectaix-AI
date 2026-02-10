@@ -38,10 +38,17 @@ if (codeClassIndex >= 0) {
 
 sanitizeSchema.attributes.code = codeAttributes;
 
-export default function Markdown({ children, className = "", enableHighlight = true }) {
+export default function Markdown({
+  children,
+  className = "",
+  enableHighlight = true,
+  streaming = false,
+  streamKey = 0,
+}) {
   // 使用 ref 记住上一次的 enableHighlight 值，避免重复触发
   const prevEnableRef = useRef(enableHighlight);
   const [actualHighlight, setActualHighlight] = useState(enableHighlight);
+  const [streamPulse, setStreamPulse] = useState(false);
 
   useEffect(() => {
     // 只有当从 false -> true 时才延迟启用，避免闪烁
@@ -55,13 +62,31 @@ export default function Markdown({ children, className = "", enableHighlight = t
     prevEnableRef.current = enableHighlight;
   }, [enableHighlight]);
 
+  useEffect(() => {
+    if (!streaming) {
+      setStreamPulse(false);
+      return;
+    }
+
+    setStreamPulse(false);
+    const rafId = requestAnimationFrame(() => setStreamPulse(true));
+    const timer = setTimeout(() => setStreamPulse(false), 340);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timer);
+    };
+  }, [streaming, streamKey]);
+
   // Sanitize first, then render KaTeX/highlight output
   const rehypePlugins = actualHighlight
     ? [[rehypeSanitize, sanitizeSchema], rehypeKatex, rehypeHighlight]
     : [[rehypeSanitize, sanitizeSchema], rehypeKatex];
+
+  const streamClass = streamPulse ? "stream-reveal" : "";
+
   return (
     <div
-      className={`prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none ${className}`}
+      className={`prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none ${streamClass} ${className}`}
     >
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
