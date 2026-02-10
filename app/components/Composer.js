@@ -9,6 +9,7 @@ import {
 import { useToast } from "./ToastProvider";
 import ModelSelector from "./ModelSelector";
 import SettingsMenu from "./SettingsMenu";
+import TokenCounter from "./TokenCounter";
 
 export default function Composer({
   loading,
@@ -16,6 +17,8 @@ export default function Composer({
   isWaitingForAI,
   model,
   onModelChange,
+  messages,
+  contextWindow,
   thinkingLevel,
   setThinkingLevel,
   historyLimit,
@@ -225,6 +228,13 @@ export default function Composer({
             onAddPrompt={onAddPrompt}
             onDeletePrompt={onDeletePrompt}
             onUpdatePrompt={onUpdatePrompt}
+          />
+          <TokenCounter
+            messages={messages}
+            systemPrompts={systemPrompts}
+            activePromptId={activePromptId}
+            historyLimit={historyLimit}
+            contextWindow={contextWindow}
           />
 
           {selectedImages.length > 0 && (

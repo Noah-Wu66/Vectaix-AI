@@ -583,11 +583,7 @@ export async function POST(req) {
                                         if (typeof thinkingLevel === "string" && allowed.has(thinkingLevel)) {
                                             return thinkingLevel;
                                         }
-                                        const v = Number(budgetTokens);
-                                        if (!Number.isFinite(v) || v <= 2000) return "low";
-                                        if (v <= 8000) return "medium";
-                                        if (v <= 32000) return "high";
-                                        return "max";
+                                        return "high";
                                     })()
                                 }
                             }
@@ -676,7 +672,17 @@ export async function POST(req) {
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
-                    controller.error(err);
+                    // 将错误作为 SSE 事件发送给客户端（而非 controller.error），保留原始错误信息
+                    try {
+                        const errorPayload = JSON.stringify({ type: 'stream_error', message: err?.message || 'Unknown error' });
+                        const padding = !paddingSent ? PADDING : '';
+                        paddingSent = true;
+                        controller.enqueue(encoder.encode(`data: ${errorPayload}${padding}\n\n`));
+                        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                        controller.close();
+                    } catch {
+                        controller.error(err);
+                    }
                 } finally {
                     if (heartbeatTimer) {
                         clearInterval(heartbeatTimer);

@@ -8,6 +8,7 @@ import PromptEditorModal from "./PromptEditorModal";
 const OPENAI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 128000];
 const GEMINI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536];
 const CLAUDE_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000];
+const CLAUDE_OPUS_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000];
 const GEMINI_FLASH_THINKING_LEVELS = ["minimal", "low", "medium", "high"];
 const GEMINI_PRO_THINKING_LEVELS = ["low", "high"];
 const CLAUDE_THINKING_LEVELS = ["low", "medium", "high", "max"];
@@ -81,7 +82,7 @@ export default function SettingsMenu({
     }
     if (isClaudeOpus) {
       if (!CLAUDE_THINKING_LEVELS.includes(thinkingLevel)) {
-        setThinkingLevel("medium");
+        setThinkingLevel("high");
       }
       return;
     }
@@ -94,7 +95,7 @@ export default function SettingsMenu({
   }, [model, thinkingLevel, setThinkingLevel]);
 
   useEffect(() => {
-    const options = model?.startsWith("claude-") ? CLAUDE_TOKEN_OPTIONS : maxTokenOptions;
+    const options = isClaudeOpus ? CLAUDE_OPUS_TOKEN_OPTIONS : model?.startsWith("claude-") ? CLAUDE_TOKEN_OPTIONS : maxTokenOptions;
     if (!options.includes(maxTokens)) {
       setMaxTokens(options[options.length - 1]);
     }
@@ -511,18 +512,25 @@ export default function SettingsMenu({
                                 <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                                   最大输出
                                 </label>
-                                <input
-                                  type="range"
-                                  min="0"
-                                  max="6"
-                                  step="1"
-                                  value={Math.max(0, CLAUDE_TOKEN_OPTIONS.indexOf(maxTokens))}
-                                  onChange={(e) => setMaxTokens(CLAUDE_TOKEN_OPTIONS[e.target.value])}
-                                  className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                                />
-                                <span className="text-xs text-right block mt-1 text-zinc-600">
-                                  {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
-                                </span>
+                                {(() => {
+                                  const opts = isClaudeOpus ? CLAUDE_OPUS_TOKEN_OPTIONS : CLAUDE_TOKEN_OPTIONS;
+                                  return (
+                                    <>
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max={opts.length - 1}
+                                        step="1"
+                                        value={Math.max(0, opts.indexOf(maxTokens))}
+                                        onChange={(e) => setMaxTokens(opts[e.target.value])}
+                                        className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                      />
+                                      <span className="text-xs text-right block mt-1 text-zinc-600">
+                                        {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
+                                      </span>
+                                    </>
+                                  );
+                                })()}
                               </div>
                             </>
                           ) : model?.startsWith("gpt-") ? (

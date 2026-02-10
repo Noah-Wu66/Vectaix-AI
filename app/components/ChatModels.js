@@ -5,6 +5,7 @@ export const CHAT_MODELS = [
     shortName: "Flash",
     provider: "gemini",
     privacy: true,
+    contextWindow: 1048576,
   },
   {
     id: "gemini-3-pro-preview",
@@ -12,29 +13,34 @@ export const CHAT_MODELS = [
     shortName: "Pro",
     provider: "gemini",
     privacy: true,
+    contextWindow: 1048576,
   },
   {
     id: "claude-sonnet-4-5-20250929",
     name: "Sonnet",
     shortName: "Sonnet",
     provider: "claude",
+    contextWindow: 200000,
   },
   {
     id: "claude-opus-4-6-20260205",
     name: "Opus",
     shortName: "Opus",
     provider: "claude",
+    contextWindow: 200000,
   },
   {
     id: "gpt-5.2",
     name: "GPT",
     shortName: "GPT",
     provider: "openai",
+    contextWindow: 1048576,
   },
   {
     id: "gpt-5.3-codex",
     name: "Codex",
     shortName: "Codex",
     provider: "openai",
+    contextWindow: 1048576,
   },
 ];

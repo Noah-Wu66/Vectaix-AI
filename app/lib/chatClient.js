@@ -1,3 +1,52 @@
+/**
+ * 判断错误信息是否表示上下文窗口超出
+ */
+function isContextOverflowError(errorMessage) {
+  if (typeof errorMessage !== "string") return false;
+  const lower = errorMessage.toLowerCase();
+  return (
+    lower.includes("context length") ||
+    lower.includes("context window") ||
+    lower.includes("too many tokens") ||
+    lower.includes("token limit") ||
+    lower.includes("too long") ||
+    lower.includes("too large") ||
+    lower.includes("max_tokens") ||
+    lower.includes("content_length") ||
+    lower.includes("request too large") ||
+    lower.includes("prompt is too long") ||
+    lower.includes("maximum context length") ||
+    lower.includes("exceeds the model") ||
+    lower.includes("input is too long") ||
+    lower.includes("resource has been exhausted") ||
+    lower.includes("resource_exhausted") ||
+    // Gemini 特有
+    lower.includes("generate_content_request.contents") ||
+    // Claude 特有
+    lower.includes("input too long") ||
+    // OpenAI 特有
+    lower.includes("maximum context") ||
+    lower.includes("reduce the length")
+  );
+}
+
+/**
+ * 调用压缩 API，将历史消息压缩为摘要
+ */
+async function compressHistory(messages) {
+  const res = await fetch("/api/chat/compress", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || "压缩失败");
+  }
+  const data = await res.json();
+  return data.summary;
+}
+
 export function buildChatConfig({
   model,
   thinkingLevel,
@@ -118,6 +167,9 @@ export async function runChat({
   onSensitiveRefusal,
   onError,
   userMessageId,
+  // 上下文压缩相关
+  _isCompressedRetry = false,
+  _compressedSummary = null,
 }) {
   // 在函数开头声明，确保在整个函数范围内可用
   let newConvId = null;
@@ -150,14 +202,22 @@ export async function runChat({
       source.start(0);
     } catch { }
   };
-  const historyPayload = historyMessages.map((m) => ({
-    role: m.role,
-    content: m.content,
-    image: m.image,
-    images: m.images,
-    mimeType: m.mimeType,
-    parts: m.parts,
-  }));
+  const historyPayload = _isCompressedRetry && _compressedSummary
+    ? [{
+        role: "user",
+        content: `[以下是之前对话的摘要，请基于此继续对话]\n\n${_compressedSummary}`,
+      }, {
+        role: "model",
+        content: "好的，我已了解之前的对话内容，请继续。",
+      }]
+    : historyMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        image: m.image,
+        images: m.images,
+        mimeType: m.mimeType,
+        parts: m.parts,
+      }));
 
   const modelMessageId = generateMessageId();
 
@@ -198,6 +258,121 @@ export async function runChat({
         const errorData = await res.json();
         errorMessage = errorData.error;
       } catch { }
+
+      // 检测上下文超出错误，自动触发压缩重试
+      if (!_isCompressedRetry && isContextOverflowError(errorMessage) && historyMessages.length > 0) {
+        console.log(debugTag, "context overflow detected, compressing history...", {
+          historyLen: historyMessages.length,
+          errorMessage,
+        });
+
+        // 显示压缩中的状态消息
+        const compressMsgId = generateMessageId();
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "model",
+            content: "",
+            type: "text",
+            id: compressMsgId,
+            isStreaming: true,
+            isThinkingStreaming: true,
+            isWaitingFirstChunk: false,
+            thought: "",
+            isSearching: false,
+            searchQuery: null,
+            searchResults: null,
+            thinkingTimeline: [{ id: `timeline_compress_${Date.now()}`, kind: "thought", status: "streaming", content: "上下文已超出模型限制，正在压缩历史对话...", synthetic: false }],
+            citations: null,
+            searchError: null,
+          },
+        ]);
+
+        try {
+          const summary = await compressHistory(historyMessages);
+          console.log(debugTag, "compression done", { summaryLen: summary.length });
+
+          // 构建压缩后的消息列表：摘要消息 + 最近一轮对话
+          const summaryUserMsg = {
+            id: generateMessageId(),
+            role: "user",
+            content: `[以下是之前对话的摘要]\n\n${summary}`,
+            type: "text",
+          };
+          const summaryModelMsg = {
+            id: generateMessageId(),
+            role: "model",
+            content: "好的，我已了解之前的对话内容，请继续。",
+            type: "text",
+          };
+
+          // 替换前端消息列表：摘要 + 最后一条用户消息（如果有）
+          const compressedMessages = [summaryUserMsg, summaryModelMsg];
+
+          // 移除压缩状态消息
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => m.id !== compressMsgId);
+            // 找到最后一条用户消息（当前正在发送的那条）
+            const lastUserMsg = filtered.length > 0 && filtered[filtered.length - 1]?.role === "user"
+              ? filtered[filtered.length - 1]
+              : null;
+            if (lastUserMsg) {
+              return [...compressedMessages, lastUserMsg];
+            }
+            return compressedMessages;
+          });
+
+          // 同步压缩后的消息到数据库
+          const targetConvId = newConvId || currentConversationId;
+          if (targetConvId) {
+            try {
+              const currentMessages = await new Promise((resolve) => {
+                setMessages((prev) => {
+                  resolve(prev);
+                  return prev;
+                });
+              });
+              await fetch(`/api/conversations/${targetConvId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messages: currentMessages }),
+              });
+            } catch { /* ignore sync error */ }
+          }
+
+          // 用压缩后的摘要重新发送请求
+          return runChat({
+            prompt,
+            historyMessages: compressedMessages,
+            conversationId: newConvId || currentConversationId || conversationId,
+            model,
+            config,
+            historyLimit,
+            currentConversationId: newConvId || currentConversationId,
+            setCurrentConversationId,
+            fetchConversations,
+            setMessages,
+            setLoading,
+            signal,
+            mode,
+            messagesForRegenerate,
+            provider,
+            completionSoundVolume,
+            refusalRestoreMessages,
+            onSensitiveRefusal,
+            onError,
+            userMessageId,
+            _isCompressedRetry: true,
+            _compressedSummary: summary,
+          });
+        } catch (compressErr) {
+          console.error(debugTag, "compression failed", compressErr?.message);
+          // 移除压缩状态消息
+          setMessages((prev) => prev.filter((m) => m.id !== compressMsgId));
+          throw new Error("对话上下文过长，自动压缩失败：" + (compressErr?.message || "未知错误"));
+        }
+      }
+
       throw new Error(errorMessage);
     }
 
@@ -246,6 +421,7 @@ export async function runChat({
     let searchResults = null;
     let citations = null;
     let searchError = null;
+    let streamErrorMessage = null; // 流内错误消息（来自 stream_error 事件）
     let thinkingTimeline = [];
     let timelineStepSeq = 0;
     let lastTextLogLen = 0;
@@ -608,6 +784,10 @@ export async function runChat({
           console.log(debugTag, "citations", {
             count: Array.isArray(citations) ? citations.length : 0,
           });
+        } else if (data.type === "stream_error") {
+          // 流内错误：记录错误信息，后续在主循环中处理
+          streamErrorMessage = typeof data.message === "string" ? data.message : "Unknown stream error";
+          console.error(debugTag, "stream_error received", { message: streamErrorMessage });
         }
       } catch {
         const preview = p.length > 200 ? `${p.slice(0, 200)}...` : p;
@@ -668,7 +848,18 @@ export async function runChat({
       fullTextLen: fullText.length,
       fullThoughtLen: fullThought.length,
       timedOut,
+      streamErrorMessage,
     });
+
+    // 检查流内错误（AI API 在流式传输过程中报错，如上下文超出）
+    if (streamErrorMessage && fullText.trim() === "") {
+      // 移除正在流式输出的空消息
+      if (streamMsgId !== null) {
+        setMessages((prev) => prev.filter((msg) => msg.id !== streamMsgId));
+        streamMsgId = null;
+      }
+      throw new Error(streamErrorMessage);
+    }
 
     // 等待模拟流式输出完成
     const waitForSimulatedStream = () => {
@@ -875,9 +1066,127 @@ export async function runChat({
     }
   } catch (err) {
     if (err?.name !== "AbortError") {
+      const errMsg = err?.message;
+
+      // 检测上下文超出错误，自动触发压缩重试（流内错误场景）
+      if (!_isCompressedRetry && isContextOverflowError(errMsg) && historyMessages.length > 0) {
+        console.log(debugTag, "context overflow in stream, compressing history...", {
+          historyLen: historyMessages.length,
+          errorMessage: errMsg,
+        });
+
+        // 移除正在流式输出的消息（如有）
+        if (streamMsgId !== null) {
+          setMessages((prev) => prev.filter((msg) => msg.id !== streamMsgId));
+        }
+
+        // 显示压缩中的状态消息
+        const compressMsgId = generateMessageId();
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "model",
+            content: "",
+            type: "text",
+            id: compressMsgId,
+            isStreaming: true,
+            isThinkingStreaming: true,
+            isWaitingFirstChunk: false,
+            thought: "",
+            isSearching: false,
+            searchQuery: null,
+            searchResults: null,
+            thinkingTimeline: [{ id: `timeline_compress_${Date.now()}`, kind: "thought", status: "streaming", content: "上下文已超出模型限制，正在压缩历史对话...", synthetic: false }],
+            citations: null,
+            searchError: null,
+          },
+        ]);
+
+        try {
+          const summary = await compressHistory(historyMessages);
+          console.log(debugTag, "compression done (stream error path)", { summaryLen: summary.length });
+
+          const summaryUserMsg = {
+            id: generateMessageId(),
+            role: "user",
+            content: `[以下是之前对话的摘要]\n\n${summary}`,
+            type: "text",
+          };
+          const summaryModelMsg = {
+            id: generateMessageId(),
+            role: "model",
+            content: "好的，我已了解之前的对话内容，请继续。",
+            type: "text",
+          };
+
+          const compressedMessages = [summaryUserMsg, summaryModelMsg];
+
+          // 移除压缩状态消息，替换为压缩后的消息
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => m.id !== compressMsgId);
+            const lastUserMsg = filtered.length > 0 && filtered[filtered.length - 1]?.role === "user"
+              ? filtered[filtered.length - 1]
+              : null;
+            if (lastUserMsg) {
+              return [...compressedMessages, lastUserMsg];
+            }
+            return compressedMessages;
+          });
+
+          // 同步压缩后的消息到数据库
+          const targetConvId = newConvId || currentConversationId;
+          if (targetConvId) {
+            try {
+              const currentMessages = await new Promise((resolve) => {
+                setMessages((prev) => {
+                  resolve(prev);
+                  return prev;
+                });
+              });
+              await fetch(`/api/conversations/${targetConvId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messages: currentMessages }),
+              });
+            } catch { /* ignore sync error */ }
+          }
+
+          // 用压缩后的摘要重新发送请求
+          return runChat({
+            prompt,
+            historyMessages: compressedMessages,
+            conversationId: newConvId || currentConversationId || conversationId,
+            model,
+            config,
+            historyLimit,
+            currentConversationId: newConvId || currentConversationId,
+            setCurrentConversationId,
+            fetchConversations,
+            setMessages,
+            setLoading,
+            signal,
+            mode,
+            messagesForRegenerate,
+            provider,
+            completionSoundVolume,
+            refusalRestoreMessages,
+            onSensitiveRefusal,
+            onError,
+            userMessageId,
+            _isCompressedRetry: true,
+            _compressedSummary: summary,
+          });
+        } catch (compressErr) {
+          console.error(debugTag, "compression failed (stream error path)", compressErr?.message);
+          setMessages((prev) => prev.filter((m) => m.id !== compressMsgId));
+          onError?.("对话上下文过长，自动压缩失败：" + (compressErr?.message || "未知错误"));
+          streamMsgId = null;
+          return;
+        }
+      }
+
       // 根据错误类型给出准确的提示
       let errorMessage;
-      const errMsg = err?.message;
       if (errMsg === "API_TIMEOUT") {
         errorMessage = "AI 响应超时，请稍后重试";
       } else if (errMsg?.includes("Failed to fetch") || errMsg?.includes("NetworkError") || errMsg?.includes("network")) {

@@ -527,3 +527,159 @@ h6 {
     font-size: 0.7rem;
   }
 }
+
+/* ===== Token Counter ===== */
+.token-counter-ring {
+  cursor: default;
+  background: none;
+  border: none;
+  padding: 0;
+  outline: none;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.token-counter-bg-ring {
+  stroke: #e4e4e7;
+}
+
+.dark-mode .token-counter-bg-ring {
+  stroke: #52525b;
+}
+
+/* Tooltip */
+.token-counter-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+  padding: 12px 14px;
+  width: 240px;
+  z-index: 60;
+  pointer-events: none;
+  animation: tokenTooltipIn 0.15s ease-out;
+}
+
+.dark-mode .token-counter-tooltip {
+  background: #27272a;
+  border-color: #3f3f46;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.30), 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes tokenTooltipIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+.token-tooltip-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #18181b;
+  margin-bottom: 8px;
+}
+
+.dark-mode .token-tooltip-header {
+  color: #fafafa;
+}
+
+.token-tooltip-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.token-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.token-tooltip-label {
+  color: #71717a;
+}
+
+.dark-mode .token-tooltip-label {
+  color: #a1a1aa;
+}
+
+.token-tooltip-note {
+  font-size: 10px;
+  color: #a1a1aa;
+  margin-left: 2px;
+}
+
+.dark-mode .token-tooltip-note {
+  color: #71717a;
+}
+
+.token-tooltip-value {
+  color: #3f3f46;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.dark-mode .token-tooltip-value {
+  color: #d4d4d8;
+}
+
+.token-tooltip-divider {
+  height: 1px;
+  background: #e4e4e7;
+  margin: 8px 0;
+}
+
+.dark-mode .token-tooltip-divider {
+  background: #3f3f46;
+}
+
+.token-tooltip-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #18181b;
+}
+
+.dark-mode .token-tooltip-total {
+  color: #fafafa;
+}
+
+.token-tooltip-bar-bg {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: #f4f4f5;
+  overflow: hidden;
+}
+
+.dark-mode .token-tooltip-bar-bg {
+  background: #3f3f46;
+}
+
+.token-tooltip-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease, background-color 0.3s ease;
+  min-width: 1px;
+}
+
+.token-tooltip-pct {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

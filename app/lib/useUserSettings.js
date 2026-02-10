@@ -19,7 +19,7 @@ const DEFAULT_MODEL = "gemini-3-flash-preview";
 const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
   "gemini-3-pro-preview": "high",
-  "claude-opus-4-6-20260205": "medium",
+  "claude-opus-4-6-20260205": "high",
   "gpt-5.2": "medium",
   "gpt-5.3-codex": "medium",
 };
@@ -139,6 +139,13 @@ export function useUserSettings() {
 
   useEffect(() => {
     if (typeof model !== "string") return;
+    if (model.startsWith("claude-opus-4-6")) {
+      if (maxTokens > 128000) {
+        _setMaxTokens(128000);
+        writeLocalSetting(UI_MAX_TOKENS_KEY, "128000");
+      }
+      return;
+    }
     if (model.startsWith("claude-")) {
       if (maxTokens > 64000) {
         _setMaxTokens(64000);

@@ -388,7 +388,8 @@ export default function ChatApp() {
         // 其他参数：使用对话设置，否则使用默认值
         setHistoryLimit(settings.historyLimit);
         const maxTokensValue = settings.maxTokens;
-        const providerLimits = { claude: 64000, openai: 128000, gemini: 65536 };
+        const isOpusConv = typeof conversationModel === "string" && conversationModel.startsWith("claude-opus-4-6");
+        const providerLimits = { claude: isOpusConv ? 128000 : 64000, openai: 128000, gemini: 65536 };
         const maxAllowed = providerLimits[conversationProvider];
         setMaxTokens(Math.min(maxTokensValue, maxAllowed));
         setBudgetTokens(settings.budgetTokens);
@@ -595,6 +596,8 @@ export default function ChatApp() {
             isWaitingForAI: loading && messages.length > 0,
             model,
             onModelChange: requestModelChange,
+            messages,
+            contextWindow: currentModelConfig?.contextWindow,
             thinkingLevel: thinkingLevels?.[model],
             setThinkingLevel: (v) => {
               setThinkingLevels((prev) => ({ ...prev, [model]: v }));
