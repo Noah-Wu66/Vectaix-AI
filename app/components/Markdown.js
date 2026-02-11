@@ -87,7 +87,7 @@ export default function Markdown({
 
     setStreamPulse(false);
     const rafId = requestAnimationFrame(() => setStreamPulse(true));
-    const timer = setTimeout(() => setStreamPulse(false), 600);
+    const timer = setTimeout(() => setStreamPulse(false), 260);
     return () => {
       cancelAnimationFrame(rafId);
       clearTimeout(timer);

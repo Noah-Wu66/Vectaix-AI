@@ -125,6 +125,12 @@ export default function MessageList({
     return false;
   };
 
+  const getStreamLineKey = (text) => {
+    if (typeof text !== "string" || !text) return 0;
+    const newlineCount = (text.match(/\n/g) || []).length;
+    return newlineCount + 1;
+  };
+
   const scrollEditIntoView = () => {
     const el = editTextareaRef.current;
     const container = listRef?.current;
@@ -443,7 +449,7 @@ export default function MessageList({
                                       key={idx}
                                       enableHighlight={!msg.isStreaming}
                                       streaming={msg.isStreaming}
-                                      streamKey={part.text.length}
+                                      streamKey={getStreamLineKey(part.text)}
                                     >
                                       {part.text}
                                     </Markdown>
@@ -474,7 +480,7 @@ export default function MessageList({
                               <Markdown
                                 enableHighlight={!msg.isStreaming}
                                 streaming={msg.isStreaming}
-                                streamKey={msg.content?.length || 0}
+                                streamKey={getStreamLineKey(msg.content)}
                               >
                                 {msg.content}
                               </Markdown>

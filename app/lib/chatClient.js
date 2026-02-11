@@ -595,6 +595,12 @@ export async function runChat({
       else setTimeout(flushStreamingMessage, 0);
     };
 
+    const getRevealTargetLength = () => {
+      if (sawDone) return fullText.length;
+      const lastNewline = fullText.lastIndexOf("\n");
+      return lastNewline >= 0 ? lastNewline + 1 : 0;
+    };
+
     // 渐进式显示控制
     const tickDisplay = () => {
       if (signal?.aborted) {
@@ -602,21 +608,16 @@ export async function runChat({
         return;
       }
 
-      const hasPendingText = displayedText.length < fullText.length;
+      const revealTargetLength = getRevealTargetLength();
+      const hasPendingText = displayedText.length < revealTargetLength;
 
       if (hasPendingText) {
-        const remaining = fullText.length - displayedText.length;
-        const step = Math.min(14, Math.max(4, Math.floor(remaining / 6)));
-        displayedText = fullText.slice(0, displayedText.length + step);
+        displayedText = fullText.slice(0, revealTargetLength);
         scheduleFlush();
       }
 
-      if (displayedText.length < fullText.length) {
-        displayRafId = requestAnimationFrame(tickDisplay);
-      } else {
-        // 已追平当前内容时先停表，等待下一批文本到达后再由 startDisplayTick 重启
-        displayRafId = null;
-      }
+      // 已追平当前可展示内容时先停表，等待下一批文本到达后再由 startDisplayTick 重启
+      displayRafId = null;
     };
 
     const startDisplayTick = () => {
@@ -633,6 +634,7 @@ export async function runChat({
         patchLastRunningStep("search", { status: "done" });
         patchLastRunningStep("reader", { status: "done" });
         closeStreamingThoughtSteps();
+        startDisplayTick();
         console.log(debugTag, "sse done", {
           fullTextLen: fullText.length,
           fullThoughtLen: fullThought.length,
@@ -855,6 +857,13 @@ export async function runChat({
     const waitForDisplay = () => {
       return new Promise((resolve) => {
         const check = () => {
+          if (!displayRafId && displayedText.length < fullText.length) {
+            displayedText = fullText;
+            flushStreamingMessage();
+            resolve();
+            return;
+          }
+
           if (signal?.aborted || displayedText.length >= fullText.length) {
             if (displayRafId) {
               cancelAnimationFrame(displayRafId);
