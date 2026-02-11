@@ -602,17 +602,20 @@ export async function runChat({
         return;
       }
 
-      if (displayedText.length < fullText.length) {
+      const hasPendingText = displayedText.length < fullText.length;
+
+      if (hasPendingText) {
         const remaining = fullText.length - displayedText.length;
         const step = Math.min(14, Math.max(4, Math.floor(remaining / 6)));
         displayedText = fullText.slice(0, displayedText.length + step);
         scheduleFlush();
       }
 
-      if (sawDone && displayedText.length >= fullText.length) {
-        displayRafId = null;
-      } else {
+      if (displayedText.length < fullText.length) {
         displayRafId = requestAnimationFrame(tickDisplay);
+      } else {
+        // 已追平当前内容时先停表，等待下一批文本到达后再由 startDisplayTick 重启
+        displayRafId = null;
       }
     };
 

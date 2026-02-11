@@ -45,6 +45,7 @@ export default function Markdown({
   streaming = false,
   streamKey = 0,
 }) {
+  const STREAM_PULSE_INTERVAL_MS = 120;
   // 使用 ref 记住上一次的 enableHighlight 值，避免重复触发
   const prevEnableRef = useRef(enableHighlight);
   const prevStreamKeyRef = useRef(streamKey);
@@ -81,8 +82,7 @@ export default function Markdown({
 
     const now = Date.now();
     const elapsed = now - lastPulseAtRef.current;
-    const shouldPulse = delta >= 8 || elapsed >= 80;
-    if (!shouldPulse) return;
+    if (elapsed < STREAM_PULSE_INTERVAL_MS) return;
     lastPulseAtRef.current = now;
 
     setStreamPulse(false);

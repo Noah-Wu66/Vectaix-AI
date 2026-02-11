@@ -578,6 +578,15 @@ h6 {
       rgba(24, 24, 27, 0.36) 100%);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .stream-flow-pulse::after {
+    animation: none;
+    opacity: 0;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 /* Mobile responsive adjustments */
 @media (max-width: 640px) {
 
