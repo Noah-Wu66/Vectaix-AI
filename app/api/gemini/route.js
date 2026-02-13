@@ -302,6 +302,7 @@ export async function POST(req) {
                 let fullText = "";
                 let fullThought = "";
                 let citations = [];
+                let searchContextTokens = 0;
                 const seenUrls = new Set();
                 try {
                     const sendHeartbeat = () => {
@@ -385,7 +386,8 @@ export async function POST(req) {
                         ? buildWebSearchContextBlock(searchContextText)
                         : "";
                     if (searchContextSection) {
-                        sendEvent({ type: 'search_context_tokens', tokens: estimateTokens(searchContextSection) });
+                        searchContextTokens = estimateTokens(searchContextSection);
+                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
                     const finalSystemText = `${baseSystemText}${webSearchGuide}${searchContextSection}`;
                     const finalConfig = {
@@ -440,6 +442,7 @@ export async function POST(req) {
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
+                            searchContextTokens: searchContextTokens || null,
                             type: 'text',
                             parts: [{ text: fullText }]
                         });

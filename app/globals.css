@@ -535,33 +535,6 @@ h6 {
   animation: dotBounce 1.2s ease-in-out infinite;
 }
 
-@keyframes streamLineFade {
-  from {
-    opacity: 0.35;
-    transform: translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.stream-flow {
-  position: relative;
-  isolation: isolate;
-}
-
-.stream-flow.stream-flow-pulse {
-  animation: streamLineFade 240ms ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .stream-flow.stream-flow-pulse {
-    animation: none;
-  }
-}
-
 /* Mobile responsive adjustments */
 @media (max-width: 640px) {
 

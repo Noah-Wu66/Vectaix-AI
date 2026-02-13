@@ -238,7 +238,6 @@ export async function runChat({
 
   setLoading(true);
   let streamMsgId = modelMessageId;
-  let displayRafId = null;
   const debugTag = "[chat-stream]";
   const logProgressStep = 500;
 
@@ -595,36 +594,6 @@ export async function runChat({
       else setTimeout(flushStreamingMessage, 0);
     };
 
-    const getRevealTargetLength = () => {
-      if (sawDone) return fullText.length;
-      const lastNewline = fullText.lastIndexOf("\n");
-      return lastNewline >= 0 ? lastNewline + 1 : 0;
-    };
-
-    // 渐进式显示控制
-    const tickDisplay = () => {
-      if (signal?.aborted) {
-        displayRafId = null;
-        return;
-      }
-
-      const revealTargetLength = getRevealTargetLength();
-      const hasPendingText = displayedText.length < revealTargetLength;
-
-      if (hasPendingText) {
-        displayedText = fullText.slice(0, revealTargetLength);
-        scheduleFlush();
-      }
-
-      // 已追平当前可展示内容时先停表，等待下一批文本到达后再由 startDisplayTick 重启
-      displayRafId = null;
-    };
-
-    const startDisplayTick = () => {
-      if (displayRafId) return;
-      displayRafId = requestAnimationFrame(tickDisplay);
-    };
-
     const applyEventPayload = (payload) => {
       const p = payload.trim();
       if (!p) return;
@@ -634,7 +603,8 @@ export async function runChat({
         patchLastRunningStep("search", { status: "done" });
         patchLastRunningStep("reader", { status: "done" });
         closeStreamingThoughtSteps();
-        startDisplayTick();
+        displayedText = fullText;
+        scheduleFlush();
         console.log(debugTag, "sse done", {
           fullTextLen: fullText.length,
           fullThoughtLen: fullThought.length,
@@ -657,6 +627,7 @@ export async function runChat({
         } else if (data.type === "text") {
           const delta = typeof data.content === "string" ? data.content : "";
           fullText += delta;
+          displayedText = fullText;
           if (fullText.length === delta.length) {
             console.log(debugTag, "text start", { len: fullText.length });
           } else if (fullText.length - lastTextLogLen >= logProgressStep) {
@@ -669,7 +640,7 @@ export async function runChat({
             closeStreamingThoughtSteps();
           }
           isSearching = false;
-          startDisplayTick();
+          scheduleFlush();
         } else if (data.type === "search_start") {
           isSearching = true;
           console.log(debugTag, "search start", { query: data.query });
@@ -852,35 +823,8 @@ export async function runChat({
     // flush TextDecoder / 最后一段 buffer（避免最后一个事件未以空行结尾时被漏掉）
     buffer += decoder.decode();
     consumeSseBuffer(true);
-
-    // 等待显示追上
-    const waitForDisplay = () => {
-      return new Promise((resolve) => {
-        const check = () => {
-          if (!displayRafId && displayedText.length < fullText.length) {
-            displayedText = fullText;
-            flushStreamingMessage();
-            resolve();
-            return;
-          }
-
-          if (signal?.aborted || displayedText.length >= fullText.length) {
-            if (displayRafId) {
-              cancelAnimationFrame(displayRafId);
-              displayRafId = null;
-            }
-            displayedText = fullText;
-            flushStreamingMessage();
-            resolve();
-          } else {
-            requestAnimationFrame(check);
-          }
-        };
-        check();
-      });
-    };
-
-    await waitForDisplay();
+    displayedText = fullText;
+    flushStreamingMessage();
 
     console.log(debugTag, "stream finished", {
       sawDone,
@@ -1234,10 +1178,6 @@ export async function runChat({
       streamMsgId = null;
     }
   } finally {
-    if (displayRafId) {
-      cancelAnimationFrame(displayRafId);
-      displayRafId = null;
-    }
     if (streamMsgId !== null) {
       setMessages((prev) =>
         prev.map((msg) =>

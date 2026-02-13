@@ -42,16 +42,10 @@ export default function Markdown({
   children,
   className = "",
   enableHighlight = true,
-  streaming = false,
-  streamKey = 0,
 }) {
-  const STREAM_PULSE_INTERVAL_MS = 120;
   // 使用 ref 记住上一次的 enableHighlight 值，避免重复触发
   const prevEnableRef = useRef(enableHighlight);
-  const prevStreamKeyRef = useRef(streamKey);
-  const lastPulseAtRef = useRef(0);
   const [actualHighlight, setActualHighlight] = useState(enableHighlight);
-  const [streamPulse, setStreamPulse] = useState(false);
 
   useEffect(() => {
     // 只有当从 false -> true 时才延迟启用，避免闪烁
@@ -65,47 +59,14 @@ export default function Markdown({
     prevEnableRef.current = enableHighlight;
   }, [enableHighlight]);
 
-  useEffect(() => {
-    if (!streaming) {
-      prevStreamKeyRef.current = streamKey;
-      lastPulseAtRef.current = 0;
-      setStreamPulse(false);
-      return;
-    }
-
-    const prevKey = Number.isFinite(prevStreamKeyRef.current) ? prevStreamKeyRef.current : 0;
-    const nextKey = Number.isFinite(streamKey) ? streamKey : 0;
-    const delta = Math.max(0, nextKey - prevKey);
-    prevStreamKeyRef.current = nextKey;
-
-    if (delta <= 0) return;
-
-    const now = Date.now();
-    const elapsed = now - lastPulseAtRef.current;
-    if (elapsed < STREAM_PULSE_INTERVAL_MS) return;
-    lastPulseAtRef.current = now;
-
-    setStreamPulse(false);
-    const rafId = requestAnimationFrame(() => setStreamPulse(true));
-    const timer = setTimeout(() => setStreamPulse(false), 260);
-    return () => {
-      cancelAnimationFrame(rafId);
-      clearTimeout(timer);
-    };
-  }, [streaming, streamKey]);
-
   // Sanitize first, then render KaTeX/highlight output
   const rehypePlugins = actualHighlight
     ? [[rehypeSanitize, sanitizeSchema], rehypeKatex, rehypeHighlight]
     : [[rehypeSanitize, sanitizeSchema], rehypeKatex];
 
-  const streamClass = streaming
-    ? `stream-flow ${streamPulse ? "stream-flow-pulse" : ""}`
-    : "";
-
   return (
     <div
-      className={`prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none ${streamClass} ${className}`}
+      className={`prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none ${className}`}
     >
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}

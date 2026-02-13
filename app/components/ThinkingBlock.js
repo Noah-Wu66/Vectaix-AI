@@ -185,8 +185,6 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
             <div className="thinking-content mt-1 bg-white/60 border border-zinc-200/60 rounded-xl p-2.5 overflow-y-auto max-h-[200px] w-full max-w-[760px] text-xs text-zinc-400" ref={containerRef}>
               <Markdown
                 enableHighlight={step.status !== "streaming"}
-                streaming={step.status === "streaming"}
-                streamKey={step.content?.length || 0}
                 className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
               >
                 {step.content}
@@ -299,8 +297,6 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
                     >
                       <Markdown
                         enableHighlight={!isStreaming}
-                        streaming={isStreaming}
-                        streamKey={safeThought.length}
                         className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
                       >
                         {safeThought}
