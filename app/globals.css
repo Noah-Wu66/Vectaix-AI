@@ -706,3 +706,237 @@ h6 {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* ===== Additional Dark Mode Overrides ===== */
+
+/* bg-zinc-200 */
+.dark-mode .bg-zinc-200 {
+  background-color: #52525b !important;
+}
+
+/* hover backgrounds */
+.dark-mode .hover\:bg-zinc-50:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.dark-mode .hover\:bg-zinc-100:hover {
+  background-color: #52525b !important;
+}
+
+.dark-mode .hover\:bg-zinc-200:hover {
+  background-color: #71717a !important;
+}
+
+/* text-zinc-300 */
+.dark-mode .text-zinc-300 {
+  color: #a1a1aa !important;
+}
+
+/* border-zinc-300 */
+.dark-mode .border-zinc-300 {
+  border-color: #52525b !important;
+}
+
+/* Shadows in dark mode */
+.dark-mode .shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark-mode .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark-mode .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark-mode .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -2px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* ===== Auth Modal Dark Mode ===== */
+.dark-mode .auth-modal {
+  background-color: var(--bg-secondary);
+}
+
+.dark-mode .auth-modal .text-zinc-900 {
+  color: var(--text-primary) !important;
+}
+
+.dark-mode .auth-input {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.dark-mode .auth-input:focus {
+  border-color: #71717a;
+}
+
+.dark-mode .auth-secondary-btn {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.dark-mode .auth-secondary-btn:hover:not(:disabled) {
+  background-color: #52525b;
+}
+
+.dark-mode .auth-secondary-btn:disabled {
+  background-color: var(--bg-tertiary);
+  opacity: 0.6;
+}
+
+/* ===== Toast Dark Mode ===== */
+.toast-success {
+  background-color: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.toast-error {
+  background-color: #fef2f2;
+  border-color: #fecaca;
+}
+
+.toast-warning {
+  background-color: #fffbeb;
+  border-color: #fde68a;
+}
+
+.toast-info {
+  background-color: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.toast-text {
+  color: var(--text-primary);
+}
+
+.toast-close {
+  color: var(--text-secondary);
+}
+
+.toast-close:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.dark-mode .toast-success {
+  background-color: rgba(6, 78, 59, 0.8);
+  border-color: #065f46;
+}
+
+.dark-mode .toast-error {
+  background-color: rgba(127, 29, 29, 0.8);
+  border-color: #991b1b;
+}
+
+.dark-mode .toast-warning {
+  background-color: rgba(120, 53, 15, 0.8);
+  border-color: #92400e;
+}
+
+.dark-mode .toast-info {
+  background-color: rgba(30, 58, 138, 0.8);
+  border-color: #1e40af;
+}
+
+.dark-mode .toast-text {
+  color: #fafafa;
+}
+
+.dark-mode .toast-close {
+  color: #d4d4d8;
+}
+
+.dark-mode .toast-close:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ===== Message List Privacy Glow ===== */
+.privacy-glow-safe {
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.14), 0 0 12px rgba(16, 185, 129, 0.12);
+}
+
+.privacy-glow-unsafe {
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.14), 0 0 12px rgba(239, 68, 68, 0.12);
+}
+
+.dark-mode .privacy-glow-safe {
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3), 0 0 12px rgba(16, 185, 129, 0.25);
+}
+
+.dark-mode .privacy-glow-unsafe {
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3), 0 0 12px rgba(239, 68, 68, 0.25);
+}
+
+/* ===== Semi-transparent backgrounds ===== */
+.dark-mode .bg-white\/60 {
+  background-color: rgba(39, 39, 42, 0.6) !important;
+}
+
+.dark-mode .border-zinc-200\/60 {
+  border-color: rgba(63, 63, 70, 0.6) !important;
+}
+
+/* ===== Token Counter Progress Colors ===== */
+.token-progress-red {
+  stroke: #ef4444;
+}
+
+.token-progress-orange {
+  stroke: #f97316;
+}
+
+.token-progress-amber {
+  stroke: #f59e0b;
+}
+
+.token-progress-neutral {
+  stroke: #a1a1aa;
+}
+
+.dark-mode .token-progress-neutral {
+  stroke: #71717a;
+}
+
+/* Token Counter Bar Fill */
+.token-progress-red-bar {
+  background-color: #ef4444;
+}
+
+.token-progress-orange-bar {
+  background-color: #f97316;
+}
+
+.token-progress-amber-bar {
+  background-color: #f59e0b;
+}
+
+.token-progress-neutral-bar {
+  background-color: #a1a1aa;
+}
+
+.dark-mode .token-progress-neutral-bar {
+  background-color: #71717a;
+}
+
+/* Token Counter Text */
+.token-progress-red-text {
+  color: #ef4444;
+}
+
+.token-progress-orange-text {
+  color: #f97316;
+}
+
+.token-progress-amber-text {
+  color: #f59e0b;
+}
+
+.token-progress-neutral-text {
+  color: #a1a1aa;
+}
+
+.dark-mode .token-progress-neutral-text {
+  color: #71717a;
+}

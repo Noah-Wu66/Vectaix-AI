@@ -15,8 +15,8 @@ export default function AuthModal({
   loading,
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white p-4">
-      <div className="w-full max-w-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="auth-modal w-full max-w-sm rounded-2xl shadow-xl p-8">
         <div className="flex justify-center mb-8">
           <div className="w-12 h-12 rounded-xl bg-zinc-500 flex items-center justify-center">
             <Sparkles size={24} className="text-white" />
@@ -35,7 +35,7 @@ export default function AuthModal({
             placeholder="邮箱"
             value={email}
             onChange={(e) => onEmailChange(e.target.value)}
-            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors"
+            className="auth-input w-full border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors"
             required
           />
           <input
@@ -43,7 +43,7 @@ export default function AuthModal({
             placeholder="密码"
             value={password}
             onChange={(e) => onPasswordChange(e.target.value)}
-            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors"
+            className="auth-input w-full border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors"
             required
           />
           {authMode === "register" && (
@@ -52,7 +52,7 @@ export default function AuthModal({
               placeholder="确认密码"
               value={confirmPassword}
               onChange={(e) => onConfirmPasswordChange(e.target.value)}
-              className="w-full bg-zinc-50 border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors"
+              className="auth-input w-full border border-zinc-200 rounded-lg p-3 text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400 transition-colors"
               required
             />
           )}
@@ -68,7 +68,7 @@ export default function AuthModal({
                 window.location.href = "/enterprise-login";
               }}
               disabled={loading}
-              className="w-full border border-zinc-200 bg-white hover:bg-zinc-50 disabled:bg-zinc-100 disabled:cursor-not-allowed text-zinc-900 font-medium py-3 rounded-lg transition-colors"
+              className="auth-secondary-btn w-full border border-zinc-200 font-medium py-3 rounded-lg transition-colors"
             >
               企业登录
             </button>
@@ -89,5 +89,3 @@ export default function AuthModal({
     </div>
   );
 }
-
-

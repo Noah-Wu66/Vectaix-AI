@@ -9,35 +9,23 @@ const ToastContext = createContext(null);
 const TOAST_TYPES = {
   success: {
     icon: CheckCircle,
-    bg: "bg-emerald-50 border-emerald-200",
+    bg: "toast-success",
     iconColor: "text-emerald-500",
-    textColor: "text-emerald-800",
-    darkBg: "dark:bg-emerald-900/80 dark:border-emerald-700",
-    darkText: "dark:text-emerald-100",
   },
   error: {
     icon: AlertCircle,
-    bg: "bg-red-50 border-red-200",
+    bg: "toast-error",
     iconColor: "text-red-500",
-    textColor: "text-red-800",
-    darkBg: "dark:bg-red-900/80 dark:border-red-700",
-    darkText: "dark:text-red-100",
   },
   warning: {
     icon: AlertTriangle,
-    bg: "bg-amber-50 border-amber-200",
+    bg: "toast-warning",
     iconColor: "text-amber-500",
-    textColor: "text-amber-800",
-    darkBg: "dark:bg-amber-900/80 dark:border-amber-700",
-    darkText: "dark:text-amber-100",
   },
   info: {
     icon: Info,
-    bg: "bg-blue-50 border-blue-200",
+    bg: "toast-info",
     iconColor: "text-blue-500",
-    textColor: "text-blue-800",
-    darkBg: "dark:bg-blue-900/80 dark:border-blue-700",
-    darkText: "dark:text-blue-100",
   },
 };
 
@@ -59,17 +47,17 @@ function ToastItem({ toast, onDismiss }) {
       transition={{ type: "spring", stiffness: 400, damping: 30 }}
       className={`
         flex items-center gap-2.5 px-4 py-2.5 rounded-full border shadow-lg backdrop-blur-sm
-        ${config.bg} ${config.darkBg}
+        ${config.bg}
         max-w-[90vw] sm:max-w-md
       `}
     >
       <Icon size={18} className={`flex-shrink-0 ${config.iconColor}`} />
-      <span className={`text-sm font-medium ${config.textColor} ${config.darkText} break-words line-clamp-2`}>
+      <span className="toast-text text-sm font-medium break-words line-clamp-2">
         {toast.message}
       </span>
       <button
         onClick={() => onDismiss(toast.id)}
-        className={`flex-shrink-0 p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${config.textColor} ${config.darkText}`}
+        className="toast-close flex-shrink-0 p-0.5 rounded-full transition-colors"
       >
         <X size={14} />
       </button>
@@ -89,12 +77,10 @@ export function ToastProvider({ children }) {
     const newToast = { id, type, message, duration };
 
     setToasts((prev) => {
-      // 保留最新的 MAX_TOASTS - 1 条，加上新的
       const trimmed = prev.slice(-(MAX_TOASTS - 1));
       return [...trimmed, newToast];
     });
 
-    // 自动消失
     if (duration > 0) {
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -115,7 +101,6 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      {/* Toast 容器 - 固定在顶部中央 */}
       <div
         className="fixed z-[9999] top-0 left-0 right-0 flex flex-col items-center gap-2 pointer-events-none"
         style={{ paddingTop: "max(env(safe-area-inset-top, 12px), 12px)" }}

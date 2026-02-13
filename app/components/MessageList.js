@@ -230,9 +230,7 @@ export default function MessageList({
             (typeof msg.content === "string" && msg.content.trim().length > 0)
             || (hasParts && msg.parts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
           const showPrivacyBadge = msg.role === "model";
-          const privacyGlow = isPrivacyModel
-            ? "0 0 0 1px rgba(16, 185, 129, 0.14), 0 0 12px rgba(16, 185, 129, 0.12)"
-            : "0 0 0 1px rgba(239, 68, 68, 0.14), 0 0 12px rgba(239, 68, 68, 0.12)";
+          const privacyGlowClass = isPrivacyModel ? "privacy-glow-safe" : "privacy-glow-unsafe";
           const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline)
             && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader");
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
@@ -407,11 +405,11 @@ export default function MessageList({
                   <>
                     {(hasParts || (typeof msg.content === 'string' && msg.content.trim().length > 0) || msg.image) && (
                       <div
-                        className={`msg-bubble px-4 py-3 ${showPrivacyBadge ? "relative pb-6" : ""} rounded-2xl overflow-hidden break-words ${msg.role === "user"
+                        className={`msg-bubble px-4 py-3 ${showPrivacyBadge ? `relative pb-6 ${privacyGlowClass}` : ""} rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
                           : "bg-zinc-100 text-zinc-800 max-w-full"
                           }`}
-                        style={{ overflowWrap: "anywhere", wordBreak: "break-word", boxShadow: showPrivacyBadge ? privacyGlow : undefined }}
+                        style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
                         onCopy={handleBubbleCopy}
                       >
                         {hasParts ? (

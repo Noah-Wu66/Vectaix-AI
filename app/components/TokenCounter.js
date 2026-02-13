@@ -130,15 +130,15 @@ export default function TokenCounter({
     };
   }, [messages, systemPrompts, activePromptId, historyLimit, contextWindow]);
 
-  // 进度颜色
-  const getProgressColor = useCallback((pct) => {
-    if (pct >= 90) return "#ef4444"; // red
-    if (pct >= 70) return "#f97316"; // orange
-    if (pct >= 50) return "#f59e0b"; // amber
-    return "#a1a1aa"; // zinc-400 (neutral)
+  // 进度颜色类
+  const getProgressClass = useCallback((pct) => {
+    if (pct >= 90) return "token-progress-red";
+    if (pct >= 70) return "token-progress-orange";
+    if (pct >= 50) return "token-progress-amber";
+    return "token-progress-neutral";
   }, []);
 
-  const progressColor = getProgressColor(tokenData.percentage);
+  const progressClass = getProgressClass(tokenData.percentage);
   const strokeDashoffset =
     CIRCUMFERENCE - (tokenData.percentage / 100) * CIRCUMFERENCE;
 
@@ -208,7 +208,7 @@ export default function TokenCounter({
             cy={SIZE / 2}
             r={RADIUS}
             fill="none"
-            stroke={progressColor}
+            className={progressClass}
             strokeWidth={STROKE}
             strokeLinecap="round"
             strokeDasharray={CIRCUMFERENCE}
@@ -281,14 +281,13 @@ export default function TokenCounter({
           {/* 进度条 */}
           <div className="token-tooltip-bar-bg">
             <div
-              className="token-tooltip-bar-fill"
+              className={`token-tooltip-bar-fill ${progressClass}-bar`}
               style={{
                 width: `${Math.max(0.5, tokenData.percentage)}%`,
-                backgroundColor: progressColor,
               }}
             />
           </div>
-          <div className="token-tooltip-pct" style={{ color: progressColor }}>
+          <div className={`token-tooltip-pct ${progressClass}-text`}>
             {tokenData.percentage < 0.1
               ? "<0.1%"
               : tokenData.percentage < 1
