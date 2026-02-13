@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
 
 export default function AuthModal({
   authMode,
@@ -12,6 +12,7 @@ export default function AuthModal({
   onConfirmPasswordChange,
   onSubmit,
   onToggleMode,
+  loading,
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-white p-4">
@@ -55,8 +56,9 @@ export default function AuthModal({
               required
             />
           )}
-          <button className="w-full bg-zinc-600 hover:bg-zinc-500 text-white font-medium py-3 rounded-lg transition-colors">
-            {authMode === "login" ? "登录" : "注册"}
+          <button disabled={loading} className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:bg-zinc-400 disabled:cursor-not-allowed text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+            {loading ? (authMode === "login" ? "登录中..." : "注册中...") : (authMode === "login" ? "登录" : "注册")}
           </button>
 
           {authMode === "login" && (
@@ -65,7 +67,8 @@ export default function AuthModal({
               onClick={() => {
                 window.location.href = "/enterprise-login";
               }}
-              className="w-full border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-900 font-medium py-3 rounded-lg transition-colors"
+              disabled={loading}
+              className="w-full border border-zinc-200 bg-white hover:bg-zinc-50 disabled:bg-zinc-100 disabled:cursor-not-allowed text-zinc-900 font-medium py-3 rounded-lg transition-colors"
             >
               企业登录
             </button>

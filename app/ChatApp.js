@@ -19,6 +19,7 @@ export default function ChatApp() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState(null);
@@ -297,26 +298,32 @@ export default function ChatApp() {
 
   const handleAuth = async (e) => {
     e.preventDefault();
+    if (authLoading) return;
+    setAuthLoading(true);
     const endpoint =
       authMode === "login" ? "/api/auth/login" : "/api/auth/register";
     const body =
       authMode === "login"
         ? { email, password }
         : { email, password, confirmPassword };
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (data.success || data.user) {
-      setUser(data.user);
-      setShowAuthModal(false);
-      toast.success(authMode === "login" ? "登录成功" : "注册成功");
-      fetchConversations();
-      fetchSettings();
-    } else {
-      toast.error(data.error);
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success || data.user) {
+        setUser(data.user);
+        setShowAuthModal(false);
+        toast.success(authMode === "login" ? "登录成功" : "注册成功");
+        fetchConversations();
+        fetchSettings();
+      } else {
+        toast.error(data.error);
+      }
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -541,7 +548,7 @@ export default function ChatApp() {
   return (
     <>
       {showAuthModal ? (
-        <AuthModal authMode={authMode} email={email} password={password} confirmPassword={confirmPassword} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onSubmit={handleAuth} onToggleMode={() => setAuthMode((m) => (m === "login" ? "register" : "login"))} />
+        <AuthModal authMode={authMode} email={email} password={password} confirmPassword={confirmPassword} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onSubmit={handleAuth} onToggleMode={() => setAuthMode((m) => (m === "login" ? "register" : "login"))} loading={authLoading} />
       ) : (
         <ChatLayout
           user={user}
