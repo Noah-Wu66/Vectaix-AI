@@ -1,0 +1,59 @@
+import dbConnect from '@/lib/db';
+import { requireAdmin } from '@/lib/admin';
+import User from '@/models/User';
+import Conversation from '@/models/Conversation';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(req) {
+    const admin = await requireAdmin();
+    if (!admin) {
+        return Response.json({ error: '无权限' }, { status: 403 });
+    }
+
+    await dbConnect();
+
+    const { searchParams } = new URL(req.url);
+    const search = searchParams.get('search')?.trim() || '';
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = 20;
+    const skip = (page - 1) * limit;
+
+    const filter = search ? { email: { $regex: search, $options: 'i' } } : {};
+
+    const [users, total] = await Promise.all([
+        User.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .select('email createdAt premium')
+            .lean(),
+        User.countDocuments(filter),
+    ]);
+
+    // 批量查询每个用户的对话数
+    const userIds = users.map(u => u._id);
+    const convCounts = await Conversation.aggregate([
+        { $match: { userId: { $in: userIds } } },
+        { $group: { _id: '$userId', count: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    for (const c of convCounts) {
+        countMap[c._id.toString()] = c.count;
+    }
+
+    const result = users.map(u => ({
+        id: u._id.toString(),
+        email: u.email,
+        createdAt: u.createdAt,
+        premium: !!u.premium,
+        conversationCount: countMap[u._id.toString()] || 0,
+    }));
+
+    return Response.json({
+        users: result,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+    });
+}

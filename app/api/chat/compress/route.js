@@ -77,10 +77,13 @@ export async function POST(req) {
         }
 
         // 使用 Gemini Flash 进行压缩（速度快、上下文窗口大、成本低）
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const ai = new GoogleGenAI({
+            apiKey: process.env.ZENMUX_API_KEY,
+            httpOptions: { apiVersion: 'v1', baseUrl: 'https://zenmux.ai/api/vertex-ai' }
+        });
 
         const result = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "google/gemini-3-flash-preview",
             contents: [{
                 role: "user",
                 parts: [{ text: `请将以下对话历史压缩成一份摘要：\n\n${conversationText}` }]

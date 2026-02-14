@@ -36,6 +36,7 @@ export function createChatAppActions({
   setEditingImageAction,
   setEditingImage,
   completionSoundVolume,
+  routePreference,
   onSensitiveRefusal,
   onConversationActivity,
 }) {
@@ -174,6 +175,7 @@ export function createChatAppActions({
         maxTokens,
         budgetTokens,
         webSearch: webSearch,
+        routePreference,
       });
 
       await runChat({
@@ -238,6 +240,7 @@ export function createChatAppActions({
       maxTokens,
       budgetTokens,
       webSearch: webSearch,
+      routePreference,
     });
 
     try {
@@ -383,6 +386,7 @@ export function createChatAppActions({
       maxTokens,
       budgetTokens,
       webSearch: webSearch,
+      routePreference,
     });
 
     try {

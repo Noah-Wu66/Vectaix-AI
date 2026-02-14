@@ -113,6 +113,7 @@ export async function POST(req) {
         }
 
         let user = null;
+        let isPremium = false;
         try {
             await dbConnect();
             const userDoc = await User.findById(auth.userId);
@@ -120,6 +121,7 @@ export async function POST(req) {
                 return Response.json({ error: 'Unauthorized' }, { status: 401 });
             }
             user = auth;
+            isPremium = !!userDoc.premium;
         } catch (dbError) {
             console.error("Database connection error:", dbError?.message);
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
@@ -127,13 +129,24 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
 
-        const client = new Anthropic({
-            apiKey: process.env.RIGHTCODE_API_KEY,
-            baseURL: "https://www.right.codes/claude-aws",
-            defaultHeaders: {
-                "anthropic-beta": "extended-cache-ttl-2025-04-11"
-            }
-        });
+        // 高级用户选择优质线路时使用 zenmux 路由，否则使用 right.codes 路由
+        const routePreference = config?.routePreference;
+        const usePremiumRoute = isPremium && routePreference === 'premium';
+        const apiModel = usePremiumRoute
+            ? (model.startsWith('claude-opus-4-6') ? 'anthropic/claude-opus-4.6' : 'anthropic/claude-sonnet-4.5')
+            : model;
+        const client = usePremiumRoute
+            ? new Anthropic({
+                apiKey: process.env.ZENMUX_API_KEY,
+                baseURL: "https://zenmux.ai/api/anthropic",
+            })
+            : new Anthropic({
+                apiKey: process.env.RIGHTCODE_API_KEY,
+                baseURL: "https://www.right.codes/claude-aws",
+                defaultHeaders: {
+                    "anthropic-beta": "extended-cache-ttl-2025-04-11"
+                }
+            });
 
         // 创建新会话
         if (user && !currentConversationId) {
@@ -321,7 +334,7 @@ export async function POST(req) {
                     const runDecisionStream = async (systemText, userText) => {
                         let decisionText = "";
                         const decisionStream = await client.messages.stream({
-                            model: model,
+                            model: apiModel,
                             max_tokens: 512,
                             system: [
                                 {
@@ -388,7 +401,7 @@ export async function POST(req) {
                         `${baseSystemPromptText}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`
                     );
                     const requestParams = {
-                        model: model,
+                        model: apiModel,
                         max_tokens: maxTokens,
                         system: [
                             {

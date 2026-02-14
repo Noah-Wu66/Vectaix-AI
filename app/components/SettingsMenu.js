@@ -13,12 +13,10 @@ const GEMINI_FLASH_THINKING_LEVELS = ["minimal", "low", "medium", "high"];
 const GEMINI_PRO_THINKING_LEVELS = ["low", "high"];
 const CLAUDE_THINKING_LEVELS = ["low", "medium", "high", "max"];
 const GPT_52_THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
-const GPT_53_CODEX_THINKING_LEVELS = ["low", "medium", "high", "xhigh"];
 const GPT_THINKING_LEVEL_LABELS = { none: "无", low: "低", medium: "中", high: "高", xhigh: "超高" };
 const CLAUDE_THINKING_LEVEL_LABELS = { low: "低", medium: "中", high: "高", max: "最大" };
 
-function getOpenAIThinkingLevels(model) {
-  if (model === "gpt-5.3-codex") return GPT_53_CODEX_THINKING_LEVELS;
+function getOpenAIThinkingLevels() {
   return GPT_52_THINKING_LEVELS;
 }
 
@@ -61,7 +59,8 @@ export default function SettingsMenu({
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
   const isClaudeOpus = typeof model === "string" && model.startsWith("claude-opus-4-6");
-  const openAIThinkingLevels = isOpenAIModel ? getOpenAIThinkingLevels(model) : [];
+  const isCouncil = model === "council";
+  const openAIThinkingLevels = isOpenAIModel ? getOpenAIThinkingLevels() : [];
   const maxTokenOptions = isOpenAIModel ? OPENAI_TOKEN_OPTIONS : GEMINI_TOKEN_OPTIONS;
   const activePrompt = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
   const activePromptName = activePrompt?.name;
@@ -293,6 +292,26 @@ export default function SettingsMenu({
               </div>
 
               <div className="space-y-4">
+                {isCouncil ? (
+                  /* Council 模式：仅显示联网开关 */
+                  <div>
+                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                      智能联网
+                    </label>
+                    <button
+                      onClick={() => setWebSearch(!webSearch)}
+                      type="button"
+                      className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                        }`}
+                    >
+                      <Globe size={14} />
+                      {webSearch ? "开" : "关"}
+                    </button>
+                  </div>
+                ) : (
+                <>
                 {model?.startsWith("claude-") || model?.startsWith("gpt-") ? null : (
                   <div>
                     <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
@@ -584,6 +603,8 @@ export default function SettingsMenu({
                     )}
                   </AnimatePresence>
                 </div>
+                </>
+                )}
               </div>
             </motion.div>
           </>

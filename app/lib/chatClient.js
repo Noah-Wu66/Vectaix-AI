@@ -56,12 +56,16 @@ export function buildChatConfig({
   maxTokens,
   budgetTokens,
   webSearch,
+  routePreference,
 }) {
   const cfg = {};
   cfg.thinkingLevel = thinkingLevel;
   cfg.maxTokens = maxTokens;
   cfg.budgetTokens = budgetTokens;
   cfg.webSearch = webSearch === true;
+  if (routePreference === "premium" || routePreference === "economy") {
+    cfg.routePreference = routePreference;
+  }
 
   const activeId = activePromptId == null ? null : String(activePromptId);
   const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
@@ -234,7 +238,7 @@ export async function runChat({
   };
 
   // 根据 provider 选择 API 端点
-  const apiEndpoint = provider === "claude" ? "/api/claude" : provider === "openai" ? "/api/openai" : "/api/gemini";
+  const apiEndpoint = provider === "council" ? "/api/council" : provider === "claude" ? "/api/claude" : provider === "openai" ? "/api/openai" : "/api/gemini";
 
   setLoading(true);
   let streamMsgId = modelMessageId;

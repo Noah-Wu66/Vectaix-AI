@@ -10,25 +10,32 @@ import {
   Palette,
   Type,
   Upload,
+  Users,
   X,
   Camera,
   Volume2,
+  Zap,
 } from "lucide-react";
 
 import { upload } from "@vercel/blob/client";
 import { useToast } from "./ToastProvider";
 import ConfirmModal from "./ConfirmModal";
+import UserManagementModal from "./UserManagementModal";
 
 export default function ProfileModal({
   open,
   onClose,
   user,
+  isAdmin,
+  isPremium,
   themeMode,
   fontSize,
   onThemeModeChange,
   onFontSizeChange,
   completionSoundVolume,
   onCompletionSoundVolumeChange,
+  routePreference,
+  onRoutePreferenceChange,
   avatar,
   onAvatarChange,
 }) {
@@ -36,6 +43,7 @@ export default function ProfileModal({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
   const [showDataManager, setShowDataManager] = useState(false);
+  const [showUserManagement, setShowUserManagement] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState(null);
 
@@ -413,12 +421,55 @@ export default function ProfileModal({
                           <span className="text-xs text-zinc-500 w-12 text-right">
                             {normalizedVolume <= 0 ? "关闭" : `${normalizedVolume}%`}
                           </span>
-                        </div>
+                         </div>
                       </div>
+
+                      {/* 线路切换（仅高级用户） */}
+                      {isPremium && (
+                        <div>
+                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block flex items-center gap-1">
+                            <Zap size={12} /> API 线路
+                          </label>
+                          <div className="flex gap-2">
+                            {[
+                              { id: "premium", label: "优质线路" },
+                              { id: "economy", label: "经济线路" },
+                            ].map((r) => (
+                              <button
+                                key={r.id}
+                                onClick={() => onRoutePreferenceChange?.(r.id)}
+                                type="button"
+                                className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${routePreference === r.id
+                                  ? "bg-zinc-600 text-white border-zinc-600"
+                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                  }`}
+                              >
+                                {r.label}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-xs text-zinc-400 mt-1.5">
+                            优质线路速度更快更稳定，经济线路可节省配额
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* 用户管理（仅管理员可见） */}
+              {isAdmin && (
+                <button
+                  onClick={() => setShowUserManagement(true)}
+                  className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
+                >
+                  <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
+                    <Users size={14} /> 用户管理
+                  </span>
+                  <ChevronDown size={16} className="text-zinc-400" />
+                </button>
+              )}
 
               {/* 数据管理 */}
               <button
@@ -497,6 +548,10 @@ export default function ProfileModal({
       confirmText="确定"
       cancelText="取消"
       danger
+    />
+    <UserManagementModal
+      open={showUserManagement}
+      onClose={() => setShowUserManagement(false)}
     />
   </>
   );

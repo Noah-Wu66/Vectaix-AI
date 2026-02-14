@@ -24,9 +24,7 @@ export const dynamic = 'force-dynamic';
 const OPENAI_BASE_URL = 'https://www.right.codes/codex/v1';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
-const MODEL_REASONING_EFFORTS = {
-    'gpt-5.3-codex': new Set(['low', 'medium', 'high', 'xhigh']),
-};
+const MODEL_REASONING_EFFORTS = {};
 
 
 
@@ -73,6 +71,7 @@ export async function POST(req) {
         }
 
         let user = null;
+        let isPremium = false;
         try {
             await dbConnect();
             const userDoc = await User.findById(auth.userId);
@@ -80,10 +79,18 @@ export async function POST(req) {
                 return Response.json({ error: 'Unauthorized' }, { status: 401 });
             }
             user = auth;
+            isPremium = !!userDoc.premium;
         } catch (dbError) {
             console.error("Database connection error:", dbError?.message);
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
+
+        // 高级用户选择优质线路时使用 zenmux 路由，否则使用 right.codes 路由
+        const routePreference = config?.routePreference;
+        const usePremiumRoute = isPremium && routePreference === 'premium';
+        const apiBaseUrl = usePremiumRoute ? 'https://zenmux.ai/api/v1' : OPENAI_BASE_URL;
+        const apiKey = usePremiumRoute ? process.env.ZENMUX_API_KEY : process.env.RIGHTCODE_API_KEY;
+        const apiModel = usePremiumRoute ? 'openai/gpt-5.2' : model;
 
         let currentConversationId = conversationId;
 
@@ -204,7 +211,7 @@ export async function POST(req) {
         ];
 
         const baseRequestBody = {
-            model: model,
+            model: apiModel,
             stream: true,
             max_output_tokens: maxTokens,
             reasoning: {
@@ -290,11 +297,11 @@ export async function POST(req) {
                             }
                         };
 
-                        const decisionResponse = await fetch(`${OPENAI_BASE_URL}/responses`, {
+                        const decisionResponse = await fetch(`${apiBaseUrl}/responses`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${process.env.RIGHTCODE_API_KEY}`
+                                'Authorization': `Bearer ${apiKey}`
                             },
                             body: JSON.stringify(decisionBody)
                         });
@@ -370,11 +377,11 @@ export async function POST(req) {
                         input: finalInput
                     };
 
-                    const response = await fetch(`${OPENAI_BASE_URL}/responses`, {
+                    const response = await fetch(`${apiBaseUrl}/responses`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${process.env.RIGHTCODE_API_KEY}`
+                            'Authorization': `Bearer ${apiKey}`
                         },
                         body: JSON.stringify(requestBody)
                     });

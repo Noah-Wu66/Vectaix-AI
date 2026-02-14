@@ -1,5 +1,13 @@
 export const CHAT_MODELS = [
   {
+    id: "council",
+    name: "Council",
+    shortName: "Council",
+    provider: "council",
+    premium: true,
+    contextWindow: 200000,
+  },
+  {
     id: "gemini-3-flash-preview",
     name: "Flash",
     shortName: "Flash",
@@ -33,13 +41,6 @@ export const CHAT_MODELS = [
     id: "gpt-5.2",
     name: "GPT",
     shortName: "GPT",
-    provider: "openai",
-    contextWindow: 1048576,
-  },
-  {
-    id: "gpt-5.3-codex",
-    name: "Codex",
-    shortName: "Codex",
     provider: "openai",
     contextWindow: 1048576,
   },

@@ -134,7 +134,14 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
 
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        // 所有用户统一使用 zenmux 路由
+        const apiModel = model === 'gemini-3-pro-preview'
+            ? 'google/gemini-3-pro-preview'
+            : 'google/gemini-3-flash-preview';
+        const ai = new GoogleGenAI({
+            apiKey: process.env.ZENMUX_API_KEY,
+            httpOptions: { apiVersion: 'v1', baseUrl: 'https://zenmux.ai/api/vertex-ai' }
+        });
 
         // 1) Ensure Conversation exists (for logged-in users)
         if (user && !currentConversationId) {
@@ -341,7 +348,7 @@ export async function POST(req) {
                     const runDecisionStream = async (systemText, userText) => {
                         let decisionText = "";
                         const decisionStream = await ai.models.generateContentStream({
-                            model: model,
+                            model: apiModel,
                             contents: [{ role: "user", parts: [{ text: userText }] }],
                             config: {
                                 systemInstruction: { parts: [{ text: systemText }] },
@@ -396,7 +403,7 @@ export async function POST(req) {
                     };
 
                     const streamResult = await ai.models.generateContentStream({
-                        model: model,
+                        model: apiModel,
                         contents: contents,
                         config: finalConfig
                     });

@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { ExternalLink, Globe, X } from "lucide-react";
-import { Gemini, Claude, OpenAI } from "@lobehub/icons";
+import { Gemini, Claude, OpenAI, Perplexity } from "@lobehub/icons";
 
 export function AIAvatar({ model, size = 24 }) {
   const props = { size, shape: "square", style: { borderRadius: 6 } };
+  if (model === "council") {
+    return <Perplexity.Avatar {...props} />;
+  }
   if (model?.startsWith("claude-")) {
     return <Claude.Avatar {...props} />;
   }

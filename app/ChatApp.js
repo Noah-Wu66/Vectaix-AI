@@ -29,7 +29,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
+  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, routePreference, setRoutePreference, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
   useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -182,6 +182,7 @@ export default function ChatApp() {
     setEditingImageAction,
     setEditingImage,
     completionSoundVolume,
+    routePreference,
     onSensitiveRefusal: handleSensitiveRefusal,
     onConversationActivity: (id) => {
       setConversations((prev) => {
@@ -486,7 +487,7 @@ export default function ChatApp() {
 
     // 如果有对话历史且 provider 不同，提示用户需要新建对话
     if (messages.length > 0 && currentProvider && nextProvider && currentProvider !== nextProvider) {
-      const providerNames = { gemini: "Gemini", claude: "Claude", openai: "OpenAI" };
+      const providerNames = { gemini: "Gemini", claude: "Claude", openai: "OpenAI", council: "Council" };
       setConfirmModalConfig({
         title: "切换模型",
         message: `切换到 ${providerNames[nextProvider]} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider]} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,
@@ -552,6 +553,10 @@ export default function ChatApp() {
       ) : (
         <ChatLayout
           user={user}
+          isAdmin={!!user?.isAdmin}
+          isPremium={!!user?.isPremium}
+          routePreference={routePreference}
+          onRoutePreferenceChange={setRoutePreference}
           showProfileModal={showProfileModal}
           onCloseProfile={() => setShowProfileModal(false)}
           themeMode={themeMode}
@@ -603,6 +608,7 @@ export default function ChatApp() {
             isWaitingForAI: loading && messages.length > 0,
             model,
             onModelChange: requestModelChange,
+            isPremium: !!user?.isPremium,
             messages,
             contextWindow: currentModelConfig?.contextWindow,
             thinkingLevel: thinkingLevels?.[model],
