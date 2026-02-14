@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { LogOut, Pencil, Pin, Plus, Trash2, X, Check } from "lucide-react";
 import { Gemini, Claude, OpenAI, Perplexity } from "@lobehub/icons";
+import ConfirmModal from "./ConfirmModal";
 
 function ConversationIcon({ model }) {
   if (model === "council") {
