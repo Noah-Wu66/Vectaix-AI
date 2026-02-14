@@ -16,7 +16,7 @@ export default function AuthModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="auth-modal w-full max-w-sm rounded-2xl shadow-xl p-8">
+      <div className="auth-modal w-full max-w-sm rounded-2xl bg-white shadow-xl p-8">
         <div className="flex justify-center mb-8">
           <div className="w-12 h-12 rounded-xl bg-zinc-500 flex items-center justify-center">
             <Sparkles size={24} className="text-white" />
