@@ -3,6 +3,7 @@ import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
+import { isAdminEmail } from '@/lib/admin';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { encryptMessage, encryptMessages, encryptString } from '@/lib/encryption';
 import {
@@ -121,7 +122,7 @@ export async function POST(req) {
                 return Response.json({ error: 'Unauthorized' }, { status: 401 });
             }
             user = auth;
-            isPremium = !!userDoc.premium;
+            isPremium = !!userDoc.premium || isAdminEmail(auth.email);
         } catch (dbError) {
             console.error("Database connection error:", dbError?.message);
             return Response.json({ error: 'Database connection failed' }, { status: 500 });

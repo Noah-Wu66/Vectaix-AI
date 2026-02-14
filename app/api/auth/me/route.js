@@ -7,18 +7,19 @@ export async function GET() {
     const payload = await getAuthPayload();
     if (!payload) return Response.json({ user: null });
 
-    let isPremium = false;
+    const isAdmin = isAdminEmail(payload.email);
+    let isPremium = isAdmin;
     try {
         await dbConnect();
         const userDoc = await User.findById(payload.userId).select('premium').lean();
-        isPremium = !!userDoc?.premium;
+        if (userDoc?.premium) isPremium = true;
     } catch { /* ignore */ }
 
     return Response.json({
         user: {
             id: payload.userId,
             email: payload.email,
-            isAdmin: isAdminEmail(payload.email),
+            isAdmin,
             isPremium,
         }
     });

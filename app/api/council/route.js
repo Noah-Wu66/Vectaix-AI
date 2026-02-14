@@ -4,6 +4,7 @@ import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
+import { isAdminEmail } from '@/lib/admin';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { encryptMessage, encryptString } from '@/lib/encryption';
 import {
@@ -257,7 +258,7 @@ export async function POST(req) {
             if (!userDoc) {
                 return Response.json({ error: 'Unauthorized' }, { status: 401 });
             }
-            if (!userDoc.premium) {
+            if (!userDoc.premium && !isAdminEmail(auth.email)) {
                 return Response.json({ error: 'Council 模式仅限高级用户使用' }, { status: 403 });
             }
             user = auth;
