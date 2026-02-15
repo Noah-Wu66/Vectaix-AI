@@ -125,7 +125,6 @@ function sanitizeMessage(msg, idx) {
             if (typeof step.title === 'string') entry.title = step.title.slice(0, MAX_TIMELINE_STRING_CHARS);
             if (typeof step.url === 'string') entry.url = step.url.slice(0, MAX_URL_CHARS);
             if (typeof step.message === 'string') entry.message = step.message.slice(0, MAX_TIMELINE_STRING_CHARS);
-            if (typeof step.excerpt === 'string') entry.excerpt = step.excerpt.slice(0, MAX_TIMELINE_STRING_CHARS);
             if (Number.isFinite(step.resultCount)) entry.resultCount = step.resultCount;
             if (step.synthetic === true) entry.synthetic = true;
             timeline.push(entry);

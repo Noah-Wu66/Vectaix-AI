@@ -696,12 +696,10 @@ export async function runChat({
           isSearching = false;
           const title = typeof data.title === "string" ? data.title.trim() : "";
           const url = typeof data.url === "string" ? data.url.trim() : "";
-          const excerpt = typeof data.excerpt === "string" ? data.excerpt.trim() : "";
           const updated = patchLastRunningStep("reader", {
             status: "done",
             title: title || undefined,
             url: url || undefined,
-            excerpt: excerpt || undefined,
           });
           if (!updated) {
             appendTimelineStep({
@@ -709,7 +707,6 @@ export async function runChat({
               status: "done",
               title,
               url,
-              excerpt,
             });
           }
           if (!thinkingEnded) ensureSyntheticThoughtRunning();

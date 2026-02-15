@@ -18,7 +18,6 @@ function normalizeTimeline(timeline) {
       title: typeof step.title === "string" ? step.title : "",
       url: typeof step.url === "string" ? step.url : "",
       message: typeof step.message === "string" ? step.message : "",
-      excerpt: typeof step.excerpt === "string" ? step.excerpt : "",
       resultCount: Number.isFinite(step.resultCount) ? step.resultCount : null,
       synthetic: step.synthetic === true,
     }))
@@ -138,7 +137,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
     const hasDetail = (() => {
       if (step.kind === "thought") return Boolean(step.content);
       if (step.kind === "search") return Boolean(step.query || Number.isFinite(step.resultCount) || (isError && step.message));
-      if (step.kind === "reader") return Boolean((step.title || step.url || step.excerpt) || (isError && step.message));
+      if (step.kind === "reader") return Boolean((step.title || step.url) || (isError && step.message));
       return false;
     })();
     const isThoughtStreaming = step.status === "streaming";
