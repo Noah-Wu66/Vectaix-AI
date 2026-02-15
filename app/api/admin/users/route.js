@@ -26,7 +26,7 @@ export async function GET(req) {
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .select('email createdAt premium')
+            .select('email createdAt')
             .lean(),
         User.countDocuments(filter),
     ]);
@@ -46,7 +46,6 @@ export async function GET(req) {
         id: u._id.toString(),
         email: u.email,
         createdAt: u.createdAt,
-        premium: !!u.premium,
         conversationCount: countMap[u._id.toString()] || 0,
     }));
 

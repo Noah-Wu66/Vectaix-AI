@@ -2,13 +2,10 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp, Shield, ShieldOff } from "lucide-react";
-import { Gemini, Claude, OpenAI, Perplexity } from "@lobehub/icons";
+import { Gemini, Claude, OpenAI } from "@lobehub/icons";
 import { CHAT_MODELS } from "./ChatModels";
 
 function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
-  if (provider === "council") {
-    return <Perplexity.Color size={size} />;
-  }
   if (provider === "gemini") {
     return <Gemini.Color size={size} />;
   }
@@ -24,10 +21,10 @@ function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
   return null;
 }
 
-export default function ModelSelector({ model, onModelChange, isPremium }) {
+export default function ModelSelector({ model, onModelChange }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
-  const visibleModels = isPremium ? CHAT_MODELS : CHAT_MODELS.filter((m) => !m.premium);
-  const currentModel = visibleModels.find((m) => m.id === model);
+  const visibleModels = CHAT_MODELS;
+  const currentModel = CHAT_MODELS.find((m) => m.id === model);
 
   const renderModelGroup = (provider, title) => {
     const models = visibleModels.filter((m) => m.provider === provider);
@@ -50,34 +47,32 @@ export default function ModelSelector({ model, onModelChange, isPremium }) {
           >
             <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
             {m.name}
-            {m.provider !== "council" && (
-              <button
-                className="ml-auto relative group"
-                type="button"
-                tabIndex={0}
-                aria-label={m.privacy ? "您的数据不会被用于训练模型" : "您的数据可能被用于训练模型"}
-                onClick={(e) => e.stopPropagation()}
-                onPointerDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-              >
-                {m.privacy ? (
-                  <Shield
-                    size={14}
-                    className={`${model === m.id ? "text-white/90" : "text-emerald-500"}`}
-                    title="您的数据不会被用于训练模型"
-                  />
-                ) : (
-                  <ShieldOff
-                    size={14}
-                    className={`${model === m.id ? "text-white/90" : "text-red-500"}`}
-                    title="您的数据可能被用于训练模型"
-                  />
-                )}
-                <span className="pointer-events-none absolute right-0 top-full mt-1 w-max max-w-[220px] rounded-md bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100">
-                  {m.privacy ? "您的数据不会被用于训练模型" : "您的数据可能被用于训练模型"}
-                </span>
-              </button>
-            )}
+            <button
+              className="ml-auto relative group"
+              type="button"
+              tabIndex={0}
+              aria-label={m.privacy ? "您的数据不会被用于训练模型" : "您的数据可能被用于训练模型"}
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
+              {m.privacy ? (
+                <Shield
+                  size={14}
+                  className={`${model === m.id ? "text-white/90" : "text-emerald-500"}`}
+                  title="您的数据不会被用于训练模型"
+                />
+              ) : (
+                <ShieldOff
+                  size={14}
+                  className={`${model === m.id ? "text-white/90" : "text-red-500"}`}
+                  title="您的数据可能被用于训练模型"
+                />
+              )}
+              <span className="pointer-events-none absolute right-0 top-full mt-1 w-max max-w-[220px] rounded-md bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100">
+                {m.privacy ? "您的数据不会被用于训练模型" : "您的数据可能被用于训练模型"}
+              </span>
+            </button>
           </button>
         ))}
       </>
@@ -122,12 +117,6 @@ export default function ModelSelector({ model, onModelChange, isPremium }) {
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px]"
             >
-              {isPremium && (
-                <>
-                  {renderModelGroup("council", "Council")}
-                  <div className="my-1.5 border-t border-zinc-200" />
-                </>
-              )}
               {renderModelGroup("gemini", "Gemini")}
               <div className="my-1.5 border-t border-zinc-200" />
               {renderModelGroup("claude", "Claude")}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Crown, KeyRound, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
+import { Copy, KeyRound, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
 import { useToast } from "./ToastProvider";
 import ConfirmModal from "./ConfirmModal";
 
@@ -68,28 +68,6 @@ export default function UserManagementModal({ open, onClose }) {
   const goPage = (p) => {
     setPage(p);
     fetchUsers(p, search.trim());
-  };
-
-  // 切换高级用户
-  const togglePremium = async (user) => {
-    setActionLoading(user.id);
-    try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ premium: !user.premium }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "操作失败");
-      setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, premium: data.premium } : u))
-      );
-      toast.success(data.premium ? "已设为高级用户" : "已取消高级用户");
-    } catch (e) {
-      toast.error(e?.message);
-    } finally {
-      setActionLoading(null);
-    }
   };
 
   // 重置密码
@@ -258,31 +236,12 @@ export default function UserManagementModal({ open, onClose }) {
                         className="flex items-center justify-between bg-zinc-50 rounded-xl p-3 border border-zinc-100 hover:border-zinc-200 transition-colors"
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-zinc-800 truncate flex items-center gap-1.5">
-                            {u.email}
-                            {u.premium && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">
-                                <Crown size={10} /> 高级
-                              </span>
-                            )}
-                          </div>
+                          <div className="text-sm font-medium text-zinc-800 truncate">{u.email}</div>
                           <div className="text-xs text-zinc-400 mt-0.5">
                             注册于 {formatDate(u.createdAt)} · {u.conversationCount} 个对话
                           </div>
                         </div>
                         <div className="flex items-center gap-1 ml-3">
-                          <button
-                            onClick={() => togglePremium(u)}
-                            disabled={actionLoading === u.id}
-                            className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
-                              u.premium
-                                ? "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
-                                : "text-zinc-400 hover:text-amber-500 hover:bg-amber-50"
-                            }`}
-                            title={u.premium ? "取消高级用户" : "设为高级用户"}
-                          >
-                            <Crown size={15} />
-                          </button>
                           <button
                             onClick={() => requestResetPassword(u)}
                             disabled={actionLoading === u.id}

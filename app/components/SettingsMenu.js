@@ -59,7 +59,6 @@ export default function SettingsMenu({
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
   const isClaudeOpus = typeof model === "string" && model.startsWith("claude-opus-4-6");
-  const isCouncil = model === "council";
   const openAIThinkingLevels = isOpenAIModel ? getOpenAIThinkingLevels() : [];
   const maxTokenOptions = isOpenAIModel ? OPENAI_TOKEN_OPTIONS : GEMINI_TOKEN_OPTIONS;
   const activePrompt = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
@@ -292,26 +291,6 @@ export default function SettingsMenu({
               </div>
 
               <div className="space-y-4">
-                {isCouncil ? (
-                  /* Council 模式：仅显示联网开关 */
-                  <div>
-                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                      智能联网
-                    </label>
-                    <button
-                      onClick={() => setWebSearch(!webSearch)}
-                      type="button"
-                      className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearch
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                        }`}
-                    >
-                      <Globe size={14} />
-                      {webSearch ? "开" : "关"}
-                    </button>
-                  </div>
-                ) : (
-                <>
                 {model?.startsWith("claude-") || model?.startsWith("gpt-") ? null : (
                   <div>
                     <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
@@ -603,8 +582,6 @@ export default function SettingsMenu({
                     )}
                   </AnimatePresence>
                 </div>
-                </>
-                )}
               </div>
             </motion.div>
           </>

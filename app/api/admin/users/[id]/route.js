@@ -11,32 +11,6 @@ import { del } from '@vercel/blob';
 
 export const dynamic = 'force-dynamic';
 
-// 切换用户高级状态
-export async function PUT(req, { params }) {
-    const admin = await requireAdmin();
-    if (!admin) {
-        return Response.json({ error: '无权限' }, { status: 403 });
-    }
-
-    const { id } = params;
-    if (!mongoose.isValidObjectId(id)) {
-        return Response.json({ error: '无效的用户 ID' }, { status: 400 });
-    }
-
-    await dbConnect();
-
-    const { premium } = await req.json();
-    const user = await User.findById(id);
-    if (!user) {
-        return Response.json({ error: '用户不存在' }, { status: 404 });
-    }
-
-    user.premium = !!premium;
-    await user.save();
-
-    return Response.json({ success: true, premium: user.premium });
-}
-
 // 重置用户密码
 export async function PATCH(req, { params }) {
     const admin = await requireAdmin();

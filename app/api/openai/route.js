@@ -2,7 +2,6 @@ import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
-import { isAdminEmail } from '@/lib/admin';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { encryptMessage, encryptMessages, encryptString } from '@/lib/encryption';
 import {
@@ -22,7 +21,7 @@ import { BASE_SYSTEM_PROMPT_TEXT } from '@/app/api/chat/systemPrompts';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const OPENAI_BASE_URL = 'https://www.right.codes/codex/v1';
+const ZENMUX_OPENAI_BASE_URL = 'https://zenmux.ai/api/v1';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
 const MODEL_REASONING_EFFORTS = {};
@@ -72,7 +71,6 @@ export async function POST(req) {
         }
 
         let user = null;
-        let isPremium = false;
         try {
             await dbConnect();
             const userDoc = await User.findById(auth.userId);
@@ -80,18 +78,14 @@ export async function POST(req) {
                 return Response.json({ error: 'Unauthorized' }, { status: 401 });
             }
             user = auth;
-            isPremium = !!userDoc.premium || isAdminEmail(auth.email);
         } catch (dbError) {
             console.error("Database connection error:", dbError?.message);
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        // 高级用户选择优质线路时使用 zenmux 路由，否则使用 right.codes 路由
-        const routePreference = config?.routePreference;
-        const usePremiumRoute = isPremium && routePreference === 'premium';
-        const apiBaseUrl = usePremiumRoute ? 'https://zenmux.ai/api/v1' : OPENAI_BASE_URL;
-        const apiKey = usePremiumRoute ? process.env.ZENMUX_API_KEY : process.env.RIGHTCODE_API_KEY;
-        const apiModel = usePremiumRoute ? 'openai/gpt-5.2' : model;
+        const apiBaseUrl = ZENMUX_OPENAI_BASE_URL;
+        const apiKey = process.env.ZENMUX_API_KEY;
+        const apiModel = model.startsWith('openai/') ? model : `openai/${model}`;
 
         let currentConversationId = conversationId;
 

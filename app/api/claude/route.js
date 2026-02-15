@@ -3,7 +3,6 @@ import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
-import { isAdminEmail } from '@/lib/admin';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import { encryptMessage, encryptMessages, encryptString } from '@/lib/encryption';
 import {
@@ -114,7 +113,6 @@ export async function POST(req) {
         }
 
         let user = null;
-        let isPremium = false;
         try {
             await dbConnect();
             const userDoc = await User.findById(auth.userId);
@@ -122,7 +120,6 @@ export async function POST(req) {
                 return Response.json({ error: 'Unauthorized' }, { status: 401 });
             }
             user = auth;
-            isPremium = !!userDoc.premium || isAdminEmail(auth.email);
         } catch (dbError) {
             console.error("Database connection error:", dbError?.message);
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
@@ -130,24 +127,15 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
 
-        // 高级用户选择优质线路时使用 zenmux 路由，否则使用 right.codes 路由
-        const routePreference = config?.routePreference;
-        const usePremiumRoute = isPremium && routePreference === 'premium';
-        const apiModel = usePremiumRoute
-            ? (model.startsWith('claude-opus-4-6') ? 'anthropic/claude-opus-4.6' : 'anthropic/claude-sonnet-4.5')
-            : model;
-        const client = usePremiumRoute
-            ? new Anthropic({
-                apiKey: process.env.ZENMUX_API_KEY,
-                baseURL: "https://zenmux.ai/api/anthropic",
-            })
-            : new Anthropic({
-                apiKey: process.env.RIGHTCODE_API_KEY,
-                baseURL: "https://www.right.codes/claude-aws",
-                defaultHeaders: {
-                    "anthropic-beta": "extended-cache-ttl-2025-04-11"
-                }
-            });
+        const apiModel = model.startsWith('claude-opus-4-6')
+            ? 'anthropic/claude-opus-4.6'
+            : model.startsWith('claude-sonnet-4-5')
+                ? 'anthropic/claude-sonnet-4.5'
+                : model;
+        const client = new Anthropic({
+            apiKey: process.env.ZENMUX_API_KEY,
+            baseURL: "https://zenmux.ai/api/anthropic",
+        });
 
         // 创建新会话
         if (user && !currentConversationId) {

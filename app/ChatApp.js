@@ -29,7 +29,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, routePreference, setRoutePreference, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
+  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
   useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -182,7 +182,6 @@ export default function ChatApp() {
     setEditingImageAction,
     setEditingImage,
     completionSoundVolume,
-    routePreference,
     onSensitiveRefusal: handleSensitiveRefusal,
     onConversationActivity: (id) => {
       setConversations((prev) => {
@@ -384,23 +383,32 @@ export default function ChatApp() {
         }
 
         // 恢复对话的参数设置（使用默认值填充缺失的字段）
-        const settings = data.conversation.settings;
+        const settings = data.conversation.settings && typeof data.conversation.settings === "object"
+          ? data.conversation.settings
+          : {};
         // 思考级别：恢复对话存储的值
-        if (settings.thinkingLevel !== undefined && conversationModel) {
-          const defaultThinkingLevel = conversationModel.includes("gemini") ? "high" : null;
+        if (typeof settings.thinkingLevel === "string" && settings.thinkingLevel && conversationModel) {
           setThinkingLevels((prev) => ({
             ...prev,
             [targetModel]: settings.thinkingLevel
           }));
         }
         // 其他参数：使用对话设置，否则使用默认值
-        setHistoryLimit(settings.historyLimit);
-        const maxTokensValue = settings.maxTokens;
-        const isOpusConv = typeof conversationModel === "string" && conversationModel.startsWith("claude-opus-4-6");
-        const providerLimits = { claude: isOpusConv ? 128000 : 64000, openai: 128000, gemini: 65536 };
-        const maxAllowed = providerLimits[conversationProvider];
-        setMaxTokens(Math.min(maxTokensValue, maxAllowed));
-        setBudgetTokens(settings.budgetTokens);
+        const nextHistoryLimit = Number(settings.historyLimit);
+        if (Number.isFinite(nextHistoryLimit) && nextHistoryLimit >= 0) {
+          setHistoryLimit(nextHistoryLimit);
+        }
+        const maxTokensValue = Number(settings.maxTokens);
+        if (Number.isFinite(maxTokensValue) && maxTokensValue > 0) {
+          const isOpusConv = typeof conversationModel === "string" && conversationModel.startsWith("claude-opus-4-6");
+          const providerLimits = { claude: isOpusConv ? 128000 : 64000, openai: 128000, gemini: 65536 };
+          const maxAllowed = providerLimits[conversationProvider];
+          setMaxTokens(Number.isFinite(maxAllowed) ? Math.min(maxTokensValue, maxAllowed) : maxTokensValue);
+        }
+        const nextBudgetTokens = Number(settings.budgetTokens);
+        if (Number.isFinite(nextBudgetTokens) && nextBudgetTokens > 0) {
+          setBudgetTokens(nextBudgetTokens);
+        }
         // activePromptId：优先使用对话存储的值，但需验证该提示词是否仍存在
         if (settings.activePromptId !== undefined) {
           const promptExists = systemPrompts.some(
@@ -487,7 +495,7 @@ export default function ChatApp() {
 
     // 如果有对话历史且 provider 不同，提示用户需要新建对话
     if (messages.length > 0 && currentProvider && nextProvider && currentProvider !== nextProvider) {
-      const providerNames = { gemini: "Gemini", claude: "Claude", openai: "OpenAI", council: "Council" };
+      const providerNames = { gemini: "Gemini", claude: "Claude", openai: "OpenAI" };
       setConfirmModalConfig({
         title: "切换模型",
         message: `切换到 ${providerNames[nextProvider]} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider]} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,
@@ -554,9 +562,6 @@ export default function ChatApp() {
         <ChatLayout
           user={user}
           isAdmin={!!user?.isAdmin}
-          isPremium={!!user?.isPremium}
-          routePreference={routePreference}
-          onRoutePreferenceChange={setRoutePreference}
           showProfileModal={showProfileModal}
           onCloseProfile={() => setShowProfileModal(false)}
           themeMode={themeMode}
@@ -608,7 +613,6 @@ export default function ChatApp() {
             isWaitingForAI: loading && messages.length > 0,
             model,
             onModelChange: requestModelChange,
-            isPremium: !!user?.isPremium,
             messages,
             contextWindow: currentModelConfig?.contextWindow,
             thinkingLevel: thinkingLevels?.[model],

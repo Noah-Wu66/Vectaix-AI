@@ -1,13 +1,5 @@
 export const CHAT_MODELS = [
   {
-    id: "council",
-    name: "Council",
-    shortName: "Council",
-    provider: "council",
-    premium: true,
-    contextWindow: 200000,
-  },
-  {
     id: "gemini-3-flash-preview",
     name: "Flash",
     shortName: "Flash",

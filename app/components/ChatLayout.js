@@ -57,13 +57,10 @@ export default function ChatLayout({
   userAvatar,
   onAvatarChange,
   isAdmin,
-  isPremium,
-  routePreference,
-  onRoutePreferenceChange,
 }) {
   return (
     <div className="app-root flex font-sans overflow-hidden">
-      <ProfileModal open={showProfileModal} onClose={onCloseProfile} user={user} isAdmin={isAdmin} isPremium={isPremium} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={onThemeModeChange} onFontSizeChange={onFontSizeChange} completionSoundVolume={completionSoundVolume} onCompletionSoundVolumeChange={onCompletionSoundVolumeChange} routePreference={routePreference} onRoutePreferenceChange={onRoutePreferenceChange} avatar={userAvatar} onAvatarChange={onAvatarChange} />
+      <ProfileModal open={showProfileModal} onClose={onCloseProfile} user={user} isAdmin={isAdmin} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={onThemeModeChange} onFontSizeChange={onFontSizeChange} completionSoundVolume={completionSoundVolume} onCompletionSoundVolumeChange={onCompletionSoundVolumeChange} avatar={userAvatar} onAvatarChange={onAvatarChange} />
       <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} avatar={userAvatar} onStartNewChat={onStartNewChat} onLoadConversation={onLoadConversation} onDeleteConversation={onDeleteConversation} onRenameConversation={onRenameConversation} onTogglePinConversation={onTogglePinConversation} onOpenProfile={onOpenProfile} onLogout={onLogout} onClose={onCloseSidebar} />
       <div className="flex-1 flex flex-col w-full h-full relative">
         <ChatHeader onToggleSidebar={onToggleSidebar} />

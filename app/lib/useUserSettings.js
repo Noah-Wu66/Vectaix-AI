@@ -13,7 +13,6 @@ import {
   UI_THEME_MODE_KEY,
   UI_THINKING_LEVELS_KEY,
   UI_WEB_SEARCH_KEY,
-  UI_ROUTE_PREFERENCE_KEY,
 } from "./storageKeys";
 
 const DEFAULT_MODEL = "gemini-3-flash-preview";
@@ -86,7 +85,6 @@ export function useUserSettings() {
   const [webSearch, _setWebSearch] = useState(true);
   const [avatar, _setAvatar] = useState(null);
   const [completionSoundVolume, _setCompletionSoundVolume] = useState(DEFAULT_COMPLETION_SOUND_VOLUME);
-  const [routePreference, _setRoutePreference] = useState("premium");
   const [settingsError, setSettingsError] = useState(null);
 
   const modelRef = useRef(model);
@@ -105,7 +103,6 @@ export function useUserSettings() {
     const localBudgetTokens = readLocalSetting(UI_BUDGET_TOKENS_KEY);
     const localWebSearch = readLocalSetting(UI_WEB_SEARCH_KEY);
     const localCompletionSoundVolume = readLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY);
-    const localRoutePreference = readLocalSetting(UI_ROUTE_PREFERENCE_KEY);
 
     if (typeof localTheme === "string") _setThemeMode(localTheme);
     if (typeof localFont === "string") _setFontSize(localFont);
@@ -131,9 +128,6 @@ export function useUserSettings() {
     if (localCompletionSoundVolume !== null) {
       const parsed = Number(localCompletionSoundVolume);
       _setCompletionSoundVolume(Number.isFinite(parsed) ? parsed : DEFAULT_COMPLETION_SOUND_VOLUME);
-    }
-    if (localRoutePreference === "premium" || localRoutePreference === "economy") {
-      _setRoutePreference(localRoutePreference);
     }
   }, []);
 
@@ -227,11 +221,6 @@ export function useUserSettings() {
   const setCompletionSoundVolume = useCallback((volume) => {
     _setCompletionSoundVolume(volume);
     writeLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY, String(volume));
-  }, []);
-
-  const setRoutePreference = useCallback((pref) => {
-    _setRoutePreference(pref);
-    writeLocalSetting(UI_ROUTE_PREFERENCE_KEY, pref);
   }, []);
 
   const fetchSettings = useCallback(async () => {
@@ -424,8 +413,6 @@ export function useUserSettings() {
     setWebSearch,
     completionSoundVolume,
     setCompletionSoundVolume,
-    routePreference,
-    setRoutePreference,
     settingsError,
     setSettingsError,
     fetchSettings,

@@ -14,7 +14,6 @@ import {
   X,
   Camera,
   Volume2,
-  Zap,
 } from "lucide-react";
 
 import { upload } from "@vercel/blob/client";
@@ -27,15 +26,12 @@ export default function ProfileModal({
   onClose,
   user,
   isAdmin,
-  isPremium,
   themeMode,
   fontSize,
   onThemeModeChange,
   onFontSizeChange,
   completionSoundVolume,
   onCompletionSoundVolumeChange,
-  routePreference,
-  onRoutePreferenceChange,
   avatar,
   onAvatarChange,
 }) {
@@ -424,35 +420,6 @@ export default function ProfileModal({
                          </div>
                       </div>
 
-                      {/* 线路切换（仅高级用户） */}
-                      {isPremium && (
-                        <div>
-                          <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block flex items-center gap-1">
-                            <Zap size={12} /> API 线路
-                          </label>
-                          <div className="flex gap-2">
-                            {[
-                              { id: "premium", label: "优质线路" },
-                              { id: "economy", label: "经济线路" },
-                            ].map((r) => (
-                              <button
-                                key={r.id}
-                                onClick={() => onRoutePreferenceChange?.(r.id)}
-                                type="button"
-                                className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${routePreference === r.id
-                                  ? "bg-zinc-600 text-white border-zinc-600"
-                                  : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                                  }`}
-                              >
-                                {r.label}
-                              </button>
-                            ))}
-                          </div>
-                          <p className="text-xs text-zinc-400 mt-1.5">
-                            优质线路速度更快更稳定，经济线路可节省配额
-                          </p>
-                        </div>
-                      )}
                     </div>
                   </motion.div>
                 )}
