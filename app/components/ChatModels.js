@@ -4,7 +4,6 @@ export const CHAT_MODELS = [
     name: "Flash",
     shortName: "Flash",
     provider: "gemini",
-    privacy: true,
     contextWindow: 1048576,
   },
   {
@@ -12,7 +11,6 @@ export const CHAT_MODELS = [
     name: "Pro",
     shortName: "Pro",
     provider: "gemini",
-    privacy: true,
     contextWindow: 1048576,
   },
   {

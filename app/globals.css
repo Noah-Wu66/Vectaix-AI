@@ -852,23 +852,6 @@ h6 {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* ===== Message List Privacy Glow ===== */
-.privacy-glow-safe {
-  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.14), 0 0 12px rgba(16, 185, 129, 0.12);
-}
-
-.privacy-glow-unsafe {
-  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.14), 0 0 12px rgba(239, 68, 68, 0.12);
-}
-
-.dark-mode .privacy-glow-safe {
-  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3), 0 0 12px rgba(16, 185, 129, 0.25);
-}
-
-.dark-mode .privacy-glow-unsafe {
-  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3), 0 0 12px rgba(239, 68, 68, 0.25);
-}
-
 /* ===== Semi-transparent backgrounds ===== */
 .dark-mode .bg-white\/60 {
   background-color: rgba(39, 39, 42, 0.6) !important;

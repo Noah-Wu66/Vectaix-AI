@@ -7,8 +7,6 @@ import {
   Edit3,
   Paperclip,
   RotateCcw,
-  Shield,
-  ShieldOff,
   Sparkles,
   Trash2,
   Type,
@@ -64,7 +62,6 @@ export default function MessageList({
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, index: null, role: null });
   const prevMessagesRef = useRef([]);
-  const isPrivacyModel = Boolean(CHAT_MODELS.find((m) => m.id === model)?.privacy);
 
   useEffect(() => {
     prevMessagesRef.current = messages;
@@ -229,8 +226,6 @@ export default function MessageList({
           const hasBodyOutput =
             (typeof msg.content === "string" && msg.content.trim().length > 0)
             || (hasParts && msg.parts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
-          const showPrivacyBadge = msg.role === "model";
-          const privacyGlowClass = isPrivacyModel ? "privacy-glow-safe" : "privacy-glow-unsafe";
           const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline)
             && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader");
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
@@ -405,7 +400,7 @@ export default function MessageList({
                   <>
                     {(hasParts || (typeof msg.content === 'string' && msg.content.trim().length > 0) || msg.image) && (
                       <div
-                        className={`msg-bubble px-4 py-3 ${showPrivacyBadge ? `relative pb-6 ${privacyGlowClass}` : ""} rounded-2xl overflow-hidden break-words ${msg.role === "user"
+                        className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
                           : "bg-zinc-100 text-zinc-800 max-w-full"
                           }`}
@@ -478,19 +473,6 @@ export default function MessageList({
 
                         {msg.role === "model" && !msg.isStreaming && msg.citations && (
                           <Citations citations={msg.citations} />
-                        )}
-
-                        {showPrivacyBadge && (
-                          <div
-                            className={`pointer-events-none absolute bottom-2 right-3 flex items-center gap-1 text-[10px] font-medium transition-opacity duration-500 ${isPrivacyModel ? "text-emerald-600" : "text-red-500"} ${msg.isStreaming ? 'opacity-0' : 'opacity-100'}`}
-                          >
-                            {isPrivacyModel ? (
-                              <Shield size={12} className="text-emerald-500" />
-                            ) : (
-                              <ShieldOff size={12} className="text-red-500" />
-                            )}
-                            <span>{isPrivacyModel ? "会话已加密" : "会话未加密"}</span>
-                          </div>
                         )}
                       </div>
                     )}
