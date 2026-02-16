@@ -7,9 +7,6 @@ const ALLOWED_IMAGE_DOMAINS = [
     "public.blob.vercel-storage.com",
 ];
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const IMAGE_FETCH_TIMEOUT_MS = 10000;
-
 function isAllowedImageDomain(url) {
     try {
         const parsed = new URL(url);
@@ -42,33 +39,13 @@ export async function fetchImageAsBase64(url) {
         throw new Error("Image domain not allowed");
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
-    try {
-        const imgRes = await fetch(url, { cache: "no-store", signal: controller.signal });
-        if (!imgRes.ok) throw new Error("Failed to fetch image from blob");
+    const imgRes = await fetch(url, { cache: "no-store" });
+    if (!imgRes.ok) throw new Error("Failed to fetch image from blob");
 
-        const len = imgRes.headers.get("content-length");
-        if (len && Number(len) > MAX_IMAGE_BYTES) {
-            throw new Error("Image too large");
-        }
-
-        const arrayBuffer = await imgRes.arrayBuffer();
-        if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
-            throw new Error("Image too large");
-        }
-
-        const base64Data = Buffer.from(arrayBuffer).toString("base64");
-        const mimeType = imgRes.headers.get("content-type");
-        return { base64Data, mimeType };
-    } catch (error) {
-        if (error?.name === "AbortError") {
-            throw new Error("Image fetch timeout");
-        }
-        throw error;
-    } finally {
-        clearTimeout(timeoutId);
-    }
+    const arrayBuffer = await imgRes.arrayBuffer();
+    const base64Data = Buffer.from(arrayBuffer).toString("base64");
+    const mimeType = imgRes.headers.get("content-type");
+    return { base64Data, mimeType };
 }
 
 export function isNonEmptyString(value) {
