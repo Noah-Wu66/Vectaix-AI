@@ -402,7 +402,7 @@ export default function MessageList({
                       <div
                         className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
-                          : "bg-zinc-100 text-zinc-800 max-w-full"
+                          : "bg-zinc-100 text-zinc-800 inline-block max-w-full md:max-w-[760px]"
                           }`}
                         style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
                         onCopy={handleBubbleCopy}

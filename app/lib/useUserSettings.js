@@ -14,8 +14,8 @@ import {
   UI_WEB_SEARCH_KEY,
 } from "./storageKeys";
 
-const DEFAULT_MODEL = "gemini-3-flash-preview";
 const SEED_MODEL_ID = "volcengine/doubao-seed-2.0-pro";
+const DEFAULT_MODEL = SEED_MODEL_ID;
 const MAX_TOKENS_64K = 64000;
 const MAX_TOKENS_128K = 128000;
 const DEFAULT_THINKING_LEVELS = {
