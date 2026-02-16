@@ -195,13 +195,11 @@ export function createChatAppActions({
       }
 
       const config = buildChatConfig({
-        model,
         thinkingLevel: getEffectiveThinkingLevel(model),
         mediaResolution,
         systemPrompts,
         activePromptId,
-        imageUrl: imageUrls[0],
-        imageUrls: imageUrls,
+        imageUrls,
         maxTokens,
         budgetTokens,
         webSearch: webSearch,
@@ -261,7 +259,6 @@ export function createChatAppActions({
     setMessages(historyWithUser);
 
     const config = buildChatConfig({
-      model,
       thinkingLevel: getEffectiveThinkingLevel(model),
       mediaResolution,
       systemPrompts,
@@ -394,9 +391,6 @@ export function createChatAppActions({
       if (parts.length > 0) updatedMsg.parts = parts;
       else delete updatedMsg.parts;
 
-      delete updatedMsg.image;
-      delete updatedMsg.images;
-      delete updatedMsg.mimeType;
     } catch (e) {
       chatRequestLockRef.current = false;
       setLoading(false);
@@ -410,7 +404,6 @@ export function createChatAppActions({
     cancelEdit();
 
     const config = buildChatConfig({
-      model,
       thinkingLevel: getEffectiveThinkingLevel(model),
       mediaResolution,
       systemPrompts,

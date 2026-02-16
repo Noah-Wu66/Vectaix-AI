@@ -420,12 +420,8 @@ export default function ChatApp() {
           if (promptExists) {
             setActivePromptId(settings.activePromptId);
           } else {
-            // 提示词已删除，使用默认提示词
-            const defaultPrompt = systemPrompts.find((p) => p?.name === "默认助手");
-            const defaultId = String(defaultPrompt?._id);
-            if (defaultId) {
-              setActivePromptId(defaultId);
-            }
+            // 提示词已删除，回到“无”
+            setActivePromptId(null);
           }
         }
       }

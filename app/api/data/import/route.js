@@ -20,8 +20,6 @@ const MAX_PROMPTS = 50;
 const MAX_PROMPT_NAME_CHARS = 80;
 const MAX_PROMPT_CONTENT_CHARS = 8000;
 
-const DEFAULT_PROMPT = { name: '默认助手', content: 'You are a helpful AI assistant.' };
-
 const IMPORT_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 const ALLOWED_MESSAGE_TYPES = new Set(['text', 'parts', 'error']);
@@ -48,15 +46,6 @@ function isAllowedImageUrl(url) {
   } catch {
     return false;
   }
-}
-
-function ensureDefaultFirst(prompts) {
-  const list = Array.isArray(prompts) ? [...prompts] : [];
-  const idx = list.findIndex((p) => p?.name === '默认助手');
-  if (idx === -1) return [DEFAULT_PROMPT, ...list];
-  if (idx === 0) return list;
-  const [defaultPrompt] = list.splice(idx, 1);
-  return [defaultPrompt, ...list];
 }
 
 function sanitizeMessage(msg, idx) {
@@ -201,7 +190,7 @@ function sanitizeSettings(settingsSrc, userId) {
   return {
     userId,
     avatar: avatar,
-    systemPrompts: ensureDefaultFirst(sanitizedPrompts),
+    systemPrompts: sanitizedPrompts,
     updatedAt: new Date(),
   };
 }

@@ -46,12 +46,10 @@ async function compressHistory(messages) {
 }
 
 export function buildChatConfig({
-  model,
   thinkingLevel,
   mediaResolution,
   systemPrompts,
   activePromptId,
-  imageUrl,
   imageUrls,
   maxTokens,
   budgetTokens,

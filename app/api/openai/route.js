@@ -84,6 +84,7 @@ export async function POST(req) {
         const apiBaseUrl = ZENMUX_OPENAI_BASE_URL;
         const apiKey = process.env.ZENMUX_API_KEY;
         const apiModel = model.startsWith('openai/') || model.includes('/') ? model : `openai/${model}`;
+        const isSeedModel = typeof apiModel === 'string' && apiModel.startsWith('volcengine/doubao-seed');
 
         let currentConversationId = conversationId;
 
@@ -185,6 +186,7 @@ export async function POST(req) {
         // 构建 Responses API 请求
         const maxTokens = config?.maxTokens;
         const thinkingLevel = config?.thinkingLevel;
+        const budgetTokens = Number.parseInt(config?.budgetTokens, 10);
 
         const baseSystemPrompt = injectCurrentTimeSystemReminder(
             typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
@@ -211,6 +213,17 @@ export async function POST(req) {
             baseRequestBody.reasoning.effort = thinkingLevel;
         }
 
+        if (isSeedModel) {
+            baseRequestBody.extra_body = {
+                thinking: {
+                    type: 'enabled',
+                    ...(Number.isFinite(budgetTokens) && budgetTokens > 0
+                        ? { budget_tokens: budgetTokens }
+                        : {})
+                }
+            };
+        }
+
         // 是否启用联网搜索
         const enableWebSearch = config?.webSearch === true;
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
@@ -226,6 +239,33 @@ export async function POST(req) {
         let paddingSent = false;
         const HEARTBEAT_INTERVAL_MS = 15000;
         let heartbeatTimer = null;
+
+        const normalizeChunkText = (value) => {
+            if (typeof value === 'string') return value;
+            if (!Array.isArray(value)) return '';
+            return value.map((item) => {
+                if (typeof item === 'string') return item;
+                if (item && typeof item.text === 'string') return item.text;
+                return '';
+            }).join('');
+        };
+
+        const normalizeChunkThought = (value) => {
+            if (typeof value === 'string') return value;
+            if (Array.isArray(value)) {
+                return value.map((item) => {
+                    if (typeof item === 'string') return item;
+                    if (item && typeof item.text === 'string') return item.text;
+                    if (item && typeof item.content === 'string') return item.content;
+                    return '';
+                }).join('');
+            }
+            if (value && typeof value === 'object') {
+                if (typeof value.text === 'string') return value.text;
+                if (typeof value.content === 'string') return value.content;
+            }
+            return '';
+        };
 
         const responseStream = new ReadableStream({
             async start(controller) {
@@ -333,12 +373,12 @@ export async function POST(req) {
                             try {
                                 const event = JSON.parse(dataStr);
 
-                                // 处理 Responses API 事件
+                                // 处理 Responses API 和 Chat Completions 事件
                                 if (event.type === 'response.output_text.delta') {
                                     const text = event.delta;
                                     fullText += text;
                                     sendEvent({ type: 'text', content: text });
-                                } else if (event.type === 'response.reasoning.delta') {
+                                } else if (event.type === 'response.reasoning.delta' || event.type === 'response.reasoning_summary_text.delta') {
                                     const thought = event.delta;
                                     fullThought += thought;
                                     sendEvent({ type: 'thought', content: thought });
@@ -351,6 +391,21 @@ export async function POST(req) {
                                             citations.push({ url: ann.url, title: ann.title });
                                             sendEvent({ type: 'citations', citations });
                                         }
+                                    }
+                                } else if (Array.isArray(event?.choices)) {
+                                    const choice = event.choices[0] || null;
+                                    const delta = choice?.delta;
+
+                                    const text = normalizeChunkText(delta?.content);
+                                    if (text) {
+                                        fullText += text;
+                                        sendEvent({ type: 'text', content: text });
+                                    }
+
+                                    const thought = normalizeChunkThought(delta?.reasoning_content);
+                                    if (thought) {
+                                        fullThought += thought;
+                                        sendEvent({ type: 'thought', content: thought });
                                     }
                                 }
                             } catch { /* ignore parse errors */ }

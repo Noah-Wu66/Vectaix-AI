@@ -76,7 +76,7 @@ export default function SettingsMenu({
       ? SEED_TOKEN_OPTIONS
       : GEMINI_TOKEN_OPTIONS;
   const activePrompt = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
-  const activePromptName = activePrompt?.name;
+  const activePromptName = activePrompt?.name || "无";
 
   useEffect(() => {
     if (!model) return;
@@ -114,27 +114,38 @@ export default function SettingsMenu({
   }, [model, maxTokens, maxTokenOptions, claudeTokenOptions, setMaxTokens]);
 
   useEffect(() => {
-    if (!model || !Array.isArray(systemPrompts) || systemPrompts.length === 0) return;
+    if (!model || !Array.isArray(systemPrompts)) return;
     const promptIds = systemPrompts.map((p) => String(p?._id));
-    
-    // 如果当前 activePromptId 有效，不自动切换
+
+    // 当前选择有效，保持不变
     if (activePromptId && promptIds.includes(String(activePromptId))) {
       return;
     }
-    
+
     const rememberedId = activePromptIds?.[model];
     const rememberedMatch = rememberedId && promptIds.includes(String(rememberedId));
-    const defaultPrompt = systemPrompts.find((p) => p?.name === "默认助手");
-    const defaultId = String(defaultPrompt?._id);
-    const nextId = rememberedMatch
-      ? String(rememberedId)
-      : defaultId;
-    if (!nextId) return;
-    if (String(activePromptId) !== nextId) {
-      setActivePromptId(nextId);
+
+    // 优先恢复当前模型上次选择的提示词
+    if (rememberedMatch) {
+      const nextId = String(rememberedId);
+      if (String(activePromptId) !== nextId) {
+        setActivePromptId(nextId);
+      }
+      return;
     }
-    if (String(rememberedId) !== nextId) {
-      setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
+
+    // 上次记忆的提示词已不存在，清理该模型记忆
+    if (rememberedId) {
+      setActivePromptIds?.((prev) => {
+        const next = { ...(prev || {}) };
+        delete next[model];
+        return next;
+      });
+    }
+
+    // 没有可用提示词时，回到“无”
+    if (activePromptId != null) {
+      setActivePromptId(null);
     }
   }, [model, systemPrompts, activePromptId, activePromptIds, setActivePromptId, setActivePromptIds]);
 
@@ -169,7 +180,7 @@ export default function SettingsMenu({
   };
 
   const openEditPromptModal = (prompt) => {
-    if (!prompt || prompt?.name === "默认助手") return;
+    if (!prompt) return;
     setShowPromptList(false);
     setPromptModalMode("edit");
     setPromptModalPromptId(String(prompt?._id));
@@ -213,24 +224,19 @@ export default function SettingsMenu({
 
   const deletePromptById = async (promptId) => {
     if (!promptId) return;
-    const cur = systemPrompts.find((p) => String(p?._id) === String(promptId));
-    if (cur?.name === "默认助手") return;
     const settings = await onDeletePrompt?.(promptId);
     if (String(promptId) !== String(activePromptId)) return;
-    const prompts = settings?.systemPrompts;
-    if (Array.isArray(prompts) && prompts.length > 0) {
-      const defaultPrompt = prompts.find((p) => p?.name === "默认助手");
-      const nextId = String(defaultPrompt?._id);
-      if (nextId) {
-        setActivePromptId(nextId);
-        setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
-      }
-    }
+    if (!settings) return;
+    setActivePromptId(null);
+    setActivePromptIds?.((prev) => {
+      const next = { ...(prev || {}) };
+      delete next[model];
+      return next;
+    });
   };
 
   const requestDeletePromptById = (prompt) => {
     if (!prompt?._id) return;
-    if (prompt?.name === "默认助手") return;
     setShowPromptList(false);
     confirmActionRef.current = () => deletePromptById(String(prompt?._id));
     setConfirmTitle("删除提示词");
@@ -328,8 +334,27 @@ export default function SettingsMenu({
                           className="absolute left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-lg shadow-lg p-1 z-10"
                         >
                           <div className="max-h-56 overflow-auto">
+                            <div
+                              className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${activePromptId == null ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
+                            >
+                              <button
+                                onClick={() => {
+                                  setActivePromptId(null);
+                                  setActivePromptIds?.((prev) => {
+                                    const next = { ...(prev || {}) };
+                                    delete next[model];
+                                    return next;
+                                  });
+                                  setShowPromptList(false);
+                                }}
+                                className="flex-1 text-left text-sm text-zinc-700 truncate"
+                                type="button"
+                              >
+                                无
+                              </button>
+                            </div>
+
                             {systemPrompts.map((p) => {
-                              const isDefault = p?.name === "默认助手";
                               const isActive = String(p?._id) === String(activePromptId);
                               return (
                                 <div
@@ -348,31 +373,30 @@ export default function SettingsMenu({
                                   >
                                     {p?.name}
                                   </button>
-                                  {isDefault ? (
-                                    <div className="w-12" />
-                                  ) : (
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        onClick={() => openEditPromptModal(p)}
-                                        title="编辑提示词"
-                                        className="p-1 text-zinc-500 hover:text-zinc-700"
-                                        type="button"
-                                      >
-                                        <Pencil size={14} />
-                                      </button>
-                                      <button
-                                        onClick={() => requestDeletePromptById(p)}
-                                        title="删除提示词"
-                                        className="p-1 text-zinc-500 hover:text-red-600"
-                                        type="button"
-                                      >
-                                        <Trash2 size={14} />
-                                      </button>
-                                    </div>
-                                  )}
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => openEditPromptModal(p)}
+                                      title="编辑提示词"
+                                      className="p-1 text-zinc-500 hover:text-zinc-700"
+                                      type="button"
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button
+                                      onClick={() => requestDeletePromptById(p)}
+                                      title="删除提示词"
+                                      className="p-1 text-zinc-500 hover:text-red-600"
+                                      type="button"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
                                 </div>
                               );
                             })}
+                            {systemPrompts.length === 0 && (
+                              <div className="px-2 py-2 text-xs text-zinc-400">暂无提示词，请先新建</div>
+                            )}
                           </div>
                           <button
                             onClick={openCreatePromptModal}

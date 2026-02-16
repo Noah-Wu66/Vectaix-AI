@@ -196,12 +196,16 @@ export function useUserSettings() {
   }, []);
 
   const setActivePromptIds = useCallback((ids) => {
-    _setActivePromptIds(ids);
-    writeLocalJson(UI_ACTIVE_PROMPT_IDS_KEY, ids);
+    _setActivePromptIds((prev) => {
+      const next = typeof ids === "function" ? ids(prev) : ids;
+      const normalized = isPlainObject(next) ? next : {};
+      writeLocalJson(UI_ACTIVE_PROMPT_IDS_KEY, normalized);
+      return normalized;
+    });
   }, []);
 
   const setActivePromptId = useCallback((id) => {
-    _setActivePromptId(id);
+    _setActivePromptId(typeof id === "string" && id ? id : null);
   }, []);
 
   const setMaxTokens = useCallback((tokens) => {
