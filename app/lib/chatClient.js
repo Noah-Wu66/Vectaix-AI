@@ -415,7 +415,7 @@ export async function runChat({
     let buffer = "";
     let thinkingEnded = false;
     let sawDone = false;
-    const convIdForSync = newConvId;
+    const convIdForSync = newConvId || currentConversationId || conversationId;
 
     let flushScheduled = false;
     let hasReceivedContent = false;
@@ -856,7 +856,7 @@ export async function runChat({
       (!citations || citations.length === 0);
 
     if (isGeminiRefusal) {
-    const convIdForSync = newConvId;
+    const convIdForSync = newConvId || currentConversationId || conversationId;
       let nextMessagesForSync = null;
       if (Array.isArray(refusalRestoreMessages)) {
         setMessages(refusalRestoreMessages);
@@ -1155,7 +1155,7 @@ export async function runChat({
       }
       // 超时：回滚本次用户消息，避免"悬空提问"扰乱上下文
       if (errMsg === "API_TIMEOUT" && mode !== "regenerate") {
-        const convIdForSync = newConvId;
+        const convIdForSync = newConvId || currentConversationId || conversationId;
         let nextMessagesForSync = null;
         setMessages((prev) => {
           if (!Array.isArray(prev) || prev.length === 0) return prev;

@@ -58,23 +58,73 @@ export function generateMessageId() {
 }
 
 export function getStoredPartsFromMessage(msg) {
-    if (Array.isArray(msg?.parts) && msg.parts.length > 0) return msg.parts;
-    return null;
+    if (!msg || typeof msg !== 'object') return null;
+
+    if (Array.isArray(msg.parts) && msg.parts.length > 0) {
+        const normalizedParts = msg.parts
+            .filter((part) => part && typeof part === 'object')
+            .map((part) => {
+                const out = {};
+                if (isNonEmptyString(part.text)) out.text = part.text;
+                if (part?.inlineData && typeof part.inlineData === 'object') {
+                    const url = part.inlineData.url;
+                    const mimeType = part.inlineData.mimeType;
+                    if (isNonEmptyString(url)) {
+                        out.inlineData = {
+                            url,
+                            mimeType: isNonEmptyString(mimeType) ? mimeType : 'image/jpeg',
+                        };
+                    }
+                }
+                if (isNonEmptyString(part.thoughtSignature)) out.thoughtSignature = part.thoughtSignature;
+                return out;
+            })
+            .filter((part) => Object.keys(part).length > 0);
+        if (normalizedParts.length > 0) return normalizedParts;
+    }
+
+    const fallbackParts = [];
+    if (isNonEmptyString(msg.content)) {
+        fallbackParts.push({ text: msg.content });
+    }
+
+    if (msg.role === 'user') {
+        const pushImagePart = (url, mimeType) => {
+            if (!isNonEmptyString(url)) return;
+            fallbackParts.push({
+                inlineData: {
+                    url,
+                    mimeType: isNonEmptyString(mimeType) ? mimeType : 'image/jpeg',
+                },
+            });
+        };
+
+        if (Array.isArray(msg.images) && msg.images.length > 0) {
+            for (const url of msg.images) {
+                pushImagePart(url, msg.mimeType);
+            }
+        } else {
+            pushImagePart(msg.image, msg.mimeType);
+        }
+    }
+
+    return fallbackParts.length > 0 ? fallbackParts : null;
 }
 
 export function sanitizeStoredMessage(msg) {
     if (!msg || typeof msg !== 'object') return null;
     if (msg.role !== 'user' && msg.role !== 'model') return null;
-    if (!Array.isArray(msg.parts) || msg.parts.length === 0) return null;
+    const normalizedParts = getStoredPartsFromMessage(msg);
+    if (!normalizedParts || normalizedParts.length === 0) return null;
     const out = {
         role: msg.role,
         content: typeof msg.content === 'string' ? msg.content : '',
-        type: typeof msg.type === 'string' ? msg.type : 'text',
+        type: typeof msg.type === 'string' ? msg.type : 'parts',
     };
     if (isNonEmptyString(msg.id) && msg.id.length <= 128) out.id = msg.id;
     if (isNonEmptyString(msg.thought)) out.thought = msg.thought;
     if (Array.isArray(msg.citations) && msg.citations.length > 0) out.citations = msg.citations;
-    out.parts = msg.parts;
+    out.parts = normalizedParts;
     return out;
 }
 
