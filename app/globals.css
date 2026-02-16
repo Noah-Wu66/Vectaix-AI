@@ -437,6 +437,83 @@ h6 {
 }
 
 /* Thinking block content - lighter text color */
+.thinking-block {
+  font-size: 0.875rem;
+}
+
+.thinking-btn {
+  gap: 0.65em;
+  padding: 0.6em 0.95em;
+  border-radius: 0.9em;
+  font-size: 1em;
+  line-height: 1.35;
+}
+
+.thinking-btn-label {
+  gap: 0.45em;
+}
+
+.thinking-capsule {
+  gap: 0.55em;
+  font-size: 0.85em;
+  line-height: 1.35;
+  padding-block: 0.15em;
+}
+
+.thinking-content-panel {
+  margin-top: 0.5em;
+  border-radius: 0.9em;
+  padding: 0.75em;
+  max-height: 14em;
+  font-size: 0.85em;
+}
+
+.thinking-timeline {
+  gap: 0.45em;
+  margin-left: 0.35em;
+  padding-left: 0.8em;
+  padding-top: 0.25em;
+  padding-bottom: 0.25em;
+}
+
+.thinking-error-tip {
+  margin-top: 0.45em;
+  padding: 0.6em 0.85em;
+  border-radius: 0.7em;
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+
+.thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+}
+
+.thinking-dot {
+  width: 0.3em;
+  height: 0.3em;
+  border-radius: 999px;
+}
+
+.thinking-icon-header {
+  width: 1.15em;
+  height: 1.15em;
+  flex-shrink: 0;
+}
+
+.thinking-icon-step {
+  width: 1.05em;
+  height: 1.05em;
+  flex-shrink: 0;
+}
+
+.thinking-icon-chevron {
+  width: 0.9em;
+  height: 0.9em;
+  flex-shrink: 0;
+}
+
 .thinking-content {
   color: #a1a1aa;
 }
@@ -507,11 +584,23 @@ h6 {
   font-size: 0.8rem;
 }
 
+.text-size-small .thinking-block {
+  font-size: 0.8rem;
+}
+
 .text-size-medium .msg-bubble {
   font-size: 0.875rem;
 }
 
+.text-size-medium .thinking-block {
+  font-size: 0.875rem;
+}
+
 .text-size-large .msg-bubble {
+  font-size: 0.95rem;
+}
+
+.text-size-large .thinking-block {
   font-size: 0.95rem;
 }
 
@@ -546,8 +635,7 @@ h6 {
 
   /* Thinking block button adjustments */
   .thinking-btn {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.7rem;
+    padding: 0.55em 0.85em;
   }
 }
 
