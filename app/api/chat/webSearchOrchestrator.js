@@ -1,3 +1,4 @@
+import { GoogleGenAI } from '@google/genai';
 import { injectCurrentTimeSystemReminder } from '@/app/api/chat/utils';
 import {
   metasoSearch,
@@ -13,6 +14,48 @@ const DECISION_SYSTEM_TEXT = '你是联网检索决策器。必须只输出严�
 const READER_SYSTEM_TEXT = '你是网页全文查看决策器。必须只输出严格 JSON，不要输出任何多余文本。';
 const CONTINUE_SYSTEM_TEXT = '你是网页阅读继续决策器。必须只输出严格 JSON，不要输出任何多余文本。';
 const ENOUGH_SYSTEM_TEXT = '你是联网检索补充决策器。必须只输出严格 JSON，不要输出任何多余文本。';
+const INTERNAL_DECISION_MODEL = 'google/gemini-3-flash-preview';
+const INTERNAL_VERTEX_BASE_URL = 'https://zenmux.ai/api/vertex-ai';
+
+let decisionClient;
+
+function getDecisionClient() {
+  if (!decisionClient) {
+    decisionClient = new GoogleGenAI({
+      apiKey: process.env.ZENMUX_API_KEY,
+      httpOptions: { apiVersion: 'v1', baseUrl: INTERNAL_VERTEX_BASE_URL },
+    });
+  }
+  return decisionClient;
+}
+
+async function runInternalDecision({ systemText, userText, isAborted, onThought }) {
+  const ai = getDecisionClient();
+  let decisionText = '';
+  const stream = await ai.models.generateContentStream({
+    model: INTERNAL_DECISION_MODEL,
+    contents: [{ role: 'user', parts: [{ text: userText }] }],
+    config: {
+      systemInstruction: { parts: [{ text: systemText }] },
+    },
+  });
+
+  for await (const chunk of stream) {
+    if (isAborted?.()) break;
+    const candidate = chunk.candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+    for (const part of parts) {
+      if (isAborted?.()) break;
+      if (part.thought && part.text) {
+        onThought?.(part.text);
+      } else if (part.text) {
+        decisionText += part.text;
+      }
+    }
+  }
+
+  return decisionText;
+}
 
 export function buildWebSearchGuide(enableWebSearch) {
   return enableWebSearch
@@ -24,7 +67,6 @@ export async function runWebSearchOrchestration(options) {
   const {
     enableWebSearch,
     prompt,
-    runDecisionStream,
     sendEvent,
     pushCitations,
     sendSearchError,
@@ -45,9 +87,16 @@ export async function runWebSearchOrchestration(options) {
     return { searchContextText: '' };
   }
 
+  const runDecision = (systemText, userText) => runInternalDecision({
+    systemText,
+    userText,
+    isAborted: aborted,
+    onThought: (content) => sendEvent({ type: 'thought', content }),
+  });
+
   const decisionSystem = injectCurrentTimeSystemReminder(DECISION_SYSTEM_TEXT);
   const decisionUser = `用户问题：${prompt}\n\n判断是否必须联网检索才能回答。\n- 需要联网：输出 {"needSearch": true, "query": "精炼检索词"}\n- 不需要联网：输出 {"needSearch": false}`;
-  const decisionText = await runDecisionStream(decisionSystem, decisionUser);
+  const decisionText = await runDecision(decisionSystem, decisionUser);
   const decision = parseJsonFromText(decisionText);
   let needSearch = decision?.needSearch === true;
   let nextQuery = typeof decision?.query === 'string' ? decision.query.trim() : '';
@@ -138,7 +187,7 @@ export async function runWebSearchOrchestration(options) {
           .join('\n\n');
         const alreadyRead = Array.from(readUrlSet);
         const readerUser = `用户问题：${prompt}\n当前检索词：${nextQuery}\n\n候选结果：\n${candidateText}\n\n已查看过的 URL：\n${alreadyRead.length > 0 ? alreadyRead.join('\n') : '无'}\n\n剩余可查看配额：${remainingQuota} 个网页\n\n判断是否需要查看网页正文来提升答案质量。可以同时选择多个网页（不超过剩余配额）。\n- 需要：输出 {"needRead": true, "urls": ["候选URL1", "候选URL2", ...]}\n- 不需要：输出 {"needRead": false}`;
-        const readerDecisionText = await runDecisionStream(readerSystem, readerUser);
+        const readerDecisionText = await runDecision(readerSystem, readerUser);
         const readerDecision = parseJsonFromText(readerDecisionText);
         const shouldRead = readerDecision?.needRead === true;
         const selectedUrls = Array.isArray(readerDecision?.urls)
@@ -192,7 +241,7 @@ export async function runWebSearchOrchestration(options) {
                 const readSoFar = Array.from(readUrlSet).join('\n');
                 const pendingList = remainingUrls.join('\n');
                 const continueUser = `用户问题：${prompt}\n\n已查看的网页内容摘要：\n${roundContextBlocks.join('\n\n')}\n\n待查看的 URL：\n${pendingList}\n\n已读过的全部 URL：\n${readSoFar}\n\n根据已获取的信息，判断：\n1. 是否还需要继续查看剩余网页\n2. 当前信息是否已足够回答用户问题，是否还需要下一轮搜索\n\n- 继续查看剩余网页：输出 {"continueRead": true}\n- 不再查看，但信息不够需要换词搜索：输出 {"continueRead": false, "enough": false, "nextQuery": "新的检索词"}\n- 不再查看，信息已足够：输出 {"continueRead": false, "enough": true}`;
-                const continueText = await runDecisionStream(continueSystem, continueUser);
+                const continueText = await runDecision(continueSystem, continueUser);
                 const continueDecision = parseJsonFromText(continueText);
                 if (continueDecision?.continueRead === false) {
                   if (continueDecision?.enough === true) {
@@ -235,7 +284,7 @@ export async function runWebSearchOrchestration(options) {
     const recentContext = searchContextParts.join('\n\n');
     const enoughSystem = injectCurrentTimeSystemReminder(ENOUGH_SYSTEM_TEXT);
     const enoughUser = `用户问题：${prompt}\n\n已获得的检索摘要：\n${recentContext}\n\n判断这些信息是否足够回答。\n- 足够：输出 {"enough": true}\n- 不足：输出 {"enough": false, "nextQuery": "新的检索词"}`;
-    const enoughText = await runDecisionStream(enoughSystem, enoughUser);
+    const enoughText = await runDecision(enoughSystem, enoughUser);
     const enoughDecision = parseJsonFromText(enoughText);
     if (enoughDecision?.enough === true) break;
     const candidateQuery = typeof enoughDecision?.nextQuery === 'string'

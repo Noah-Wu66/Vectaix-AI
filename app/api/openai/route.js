@@ -8,7 +8,6 @@ import {
     fetchImageAsBase64,
     isNonEmptyString,
     sanitizeStoredMessages,
-    generateMessageId,
     injectCurrentTimeSystemReminder,
     buildWebSearchContextBlock,
     estimateTokens
@@ -16,7 +15,6 @@ import {
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 
 import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
-import { BASE_SYSTEM_PROMPT_TEXT } from '@/app/api/chat/systemPrompts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -85,7 +83,7 @@ export async function POST(req) {
 
         const apiBaseUrl = ZENMUX_OPENAI_BASE_URL;
         const apiKey = process.env.ZENMUX_API_KEY;
-        const apiModel = model.startsWith('openai/') ? model : `openai/${model}`;
+        const apiModel = model.startsWith('openai/') || model.includes('/') ? model : `openai/${model}`;
 
         let currentConversationId = conversationId;
 
@@ -129,7 +127,6 @@ export async function POST(req) {
             openaiInput = await buildOpenAIInputFromHistory(effectiveHistory);
         }
 
-        let dbImageMimeType = null;
         let dbImageEntries = [];
 
         if (!isRegenerateMode) {
@@ -145,9 +142,6 @@ export async function POST(req) {
                         });
                         dbImageEntries.push({ url: img.url, mimeType });
                     }
-                }
-                if (dbImageEntries.length > 0) {
-                    dbImageMimeType = dbImageEntries[0].mimeType;
                 }
             }
 
@@ -176,9 +170,7 @@ export async function POST(req) {
                 id: resolvedUserMessageId,
                 role: 'user',
                 content: prompt,
-                type: 'text',
-                images: dbImageEntries.map(e => e.url),
-                ...(dbImageMimeType ? { mimeType: dbImageMimeType } : {}),
+                type: 'parts',
                 parts: storedUserParts
             });
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
@@ -194,12 +186,10 @@ export async function POST(req) {
         const maxTokens = config?.maxTokens;
         const thinkingLevel = config?.thinkingLevel;
 
-        const baseSystemPromptText = BASE_SYSTEM_PROMPT_TEXT;
-        const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
-
         const baseSystemPrompt = injectCurrentTimeSystemReminder(
-            `${baseSystemPromptText}\n\n${formattingGuard}`
+            typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
         );
+        const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
         const baseInputWithInstructions = [
             { role: 'developer', content: [{ type: 'input_text', text: baseSystemPrompt }] },
             ...(Array.isArray(openaiInput) ? openaiInput : [])
@@ -277,74 +267,9 @@ export async function POST(req) {
                         }
                     };
 
-                    const runDecisionStream = async (systemText, userText) => {
-                        let decisionText = "";
-                        const decisionBody = {
-                            ...baseRequestBody,
-                            input: [
-                                { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
-                                { role: 'user', content: [{ type: 'input_text', text: userText }] }
-                            ],
-                            max_output_tokens: 512,
-                            reasoning: {
-                                effort: "low",
-                                summary: "auto"
-                            }
-                        };
-
-                        const decisionResponse = await fetch(`${apiBaseUrl}/responses`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${apiKey}`
-                            },
-                            body: JSON.stringify(decisionBody)
-                        });
-
-                        if (!decisionResponse.ok) {
-                            const errorText = await decisionResponse.text();
-                            throw new Error(`OpenAI decision error: ${decisionResponse.status} ${errorText}`);
-                        }
-
-                        const reader = decisionResponse.body.getReader();
-                        const decoder = new TextDecoder();
-                        let buffer = "";
-
-                        while (true) {
-                            const { value, done } = await reader.read();
-                            if (done || clientAborted) break;
-
-                            buffer += decoder.decode(value, { stream: true });
-                            const lines = buffer.split('\n');
-                            buffer = lines.pop();
-
-                            for (const line of lines) {
-                                if (!line.trim() || line.startsWith(':')) continue;
-                                if (!line.startsWith('data: ')) continue;
-
-                                const dataStr = line.slice(6);
-                                if (dataStr === '[DONE]') continue;
-
-                                try {
-                                    const event = JSON.parse(dataStr);
-                                    if (event.type === 'response.reasoning.delta') {
-                                        const thought = event.delta;
-                                        fullThought += thought;
-                                        sendEvent({ type: 'thought', content: thought });
-                                    } else if (event.type === 'response.output_text.delta') {
-                                        decisionText += event.delta;
-                                    }
-                                } catch { /* ignore parse errors */ }
-                            }
-                        }
-
-                        return decisionText;
-                    };
-
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
                         prompt,
-                        runDecisionStream,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
@@ -364,7 +289,7 @@ export async function POST(req) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
-                    const finalSystemPrompt = `${baseSystemPrompt}${webSearchGuide}${searchContextSection}`;
+                    const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
                     const finalInput = baseInputWithInstructions.slice();
                     finalInput[0] = { role: 'developer', content: [{ type: 'input_text', text: finalSystemPrompt }] };
                     const requestBody = {

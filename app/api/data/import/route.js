@@ -14,7 +14,6 @@ const MAX_MESSAGES_PER_CONVERSATION = 500;
 const MAX_MESSAGE_CHARS = 20000;
 const MAX_PART_TEXT_CHARS = 10000;
 const MAX_PARTS_PER_MESSAGE = 20;
-const MAX_IMAGES_PER_MESSAGE = 4;
 const MAX_URL_CHARS = 2048;
 const MAX_TITLE_CHARS = 200;
 const MAX_PROMPTS = 50;
@@ -67,6 +66,10 @@ function sanitizeMessage(msg, idx) {
   if (!ALLOWED_ROLES.has(role)) throw new Error(`messages[${idx}].role invalid`);
   if (!ALLOWED_MESSAGE_TYPES.has(type)) throw new Error(`messages[${idx}].type invalid`);
 
+  if (!Array.isArray(msg.parts) || msg.parts.length === 0) {
+    throw new Error(`messages[${idx}].parts required`);
+  }
+
   const out = {
     role,
     type,
@@ -98,50 +101,39 @@ function sanitizeMessage(msg, idx) {
     }
     if (timeline.length > 0) out.thinkingTimeline = timeline;
   }
-  if (typeof msg.image === 'string' && msg.image) {
-    if (!isAllowedImageUrl(msg.image)) throw new Error(`messages[${idx}].image invalid`);
-    out.image = msg.image;
+  if (msg.parts.length > MAX_PARTS_PER_MESSAGE) {
+    throw new Error(`messages[${idx}].parts too many`);
   }
-  if (Array.isArray(msg.images)) {
-    if (msg.images.length > MAX_IMAGES_PER_MESSAGE) {
-      throw new Error(`messages[${idx}].images too many`);
+  const parts = [];
+  for (const part of msg.parts) {
+    if (!isPlainObject(part)) continue;
+    const p = {};
+    if (typeof part.text === 'string') {
+      if (part.text.length > MAX_PART_TEXT_CHARS) {
+        throw new Error(`messages[${idx}].parts text too long`);
+      }
+      if (part.text) p.text = part.text;
     }
-    const filtered = msg.images.filter((url) => isAllowedImageUrl(url));
-    if (filtered.length !== msg.images.length) {
-      throw new Error(`messages[${idx}].images invalid`);
+    if (isPlainObject(part.inlineData)) {
+      const url = part.inlineData.url;
+      if (!isAllowedImageUrl(url)) {
+        throw new Error(`messages[${idx}].parts image invalid`);
+      }
+      const mimeType = typeof part.inlineData.mimeType === 'string' ? part.inlineData.mimeType.trim() : '';
+      if (!mimeType || mimeType.length > 128) {
+        throw new Error(`messages[${idx}].parts image mimeType invalid`);
+      }
+      p.inlineData = { url, mimeType };
     }
-    out.images = filtered;
+    if (typeof part.thoughtSignature === 'string' && part.thoughtSignature.length <= 256) {
+      p.thoughtSignature = part.thoughtSignature;
+    }
+    if (Object.keys(p).length > 0) parts.push(p);
   }
-  if (typeof msg.mimeType === 'string' && msg.mimeType) out.mimeType = msg.mimeType;
-  if (Array.isArray(msg.parts)) {
-    if (msg.parts.length > MAX_PARTS_PER_MESSAGE) {
-      throw new Error(`messages[${idx}].parts too many`);
-    }
-    const parts = [];
-    for (const part of msg.parts) {
-      if (!isPlainObject(part)) continue;
-      const p = {};
-      if (typeof part.text === 'string') {
-        if (part.text.length > MAX_PART_TEXT_CHARS) {
-          throw new Error(`messages[${idx}].parts text too long`);
-        }
-        if (part.text) p.text = part.text;
-      }
-      if (isPlainObject(part.inlineData)) {
-        const url = part.inlineData.url;
-        if (!isAllowedImageUrl(url)) {
-          throw new Error(`messages[${idx}].parts image invalid`);
-        }
-        const mimeType = typeof part.inlineData.mimeType === 'string' ? part.inlineData.mimeType : 'image/jpeg';
-        p.inlineData = { url, mimeType: mimeType.slice(0, 128) };
-      }
-      if (typeof part.thoughtSignature === 'string' && part.thoughtSignature.length <= 256) {
-        p.thoughtSignature = part.thoughtSignature;
-      }
-      if (Object.keys(p).length > 0) parts.push(p);
-    }
-    if (parts.length > 0) out.parts = parts;
+  if (parts.length === 0) {
+    throw new Error(`messages[${idx}].parts invalid`);
   }
+  out.parts = parts;
 
   if (msg.createdAt) {
     const d = new Date(msg.createdAt);
@@ -250,6 +242,11 @@ export async function POST(req) {
 
   try {
     if (!isPlainObject(payload)) throw new Error('Body must be a JSON object');
+
+    if (payload.schemaVersion !== 1) {
+      throw new Error('schemaVersion must be 1');
+    }
+
     if (!isPlainObject(payload.data)) throw new Error('Missing data');
 
     const conversationsSrc = payload.data.conversations;

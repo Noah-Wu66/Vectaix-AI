@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { ExternalLink, Globe, X } from "lucide-react";
-import { Gemini, Claude, OpenAI } from "@lobehub/icons";
+import { Gemini, Claude, OpenAI, Doubao } from "@lobehub/icons";
 
 export function AIAvatar({ model, size = 24 }) {
-  const props = { size, shape: "square", style: { borderRadius: 6 } };
+  const squareProps = { size, shape: "square" };
+  const props = { ...squareProps, style: { borderRadius: 6 } };
+  if (model?.startsWith("volcengine/doubao-seed-")) {
+    return <Doubao.Avatar {...squareProps} />;
+  }
   if (model?.startsWith("claude-")) {
     return <Claude.Avatar {...props} />;
   }

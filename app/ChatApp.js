@@ -365,6 +365,7 @@ export default function ChatApp() {
         // - Gemini 对话进入后，如果当前不是 Gemini 模型，强制变为 Flash
         // - Claude 对话进入后，如果当前不是 Claude 模型，强制变为 Sonnet
         // - OpenAI 对话进入后，如果当前不是 OpenAI 模型，强制变为 GPT
+        // - Seed 对话进入后，如果当前不是 Seed 模型，强制变为 Seed
         let targetModel = model; // 默认保持当前模型
         if (conversationProvider === "gemini" && currentProvider !== "gemini") {
           targetModel = "gemini-3-flash-preview";
@@ -372,6 +373,8 @@ export default function ChatApp() {
           targetModel = "claude-sonnet-4-5-20250929";
         } else if (conversationProvider === "openai" && currentProvider !== "openai") {
           targetModel = "gpt-5.2";
+        } else if (conversationProvider === "seed" && currentProvider !== "seed") {
+          targetModel = "volcengine/doubao-seed-2.0-pro";
         } else if (conversationProvider === currentProvider) {
           // provider 相同，保持当前模型不变
           targetModel = model;
@@ -398,10 +401,10 @@ export default function ChatApp() {
         if (Number.isFinite(nextHistoryLimit) && nextHistoryLimit >= 0) {
           setHistoryLimit(nextHistoryLimit);
         }
+        const isOpusConv = typeof conversationModel === "string" && conversationModel.startsWith("claude-opus-4-6");
         const maxTokensValue = Number(settings.maxTokens);
         if (Number.isFinite(maxTokensValue) && maxTokensValue > 0) {
-          const isOpusConv = typeof conversationModel === "string" && conversationModel.startsWith("claude-opus-4-6");
-          const providerLimits = { claude: isOpusConv ? 128000 : 64000, openai: 128000, gemini: 65536 };
+          const providerLimits = { claude: isOpusConv ? 128000 : 64000, openai: 128000, gemini: 64000, seed: 64000 };
           const maxAllowed = providerLimits[conversationProvider];
           setMaxTokens(Number.isFinite(maxAllowed) ? Math.min(maxTokensValue, maxAllowed) : maxTokensValue);
         }
@@ -495,7 +498,7 @@ export default function ChatApp() {
 
     // 如果有对话历史且 provider 不同，提示用户需要新建对话
     if (messages.length > 0 && currentProvider && nextProvider && currentProvider !== nextProvider) {
-      const providerNames = { gemini: "Gemini", claude: "Claude", openai: "OpenAI" };
+      const providerNames = { gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "Seed" };
       setConfirmModalConfig({
         title: "切换模型",
         message: `切换到 ${providerNames[nextProvider]} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider]} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,

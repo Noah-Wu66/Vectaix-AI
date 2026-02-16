@@ -92,10 +92,11 @@ export default function TokenCounter({
       }
 
       // 图片（每张高分辨率图片约 1000 tokens）
-      if (Array.isArray(msg.images) && msg.images.length > 0) {
-        imageCount += msg.images.length;
-      } else if (msg.image) {
-        imageCount += 1;
+      if (Array.isArray(msg.parts) && msg.parts.length > 0) {
+        for (const part of msg.parts) {
+          const url = part?.inlineData?.url;
+          if (typeof url === "string" && url) imageCount += 1;
+        }
       }
 
       // 联网搜索注入的上下文 tokens（由后端计算）

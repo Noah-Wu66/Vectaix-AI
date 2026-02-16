@@ -8,8 +8,6 @@ const MessageSchema = new mongoose.Schema({
     thinkingTimeline: { type: [mongoose.Schema.Types.Mixed] }, // 联网模式多步骤流程
     citations: { type: [mongoose.Schema.Types.Mixed] },
     type: { type: String, default: 'text', enum: ['text', 'parts', 'error'] },
-    image: { type: String }, // URL
-    mimeType: { type: String },
     // Gemini multi-turn image editing: persist sanitized content.parts with thoughtSignature
     // - text parts: { text, thought?, thoughtSignature? }
     // - image parts: { inlineData: { mimeType, url }, thoughtSignature? }

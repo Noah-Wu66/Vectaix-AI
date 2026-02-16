@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  UI_ACTIVE_PROMPT_ID_KEY,
   UI_ACTIVE_PROMPT_IDS_KEY,
   UI_BUDGET_TOKENS_KEY,
   UI_COMPLETION_SOUND_VOLUME_KEY,
@@ -16,13 +15,17 @@ import {
 } from "./storageKeys";
 
 const DEFAULT_MODEL = "gemini-3-flash-preview";
+const SEED_MODEL_ID = "volcengine/doubao-seed-2.0-pro";
+const MAX_TOKENS_64K = 64000;
+const MAX_TOKENS_128K = 128000;
 const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
   "gemini-3-pro-preview": "high",
   "claude-opus-4-6-20260205": "high",
   "gpt-5.2": "medium",
+  [SEED_MODEL_ID]: "medium",
 };
-const DEFAULT_MAX_TOKENS = 65536;
+const DEFAULT_MAX_TOKENS = MAX_TOKENS_64K;
 const DEFAULT_BUDGET_TOKENS = 32000;
 const DEFAULT_COMPLETION_SOUND_VOLUME = 60;
 
@@ -98,11 +101,14 @@ export function useUserSettings() {
     const localThinkingLevels = readLocalJson(UI_THINKING_LEVELS_KEY);
     const localHistoryLimit = readLocalSetting(UI_HISTORY_LIMIT_KEY);
     const localActivePromptIds = readLocalJson(UI_ACTIVE_PROMPT_IDS_KEY);
-    const localActivePromptId = readLocalSetting(UI_ACTIVE_PROMPT_ID_KEY);
     const localMaxTokens = readLocalSetting(UI_MAX_TOKENS_KEY);
     const localBudgetTokens = readLocalSetting(UI_BUDGET_TOKENS_KEY);
     const localWebSearch = readLocalSetting(UI_WEB_SEARCH_KEY);
     const localCompletionSoundVolume = readLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY);
+
+    const initialModel = typeof localModel === "string" && localModel
+      ? localModel
+      : DEFAULT_MODEL;
 
     if (typeof localTheme === "string") _setThemeMode(localTheme);
     if (typeof localFont === "string") _setFontSize(localFont);
@@ -112,12 +118,16 @@ export function useUserSettings() {
       const parsed = Number(localHistoryLimit);
       _setHistoryLimit(Number.isFinite(parsed) ? parsed : 0);
     }
-    if (isPlainObject(localActivePromptIds)) _setActivePromptIds(localActivePromptIds);
-    if (typeof localActivePromptId === "string") _setActivePromptId(localActivePromptId);
+    if (isPlainObject(localActivePromptIds)) {
+      _setActivePromptIds(localActivePromptIds);
+      const remembered = localActivePromptIds?.[initialModel];
+      if (typeof remembered === "string" && remembered) {
+        _setActivePromptId(remembered);
+      }
+    }
     if (localMaxTokens !== null) {
       const parsed = Number(localMaxTokens);
-      const validParsed = Number.isFinite(parsed) ? parsed : DEFAULT_MAX_TOKENS;
-      _setMaxTokens(validParsed === 64000 ? 65536 : validParsed);
+      _setMaxTokens(Number.isFinite(parsed) ? parsed : DEFAULT_MAX_TOKENS);
     }
     if (localBudgetTokens !== null) {
       const parsed = Number(localBudgetTokens);
@@ -138,38 +148,30 @@ export function useUserSettings() {
 
   useEffect(() => {
     if (typeof model !== "string") return;
+    if (model === SEED_MODEL_ID || model.startsWith("gemini-")) {
+      if (maxTokens > MAX_TOKENS_64K) {
+        _setMaxTokens(MAX_TOKENS_64K);
+        writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_64K));
+      }
+      return;
+    }
     if (model.startsWith("claude-opus-4-6")) {
-      if (maxTokens > 128000) {
-        _setMaxTokens(128000);
-        writeLocalSetting(UI_MAX_TOKENS_KEY, "128000");
+      if (maxTokens > MAX_TOKENS_128K) {
+        _setMaxTokens(MAX_TOKENS_128K);
+        writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_128K));
       }
       return;
     }
     if (model.startsWith("claude-")) {
-      if (maxTokens > 64000) {
-        _setMaxTokens(64000);
-        writeLocalSetting(UI_MAX_TOKENS_KEY, "64000");
+      if (maxTokens > MAX_TOKENS_64K) {
+        _setMaxTokens(MAX_TOKENS_64K);
+        writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_64K));
       }
       return;
     }
-    if (model.startsWith("gpt-") && maxTokens <= 65536) {
-      _setMaxTokens(128000);
-      writeLocalSetting(UI_MAX_TOKENS_KEY, "128000");
-      return;
-    }
-    if (model.startsWith("gpt-") && maxTokens > 128000) {
-      _setMaxTokens(128000);
-      writeLocalSetting(UI_MAX_TOKENS_KEY, "128000");
-      return;
-    }
-    if (model.startsWith("gemini-")) {
-      if (maxTokens > 65536) {
-        _setMaxTokens(65536);
-        writeLocalSetting(UI_MAX_TOKENS_KEY, "65536");
-      } else if (maxTokens === 64000) {
-        _setMaxTokens(65536);
-        writeLocalSetting(UI_MAX_TOKENS_KEY, "65536");
-      }
+    if (model.startsWith("gpt-") && maxTokens !== MAX_TOKENS_128K) {
+      _setMaxTokens(MAX_TOKENS_128K);
+      writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_128K));
     }
   }, [model, maxTokens]);
 
@@ -200,7 +202,6 @@ export function useUserSettings() {
 
   const setActivePromptId = useCallback((id) => {
     _setActivePromptId(id);
-    writeLocalSetting(UI_ACTIVE_PROMPT_ID_KEY, id);
   }, []);
 
   const setMaxTokens = useCallback((tokens) => {

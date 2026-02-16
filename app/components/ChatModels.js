@@ -4,14 +4,14 @@ export const CHAT_MODELS = [
     name: "Flash",
     shortName: "Flash",
     provider: "gemini",
-    contextWindow: 1048576,
+    contextWindow: 1000000,
   },
   {
     id: "gemini-3-pro-preview",
     name: "Pro",
     shortName: "Pro",
     provider: "gemini",
-    contextWindow: 1048576,
+    contextWindow: 1000000,
   },
   {
     id: "claude-sonnet-4-5-20250929",
@@ -32,6 +32,13 @@ export const CHAT_MODELS = [
     name: "GPT",
     shortName: "GPT",
     provider: "openai",
-    contextWindow: 1048576,
+    contextWindow: 1000000,
+  },
+  {
+    id: "volcengine/doubao-seed-2.0-pro",
+    name: "Seed",
+    shortName: "Seed",
+    provider: "seed",
+    contextWindow: 256000,
   },
 ];

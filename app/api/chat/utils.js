@@ -88,18 +88,16 @@ export function getStoredPartsFromMessage(msg) {
 export function sanitizeStoredMessage(msg) {
     if (!msg || typeof msg !== 'object') return null;
     if (msg.role !== 'user' && msg.role !== 'model') return null;
+    if (!Array.isArray(msg.parts) || msg.parts.length === 0) return null;
     const out = {
         role: msg.role,
         content: typeof msg.content === 'string' ? msg.content : '',
         type: typeof msg.type === 'string' ? msg.type : 'text',
     };
     if (isNonEmptyString(msg.id) && msg.id.length <= 128) out.id = msg.id;
-    if (isNonEmptyString(msg.image)) out.image = msg.image;
-    if (Array.isArray(msg.images) && msg.images.length > 0) out.images = msg.images;
-    if (isNonEmptyString(msg.mimeType)) out.mimeType = msg.mimeType;
     if (isNonEmptyString(msg.thought)) out.thought = msg.thought;
     if (Array.isArray(msg.citations) && msg.citations.length > 0) out.citations = msg.citations;
-    if (Array.isArray(msg.parts) && msg.parts.length > 0) out.parts = msg.parts;
+    out.parts = msg.parts;
     return out;
 }
 

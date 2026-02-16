@@ -55,8 +55,6 @@ async function isUrlOwnedByUser(userId, url) {
   const conversationMatch = await Conversation.exists({
     userId,
     $or: [
-      { "messages.image": url },
-      { "messages.images": url },
       { "messages.parts.inlineData.url": url },
     ],
   });

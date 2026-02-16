@@ -4,7 +4,6 @@ export const UI_MODEL_KEY = "vectaix_ui_model";
 export const UI_THINKING_LEVELS_KEY = "vectaix_ui_thinkingLevels";
 export const UI_HISTORY_LIMIT_KEY = "vectaix_ui_historyLimit";
 export const UI_ACTIVE_PROMPT_IDS_KEY = "vectaix_ui_activePromptIds";
-export const UI_ACTIVE_PROMPT_ID_KEY = "vectaix_ui_activePromptId";
 export const UI_MAX_TOKENS_KEY = "vectaix_ui_maxTokens";
 export const UI_BUDGET_TOKENS_KEY = "vectaix_ui_budgetTokens";
 export const UI_WEB_SEARCH_KEY = "vectaix_ui_webSearch";

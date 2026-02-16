@@ -1,1 +1,0 @@
-export const BASE_SYSTEM_PROMPT_TEXT = "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";

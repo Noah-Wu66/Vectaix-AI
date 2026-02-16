@@ -204,16 +204,15 @@ export async function runChat({
     ? [{
         role: "user",
         content: `[以下是之前对话的摘要，请基于此继续对话]\n\n${_compressedSummary}`,
+        parts: [{ text: `[以下是之前对话的摘要，请基于此继续对话]\n\n${_compressedSummary}` }],
       }, {
         role: "model",
         content: "好的，我已了解之前的对话内容，请继续。",
+        parts: [{ text: "好的，我已了解之前的对话内容，请继续。" }],
       }]
     : historyMessages.map((m) => ({
         role: m.role,
         content: m.content,
-        image: m.image,
-        images: m.images,
-        mimeType: m.mimeType,
         parts: m.parts,
       }));
 
@@ -234,7 +233,13 @@ export async function runChat({
   };
 
   // 根据 provider 选择 API 端点
-  const apiEndpoint = provider === "claude" ? "/api/claude" : provider === "openai" ? "/api/openai" : "/api/gemini";
+  const apiEndpoint = provider === "claude"
+    ? "/api/anthropic"
+    : provider === "seed"
+      ? "/api/bytedance"
+      : provider === "openai"
+      ? "/api/openai"
+      : "/api/google";
 
   setLoading(true);
   let streamMsgId = modelMessageId;
@@ -295,12 +300,14 @@ export async function runChat({
             role: "user",
             content: `[以下是之前对话的摘要]\n\n${summary}`,
             type: "text",
+            parts: [{ text: `[以下是之前对话的摘要]\n\n${summary}` }],
           };
           const summaryModelMsg = {
             id: generateMessageId(),
             role: "model",
             content: "好的，我已了解之前的对话内容，请继续。",
             type: "text",
+            parts: [{ text: "好的，我已了解之前的对话内容，请继续。" }],
           };
 
           // 替换前端消息列表：摘要 + 最后一条用户消息（如果有）
@@ -554,6 +561,7 @@ export async function runChat({
         const nextMsg = {
           ...base,
           content: displayedText,
+          parts: displayedText.length > 0 ? [{ text: displayedText }] : base.parts,
           thought: fullThought,
           isThinkingStreaming: !thinkingEnded,
           isWaitingFirstChunk: !hasReceivedContent,
@@ -1046,12 +1054,14 @@ export async function runChat({
             role: "user",
             content: `[以下是之前对话的摘要]\n\n${summary}`,
             type: "text",
+            parts: [{ text: `[以下是之前对话的摘要]\n\n${summary}` }],
           };
           const summaryModelMsg = {
             id: generateMessageId(),
             role: "model",
             content: "好的，我已了解之前的对话内容，请继续。",
             type: "text",
+            parts: [{ text: "好的，我已了解之前的对话内容，请继续。" }],
           };
 
           const compressedMessages = [summaryUserMsg, summaryModelMsg];

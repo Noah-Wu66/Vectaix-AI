@@ -278,7 +278,7 @@ export default function MessageList({
                   />
                 )}
 
-                {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !msg.image && !Array.isArray(msg.images) && !hasThinkingTimeline && (
+                {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !hasThinkingTimeline && (
                   <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
                     <span
                       className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
@@ -398,7 +398,7 @@ export default function MessageList({
                   </div>
                 ) : (
                   <>
-                    {(hasParts || (typeof msg.content === 'string' && msg.content.trim().length > 0) || msg.image) && (
+                    {(hasParts || (typeof msg.content === 'string' && msg.content.trim().length > 0)) && (
                       <div
                         className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
@@ -445,30 +445,11 @@ export default function MessageList({
                             })()}
                           </div>
                         ) : (
-                          <>
-                            {/* 多图片支持：优先渲染 images 数组，否则回退到单张 image */}
-                            {Array.isArray(msg.images) && msg.images.length > 1 ? (
-                              <div className="flex flex-wrap gap-2 mb-2">
-                                {msg.images.map((imgSrc, imgIdx) => (
-                                  <Thumb key={imgIdx} src={imgSrc} className="w-fit" onClick={openLightbox} />
-                                ))}
-                              </div>
-                            ) : msg.image && (
-                              <div className="mb-2 w-fit">
-                                <Thumb src={msg.image} onClick={openLightbox} />
-                              </div>
-                            )}
-
-                            {msg.role === "user" ? (
-                              <Markdown enableHighlight={false}>{msg.content}</Markdown>
-                            ) : (
-                              <Markdown
-                                enableHighlight={!msg.isStreaming}
-                              >
-                                {msg.content}
-                              </Markdown>
-                            )}
-                          </>
+                          msg.role === "user" ? (
+                            <Markdown enableHighlight={false}>{msg.content}</Markdown>
+                          ) : (
+                            <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
+                          )
                         )}
 
                         {msg.role === "model" && !msg.isStreaming && msg.citations && (

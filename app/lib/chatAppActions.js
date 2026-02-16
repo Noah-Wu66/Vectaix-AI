@@ -1,9 +1,17 @@
 import { upload } from "@vercel/blob/client";
 import { buildChatConfig, runChat, unlockCompletionSound } from "./chatClient";
-import { getMessageImageSrcs, isDataImageUrl, isHttpUrl } from "./messageImage";
+import { isDataImageUrl, isHttpUrl } from "./messageImage";
 
 let msgIdCounter = 0;
 const generateMsgId = () => `msg_${Date.now()}_${++msgIdCounter}`;
+const SEED_MODEL_ID = "volcengine/doubao-seed-2.0-pro";
+
+function getSeedThinkingLevelByBudget(budgetTokens) {
+  const budget = Number(budgetTokens);
+  if (budget <= 4000) return "low";
+  if (budget <= 16000) return "medium";
+  return "high";
+}
 
 export function createChatAppActions({
   toast,
@@ -40,6 +48,9 @@ export function createChatAppActions({
   onConversationActivity,
 }) {
   const getEffectiveThinkingLevel = (m) => {
+    if (m === SEED_MODEL_ID) {
+      return getSeedThinkingLevelByBudget(budgetTokens);
+    }
     const v = thinkingLevels?.[m];
     if (typeof v === "string" && v) return v;
     return undefined;
@@ -115,15 +126,26 @@ export function createChatAppActions({
 
     userInterruptedRef.current = false;
 
-    const firstImagePreview = images?.[0]?.preview;
+    const userMsgParts = [];
+    if (typeof text === "string" && text) {
+      userMsgParts.push({ text });
+    }
+    if (Array.isArray(images) && images.length > 0) {
+      for (const img of images) {
+        const url = img?.preview;
+        const mimeType = img?.file?.type;
+        if (typeof url === "string" && url && typeof mimeType === "string" && mimeType) {
+          userMsgParts.push({ inlineData: { url, mimeType } });
+        }
+      }
+    }
 
     const userMsg = {
       id: generateMsgId(),
       role: "user",
       content: text,
-      type: "text",
-      image: firstImagePreview,
-      images: images?.map((img) => img.preview),
+      type: "parts",
+      parts: userMsgParts,
     };
 
     const historyBeforeUser = messages;
@@ -132,6 +154,7 @@ export function createChatAppActions({
     setLoading(true);
     try {
       const imageUrls = [];
+      const imageMimeTypes = [];
       if (images && images.length > 0) {
         for (const image of images) {
           if (image?.file) {
@@ -141,6 +164,7 @@ export function createChatAppActions({
               clientPayload: JSON.stringify({ kind: "chat" }),
             });
             imageUrls.push(blob.url);
+            imageMimeTypes.push(image.file.type);
           }
         }
       }
@@ -151,11 +175,18 @@ export function createChatAppActions({
           for (let i = next.length - 1; i >= 0; i -= 1) {
             const m = next[i];
             if (m?.role === "user" && m?.id === userMsg.id) {
-              next[i] = {
-                ...m,
-                image: imageUrls[0],
-                images: imageUrls,
-              };
+              const nextParts = [];
+              if (typeof text === "string" && text) {
+                nextParts.push({ text });
+              }
+              for (let j = 0; j < imageUrls.length; j += 1) {
+                const url = imageUrls[j];
+                const mimeType = imageMimeTypes[j];
+                if (typeof url === "string" && url && typeof mimeType === "string" && mimeType) {
+                  nextParts.push({ inlineData: { url, mimeType } });
+                }
+              }
+              next[i] = { ...m, parts: nextParts };
               break;
             }
           }
@@ -289,8 +320,14 @@ export function createChatAppActions({
     const newContent = editingContent.trim();
     const oldMsg = messages[index];
     const messagesBeforeEdit = messages.slice();
-    const existingImageSrcs = getMessageImageSrcs(oldMsg);
-    const canKeepExistingImages = existingImageSrcs.length > 0 && existingImageSrcs.every((src) => isHttpUrl(src) || isDataImageUrl(src));
+    const existingImageParts = Array.isArray(oldMsg?.parts)
+      ? oldMsg.parts.filter((p) => typeof p?.inlineData?.url === "string" && p.inlineData.url)
+      : [];
+    const canKeepExistingImages = existingImageParts.length > 0 && existingImageParts.every((p) => {
+      const url = p?.inlineData?.url;
+      const mimeType = p?.inlineData?.mimeType;
+      return (isHttpUrl(url) || isDataImageUrl(url)) && typeof mimeType === "string" && Boolean(mimeType);
+    });
     const hasImageAfterEdit =
       (editingImageAction === "new" && editingImage?.file) ||
       (editingImageAction === "keep" && canKeepExistingImages);
@@ -305,63 +342,61 @@ export function createChatAppActions({
     const nextMessages = messages.slice(0, index);
     const updatedMsg = { ...oldMsg, content: newContent };
 
-    let nextImageUrls = [];
-    let nextMimeType = null;
+    let nextImageParts = [];
     try {
       if (editingImageAction === "remove") {
-        nextImageUrls = [];
+        nextImageParts = [];
       } else if (editingImageAction === "new" && editingImage?.file) {
         const blob = await upload(editingImage.file.name, editingImage.file, {
           access: "public",
           handleUploadUrl: "/api/upload",
           clientPayload: JSON.stringify({ kind: "chat" }),
         });
-        nextImageUrls = [blob.url];
-        nextMimeType = editingImage.mimeType;
+        const mimeType = typeof editingImage.mimeType === "string" ? editingImage.mimeType : "";
+        if (!mimeType) throw new Error("图片 mimeType 缺失");
+        nextImageParts = [{ inlineData: { url: blob.url, mimeType } }];
       } else if (editingImageAction === "keep") {
-        if (typeof oldMsg?.mimeType === "string" && oldMsg.mimeType) nextMimeType = oldMsg.mimeType;
+        for (const p of existingImageParts) {
+          const src = p?.inlineData?.url;
+          const mimeType = typeof p?.inlineData?.mimeType === "string" ? p.inlineData.mimeType : "";
+          if (!src || !mimeType) continue;
 
-        for (const src of existingImageSrcs) {
           if (isHttpUrl(src)) {
-            nextImageUrls.push(src);
-          } else if (isDataImageUrl(src)) {
+            nextImageParts.push({ inlineData: { url: src, mimeType } });
+            continue;
+          }
+
+          if (isDataImageUrl(src)) {
             const resp = await fetch(src);
             const b = await resp.blob();
-            const mime = b.type;
-            const ext = mime.split("/")[1].replace(/[^a-z0-9]/gi, "");
-            const file = new File([b], `edit-${Date.now()}-${nextImageUrls.length}.${ext}`, { type: mime });
+            const mime = b.type || mimeType;
+            if (!mime) throw new Error("图片 mimeType 缺失");
+            const ext = mime.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "png";
+            const file = new File([b], `edit-${Date.now()}-${nextImageParts.length}.${ext}`, { type: mime });
             const uploaded = await upload(file.name, file, {
               access: "public",
               handleUploadUrl: "/api/upload",
               clientPayload: JSON.stringify({ kind: "chat" }),
             });
-            nextImageUrls.push(uploaded.url);
-            if (!nextMimeType) nextMimeType = mime;
+            nextImageParts.push({ inlineData: { url: uploaded.url, mimeType: mime } });
           }
         }
       }
 
       const parts = [];
       if (newContent) parts.push({ text: newContent });
-      for (const imgUrl of nextImageUrls) {
-        const inlineData = { url: imgUrl };
-        if (nextMimeType) inlineData.mimeType = nextMimeType;
-        parts.push({ inlineData });
+      for (const part of nextImageParts) {
+        if (part?.inlineData?.url && part?.inlineData?.mimeType) {
+          parts.push({ inlineData: { url: part.inlineData.url, mimeType: part.inlineData.mimeType } });
+        }
       }
 
       if (parts.length > 0) updatedMsg.parts = parts;
       else delete updatedMsg.parts;
 
-      if (nextImageUrls.length > 0) {
-        updatedMsg.image = nextImageUrls[0];
-        updatedMsg.images = nextImageUrls;
-      } else {
-        delete updatedMsg.image;
-        delete updatedMsg.images;
-      }
-
-      if (nextMimeType) updatedMsg.mimeType = nextMimeType;
-      else if (editingImageAction === "remove") delete updatedMsg.mimeType;
+      delete updatedMsg.image;
+      delete updatedMsg.images;
+      delete updatedMsg.mimeType;
     } catch (e) {
       chatRequestLockRef.current = false;
       setLoading(false);

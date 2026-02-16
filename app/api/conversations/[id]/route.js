@@ -15,7 +15,6 @@ const MAX_MESSAGE_CHARS = 20000;
 const MAX_MESSAGE_ID_CHARS = 128;
 const MAX_PART_TEXT_CHARS = 10000;
 const MAX_PARTS_PER_MESSAGE = 20;
-const MAX_IMAGES_PER_MESSAGE = 4;
 const MAX_URL_CHARS = 2048;
 const MAX_TITLE_CHARS = 200;
 const MAX_CITATIONS = 20;
@@ -58,6 +57,10 @@ function sanitizeMessage(msg, idx) {
     if (!ALLOWED_ROLES.has(role)) throw new Error(`messages[${idx}].role invalid`);
     if (!ALLOWED_MESSAGE_TYPES.has(type)) throw new Error(`messages[${idx}].type invalid`);
 
+    if (!Array.isArray(msg.parts) || msg.parts.length === 0) {
+        throw new Error(`messages[${idx}].parts required`);
+    }
+
     const content = typeof msg.content === 'string' ? msg.content : '';
     if (content.length > MAX_MESSAGE_CHARS) throw new Error(`messages[${idx}].content too long`);
 
@@ -73,22 +76,6 @@ function sanitizeMessage(msg, idx) {
     if (typeof msg.thought === 'string') {
         if (msg.thought.length > MAX_MESSAGE_CHARS) throw new Error(`messages[${idx}].thought too long`);
         if (msg.thought) out.thought = msg.thought;
-    }
-
-    if (typeof msg.image === 'string') {
-        if (!isAllowedImageUrl(msg.image)) throw new Error(`messages[${idx}].image invalid`);
-        out.image = msg.image;
-    }
-
-    if (Array.isArray(msg.images)) {
-        if (msg.images.length > MAX_IMAGES_PER_MESSAGE) throw new Error(`messages[${idx}].images too many`);
-        const filtered = msg.images.filter((url) => isAllowedImageUrl(url));
-        if (filtered.length !== msg.images.length) throw new Error(`messages[${idx}].images invalid`);
-        out.images = filtered;
-    }
-
-    if (typeof msg.mimeType === 'string' && msg.mimeType.length <= 128) {
-        out.mimeType = msg.mimeType;
     }
 
     if (Array.isArray(msg.citations)) {
@@ -132,31 +119,35 @@ function sanitizeMessage(msg, idx) {
         if (timeline.length > 0) out.thinkingTimeline = timeline;
     }
 
-    if (Array.isArray(msg.parts)) {
-        if (msg.parts.length > MAX_PARTS_PER_MESSAGE) throw new Error(`messages[${idx}].parts too many`);
-        const parts = [];
-        for (const part of msg.parts) {
-            if (!isPlainObject(part)) continue;
-            const p = {};
-            if (typeof part.text === 'string') {
-                if (part.text.length > MAX_PART_TEXT_CHARS) {
-                    throw new Error(`messages[${idx}].parts text too long`);
-                }
-                if (part.text) p.text = part.text;
+    if (msg.parts.length > MAX_PARTS_PER_MESSAGE) throw new Error(`messages[${idx}].parts too many`);
+    const parts = [];
+    for (const part of msg.parts) {
+        if (!isPlainObject(part)) continue;
+        const p = {};
+        if (typeof part.text === 'string') {
+            if (part.text.length > MAX_PART_TEXT_CHARS) {
+                throw new Error(`messages[${idx}].parts text too long`);
             }
-            if (isPlainObject(part.inlineData)) {
-                const url = part.inlineData.url;
-                if (!isAllowedImageUrl(url)) throw new Error(`messages[${idx}].parts image invalid`);
-                const mimeType = typeof part.inlineData.mimeType === 'string' ? part.inlineData.mimeType : 'image/jpeg';
-                p.inlineData = { url, mimeType: mimeType.slice(0, 128) };
-            }
-            if (typeof part.thoughtSignature === 'string' && part.thoughtSignature.length <= 256) {
-                p.thoughtSignature = part.thoughtSignature;
-            }
-            if (Object.keys(p).length > 0) parts.push(p);
+            if (part.text) p.text = part.text;
         }
-        if (parts.length > 0) out.parts = parts;
+        if (isPlainObject(part.inlineData)) {
+            const url = part.inlineData.url;
+            if (!isAllowedImageUrl(url)) throw new Error(`messages[${idx}].parts image invalid`);
+            const mimeType = typeof part.inlineData.mimeType === 'string' ? part.inlineData.mimeType.trim() : '';
+            if (!mimeType || mimeType.length > 128) {
+                throw new Error(`messages[${idx}].parts image mimeType invalid`);
+            }
+            p.inlineData = { url, mimeType };
+        }
+        if (typeof part.thoughtSignature === 'string' && part.thoughtSignature.length <= 256) {
+            p.thoughtSignature = part.thoughtSignature;
+        }
+        if (Object.keys(p).length > 0) parts.push(p);
     }
+    if (parts.length === 0) {
+        throw new Error(`messages[${idx}].parts invalid`);
+    }
+    out.parts = parts;
 
     if (msg.createdAt) {
         const d = new Date(msg.createdAt);

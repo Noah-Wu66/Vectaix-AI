@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import Anthropic from "@anthropic-ai/sdk";
 import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
@@ -22,76 +22,71 @@ export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
-async function storedPartToRequestPart(part) {
+async function storedPartToClaudePart(part) {
     if (!part || typeof part !== 'object') return null;
 
     if (isNonEmptyString(part.text)) {
-        const p = { text: part.text };
-        if (isNonEmptyString(part.thoughtSignature)) p.thoughtSignature = part.thoughtSignature;
-        return p;
+        return { type: 'text', text: part.text };
     }
 
     const url = part?.inlineData?.url;
     if (isNonEmptyString(url)) {
         const { base64Data, mimeType: fetchedMimeType } = await fetchImageAsBase64(url);
         const mimeType = part.inlineData?.mimeType;
-        const p = { inlineData: { mimeType, data: base64Data } };
-        if (isNonEmptyString(part.thoughtSignature)) p.thoughtSignature = part.thoughtSignature;
-        return p;
+        return {
+            type: 'image',
+            source: {
+                type: 'base64',
+                media_type: mimeType,
+                data: base64Data
+            }
+        };
     }
 
     return null;
 }
 
-async function buildGeminiContentsFromMessages(messages) {
-    const contents = [];
+async function buildClaudeMessagesFromHistory(messages) {
+    const claudeMessages = [];
     for (const msg of messages) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
         const storedParts = getStoredPartsFromMessage(msg);
         if (!storedParts || storedParts.length === 0) continue;
-        const parts = [];
+
+        const content = [];
         for (const storedPart of storedParts) {
-            const p = await storedPartToRequestPart(storedPart);
-            if (p) parts.push(p);
+            const p = await storedPartToClaudePart(storedPart);
+            if (p) content.push(p);
         }
-        if (parts.length) contents.push({ role: msg.role, parts });
+        if (content.length) {
+            claudeMessages.push({
+                role: msg.role === 'model' ? 'assistant' : 'user',
+                content
+            });
+        }
     }
-    return contents;
+    return claudeMessages;
 }
 
 export async function POST(req) {
-    // 写入许可时间戳：只有当 conversation.updatedAt <= 此值时，才允许写入 model 消息
-    // 用于防止"停止后再 regenerate"时，旧请求晚于新请求覆盖导致重复回答
     let writePermitTime = null;
 
     try {
-        // Validate request body
         let body;
         try {
             body = await req.json();
         } catch {
-            return Response.json(
-                { error: 'Invalid JSON in request body' },
-                { status: 400 }
-            );
+            return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
         }
 
         const { prompt, model, config, history, historyLimit, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
 
-        // Validate required fields
         if (!model || typeof model !== 'string') {
-            return Response.json(
-                { error: 'Model is required and must be a string' },
-                { status: 400 }
-            );
+            return Response.json({ error: 'Model is required' }, { status: 400 });
         }
-
         if (!prompt || typeof prompt !== 'string') {
-            return Response.json(
-                { error: 'Prompt is required and must be a string' },
-                { status: 400 }
-            );
+            return Response.json({ error: 'Prompt is required' }, { status: 400 });
         }
 
         const auth = await getAuthPayload();
@@ -126,24 +121,22 @@ export async function POST(req) {
             user = auth;
         } catch (dbError) {
             console.error("Database connection error:", dbError?.message);
-            return Response.json(
-                { error: 'Database connection failed' },
-                { status: 500 }
-            );
+            return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
         let currentConversationId = conversationId;
 
-        // 所有用户统一使用 zenmux 路由
-        const apiModel = model === 'gemini-3-pro-preview'
-            ? 'google/gemini-3-pro-preview'
-            : 'google/gemini-3-flash-preview';
-        const ai = new GoogleGenAI({
+        const apiModel = model.startsWith('claude-opus-4-6')
+            ? 'anthropic/claude-opus-4.6'
+            : model.startsWith('claude-sonnet-4-5')
+                ? 'anthropic/claude-sonnet-4.5'
+                : model;
+        const client = new Anthropic({
             apiKey: process.env.ZENMUX_API_KEY,
-            httpOptions: { apiVersion: 'v1', baseUrl: 'https://zenmux.ai/api/vertex-ai' }
+            baseURL: "https://zenmux.ai/api/anthropic",
         });
 
-        // 1) Ensure Conversation exists (for logged-in users)
+        // 创建新会话
         if (user && !currentConversationId) {
             const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
             const newConv = await Conversation.create({
@@ -156,8 +149,7 @@ export async function POST(req) {
             currentConversationId = newConv._id.toString();
         }
 
-        // 2) Prepare Request Contents
-        let contents = [];
+        let claudeMessages = [];
         const limit = Number.parseInt(historyLimit);
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
@@ -172,87 +164,55 @@ export async function POST(req) {
             ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
             storedMessagesForRegenerate = sanitized;
-            // 记录写入许可时间：只有 updatedAt 仍为此值时才允许写入 model 消息
             writePermitTime = conv.updatedAt?.getTime?.();
         }
 
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
-            // 使用 buildGeminiContentsFromMessages 正确处理图片消息
-            contents = await buildGeminiContentsFromMessages(effectiveMsgs);
+            claudeMessages = await buildClaudeMessagesFromHistory(effectiveMsgs);
         } else {
+            // 非 regenerate 模式：历史消息也需要正确处理图片
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
-            effectiveHistory.forEach(msg => {
-                if (msg.role === 'user' || msg.role === 'model') {
-                    // History remains text-only fallback to save bandwidth
-                    contents.push({
-                        role: msg.role,
-                        parts: [{ text: `${msg.content} ${msg.image ? '[Image sent previously]' : ''}` }]
-                    });
-                }
-            });
+            claudeMessages = await buildClaudeMessagesFromHistory(effectiveHistory);
         }
 
-        // regenerate 模式：最后一条用户消息已经在 messages 里了，这里不再追加"新用户消息"
-        let currentParts = isRegenerateMode ? null : [{ text: prompt }];
+        // 在历史消息的最后一条添加缓存控制，使对话历史可被缓存
+        if (claudeMessages.length > 0) {
+            const lastHistoryMsg = claudeMessages[claudeMessages.length - 1];
+            if (lastHistoryMsg.content?.length > 0) {
+                const lastContent = lastHistoryMsg.content[lastHistoryMsg.content.length - 1];
+                lastContent.cache_control = { type: "ephemeral", ttl: "1h" };
+            }
+        }
 
-        // Handle Image Input (URL from Blob) - 支持多张图片
-        let dbImageMimeType = null;
         let dbImageEntries = [];
 
-        if (!isRegenerateMode && config?.images?.length > 0) {
-            for (const img of config.images) {
-                if (img?.url) {
-                    const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
-                    currentParts.push({
-                        inlineData: {
-                            mimeType: mimeType,
-                            data: base64Data
-                        },
-                        ...(config.mediaResolution ? { mediaResolution: { level: config.mediaResolution } } : {})
-                    });
-                    dbImageEntries.push({ url: img.url, mimeType });
+        if (!isRegenerateMode) {
+            const userContent = [{ type: 'text', text: prompt }];
+
+            // 支持多张图片
+            if (config?.images?.length > 0) {
+                for (const img of config.images) {
+                    if (img?.url) {
+                        const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
+                        userContent.push({
+                            type: 'image',
+                            source: {
+                                type: 'base64',
+                                media_type: mimeType,
+                                data: base64Data
+                            }
+                        });
+                        dbImageEntries.push({ url: img.url, mimeType });
+                    }
                 }
             }
-            if (dbImageEntries.length > 0) {
-                dbImageMimeType = dbImageEntries[0].mimeType;
-            }
+
+            claudeMessages.push({ role: 'user', content: userContent });
         }
 
-        if (!isRegenerateMode) {
-            contents.push({
-                role: "user",
-                parts: currentParts
-            });
-        }
-
-        // 2. Prepare Payload
-        const baseSystemText = injectCurrentTimeSystemReminder(
-            config?.systemPrompt
-        );
-        const baseConfig = {
-            systemInstruction: {
-                parts: [{ text: baseSystemText }]
-            },
-            ...config?.generationConfig
-        };
-
-        if (config?.maxTokens) {
-            baseConfig.maxOutputTokens = config.maxTokens;
-        }
-
-        if (config?.thinkingLevel) {
-            baseConfig.thinkingConfig = {
-                thinkingLevel: config.thinkingLevel,
-                includeThoughts: true
-            };
-        }
-
-        const enableWebSearch = config?.webSearch === true;
-        const webSearchGuide = buildWebSearchGuide(enableWebSearch);
-
-        // 3. Database Logic
+        // 保存用户消息
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
@@ -275,9 +235,7 @@ export async function POST(req) {
                 id: resolvedUserMessageId,
                 role: 'user',
                 content: prompt,
-                type: 'text',
-                images: dbImageEntries.map(e => e.url),
-                ...(dbImageMimeType ? { mimeType: dbImageMimeType } : {}),
+                type: 'parts',
                 parts: storedUserParts
             });
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
@@ -286,39 +244,50 @@ export async function POST(req) {
                 },
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
-            // 记录写入许可时间
             writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
+
+        // 构建请求参数（联网检索上下文将在流式开始前注入）
+        const maxTokens = config?.maxTokens;
+        const budgetTokens = config?.budgetTokens;
+        const thinkingLevel = config?.thinkingLevel;
+        const isOpus = typeof model === "string" && model.startsWith("claude-opus-4-6");
+        const baseSystemPrompt = injectCurrentTimeSystemReminder(
+            typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
+        );
+        const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
+
+        // 是否启用联网搜索
+        const enableWebSearch = config?.webSearch === true;
+
+        // 联网搜索时禁用来源括号标注
+        const webSearchGuide = buildWebSearchGuide(enableWebSearch);
 
         const encoder = new TextEncoder();
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
         try {
             req?.signal?.addEventListener?.('abort', onAbort, { once: true });
-        } catch {
-            // ignore
-        }
+        } catch { /* ignore */ }
 
         const PADDING = ' '.repeat(2048);
         let paddingSent = false;
         const HEARTBEAT_INTERVAL_MS = 15000;
         let heartbeatTimer = null;
 
-        const stream = new ReadableStream({
+        const responseStream = new ReadableStream({
             async start(controller) {
                 let fullText = "";
                 let fullThought = "";
                 let citations = [];
                 let searchContextTokens = 0;
-                const seenUrls = new Set();
+
                 try {
                     const sendHeartbeat = () => {
                         try {
                             if (clientAborted) return;
                             controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
-                        } catch {
-                            // ignore
-                        }
+                        } catch { /* ignore */ }
                     };
                     heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
                     sendHeartbeat();
@@ -339,49 +308,26 @@ export async function POST(req) {
 
                     const pushCitations = (items) => {
                         for (const item of items) {
-                            if (!item?.url || seenUrls.has(item.url)) continue;
-                            seenUrls.add(item.url);
-                            citations.push({ url: item.url, title: item.title });
-                        }
-                    };
-
-                    const runDecisionStream = async (systemText, userText) => {
-                        let decisionText = "";
-                        const decisionStream = await ai.models.generateContentStream({
-                            model: apiModel,
-                            contents: [{ role: "user", parts: [{ text: userText }] }],
-                            config: {
-                                systemInstruction: { parts: [{ text: systemText }] },
-                                maxOutputTokens: 512
-                            }
-                        });
-
-                        for await (const chunk of decisionStream) {
-                            if (clientAborted) break;
-                            const candidate = chunk.candidates?.[0];
-                            const parts = candidate?.content?.parts;
-                            for (const part of parts) {
-                                if (clientAborted) break;
-                                if (part.thought && part.text) {
-                                    fullThought += part.text;
-                                    sendEvent({ type: 'thought', content: part.text });
-                                } else if (part.text) {
-                                    decisionText += part.text;
-                                }
+                            if (!item?.url) continue;
+                            if (!citations.some(c => c.url === item.url)) {
+                                citations.push({ url: item.url, title: item.title, cited_text: null });
                             }
                         }
-                        return decisionText;
                     };
 
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
                         prompt,
-                        runDecisionStream,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
                         isClientAborted: () => clientAborted,
-                        providerLabel: 'Gemini',
+                        providerLabel: 'Claude',
+                        model,
+                        conversationId: currentConversationId,
+                        logDecision: true,
+                        warnOnEmptyResults: true,
+                        warnOnNoContext: true,
                     });
 
                     if (clientAborted) {
@@ -396,31 +342,71 @@ export async function POST(req) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
-                    const finalSystemText = `${baseSystemText}${webSearchGuide}${searchContextSection}`;
-                    const finalConfig = {
-                        ...baseConfig,
-                        systemInstruction: { parts: [{ text: finalSystemText }] }
+                    const systemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
+                    const requestParams = {
+                        model: apiModel,
+                        max_tokens: maxTokens,
+                        system: [
+                            {
+                                type: "text",
+                                text: systemPrompt,
+                                cache_control: {
+                                    type: "ephemeral",
+                                    ttl: "1h"
+                                }
+                            }
+                        ],
+                        messages: claudeMessages,
+                        stream: true,
+                        ...(isOpus
+                            ? {
+                                thinking: { type: "adaptive" },
+                                output_config: {
+                                    effort: (() => {
+                                        const allowed = new Set(["low", "medium", "high", "max"]);
+                                        if (typeof thinkingLevel === "string" && allowed.has(thinkingLevel)) {
+                                            return thinkingLevel;
+                                        }
+                                        return "high";
+                                    })()
+                                }
+                            }
+                            : {
+                                thinking: { type: "enabled", budget_tokens: budgetTokens }
+                            }
+                        )
                     };
 
-                    const streamResult = await ai.models.generateContentStream({
-                        model: apiModel,
-                        contents: contents,
-                        config: finalConfig
-                    });
+                    const stream = await client.messages.stream(requestParams);
 
-                    for await (const chunk of streamResult) {
+                    for await (const event of stream) {
                         if (clientAborted) break;
-                        const candidate = chunk.candidates?.[0];
-                        const parts = candidate?.content?.parts;
 
-                        for (const part of parts) {
-                            if (clientAborted) break;
-                            if (part.thought && part.text) {
-                                fullThought += part.text;
-                                sendEvent({ type: 'thought', content: part.text });
-                            } else if (part.text) {
-                                fullText += part.text;
-                                sendEvent({ type: 'text', content: part.text });
+                        if (event.type === 'content_block_delta') {
+                            const delta = event.delta;
+                            if (delta.type === 'thinking_delta') {
+                                fullThought += delta.thinking;
+                                sendEvent({ type: 'thought', content: delta.thinking });
+                            } else if (delta.type === 'text_delta') {
+                                fullText += delta.text;
+                                const citationData = Array.isArray(delta.citations) ? delta.citations : [];
+                                if (citationData.length > 0) {
+                                    for (const c of citationData) {
+                                        if (c?.type === 'web_search_result_location') {
+                                            const exists = citations.some(
+                                                existing => existing.url === c.url && existing.cited_text === c.cited_text
+                                            );
+                                            if (!exists) {
+                                                citations.push({
+                                                    url: c.url,
+                                                    title: c.title,
+                                                    cited_text: c.cited_text
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                                sendEvent({ type: 'text', content: delta.text });
                             }
                         }
                     }
@@ -430,8 +416,10 @@ export async function POST(req) {
                         return;
                     }
 
+                    // 发送引用信息
                     if (citations.length > 0) {
-                        sendEvent({ type: 'citations', citations });
+                        const citationsData = `data: ${JSON.stringify({ type: 'citations', citations })}\n\n`;
+                        controller.enqueue(encoder.encode(citationsData));
                     }
 
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
@@ -487,9 +475,7 @@ export async function POST(req) {
                     }
                     try {
                         req?.signal?.removeEventListener?.('abort', onAbort);
-                    } catch {
-                        // ignore
-                    }
+                    } catch { /* ignore */ }
                 }
             }
         });
@@ -498,14 +484,15 @@ export async function POST(req) {
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Cache-Control': 'no-cache, no-transform',
             'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no', // 禁用 nginx/反向代理缓冲
+            'X-Accel-Buffering': 'no',
         };
-        if (currentConversationId) { headers['X-Conversation-Id'] = currentConversationId; }
-        return new Response(stream, { headers });
+        if (currentConversationId) {
+            headers['X-Conversation-Id'] = currentConversationId;
+        }
+        return new Response(responseStream, { headers });
 
     } catch (error) {
-        // Log detailed error information
-        console.error("Gemini API Error:", {
+        console.error("Claude API Error:", {
             message: error?.message,
             status: error?.status,
             name: error?.name,
@@ -513,25 +500,12 @@ export async function POST(req) {
         });
 
         const status = typeof error?.status === 'number' ? error.status : 500;
-
-        // Provide user-friendly error messages
         let errorMessage = error?.message;
 
-        // Add context for common errors
         if (error?.message?.includes('API_KEY')) {
             errorMessage = "API configuration error. Please check your API keys.";
-        } else if (error?.message?.includes('ECONNREFUSED')) {
-            errorMessage = "Failed to connect to external service.";
-        } else if (error?.message?.includes('fetch')) {
-            errorMessage = "Failed to fetch external resource.";
         }
 
-        return Response.json(
-            {
-                error: errorMessage,
-                details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
-            },
-            { status }
-        );
+        return Response.json({ error: errorMessage }, { status });
     }
 }

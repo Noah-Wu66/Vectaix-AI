@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp } from "lucide-react";
-import { Gemini, Claude, OpenAI } from "@lobehub/icons";
+import { Gemini, Claude, OpenAI, Doubao } from "@lobehub/icons";
 import { CHAT_MODELS } from "./ChatModels";
 
 function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
@@ -14,6 +14,9 @@ function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
   }
   if (provider === "openai") {
     return <OpenAI size={size} />;
+  }
+  if (provider === "seed") {
+    return <Doubao.Color size={size} />;
   }
   if (Icon) {
     return <Icon size={size} className={isSelected ? "" : "text-blue-400"} />;
@@ -96,6 +99,8 @@ export default function ModelSelector({ model, onModelChange }) {
               {renderModelGroup("claude", "Claude")}
               <div className="my-1.5 border-t border-zinc-200" />
               {renderModelGroup("openai", "OpenAI")}
+              <div className="my-1.5 border-t border-zinc-200" />
+              {renderModelGroup("seed", "Seed")}
             </motion.div>
           </>
         )}

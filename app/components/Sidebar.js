@@ -2,10 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import { LogOut, Pencil, Pin, Plus, Trash2, X, Check } from "lucide-react";
-import { Gemini, Claude, OpenAI } from "@lobehub/icons";
+import { Gemini, Claude, OpenAI, Doubao } from "@lobehub/icons";
 import ConfirmModal from "./ConfirmModal";
 
 function ConversationIcon({ model }) {
+  if (model?.startsWith("volcengine/doubao-seed-")) {
+    return <Doubao.Color size={16} />;
+  }
   if (model?.startsWith("claude-")) {
     return <Claude.Color size={16} />;
   }

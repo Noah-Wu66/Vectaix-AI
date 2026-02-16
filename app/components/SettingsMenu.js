@@ -5,10 +5,13 @@ import { ChevronDown, ChevronUp, Globe, Pencil, Settings2, Trash2, X } from "luc
 import ConfirmModal from "./ConfirmModal";
 import PromptEditorModal from "./PromptEditorModal";
 
-const OPENAI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 128000];
-const GEMINI_TOKEN_OPTIONS = [1024, 2048, 4096, 8192, 16384, 32768, 65536];
-const CLAUDE_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000];
-const CLAUDE_OPUS_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000];
+const BASE_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000];
+const OPENAI_TOKEN_OPTIONS = [...BASE_TOKEN_OPTIONS, 128000];
+const GEMINI_TOKEN_OPTIONS = BASE_TOKEN_OPTIONS;
+const SEED_TOKEN_OPTIONS = BASE_TOKEN_OPTIONS;
+const CLAUDE_TOKEN_OPTIONS = BASE_TOKEN_OPTIONS;
+const CLAUDE_OPUS_TOKEN_OPTIONS = OPENAI_TOKEN_OPTIONS;
+const CLAUDE_SONNET_THINKING_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000];
 const GEMINI_FLASH_THINKING_LEVELS = ["minimal", "low", "medium", "high"];
 const GEMINI_PRO_THINKING_LEVELS = ["low", "high"];
 const CLAUDE_THINKING_LEVELS = ["low", "medium", "high", "max"];
@@ -18,6 +21,11 @@ const CLAUDE_THINKING_LEVEL_LABELS = { low: "低", medium: "中", high: "高", m
 
 function getOpenAIThinkingLevels() {
   return GPT_52_THINKING_LEVELS;
+}
+
+function formatTokenLabel(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "0";
+  return value >= 1000 ? `${Math.round(value / 1000)}K` : String(value);
 }
 
 export default function SettingsMenu({
@@ -58,9 +66,15 @@ export default function SettingsMenu({
   const promptListRef = useRef(null);
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
+  const isSeedModel = model === "volcengine/doubao-seed-2.0-pro";
   const isClaudeOpus = typeof model === "string" && model.startsWith("claude-opus-4-6");
   const openAIThinkingLevels = isOpenAIModel ? getOpenAIThinkingLevels() : [];
-  const maxTokenOptions = isOpenAIModel ? OPENAI_TOKEN_OPTIONS : GEMINI_TOKEN_OPTIONS;
+  const claudeTokenOptions = isClaudeOpus ? CLAUDE_OPUS_TOKEN_OPTIONS : CLAUDE_TOKEN_OPTIONS;
+  const maxTokenOptions = isOpenAIModel
+    ? OPENAI_TOKEN_OPTIONS
+    : isSeedModel
+      ? SEED_TOKEN_OPTIONS
+      : GEMINI_TOKEN_OPTIONS;
   const activePrompt = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
   const activePromptName = activePrompt?.name;
 
@@ -90,14 +104,14 @@ export default function SettingsMenu({
         setThinkingLevel("medium");
       }
     }
-  }, [model, thinkingLevel, setThinkingLevel]);
+  }, [model, thinkingLevel, setThinkingLevel, isClaudeOpus]);
 
   useEffect(() => {
-    const options = isClaudeOpus ? CLAUDE_OPUS_TOKEN_OPTIONS : model?.startsWith("claude-") ? CLAUDE_TOKEN_OPTIONS : maxTokenOptions;
+    const options = model?.startsWith("claude-") ? claudeTokenOptions : maxTokenOptions;
     if (!options.includes(maxTokens)) {
       setMaxTokens(options[options.length - 1]);
     }
-  }, [model, maxTokens, maxTokenOptions, setMaxTokens]);
+  }, [model, maxTokens, maxTokenOptions, claudeTokenOptions, setMaxTokens]);
 
   useEffect(() => {
     if (!model || !Array.isArray(systemPrompts) || systemPrompts.length === 0) return;
@@ -291,89 +305,87 @@ export default function SettingsMenu({
               </div>
 
               <div className="space-y-4">
-                {model?.startsWith("claude-") || model?.startsWith("gpt-") ? null : (
-                  <div>
-                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                      系统提示词
-                    </label>
-                    <div className="relative" ref={promptListRef}>
-                      <button
-                        onClick={() => setShowPromptList((v) => !v)}
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-700 flex items-center justify-between"
-                        type="button"
-                      >
-                        <span className="truncate pr-2">{activePromptName}</span>
-                        <ChevronDown size={16} className={`transition-transform ${showPromptList ? "rotate-180" : ""}`} />
-                      </button>
+                <div>
+                  <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                    系统提示词
+                  </label>
+                  <div className="relative" ref={promptListRef}>
+                    <button
+                      onClick={() => setShowPromptList((v) => !v)}
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-700 flex items-center justify-between"
+                      type="button"
+                    >
+                      <span className="truncate pr-2">{activePromptName}</span>
+                      <ChevronDown size={16} className={`transition-transform ${showPromptList ? "rotate-180" : ""}`} />
+                    </button>
 
-                      <AnimatePresence>
-                        {showPromptList && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            className="absolute left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-lg shadow-lg p-1 z-10"
-                          >
-                            <div className="max-h-56 overflow-auto">
-                              {systemPrompts.map((p) => {
-                                const isDefault = p?.name === "默认助手";
-                                const isActive = String(p?._id) === String(activePromptId);
-                                return (
-                                  <div
-                                    key={p._id}
-                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${isActive ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
+                    <AnimatePresence>
+                      {showPromptList && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          className="absolute left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-lg shadow-lg p-1 z-10"
+                        >
+                          <div className="max-h-56 overflow-auto">
+                            {systemPrompts.map((p) => {
+                              const isDefault = p?.name === "默认助手";
+                              const isActive = String(p?._id) === String(activePromptId);
+                              return (
+                                <div
+                                  key={p._id}
+                                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${isActive ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
+                                >
+                                  <button
+                                    onClick={() => {
+                                      const nextId = String(p?._id);
+                                      setActivePromptId(nextId);
+                                      setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
+                                      setShowPromptList(false);
+                                    }}
+                                    className="flex-1 text-left text-sm text-zinc-700 truncate"
+                                    type="button"
                                   >
-                                    <button
-                                      onClick={() => {
-                                        const nextId = String(p?._id);
-                                        setActivePromptId(nextId);
-                                        setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
-                                        setShowPromptList(false);
-                                      }}
-                                      className="flex-1 text-left text-sm text-zinc-700 truncate"
-                                      type="button"
-                                    >
-                                      {p?.name}
-                                    </button>
-                                    {isDefault ? (
-                                      <div className="w-12" />
-                                    ) : (
-                                      <div className="flex items-center gap-1">
-                                        <button
-                                          onClick={() => openEditPromptModal(p)}
-                                          title="编辑提示词"
-                                          className="p-1 text-zinc-500 hover:text-zinc-700"
-                                          type="button"
-                                        >
-                                          <Pencil size={14} />
-                                        </button>
-                                        <button
-                                          onClick={() => requestDeletePromptById(p)}
-                                          title="删除提示词"
-                                          className="p-1 text-zinc-500 hover:text-red-600"
-                                          type="button"
-                                        >
-                                          <Trash2 size={14} />
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <button
-                              onClick={openCreatePromptModal}
-                              className="w-full mt-1 px-2 py-2 text-left text-sm text-zinc-600 hover:text-zinc-800 hover:bg-zinc-50 rounded-md"
-                              type="button"
-                            >
-                              + 新建提示词
-                            </button>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                                    {p?.name}
+                                  </button>
+                                  {isDefault ? (
+                                    <div className="w-12" />
+                                  ) : (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => openEditPromptModal(p)}
+                                        title="编辑提示词"
+                                        className="p-1 text-zinc-500 hover:text-zinc-700"
+                                        type="button"
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        onClick={() => requestDeletePromptById(p)}
+                                        title="删除提示词"
+                                        className="p-1 text-zinc-500 hover:text-red-600"
+                                        type="button"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <button
+                            onClick={openCreatePromptModal}
+                            className="w-full mt-1 px-2 py-2 text-left text-sm text-zinc-600 hover:text-zinc-800 hover:bg-zinc-50 rounded-md"
+                            type="button"
+                          >
+                            + 新建提示词
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                )}
+                </div>
 
                 <div>
                   <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
@@ -494,14 +506,14 @@ export default function SettingsMenu({
                                     <input
                                       type="range"
                                       min="0"
-                                      max="6"
+                                      max={CLAUDE_SONNET_THINKING_TOKEN_OPTIONS.length - 1}
                                       step="1"
-                                      value={Math.max(0, CLAUDE_TOKEN_OPTIONS.indexOf(budgetTokens))}
-                                      onChange={(e) => setBudgetTokens(CLAUDE_TOKEN_OPTIONS[e.target.value])}
+                                      value={Math.max(0, CLAUDE_SONNET_THINKING_TOKEN_OPTIONS.indexOf(budgetTokens))}
+                                      onChange={(e) => setBudgetTokens(CLAUDE_SONNET_THINKING_TOKEN_OPTIONS[e.target.value])}
                                       className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                                     />
                                     <span className="text-xs text-right block mt-1 text-zinc-600">
-                                      {budgetTokens >= 1000 ? `${Math.round(budgetTokens / 1000)}K` : budgetTokens}
+                                      {formatTokenLabel(budgetTokens)}
                                     </span>
                                   </>
                                 )}
@@ -510,27 +522,38 @@ export default function SettingsMenu({
                                 <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                                   最大输出
                                 </label>
-                                {(() => {
-                                  const opts = isClaudeOpus ? CLAUDE_OPUS_TOKEN_OPTIONS : CLAUDE_TOKEN_OPTIONS;
-                                  return (
-                                    <>
-                                      <input
-                                        type="range"
-                                        min="0"
-                                        max={opts.length - 1}
-                                        step="1"
-                                        value={Math.max(0, opts.indexOf(maxTokens))}
-                                        onChange={(e) => setMaxTokens(opts[e.target.value])}
-                                        className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
-                                      />
-                                      <span className="text-xs text-right block mt-1 text-zinc-600">
-                                        {maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens}
-                                      </span>
-                                    </>
-                                  );
-                                })()}
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max={claudeTokenOptions.length - 1}
+                                  step="1"
+                                  value={Math.max(0, claudeTokenOptions.indexOf(maxTokens))}
+                                  onChange={(e) => setMaxTokens(claudeTokenOptions[e.target.value])}
+                                  className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                                />
+                                <span className="text-xs text-right block mt-1 text-zinc-600">
+                                  {formatTokenLabel(maxTokens)}
+                                </span>
                               </div>
                             </>
+                          ) : isSeedModel ? (
+                            <div>
+                              <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                                思考深度
+                              </label>
+                              <input
+                                type="range"
+                                min="0"
+                                max={CLAUDE_SONNET_THINKING_TOKEN_OPTIONS.length - 1}
+                                step="1"
+                                value={Math.max(0, CLAUDE_SONNET_THINKING_TOKEN_OPTIONS.indexOf(budgetTokens))}
+                                onChange={(e) => setBudgetTokens(CLAUDE_SONNET_THINKING_TOKEN_OPTIONS[Number(e.target.value)])}
+                                className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                              />
+                              <span className="text-xs text-right block mt-1 text-zinc-600">
+                                {formatTokenLabel(budgetTokens)}
+                              </span>
+                            </div>
                           ) : model?.startsWith("gpt-") ? (
                             <div>
                               <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
@@ -571,9 +594,7 @@ export default function SettingsMenu({
                                         className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                                       />
                               <span className="text-xs text-right block mt-1 text-zinc-600">
-                                {isOpenAIModel
-                                  ? (maxTokens >= 1000 ? `${Math.round(maxTokens / 1000)}K` : maxTokens)
-                                  : (maxTokens >= 1024 ? `${Math.round(maxTokens / 1024)}K` : maxTokens)}
+                                {formatTokenLabel(maxTokens)}
                               </span>
                             </div>
                           )}

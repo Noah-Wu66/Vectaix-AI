@@ -89,12 +89,7 @@ export async function POST(req) {
                 parts: [{ text: `请将以下对话历史压缩成一份摘要：\n\n${conversationText}` }]
             }],
             config: {
-                systemInstruction: { parts: [{ text: COMPRESS_SYSTEM_PROMPT }] },
-                maxOutputTokens: 4096,
-                thinkingConfig: {
-                    thinkingLevel: "low",
-                    includeThoughts: false
-                }
+                systemInstruction: { parts: [{ text: COMPRESS_SYSTEM_PROMPT }] }
             }
         });
 
