@@ -61,9 +61,7 @@ export function createChatAppActions({
     chatAbortRef.current = null;
     chatRequestLockRef.current = false;
     setLoading(false);
-    setMessages((prev) => prev
-      .filter((m) => !m.isStreaming || m.content.trim() || m.thought.trim())
-      .map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)));
+    setMessages((prev) => prev.filter((m) => !m.isStreaming));
   };
 
   const onEditingImageSelect = (img) => {

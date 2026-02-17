@@ -239,6 +239,28 @@ export async function runChat({
       ? "/api/openai"
       : "/api/google";
 
+  const syncConversationMessages = async (convId, nextMessages) => {
+    if (!convId || !Array.isArray(nextMessages)) return;
+    try {
+      await fetch(`/api/conversations/${convId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: nextMessages }),
+        }
+      );
+    } catch { }
+  };
+
+  const restoreRegenerateMessages = async (convId) => {
+    if (mode !== "regenerate" || !Array.isArray(refusalRestoreMessages)) {
+      return false;
+    }
+    setMessages(refusalRestoreMessages);
+    await syncConversationMessages(convId, refusalRestoreMessages);
+    return true;
+  };
+
   setLoading(true);
   let streamMsgId = modelMessageId;
   const debugTag = "[chat-stream]";
@@ -342,32 +364,32 @@ export async function runChat({
             } catch { /* ignore sync error */ }
           }
 
-           // 用压缩后的摘要重新发送请求
-           return runChat({
-             prompt,
-             historyMessages: compressedMessages,
-             conversationId: newConvId || currentConversationId || conversationId,
-             model,
-             config,
-             historyLimit,
-             currentConversationId: newConvId || currentConversationId,
-             setCurrentConversationId,
-             fetchConversations,
-             setMessages,
-             setLoading,
-             signal,
-             mode,
-             messagesForRegenerate,
-             provider,
-             settings,
-             completionSoundVolume,
-             refusalRestoreMessages,
-             onSensitiveRefusal,
-             onError,
-             userMessageId,
-             _isCompressedRetry: true,
-             _compressedSummary: summary,
-           });
+          // 用压缩后的摘要重新发送请求
+          return runChat({
+              prompt,
+              historyMessages: compressedMessages,
+              conversationId: newConvId || currentConversationId || conversationId,
+              model,
+              config,
+              historyLimit,
+              currentConversationId: newConvId || currentConversationId,
+              setCurrentConversationId,
+              fetchConversations,
+              setMessages,
+              setLoading,
+              signal,
+              mode,
+              messagesForRegenerate: mode === "regenerate" ? compressedMessages : messagesForRegenerate,
+              provider,
+              settings,
+              completionSoundVolume,
+              refusalRestoreMessages,
+              onSensitiveRefusal,
+              onError,
+              userMessageId,
+              _isCompressedRetry: true,
+              _compressedSummary: summary,
+            });
          } catch (compressErr) {
            console.error(debugTag, "compression failed", compressErr?.message);
            // 移除压缩状态消息
@@ -1006,7 +1028,15 @@ export async function runChat({
       })();
     }
   } catch (err) {
-    if (err?.name !== "AbortError") {
+    const isAbortError = err?.name === "AbortError";
+    const convIdForSync = newConvId || currentConversationId || conversationId;
+
+    if (isAbortError) {
+      const restored = await restoreRegenerateMessages(convIdForSync);
+      if (restored) {
+        streamMsgId = null;
+      }
+    } else {
       const errMsg = err?.message;
 
       // 检测上下文超出错误，自动触发压缩重试（流内错误场景）
@@ -1109,7 +1139,7 @@ export async function runChat({
             setLoading,
             signal,
             mode,
-            messagesForRegenerate,
+            messagesForRegenerate: mode === "regenerate" ? compressedMessages : messagesForRegenerate,
             provider,
             settings,
             completionSoundVolume,
@@ -1123,6 +1153,9 @@ export async function runChat({
         } catch (compressErr) {
           console.error(debugTag, "compression failed (stream error path)", compressErr?.message);
           setMessages((prev) => prev.filter((m) => m.id !== compressMsgId));
+          if (mode === "regenerate" && Array.isArray(refusalRestoreMessages)) {
+            await restoreRegenerateMessages(newConvId || currentConversationId || conversationId);
+          }
           onError?.("对话上下文过长，自动压缩失败：" + (compressErr?.message || "未知错误"));
           streamMsgId = null;
           return;
@@ -1153,9 +1186,13 @@ export async function runChat({
       if (streamMsgId !== null) {
         setMessages((prev) => prev.filter((msg) => msg.id !== streamMsgId));
       }
+      // regenerate 失败：恢复原消息，避免旧回答丢失
+      if (mode === "regenerate" && Array.isArray(refusalRestoreMessages)) {
+        await restoreRegenerateMessages(convIdForSync);
+      }
+
       // 超时：回滚本次用户消息，避免"悬空提问"扰乱上下文
       if (errMsg === "API_TIMEOUT" && mode !== "regenerate") {
-        const convIdForSync = newConvId || currentConversationId || conversationId;
         let nextMessagesForSync = null;
         setMessages((prev) => {
           if (!Array.isArray(prev) || prev.length === 0) return prev;
@@ -1166,17 +1203,7 @@ export async function runChat({
           nextMessagesForSync = next;
           return next;
         });
-        if (convIdForSync && Array.isArray(nextMessagesForSync)) {
-          try {
-            await fetch(`/api/conversations/${convIdForSync}`,
-              {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ messages: nextMessagesForSync }),
-              }
-            );
-          } catch { }
-        }
+        await syncConversationMessages(convIdForSync, nextMessagesForSync);
       }
       // 通过回调通知错误（由调用方显示 toast）
       onError?.(errorMessage);

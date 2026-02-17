@@ -261,7 +261,8 @@ export async function PUT(req, { params }) {
     }
 
     // 构建更新对象，支持 settings 的部分更新
-    const updateObj = { updatedAt: Date.now() };
+    const updateObj = {};
+    let shouldTouchUpdatedAt = false;
     if (typeof body.title === 'string') {
         if (body.title.length > MAX_TITLE_CHARS) {
             return Response.json({ error: 'title too long' }, { status: 400 });
@@ -273,6 +274,7 @@ export async function PUT(req, { params }) {
         try {
             const sanitizedMessages = sanitizeMessages(body.messages);
             updateObj.messages = encryptMessages(sanitizedMessages);
+            shouldTouchUpdatedAt = true;
         } catch (e) {
             return Response.json({ error: e?.message }, { status: 400 });
         }
@@ -289,6 +291,15 @@ export async function PUT(req, { params }) {
         } catch (e) {
             return Response.json({ error: e?.message }, { status: 400 });
         }
+    }
+
+    if (shouldTouchUpdatedAt) {
+        updateObj.updatedAt = Date.now();
+    }
+
+    if (Object.keys(updateObj).length === 0) {
+        const conversation = await Conversation.findOne({ _id: params.id, userId: user.userId });
+        return Response.json({ conversation: decryptConversation(conversation?.toObject?.() || conversation) });
     }
 
     const conversation = await Conversation.findOneAndUpdate(
