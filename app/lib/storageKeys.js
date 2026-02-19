@@ -8,3 +8,4 @@ export const UI_MAX_TOKENS_KEY = "vectaix_ui_maxTokens";
 export const UI_BUDGET_TOKENS_KEY = "vectaix_ui_budgetTokens";
 export const UI_WEB_SEARCH_KEY = "vectaix_ui_webSearch";
 export const UI_COMPLETION_SOUND_VOLUME_KEY = "vectaix_ui_completionSoundVolume";
+export const UI_ROUTE_MODE_KEY = "vectaix_ui_routeMode";

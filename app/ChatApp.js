@@ -29,7 +29,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
+  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, routeMode, setRouteMode, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
   useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -182,6 +182,7 @@ export default function ChatApp() {
     setEditingImageAction,
     setEditingImage,
     completionSoundVolume,
+    lineMode: routeMode,
     onSensitiveRefusal: handleSensitiveRefusal,
     onConversationActivity: (id) => {
       setConversations((prev) => {
@@ -569,6 +570,8 @@ export default function ChatApp() {
           onFontSizeChange={updateFontSize}
           completionSoundVolume={completionSoundVolume}
           onCompletionSoundVolumeChange={setCompletionSoundVolume}
+          routeMode={routeMode}
+          onRouteModeChange={setRouteMode}
           sidebarOpen={sidebarOpen}
           conversations={conversations}
           currentConversationId={currentConversationId}

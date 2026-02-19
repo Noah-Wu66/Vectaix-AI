@@ -13,6 +13,7 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { buildEconomySystemPrompt, isEconomyLineMode } from '@/app/lib/economyModels';
 
 import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
 
@@ -20,6 +21,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const ZENMUX_OPENAI_BASE_URL = 'https://zenmux.ai/api/v1';
+const RIGHT_CODES_OPENAI_BASE_URL = 'https://www.right.codes/codex';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
 const MODEL_REASONING_EFFORTS = {};
@@ -81,7 +83,8 @@ export async function POST(req) {
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        const apiBaseUrl = ZENMUX_OPENAI_BASE_URL;
+        const isEconomyLine = isEconomyLineMode(config?.lineMode);
+        const apiBaseUrl = isEconomyLine ? RIGHT_CODES_OPENAI_BASE_URL : ZENMUX_OPENAI_BASE_URL;
         const apiKey = process.env.ZENMUX_API_KEY;
         const apiModel = model.startsWith('openai/') || model.includes('/') ? model : `openai/${model}`;
         const isSeedModel = typeof apiModel === 'string' && apiModel.startsWith('volcengine/doubao-seed');
@@ -188,8 +191,9 @@ export async function POST(req) {
         const thinkingLevel = config?.thinkingLevel;
         const budgetTokens = Number.parseInt(config?.budgetTokens, 10);
 
+        const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemPrompt = injectCurrentTimeSystemReminder(
-            typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
+            isEconomyLine ? buildEconomySystemPrompt(userSystemPrompt) : userSystemPrompt
         );
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
         const baseInputWithInstructions = [

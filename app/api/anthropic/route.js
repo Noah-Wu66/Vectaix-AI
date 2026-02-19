@@ -16,11 +16,14 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { buildEconomySystemPrompt, isEconomyLineMode } from '@/app/lib/economyModels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
+const ZENMUX_ANTHROPIC_BASE_URL = "https://zenmux.ai/api/anthropic";
+const RIGHT_CODES_CLAUDE_BASE_URL = "https://www.right.codes/claude-aws";
 
 async function storedPartToClaudePart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -126,6 +129,7 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
 
+        const isEconomyLine = isEconomyLineMode(config?.lineMode);
         const apiModel = model.startsWith('claude-opus-4-6')
             ? 'anthropic/claude-opus-4.6'
             : model.startsWith('claude-sonnet-4-5')
@@ -133,7 +137,7 @@ export async function POST(req) {
                 : model;
         const client = new Anthropic({
             apiKey: process.env.ZENMUX_API_KEY,
-            baseURL: "https://zenmux.ai/api/anthropic",
+            baseURL: isEconomyLine ? RIGHT_CODES_CLAUDE_BASE_URL : ZENMUX_ANTHROPIC_BASE_URL,
         });
 
         // 创建新会话
@@ -252,8 +256,9 @@ export async function POST(req) {
         const budgetTokens = config?.budgetTokens;
         const thinkingLevel = config?.thinkingLevel;
         const isOpus = typeof model === "string" && model.startsWith("claude-opus-4-6");
+        const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemPrompt = injectCurrentTimeSystemReminder(
-            typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
+            isEconomyLine ? buildEconomySystemPrompt(userSystemPrompt) : userSystemPrompt
         );
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 

@@ -32,6 +32,8 @@ export default function ProfileModal({
   onFontSizeChange,
   completionSoundVolume,
   onCompletionSoundVolumeChange,
+  routeMode,
+  onRouteModeChange,
   avatar,
   onAvatarChange,
 }) {
@@ -347,6 +349,30 @@ export default function ProfileModal({
                     className="overflow-hidden"
                   >
                     <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
+                      <div>
+                        <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                          线路切换
+                        </label>
+                        <div className="flex gap-2">
+                          {[
+                            { id: "premium", label: "优质线路" },
+                            { id: "economy", label: "经济线路" },
+                          ].map((mode) => (
+                            <button
+                              key={mode.id}
+                              onClick={() => onRouteModeChange?.(mode.id)}
+                              type="button"
+                              className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${routeMode === mode.id
+                                ? "bg-zinc-600 text-white border-zinc-600"
+                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                }`}
+                            >
+                              {mode.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       {/* 主题模式 */}
                       <div>
                         <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block flex items-center gap-1">
