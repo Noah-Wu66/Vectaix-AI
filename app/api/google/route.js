@@ -24,6 +24,8 @@ export const dynamic = 'force-dynamic';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const ZENMUX_VERTEX_BASE_URL = 'https://zenmux.ai/api/vertex-ai';
 const RIGHT_CODES_GEMINI_BASE_URL = 'https://www.right.codes/gemini';
+const ZENMUX_API_KEY = process.env.ZENMUX_API_KEY;
+const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
 
 async function storedPartToRequestPart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -139,11 +141,16 @@ export async function POST(req) {
 
         // 默认走 zenmux；经济线路走 right.codes
         const isEconomyLine = isEconomyLineMode(config?.lineMode);
+        const apiKey = isEconomyLine ? RIGHT_CODES_API_KEY : ZENMUX_API_KEY;
+        if (!apiKey) {
+            const missingKey = isEconomyLine ? 'RIGHT_CODES_API_KEY' : 'ZENMUX_API_KEY';
+            return Response.json({ error: `${missingKey} is not set` }, { status: 500 });
+        }
         const apiModel = model === 'gemini-3-pro-preview'
             ? 'google/gemini-3-pro-preview'
             : 'google/gemini-3-flash-preview';
         const ai = new GoogleGenAI({
-            apiKey: process.env.ZENMUX_API_KEY,
+            apiKey,
             httpOptions: {
                 apiVersion: 'v1',
                 baseUrl: isEconomyLine ? RIGHT_CODES_GEMINI_BASE_URL : ZENMUX_VERTEX_BASE_URL

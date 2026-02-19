@@ -22,6 +22,8 @@ export const dynamic = 'force-dynamic';
 
 const ZENMUX_OPENAI_BASE_URL = 'https://zenmux.ai/api/v1';
 const RIGHT_CODES_OPENAI_BASE_URL = 'https://www.right.codes/codex';
+const ZENMUX_API_KEY = process.env.ZENMUX_API_KEY;
+const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
 const MODEL_REASONING_EFFORTS = {};
@@ -85,7 +87,11 @@ export async function POST(req) {
 
         const isEconomyLine = isEconomyLineMode(config?.lineMode);
         const apiBaseUrl = isEconomyLine ? RIGHT_CODES_OPENAI_BASE_URL : ZENMUX_OPENAI_BASE_URL;
-        const apiKey = process.env.ZENMUX_API_KEY;
+        const apiKey = isEconomyLine ? RIGHT_CODES_API_KEY : ZENMUX_API_KEY;
+        if (!apiKey) {
+            const missingKey = isEconomyLine ? 'RIGHT_CODES_API_KEY' : 'ZENMUX_API_KEY';
+            return Response.json({ error: `${missingKey} is not set` }, { status: 500 });
+        }
         const apiModel = model.startsWith('openai/') || model.includes('/') ? model : `openai/${model}`;
         const isSeedModel = typeof apiModel === 'string' && apiModel.startsWith('volcengine/doubao-seed');
 

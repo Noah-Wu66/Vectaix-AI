@@ -24,6 +24,8 @@ export const dynamic = 'force-dynamic';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const ZENMUX_ANTHROPIC_BASE_URL = "https://zenmux.ai/api/anthropic";
 const RIGHT_CODES_CLAUDE_BASE_URL = "https://www.right.codes/claude-aws";
+const ZENMUX_API_KEY = process.env.ZENMUX_API_KEY;
+const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
 
 async function storedPartToClaudePart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -130,13 +132,18 @@ export async function POST(req) {
         let currentConversationId = conversationId;
 
         const isEconomyLine = isEconomyLineMode(config?.lineMode);
+        const apiKey = isEconomyLine ? RIGHT_CODES_API_KEY : ZENMUX_API_KEY;
+        if (!apiKey) {
+            const missingKey = isEconomyLine ? 'RIGHT_CODES_API_KEY' : 'ZENMUX_API_KEY';
+            return Response.json({ error: `${missingKey} is not set` }, { status: 500 });
+        }
         const apiModel = model.startsWith('claude-opus-4-6')
             ? 'anthropic/claude-opus-4.6'
             : model.startsWith('claude-sonnet-4-5')
                 ? 'anthropic/claude-sonnet-4.5'
                 : model;
         const client = new Anthropic({
-            apiKey: process.env.ZENMUX_API_KEY,
+            apiKey,
             baseURL: isEconomyLine ? RIGHT_CODES_CLAUDE_BASE_URL : ZENMUX_ANTHROPIC_BASE_URL,
         });
 
