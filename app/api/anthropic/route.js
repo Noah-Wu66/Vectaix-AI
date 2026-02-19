@@ -16,7 +16,7 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildEconomySystemPrompt, isEconomyLineMode } from '@/app/lib/economyModels';
+import { buildEconomySystemPrompt, isEconomyLineMode, stripModelPrefix } from '@/app/lib/economyModels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -137,11 +137,12 @@ export async function POST(req) {
             const missingKey = isEconomyLine ? 'RIGHT_CODES_API_KEY' : 'ZENMUX_API_KEY';
             return Response.json({ error: `${missingKey} is not set` }, { status: 500 });
         }
-        const apiModel = model.startsWith('claude-opus-4-6')
+        const premiumApiModel = model.startsWith('claude-opus-4-6')
             ? 'anthropic/claude-opus-4.6'
             : model.startsWith('claude-sonnet-4-5')
                 ? 'anthropic/claude-sonnet-4.5'
                 : model;
+        const apiModel = isEconomyLine ? stripModelPrefix(premiumApiModel) : premiumApiModel;
         const client = new Anthropic({
             apiKey,
             baseURL: isEconomyLine ? RIGHT_CODES_CLAUDE_BASE_URL : ZENMUX_ANTHROPIC_BASE_URL,

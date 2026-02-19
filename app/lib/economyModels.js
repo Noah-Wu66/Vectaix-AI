@@ -10,6 +10,13 @@ export function isEconomyLineMode(lineMode) {
   return lineMode === LINE_MODES.ECONOMY;
 }
 
+export function stripModelPrefix(model) {
+  if (typeof model !== "string") return model;
+  const slashIndex = model.lastIndexOf("/");
+  if (slashIndex <= 0) return model;
+  return model.slice(slashIndex + 1);
+}
+
 export function buildEconomySystemPrompt(userSystemPrompt) {
   const userPrompt = typeof userSystemPrompt === "string" ? userSystemPrompt : "";
   if (!userPrompt.trim()) return ECONOMY_SYSTEM_PROMPT_PREFIX;

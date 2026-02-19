@@ -13,7 +13,7 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildEconomySystemPrompt, isEconomyLineMode } from '@/app/lib/economyModels';
+import { buildEconomySystemPrompt, isEconomyLineMode, stripModelPrefix } from '@/app/lib/economyModels';
 
 import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
 
@@ -92,7 +92,9 @@ export async function POST(req) {
             const missingKey = isEconomyLine ? 'RIGHT_CODES_API_KEY' : 'ZENMUX_API_KEY';
             return Response.json({ error: `${missingKey} is not set` }, { status: 500 });
         }
-        const apiModel = model.startsWith('openai/') || model.includes('/') ? model : `openai/${model}`;
+        const apiModel = isEconomyLine
+            ? stripModelPrefix(model)
+            : (model.startsWith('openai/') || model.includes('/') ? model : `openai/${model}`);
         const isSeedModel = typeof apiModel === 'string' && apiModel.startsWith('volcengine/doubao-seed');
 
         let currentConversationId = conversationId;
