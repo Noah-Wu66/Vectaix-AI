@@ -14,7 +14,7 @@ export const CHAT_MODELS = [
     contextWindow: 1000000,
   },
   {
-    id: "claude-sonnet-4-5-20250929",
+    id: "claude-sonnet-4-6-20260219",
     name: "Sonnet",
     shortName: "Sonnet",
     provider: "claude",

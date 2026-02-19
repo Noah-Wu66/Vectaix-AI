@@ -23,6 +23,7 @@ const MAX_TOKENS_128K = 128000;
 const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
   "gemini-3-pro-preview": "high",
+  "claude-sonnet-4-6-20260219": "high",
   "claude-opus-4-6-20260205": "high",
   "gpt-5.2": "medium",
   [SEED_MODEL_ID]: "medium",
@@ -163,7 +164,7 @@ export function useUserSettings() {
       }
       return;
     }
-    if (model.startsWith("claude-opus-4-6")) {
+    if (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6")) {
       if (maxTokens > MAX_TOKENS_128K) {
         _setMaxTokens(MAX_TOKENS_128K);
         writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_128K));

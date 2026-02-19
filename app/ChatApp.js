@@ -371,7 +371,7 @@ export default function ChatApp() {
         if (conversationProvider === "gemini" && currentProvider !== "gemini") {
           targetModel = "gemini-3-flash-preview";
         } else if (conversationProvider === "claude" && currentProvider !== "claude") {
-          targetModel = "claude-sonnet-4-5-20250929";
+          targetModel = "claude-sonnet-4-6-20260219";
         } else if (conversationProvider === "openai" && currentProvider !== "openai") {
           targetModel = "gpt-5.2";
         } else if (conversationProvider === "seed" && currentProvider !== "seed") {
@@ -402,10 +402,11 @@ export default function ChatApp() {
         if (Number.isFinite(nextHistoryLimit) && nextHistoryLimit >= 0) {
           setHistoryLimit(nextHistoryLimit);
         }
-        const isOpusConv = typeof conversationModel === "string" && conversationModel.startsWith("claude-opus-4-6");
+        const isClaudeAdaptiveConv = typeof conversationModel === "string"
+          && (conversationModel.startsWith("claude-opus-4-6") || conversationModel.startsWith("claude-sonnet-4-6"));
         const maxTokensValue = Number(settings.maxTokens);
         if (Number.isFinite(maxTokensValue) && maxTokensValue > 0) {
-          const providerLimits = { claude: isOpusConv ? 128000 : 64000, openai: 128000, gemini: 64000, seed: 64000 };
+          const providerLimits = { claude: isClaudeAdaptiveConv ? 128000 : 64000, openai: 128000, gemini: 64000, seed: 64000 };
           const maxAllowed = providerLimits[conversationProvider];
           setMaxTokens(Number.isFinite(maxAllowed) ? Math.min(maxTokensValue, maxAllowed) : maxTokensValue);
         }

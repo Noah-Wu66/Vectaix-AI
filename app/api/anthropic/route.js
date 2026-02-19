@@ -16,7 +16,7 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildEconomySystemPrompt, isEconomyLineMode, stripModelPrefix } from '@/app/lib/economyModels';
+import { buildEconomySystemPrompt, isEconomyLineMode } from '@/app/lib/economyModels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -139,10 +139,15 @@ export async function POST(req) {
         }
         const premiumApiModel = model.startsWith('claude-opus-4-6')
             ? 'anthropic/claude-opus-4.6'
-            : model.startsWith('claude-sonnet-4-5')
-                ? 'anthropic/claude-sonnet-4.5'
+            : model.startsWith('claude-sonnet-4-6')
+                ? 'anthropic/claude-sonnet-4.6'
                 : model;
-        const apiModel = isEconomyLine ? stripModelPrefix(premiumApiModel) : premiumApiModel;
+        const economyApiModel = model.startsWith('claude-opus-4-6')
+            ? 'claude-opus-4-6'
+            : model.startsWith('claude-sonnet-4-6')
+                ? 'claude-sonnet-4-6'
+                : model;
+        const apiModel = isEconomyLine ? economyApiModel : premiumApiModel;
         const client = new Anthropic({
             apiKey,
             baseURL: isEconomyLine ? RIGHT_CODES_CLAUDE_BASE_URL : ZENMUX_ANTHROPIC_BASE_URL,
@@ -263,7 +268,8 @@ export async function POST(req) {
         const maxTokens = config?.maxTokens;
         const budgetTokens = config?.budgetTokens;
         const thinkingLevel = config?.thinkingLevel;
-        const isOpus = typeof model === "string" && model.startsWith("claude-opus-4-6");
+        const isClaudeAdaptiveThinkingModel = typeof model === "string"
+            && (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6"));
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemPrompt = injectCurrentTimeSystemReminder(
             isEconomyLine ? buildEconomySystemPrompt(userSystemPrompt) : userSystemPrompt
@@ -371,7 +377,7 @@ export async function POST(req) {
                         ],
                         messages: claudeMessages,
                         stream: true,
-                        ...(isOpus
+                        ...(isClaudeAdaptiveThinkingModel
                             ? {
                                 thinking: { type: "adaptive" },
                                 output_config: {

@@ -67,9 +67,10 @@ export default function SettingsMenu({
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
   const isSeedModel = model === "volcengine/doubao-seed-2.0-pro";
-  const isClaudeOpus = typeof model === "string" && model.startsWith("claude-opus-4-6");
+  const isClaudeAdaptiveThinkingModel = typeof model === "string"
+    && (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6"));
   const openAIThinkingLevels = isOpenAIModel ? getOpenAIThinkingLevels() : [];
-  const claudeTokenOptions = isClaudeOpus ? CLAUDE_OPUS_TOKEN_OPTIONS : CLAUDE_TOKEN_OPTIONS;
+  const claudeTokenOptions = isClaudeAdaptiveThinkingModel ? CLAUDE_OPUS_TOKEN_OPTIONS : CLAUDE_TOKEN_OPTIONS;
   const maxTokenOptions = isOpenAIModel
     ? OPENAI_TOKEN_OPTIONS
     : isSeedModel
@@ -92,7 +93,7 @@ export default function SettingsMenu({
       }
       return;
     }
-    if (isClaudeOpus) {
+    if (isClaudeAdaptiveThinkingModel) {
       if (!CLAUDE_THINKING_LEVELS.includes(thinkingLevel)) {
         setThinkingLevel("high");
       }
@@ -104,7 +105,7 @@ export default function SettingsMenu({
         setThinkingLevel("medium");
       }
     }
-  }, [model, thinkingLevel, setThinkingLevel, isClaudeOpus]);
+  }, [model, thinkingLevel, setThinkingLevel, isClaudeAdaptiveThinkingModel]);
 
   useEffect(() => {
     const options = model?.startsWith("claude-") ? claudeTokenOptions : maxTokenOptions;
@@ -510,7 +511,7 @@ export default function SettingsMenu({
                                 <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                                   思考深度
                                 </label>
-                                {isClaudeOpus ? (
+                                {isClaudeAdaptiveThinkingModel ? (
                                   <>
                                     <input
                                       type="range"

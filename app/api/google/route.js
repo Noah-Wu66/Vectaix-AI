@@ -16,7 +16,7 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildEconomySystemPrompt, isEconomyLineMode, stripModelPrefix } from '@/app/lib/economyModels';
+import { buildEconomySystemPrompt, isEconomyLineMode } from '@/app/lib/economyModels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -146,10 +146,14 @@ export async function POST(req) {
             const missingKey = isEconomyLine ? 'RIGHT_CODES_API_KEY' : 'ZENMUX_API_KEY';
             return Response.json({ error: `${missingKey} is not set` }, { status: 500 });
         }
-        const premiumApiModel = model === 'gemini-3-pro-preview'
+        const isGeminiProModel = model === 'gemini-3-pro-preview' || model === 'google/gemini-3-pro-preview';
+        const premiumApiModel = isGeminiProModel
             ? 'google/gemini-3-pro-preview'
             : 'google/gemini-3-flash-preview';
-        const apiModel = isEconomyLine ? stripModelPrefix(premiumApiModel) : premiumApiModel;
+        const economyApiModel = isGeminiProModel
+            ? 'gemini-3-pro-preview'
+            : 'gemini-3-flash-preview';
+        const apiModel = isEconomyLine ? economyApiModel : premiumApiModel;
         const ai = new GoogleGenAI({
             apiKey,
             httpOptions: {
