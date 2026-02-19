@@ -22,8 +22,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const ZENMUX_ANTHROPIC_BASE_URL = "https://zenmux.ai/api/anthropic";
-const RIGHT_CODES_CLAUDE_BASE_URL = "https://www.right.codes/claude-aws";
+const ZENMUX_ANTHROPIC_BASE_URL = "https://zenmux.ai/api/anthropic/v1";
+const RIGHT_CODES_CLAUDE_BASE_URL = "https://www.right.codes/claude-aws/v1";
 const ZENMUX_API_KEY = process.env.ZENMUX_API_KEY;
 const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
 
