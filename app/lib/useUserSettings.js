@@ -112,13 +112,15 @@ export function useUserSettings() {
     const localCompletionSoundVolume = readLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY);
     const localRouteMode = readLocalSetting(UI_ROUTE_MODE_KEY);
 
-    const initialModel = typeof localModel === "string" && localModel
+    const initialModel = typeof localModel === "string" && localModel && localModel !== "gemini-3-pro-preview"
       ? localModel
-      : DEFAULT_MODEL;
+      : localModel === "gemini-3-pro-preview" ? "gemini-3.1-pro-preview" : DEFAULT_MODEL;
 
     if (typeof localTheme === "string") _setThemeMode(localTheme);
     if (typeof localFont === "string") _setFontSize(localFont);
-    if (typeof localModel === "string") _setModel(localModel);
+    if (typeof localModel === "string") {
+      _setModel(localModel === "gemini-3-pro-preview" ? "gemini-3.1-pro-preview" : localModel);
+    }
     if (isPlainObject(localThinkingLevels)) _setThinkingLevels(localThinkingLevels);
     if (localHistoryLimit !== null) {
       const parsed = Number(localHistoryLimit);
