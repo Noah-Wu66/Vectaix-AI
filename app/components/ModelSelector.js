@@ -42,6 +42,7 @@ export default function ModelSelector({ model, onModelChange, routeMode }) {
   const visibleModels = CHAT_MODELS;
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
   const currentModelLine = getModelLineMeta(currentModel, routeMode);
+  const currentModelLabel = currentModel?.shortName || currentModel?.name || "模型";
 
   const renderModelGroup = (provider, title) => {
     const models = visibleModels.filter((m) => m.provider === provider);
@@ -91,7 +92,7 @@ export default function ModelSelector({ model, onModelChange, routeMode }) {
             isSelected={true}
           />
         )}
-        <span className="hidden sm:inline">{currentModel?.shortName}</span>
+        <span className="truncate max-w-[90px]">{currentModelLabel}</span>
         <span className={`text-xs font-semibold ml-auto ${currentModelLine.className}`}>
           {currentModelLine.label}
         </span>
