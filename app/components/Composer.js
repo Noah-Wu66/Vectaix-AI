@@ -16,6 +16,7 @@ export default function Composer({
   isStreaming,
   isWaitingForAI,
   model,
+  routeMode,
   onModelChange,
   messages,
   contextWindow,
@@ -207,7 +208,7 @@ export default function Composer({
     <div className="p-3 md:p-4 bg-white border-t border-zinc-200 z-20 shrink-0 pb-safe">
       <div className="max-w-3xl mx-auto space-y-2">
         <div className="flex items-center gap-2">
-          <ModelSelector model={model} onModelChange={onModelChange} />
+          <ModelSelector model={model} routeMode={routeMode} onModelChange={onModelChange} />
           <SettingsMenu
             model={model}
             thinkingLevel={thinkingLevel}

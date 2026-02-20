@@ -87,7 +87,7 @@ export default function SettingsMenu({
       }
       return;
     }
-    if (model === "gemini-3-pro-preview") {
+    if (model === "gemini-3.1-pro-preview") {
       if (!GEMINI_PRO_THINKING_LEVELS.includes(thinkingLevel)) {
         setThinkingLevel("high");
       }
@@ -487,7 +487,7 @@ export default function SettingsMenu({
                                 {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel]}
                               </span>
                             </div>
-                          ) : model === "gemini-3-pro-preview" ? (
+                          ) : model === "gemini-3.1-pro-preview" ? (
                             <div>
                               <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                                 思考深度

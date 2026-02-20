@@ -615,6 +615,7 @@ export default function ChatApp() {
             isStreaming,
             isWaitingForAI: loading && messages.length > 0,
             model,
+            routeMode,
             onModelChange: requestModelChange,
             messages,
             contextWindow: currentModelConfig?.contextWindow,

@@ -22,7 +22,7 @@ const MAX_TOKENS_64K = 64000;
 const MAX_TOKENS_128K = 128000;
 const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "high",
-  "gemini-3-pro-preview": "high",
+  "gemini-3.1-pro-preview": "high",
   "claude-sonnet-4-6-20260219": "high",
   "claude-opus-4-6-20260205": "high",
   "gpt-5.2": "medium",

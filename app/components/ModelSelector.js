@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp } from "lucide-react";
 import { Gemini, Claude, OpenAI, Doubao } from "@lobehub/icons";
 import { CHAT_MODELS } from "./ChatModels";
+import { LINE_MODES } from "../lib/economyModels";
 
 function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
   if (provider === "gemini") {
@@ -24,10 +25,23 @@ function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
   return null;
 }
 
-export default function ModelSelector({ model, onModelChange }) {
+function getModelLineMeta(modelConfig, routeMode) {
+  if (modelConfig?.provider === "seed") {
+    return { label: "优质", className: "text-green-500" };
+  }
+
+  if (routeMode === LINE_MODES.ECONOMY) {
+    return { label: "经济", className: "text-yellow-500" };
+  }
+
+  return { label: "优质", className: "text-green-500" };
+}
+
+export default function ModelSelector({ model, onModelChange, routeMode }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const visibleModels = CHAT_MODELS;
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
+  const currentModelLine = getModelLineMeta(currentModel, routeMode);
 
   const renderModelGroup = (provider, title) => {
     const models = visibleModels.filter((m) => m.provider === provider);
@@ -35,23 +49,29 @@ export default function ModelSelector({ model, onModelChange }) {
     return (
       <>
         <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">{title}</div>
-        {models.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => {
-              setShowModelMenu(false);
-              onModelChange(m.id);
-            }}
-            className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id
-              ? "bg-zinc-600 text-white"
-              : "text-zinc-600 hover:bg-zinc-50"
-              }`}
-            type="button"
-          >
-            <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
-            {m.name}
-          </button>
-        ))}
+        {models.map((m) => {
+          const lineMeta = getModelLineMeta(m, routeMode);
+          return (
+            <button
+              key={m.id}
+              onClick={() => {
+                setShowModelMenu(false);
+                onModelChange(m.id);
+              }}
+              className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id
+                ? "bg-zinc-600 text-white"
+                : "text-zinc-600 hover:bg-zinc-50"
+                }`}
+              type="button"
+            >
+              <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
+              <span>{m.name}</span>
+              <span className={`ml-auto text-xs font-semibold ${lineMeta.className}`}>
+                {lineMeta.label}
+              </span>
+            </button>
+          );
+        })}
       </>
     );
   };
@@ -72,6 +92,9 @@ export default function ModelSelector({ model, onModelChange }) {
           />
         )}
         <span className="hidden sm:inline">{currentModel?.shortName}</span>
+        <span className={`text-xs font-semibold ml-auto ${currentModelLine.className}`}>
+          {currentModelLine.label}
+        </span>
         <ChevronUp
           size={12}
           className={`transition-transform ${showModelMenu ? "rotate-180" : ""}`}

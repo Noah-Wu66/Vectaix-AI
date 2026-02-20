@@ -146,12 +146,12 @@ export async function POST(req) {
             const missingKey = isEconomyLine ? 'RIGHT_CODES_API_KEY' : 'ZENMUX_API_KEY';
             return Response.json({ error: `${missingKey} is not set` }, { status: 500 });
         }
-        const isGeminiProModel = model === 'gemini-3-pro-preview' || model === 'google/gemini-3.1-pro-preview';
+        const isGeminiProModel = model === 'gemini-3.1-pro-preview' || model === 'google/gemini-3.1-pro-preview';
         const premiumApiModel = isGeminiProModel
             ? 'google/gemini-3.1-pro-preview'
             : 'google/gemini-3-flash-preview';
         const economyApiModel = isGeminiProModel
-            ? 'gemini-3-pro-preview'
+            ? 'gemini-3.1-pro-preview'
             : 'gemini-3-flash-preview';
         const apiModel = isEconomyLine ? economyApiModel : premiumApiModel;
         const ai = new GoogleGenAI({

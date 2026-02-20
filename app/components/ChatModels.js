@@ -7,7 +7,7 @@ export const CHAT_MODELS = [
     contextWindow: 1000000,
   },
   {
-    id: "gemini-3-pro-preview",
+    id: "gemini-3.1-pro-preview",
     name: "Pro",
     shortName: "Pro",
     provider: "gemini",
