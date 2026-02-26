@@ -4,7 +4,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, Globe, Pencil, Settings2, Trash2, X } from "lucide-react";
 import ConfirmModal from "./ConfirmModal";
 import PromptEditorModal from "./PromptEditorModal";
-import { LINE_MODES } from "../lib/economyModels";
 
 const BASE_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000];
 const OPENAI_TOKEN_OPTIONS = [...BASE_TOKEN_OPTIONS, 128000];
@@ -41,8 +40,6 @@ export default function SettingsMenu({
   setBudgetTokens,
   webSearch,
   setWebSearch,
-  routeMode,
-  onRouteModeChange,
   systemPrompts,
   activePromptIds,
   setActivePromptIds,
@@ -70,9 +67,6 @@ export default function SettingsMenu({
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
   const isSeedModel = model === "volcengine/doubao-seed-2.0-pro";
-  const isEconomyOnlyModel = typeof model === "string"
-    && (model.startsWith("claude-") || model.startsWith("gpt-"));
-  const isPremiumOnlyModel = isSeedModel;
   const isClaudeAdaptiveThinkingModel = typeof model === "string"
     && (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6"));
   const openAIThinkingLevels = isOpenAIModel ? getOpenAIThinkingLevels() : [];
@@ -416,40 +410,6 @@ export default function SettingsMenu({
                       )}
                     </AnimatePresence>
                   </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                    线路切换
-                  </label>
-                  {isEconomyOnlyModel ? (
-                    <div className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-zinc-50 text-sm text-zinc-600">
-                      当前模型仅支持经济线路
-                    </div>
-                  ) : isPremiumOnlyModel ? (
-                    <div className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-zinc-50 text-sm text-zinc-600">
-                      当前模型仅支持优质线路
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      {[
-                        { id: LINE_MODES.PREMIUM, label: "优质线路" },
-                        { id: LINE_MODES.ECONOMY, label: "经济线路" },
-                      ].map((mode) => (
-                        <button
-                          key={mode.id}
-                          onClick={() => onRouteModeChange?.(mode.id)}
-                          type="button"
-                          className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${routeMode === mode.id
-                            ? "bg-zinc-600 text-white border-zinc-600"
-                            : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
-                            }`}
-                        >
-                          {mode.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 <div>

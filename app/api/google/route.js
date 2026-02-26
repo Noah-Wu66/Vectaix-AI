@@ -15,7 +15,6 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildEconomySystemPrompt, isEconomyLineMode } from '@/app/lib/economyModels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -150,7 +149,6 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
 
-        const isEconomyLine = isEconomyLineMode(config?.lineMode);
         if (!GEMINI_API_KEY) {
             return Response.json({ error: 'GEMINI_API_KEY is not set' }, { status: 500 });
         }
@@ -240,9 +238,7 @@ export async function POST(req) {
 
         // 2. Prepare Payload
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
-        const baseSystemText = injectCurrentTimeSystemReminder(
-            isEconomyLine ? buildEconomySystemPrompt(userSystemPrompt) : userSystemPrompt
-        );
+        const baseSystemText = injectCurrentTimeSystemReminder(userSystemPrompt);
         const baseConfig = {
             systemInstruction: {
                 parts: [{ text: baseSystemText }]

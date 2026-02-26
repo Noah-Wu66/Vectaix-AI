@@ -9,12 +9,10 @@ import {
   UI_HISTORY_LIMIT_KEY,
   UI_MAX_TOKENS_KEY,
   UI_MODEL_KEY,
-  UI_ROUTE_MODE_KEY,
   UI_THEME_MODE_KEY,
   UI_THINKING_LEVELS_KEY,
   UI_WEB_SEARCH_KEY,
 } from "./storageKeys";
-import { LINE_MODES } from "./economyModels";
 
 const SEED_MODEL_ID = "volcengine/doubao-seed-2.0-pro";
 const DEFAULT_MODEL = SEED_MODEL_ID;
@@ -31,7 +29,6 @@ const DEFAULT_THINKING_LEVELS = {
 const DEFAULT_MAX_TOKENS = MAX_TOKENS_64K;
 const DEFAULT_BUDGET_TOKENS = 32000;
 const DEFAULT_COMPLETION_SOUND_VOLUME = 60;
-const DEFAULT_ROUTE_MODE = LINE_MODES.PREMIUM;
 
 // localStorage keys - 所有设置都本地存储，只有 systemPrompts 内容存数据库
 
@@ -92,7 +89,6 @@ export function useUserSettings() {
   const [webSearch, _setWebSearch] = useState(true);
   const [avatar, _setAvatar] = useState(null);
   const [completionSoundVolume, _setCompletionSoundVolume] = useState(DEFAULT_COMPLETION_SOUND_VOLUME);
-  const [routeMode, _setRouteMode] = useState(DEFAULT_ROUTE_MODE);
   const [settingsError, setSettingsError] = useState(null);
 
   const modelRef = useRef(model);
@@ -110,7 +106,6 @@ export function useUserSettings() {
     const localBudgetTokens = readLocalSetting(UI_BUDGET_TOKENS_KEY);
     const localWebSearch = readLocalSetting(UI_WEB_SEARCH_KEY);
     const localCompletionSoundVolume = readLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY);
-    const localRouteMode = readLocalSetting(UI_ROUTE_MODE_KEY);
 
     const initialModel = typeof localModel === "string" && localModel && localModel !== "gemini-3-pro-preview"
       ? localModel
@@ -146,9 +141,6 @@ export function useUserSettings() {
     if (localCompletionSoundVolume !== null) {
       const parsed = Number(localCompletionSoundVolume);
       _setCompletionSoundVolume(Number.isFinite(parsed) ? parsed : DEFAULT_COMPLETION_SOUND_VOLUME);
-    }
-    if (localRouteMode === LINE_MODES.ECONOMY || localRouteMode === LINE_MODES.PREMIUM) {
-      _setRouteMode(localRouteMode);
     }
   }, []);
 
@@ -237,12 +229,6 @@ export function useUserSettings() {
   const setCompletionSoundVolume = useCallback((volume) => {
     _setCompletionSoundVolume(volume);
     writeLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY, String(volume));
-  }, []);
-
-  const setRouteMode = useCallback((mode) => {
-    const normalized = mode === LINE_MODES.ECONOMY ? LINE_MODES.ECONOMY : LINE_MODES.PREMIUM;
-    _setRouteMode(normalized);
-    writeLocalSetting(UI_ROUTE_MODE_KEY, normalized);
   }, []);
 
   const fetchSettings = useCallback(async () => {
@@ -435,8 +421,6 @@ export function useUserSettings() {
     setWebSearch,
     completionSoundVolume,
     setCompletionSoundVolume,
-    routeMode,
-    setRouteMode,
     settingsError,
     setSettingsError,
     fetchSettings,

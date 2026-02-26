@@ -54,14 +54,12 @@ export function buildChatConfig({
   maxTokens,
   budgetTokens,
   webSearch,
-  lineMode,
 }) {
   const cfg = {};
   cfg.thinkingLevel = thinkingLevel;
   cfg.maxTokens = maxTokens;
   cfg.budgetTokens = budgetTokens;
   cfg.webSearch = webSearch === true;
-  cfg.lineMode = lineMode === "economy" ? "economy" : "premium";
 
   const activeId = activePromptId == null ? null : String(activePromptId);
   const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
