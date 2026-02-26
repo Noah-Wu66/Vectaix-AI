@@ -2,8 +2,22 @@ import dbConnect from '@/lib/db';
 import { requireAdmin } from '@/lib/admin';
 import User from '@/models/User';
 import Conversation from '@/models/Conversation';
+import UserSettings from '@/models/UserSettings';
 
 export const dynamic = 'force-dynamic';
+
+const ENCRYPTION_PREFIX = 'enc:v1:';
+
+function hasEncryptedData(obj) {
+    if (typeof obj === 'string') {
+        return obj.startsWith(ENCRYPTION_PREFIX);
+    }
+    if (!obj || typeof obj !== 'object') return false;
+    if (Array.isArray(obj)) {
+        return obj.some(item => hasEncryptedData(item));
+    }
+    return Object.values(obj).some(val => hasEncryptedData(val));
+}
 
 export async function GET(req) {
     const admin = await requireAdmin();
@@ -54,5 +68,70 @@ export async function GET(req) {
         total,
         page,
         totalPages: Math.ceil(total / limit),
+    });
+}
+
+// 清除全部用户的加密数据（包含侧边栏会话标题）
+export async function POST() {
+    const admin = await requireAdmin();
+    if (!admin) {
+        return Response.json({ error: '无权限' }, { status: 403 });
+    }
+
+    await dbConnect();
+
+    const encryptedConversationIds = [];
+    const encryptedUserIds = new Set();
+
+    const conversations = await Conversation.find({})
+        .select('_id userId title messages settings')
+        .lean();
+
+    for (const conv of conversations) {
+        const shouldDelete = hasEncryptedData({
+            title: conv.title,
+            messages: conv.messages,
+            settings: conv.settings,
+        });
+
+        if (shouldDelete) {
+            encryptedConversationIds.push(conv._id);
+            if (conv.userId) {
+                encryptedUserIds.add(conv.userId.toString());
+            }
+        }
+    }
+
+    let deletedConversations = 0;
+    if (encryptedConversationIds.length > 0) {
+        const result = await Conversation.deleteMany({ _id: { $in: encryptedConversationIds } });
+        deletedConversations = result.deletedCount || 0;
+    }
+
+    const encryptedSettingIds = [];
+    const settings = await UserSettings.find({})
+        .select('_id userId systemPrompts')
+        .lean();
+
+    for (const setting of settings) {
+        if (hasEncryptedData(setting.systemPrompts)) {
+            encryptedSettingIds.push(setting._id);
+            if (setting.userId) {
+                encryptedUserIds.add(setting.userId.toString());
+            }
+        }
+    }
+
+    let deletedSettings = 0;
+    if (encryptedSettingIds.length > 0) {
+        const result = await UserSettings.deleteMany({ _id: { $in: encryptedSettingIds } });
+        deletedSettings = result.deletedCount || 0;
+    }
+
+    return Response.json({
+        success: true,
+        deletedConversations,
+        deletedSettings,
+        affectedUsers: encryptedUserIds.size,
     });
 }

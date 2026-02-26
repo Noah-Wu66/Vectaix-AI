@@ -46,28 +46,17 @@ export async function POST(req, { params }) {
     const userId = user._id;
 
     // 查找并删除包含加密数据的会话
-    const conversations = await Conversation.find({ userId }).lean();
+    const conversations = await Conversation.find({ userId })
+        .select('_id title messages settings')
+        .lean();
     let deletedConversations = 0;
 
     for (const conv of conversations) {
-        let shouldDelete = false;
-
-        // 检查 title
-        if (hasEncryptedData(conv.title)) {
-            shouldDelete = true;
-        }
-
-        // 检查 messages
-        if (!shouldDelete && Array.isArray(conv.messages)) {
-            for (const msg of conv.messages) {
-                if (hasEncryptedData(msg.content) || 
-                    hasEncryptedData(msg.thought) || 
-                    hasEncryptedData(msg.parts)) {
-                    shouldDelete = true;
-                    break;
-                }
-            }
-        }
+        const shouldDelete = hasEncryptedData({
+            title: conv.title,
+            messages: conv.messages,
+            settings: conv.settings,
+        });
 
         if (shouldDelete) {
             await Conversation.deleteOne({ _id: conv._id });

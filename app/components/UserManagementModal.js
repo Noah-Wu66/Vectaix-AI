@@ -23,6 +23,7 @@ export default function UserManagementModal({ open, onClose }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmButtonText, setConfirmButtonText] = useState("确定");
   const [confirmDanger, setConfirmDanger] = useState(false);
   const confirmActionRef = useRef(null);
 
@@ -88,6 +89,7 @@ export default function UserManagementModal({ open, onClose }) {
     };
     setConfirmTitle("重置密码");
     setConfirmMessage(`确定要重置「${user.email}」的密码吗？重置后将生成新的随机密码。`);
+    setConfirmButtonText("确认");
     setConfirmDanger(false);
     setConfirmOpen(true);
   };
@@ -110,27 +112,30 @@ export default function UserManagementModal({ open, onClose }) {
     };
     setConfirmTitle("删除用户");
     setConfirmMessage(`确定要删除「${user.email}」吗？该用户的所有数据（对话、设置、文件）将被永久删除，此操作不可撤销。`);
+    setConfirmButtonText("删除");
     setConfirmDanger(true);
     setConfirmOpen(true);
   };
 
-  // 清除加密数据
-  const requestCleanEncrypted = (user) => {
+  // 清除全部用户加密数据
+  const requestCleanAllEncrypted = () => {
     confirmActionRef.current = async () => {
-      setActionLoading(user.id);
+      setActionLoading("clean-all");
       try {
-        const res = await fetch(`/api/admin/users/${user.id}`, { method: "POST" });
+        const res = await fetch("/api/admin/users", { method: "POST" });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "操作失败");
-        toast.success(`已清除 ${data.deletedConversations} 个加密会话${data.deletedSettings ? '及加密设置' : ''}`);
+        toast.success(`已清除 ${data.deletedConversations || 0} 个加密会话、${data.deletedSettings || 0} 份加密设置`);
+        fetchUsers(page, search.trim());
       } catch (e) {
         toast.error(e?.message);
       } finally {
         setActionLoading(null);
       }
     };
-    setConfirmTitle("清除加密数据");
-    setConfirmMessage(`确定要清除「${user.email}」的旧加密数据吗？将删除包含加密内容的会话和系统提示词，此操作不可撤销。`);
+    setConfirmTitle("一键清除全部加密数据");
+    setConfirmMessage("确定要清除所有用户的旧加密数据吗？将删除包含加密内容的会话（含侧边栏加密标题）和系统提示词，此操作不可撤销。");
+    setConfirmButtonText("清除");
     setConfirmDanger(true);
     setConfirmOpen(true);
   };
@@ -200,6 +205,15 @@ export default function UserManagementModal({ open, onClose }) {
                     className="w-full bg-zinc-50 border border-zinc-200 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-800 focus:border-zinc-400 outline-none"
                   />
                 </div>
+
+                <button
+                  onClick={requestCleanAllEncrypted}
+                  disabled={actionLoading !== null || loading}
+                  className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                >
+                  <Eraser size={16} />
+                  一键清除全部用户加密数据（含侧边栏）
+                </button>
               </div>
 
               {/* 重置密码结果 */}
@@ -263,28 +277,20 @@ export default function UserManagementModal({ open, onClose }) {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 ml-3">
-                           <button
-                             onClick={() => requestCleanEncrypted(u)}
-                             disabled={actionLoading === u.id}
-                             className="p-2 text-zinc-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
-                             title="清除加密数据"
-                           >
-                             <Eraser size={15} />
-                           </button>
-                           <button
-                             onClick={() => requestResetPassword(u)}
-                             disabled={actionLoading === u.id}
-                             className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
-                             title="重置密码"
-                           >
+                            <button
+                              onClick={() => requestResetPassword(u)}
+                              disabled={actionLoading !== null}
+                              className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
+                              title="重置密码"
+                            >
                              <KeyRound size={15} />
                            </button>
-                           <button
-                             onClick={() => requestDeleteUser(u)}
-                             disabled={actionLoading === u.id}
-                             className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                             title="删除用户"
-                           >
+                            <button
+                              onClick={() => requestDeleteUser(u)}
+                              disabled={actionLoading !== null}
+                              className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                              title="删除用户"
+                            >
                              <Trash2 size={15} />
                            </button>
                          </div>
@@ -337,7 +343,7 @@ export default function UserManagementModal({ open, onClose }) {
         }}
         title={confirmTitle}
         message={confirmMessage}
-        confirmText={confirmDanger ? "删除" : "确定"}
+        confirmText={confirmButtonText}
         cancelText="取消"
         danger={confirmDanger}
       />
