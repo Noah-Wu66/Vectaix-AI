@@ -107,14 +107,14 @@ export function useUserSettings() {
     const localWebSearch = readLocalSetting(UI_WEB_SEARCH_KEY);
     const localCompletionSoundVolume = readLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY);
 
-    const initialModel = typeof localModel === "string" && localModel && localModel !== "gemini-3-pro-preview"
+    const initialModel = typeof localModel === "string" && localModel
       ? localModel
-      : localModel === "gemini-3-pro-preview" ? "gemini-3.1-pro-preview" : DEFAULT_MODEL;
+      : DEFAULT_MODEL;
 
     if (typeof localTheme === "string") _setThemeMode(localTheme);
     if (typeof localFont === "string") _setFontSize(localFont);
     if (typeof localModel === "string") {
-      _setModel(localModel === "gemini-3-pro-preview" ? "gemini-3.1-pro-preview" : localModel);
+      _setModel(localModel);
     }
     if (isPlainObject(localThinkingLevels)) _setThinkingLevels(localThinkingLevels);
     if (localHistoryLimit !== null) {

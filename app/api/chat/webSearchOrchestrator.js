@@ -14,7 +14,7 @@ const DECISION_SYSTEM_TEXT = '你是联网检索决策器。必须只输出严�
 const READER_SYSTEM_TEXT = '你是网页全文查看决策器。必须只输出严格 JSON，不要输出任何多余文本。';
 const CONTINUE_SYSTEM_TEXT = '你是网页阅读继续决策器。必须只输出严格 JSON，不要输出任何多余文本。';
 const ENOUGH_SYSTEM_TEXT = '你是联网检索补充决策器。必须只输出严格 JSON，不要输出任何多余文本。';
-const INTERNAL_DECISION_MODEL = 'gemini-2.5-flash';
+const INTERNAL_DECISION_MODEL = 'gemini-3-flash-preview';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 let decisionClient;

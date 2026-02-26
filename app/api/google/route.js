@@ -21,8 +21,8 @@ export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_FLASH_MODEL = 'gemini-2.5-flash';
-const GEMINI_PRO_MODEL = 'gemini-2.5-pro';
+const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
+const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
 
 async function storedPartToRequestPart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -64,14 +64,24 @@ async function buildGeminiContentsFromMessages(messages) {
 
 function resolveGeminiApiModel(model) {
     const normalizedModel = typeof model === 'string' ? model.trim() : '';
+    const modelWithoutProvider = normalizedModel.startsWith('google/')
+        ? normalizedModel.slice('google/'.length)
+        : normalizedModel;
+
     if (
-        normalizedModel === 'gemini-3.1-pro-preview'
-        || normalizedModel === 'google/gemini-3.1-pro-preview'
-        || normalizedModel === 'gemini-3-pro-preview'
-        || normalizedModel === GEMINI_PRO_MODEL
+        modelWithoutProvider === 'gemini-3.1-pro-preview'
+        || modelWithoutProvider === GEMINI_PRO_MODEL
     ) {
         return GEMINI_PRO_MODEL;
     }
+
+    if (
+        modelWithoutProvider === 'gemini-3-flash-preview'
+        || modelWithoutProvider === GEMINI_FLASH_MODEL
+    ) {
+        return GEMINI_FLASH_MODEL;
+    }
+
     return GEMINI_FLASH_MODEL;
 }
 
@@ -251,10 +261,19 @@ export async function POST(req) {
         }
 
         if (config?.thinkingLevel) {
-            baseConfig.thinkingConfig = {
-                thinkingLevel: config.thinkingLevel,
-                includeThoughts: true
-            };
+            const thinkingLevel = typeof config.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
+            const flashAllowedLevels = new Set(['minimal', 'low', 'medium', 'high']);
+            const proAllowedLevels = new Set(['low', 'high']);
+            const isAllowed = apiModel === GEMINI_FLASH_MODEL
+                ? flashAllowedLevels.has(thinkingLevel)
+                : proAllowedLevels.has(thinkingLevel);
+
+            if (isAllowed) {
+                baseConfig.thinkingConfig = {
+                    thinkingLevel,
+                    includeThoughts: true
+                };
+            }
         }
 
         const enableWebSearch = config?.webSearch === true;

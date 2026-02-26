@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 const COMPRESS_RATE_LIMIT = { limit: 10, windowMs: 60 * 1000 };
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const COMPRESS_MODEL = 'gemini-2.5-flash';
+const COMPRESS_MODEL = 'gemini-3-flash-preview';
 
 const COMPRESS_SYSTEM_PROMPT = `你是一个对话历史压缩器。你的任务是将一段多轮对话压缩成一份简洁的摘要，保留所有关键信息。
 
