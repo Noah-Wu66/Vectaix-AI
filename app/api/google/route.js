@@ -4,7 +4,6 @@ import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
-import { encryptMessage, encryptMessages, encryptString } from '@/lib/encryption';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
@@ -22,10 +21,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const ZENMUX_VERTEX_BASE_URL = 'https://zenmux.ai/api/vertex-ai';
-const RIGHT_CODES_GEMINI_BASE_URL = 'https://www.right.codes/gemini';
-const ZENMUX_API_KEY = process.env.ZENMUX_API_KEY;
-const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_FLASH_MODEL = 'gemini-2.5-flash';
+const GEMINI_PRO_MODEL = 'gemini-2.5-pro';
 
 async function storedPartToRequestPart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -63,6 +61,19 @@ async function buildGeminiContentsFromMessages(messages) {
         if (parts.length) contents.push({ role: msg.role, parts });
     }
     return contents;
+}
+
+function resolveGeminiApiModel(model) {
+    const normalizedModel = typeof model === 'string' ? model.trim() : '';
+    if (
+        normalizedModel === 'gemini-3.1-pro-preview'
+        || normalizedModel === 'google/gemini-3.1-pro-preview'
+        || normalizedModel === 'gemini-3-pro-preview'
+        || normalizedModel === GEMINI_PRO_MODEL
+    ) {
+        return GEMINI_PRO_MODEL;
+    }
+    return GEMINI_FLASH_MODEL;
 }
 
 export async function POST(req) {
@@ -139,35 +150,19 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
 
-        // 默认走 zenmux；经济线路走 right.codes
         const isEconomyLine = isEconomyLineMode(config?.lineMode);
-        const apiKey = isEconomyLine ? RIGHT_CODES_API_KEY : ZENMUX_API_KEY;
-        if (!apiKey) {
-            const missingKey = isEconomyLine ? 'RIGHT_CODES_API_KEY' : 'ZENMUX_API_KEY';
-            return Response.json({ error: `${missingKey} is not set` }, { status: 500 });
+        if (!GEMINI_API_KEY) {
+            return Response.json({ error: 'GEMINI_API_KEY is not set' }, { status: 500 });
         }
-        const isGeminiProModel = model === 'gemini-3.1-pro-preview' || model === 'google/gemini-3.1-pro-preview';
-        const premiumApiModel = isGeminiProModel
-            ? 'google/gemini-3.1-pro-preview'
-            : 'google/gemini-3-flash-preview';
-        const economyApiModel = isGeminiProModel
-            ? 'gemini-3.1-pro-preview'
-            : 'gemini-3-flash-preview';
-        const apiModel = isEconomyLine ? economyApiModel : premiumApiModel;
-        const ai = new GoogleGenAI({
-            apiKey,
-            httpOptions: {
-                apiVersion: 'v1',
-                baseUrl: isEconomyLine ? RIGHT_CODES_GEMINI_BASE_URL : ZENMUX_VERTEX_BASE_URL
-            }
-        });
+        const apiModel = resolveGeminiApiModel(model);
+        const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
         // 1) Ensure Conversation exists (for logged-in users)
         if (user && !currentConversationId) {
             const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
-                title: encryptString(title),
+                title: title,
                 model: model,
                 settings: settings,
                 messages: []
@@ -186,7 +181,7 @@ export async function POST(req) {
             const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },
-                { $set: { messages: encryptMessages(sanitized), updatedAt: regenerateTime } },
+                { $set: { messages: sanitized, updatedAt: regenerateTime } },
                 { new: true }
             ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
@@ -288,16 +283,16 @@ export async function POST(req) {
 
             const userMsgTime = Date.now();
             const resolvedUserMessageId = userMessageId;
-            const encryptedUserMessage = encryptMessage({
+            const userMessage = {
                 id: resolvedUserMessageId,
                 role: 'user',
                 content: prompt,
                 type: 'parts',
                 parts: storedUserParts
-            });
+            };
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
                 $push: {
-                    messages: encryptedUserMessage
+                    messages: userMessage
                 },
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
@@ -429,7 +424,7 @@ export async function POST(req) {
                         const resolvedModelMessageId = (isNonEmptyString(modelMessageId) && modelMessageId.length <= 128)
                             ? modelMessageId
                             : generateMessageId();
-                        const encryptedModelMessage = encryptMessage({
+                        const modelMessage = {
                             id: resolvedModelMessageId,
                             role: 'model',
                             content: fullText,
@@ -438,12 +433,12 @@ export async function POST(req) {
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
                             parts: [{ text: fullText }]
-                        });
+                        };
                         await Conversation.findOneAndUpdate(
                             writeCondition,
                             {
                                 $push: {
-                                    messages: encryptedModelMessage
+                                    messages: modelMessage
                                 },
                                 updatedAt: Date.now()
                             }

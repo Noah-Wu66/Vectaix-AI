@@ -3,7 +3,6 @@ import Conversation from '@/models/Conversation';
 import UserSettings from '@/models/UserSettings';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
-import { decryptConversation, decryptSettings } from '@/lib/encryption';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,15 +51,13 @@ export async function GET(req) {
     .lean();
 
   const settings = await UserSettings.findOne({ userId: user.userId }).lean();
-  const decryptedConversations = conversations.map((conv) => decryptConversation(conv));
-  const decryptedSettings = settings ? decryptSettings(settings) : settings;
 
   const payload = {
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
     data: {
-      conversations: decryptedConversations,
-      settings: decryptedSettings,
+      conversations,
+      settings,
     },
   };
 

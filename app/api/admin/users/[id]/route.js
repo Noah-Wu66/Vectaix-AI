@@ -11,6 +11,88 @@ import { del } from '@vercel/blob';
 
 export const dynamic = 'force-dynamic';
 
+const ENCRYPTION_PREFIX = 'enc:v1:';
+
+function hasEncryptedData(obj) {
+    if (typeof obj === 'string') {
+        return obj.startsWith(ENCRYPTION_PREFIX);
+    }
+    if (!obj || typeof obj !== 'object') return false;
+    if (Array.isArray(obj)) {
+        return obj.some(item => hasEncryptedData(item));
+    }
+    return Object.values(obj).some(val => hasEncryptedData(val));
+}
+
+// 清除用户的加密数据
+export async function POST(req, { params }) {
+    const admin = await requireAdmin();
+    if (!admin) {
+        return Response.json({ error: '无权限' }, { status: 403 });
+    }
+
+    const { id } = params;
+    if (!mongoose.isValidObjectId(id)) {
+        return Response.json({ error: '无效的用户 ID' }, { status: 400 });
+    }
+
+    await dbConnect();
+
+    const user = await User.findById(id);
+    if (!user) {
+        return Response.json({ error: '用户不存在' }, { status: 404 });
+    }
+
+    const userId = user._id;
+
+    // 查找并删除包含加密数据的会话
+    const conversations = await Conversation.find({ userId }).lean();
+    let deletedConversations = 0;
+
+    for (const conv of conversations) {
+        let shouldDelete = false;
+
+        // 检查 title
+        if (hasEncryptedData(conv.title)) {
+            shouldDelete = true;
+        }
+
+        // 检查 messages
+        if (!shouldDelete && Array.isArray(conv.messages)) {
+            for (const msg of conv.messages) {
+                if (hasEncryptedData(msg.content) || 
+                    hasEncryptedData(msg.thought) || 
+                    hasEncryptedData(msg.parts)) {
+                    shouldDelete = true;
+                    break;
+                }
+            }
+        }
+
+        if (shouldDelete) {
+            await Conversation.deleteOne({ _id: conv._id });
+            deletedConversations++;
+        }
+    }
+
+    // 查找并删除包含加密数据的设置
+    const settings = await UserSettings.findOne({ userId }).lean();
+    let deletedSettings = false;
+
+    if (settings) {
+        if (hasEncryptedData(settings.systemPrompts)) {
+            await UserSettings.deleteOne({ userId });
+            deletedSettings = true;
+        }
+    }
+
+    return Response.json({ 
+        success: true, 
+        deletedConversations,
+        deletedSettings
+    });
+}
+
 // 重置用户密码
 export async function PATCH(req, { params }) {
     const admin = await requireAdmin();

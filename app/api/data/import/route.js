@@ -3,7 +3,6 @@ import Conversation from '@/models/Conversation';
 import UserSettings from '@/models/UserSettings';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
-import { encryptConversation, encryptSettings } from '@/lib/encryption';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -249,27 +248,26 @@ export async function POST(req) {
 
     const userId = user.userId;
     const conversations = conversationsSrc.map((c, ci) => sanitizeConversation(c, ci, userId));
-    const encryptedConversations = conversations.map((c) => encryptConversation(c));
 
     // 全量覆盖：先清空再重建
     await Conversation.deleteMany({ userId });
     await UserSettings.deleteOne({ userId });
 
-    if (encryptedConversations.length > 0) {
-      await Conversation.insertMany(encryptedConversations, { ordered: true });
+    if (conversations.length > 0) {
+      await Conversation.insertMany(conversations, { ordered: true });
     }
 
     if (settingsSrc) {
       const sanitizedSettings = sanitizeSettings(settingsSrc, userId);
       if (sanitizedSettings) {
-        await UserSettings.create(encryptSettings(sanitizedSettings));
+        await UserSettings.create(sanitizedSettings);
       }
     }
 
     return Response.json({
       success: true,
       imported: {
-        conversationsCount: encryptedConversations.length,
+        conversationsCount: conversations.length,
         settings: Boolean(settingsSrc),
       },
     });

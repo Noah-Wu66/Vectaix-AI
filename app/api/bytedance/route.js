@@ -3,7 +3,6 @@ import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
-import { encryptMessage, encryptMessages, encryptString } from '@/lib/encryption';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
@@ -93,7 +92,7 @@ export async function POST(req) {
             const title = prompt.length > 30 ? `${prompt.substring(0, 30)}...` : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
-                title: encryptString(title),
+                title: title,
                 model,
                 settings,
                 messages: []
@@ -111,7 +110,7 @@ export async function POST(req) {
             const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },
-                { $set: { messages: encryptMessages(sanitized), updatedAt: regenerateTime } },
+                { $set: { messages: sanitized, updatedAt: regenerateTime } },
                 { new: true }
             ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
@@ -166,16 +165,16 @@ export async function POST(req) {
             }
 
             const userMsgTime = Date.now();
-            const encryptedUserMessage = encryptMessage({
+            const userMessage = {
                 id: userMessageId,
                 role: 'user',
                 content: prompt,
                 type: 'parts',
                 parts: storedUserParts
-            });
+            };
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
                 $push: {
-                    messages: encryptedUserMessage
+                    messages: userMessage
                 },
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
@@ -419,7 +418,7 @@ export async function POST(req) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
                             : { _id: currentConversationId, userId: user.userId };
-                        const encryptedModelMessage = encryptMessage({
+                        const modelMessage = {
                             id: modelMessageId,
                             role: 'model',
                             content: fullText,
@@ -428,12 +427,12 @@ export async function POST(req) {
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
                             parts: [{ text: fullText }]
-                        });
+                        };
                         await Conversation.findOneAndUpdate(
                             writeCondition,
                             {
                                 $push: {
-                                    messages: encryptedModelMessage
+                                    messages: modelMessage
                                 },
                                 updatedAt: Date.now()
                             }

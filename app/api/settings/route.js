@@ -1,7 +1,6 @@
 import dbConnect from '@/lib/db';
 import UserSettings from '@/models/UserSettings';
 import { getAuthPayload } from '@/lib/auth';
-import { decryptSettings, encryptSystemPrompts } from '@/lib/encryption';
 
 // 获取用户设置（只返回系统提示词）
 export async function GET() {
@@ -19,7 +18,7 @@ export async function GET() {
         });
     }
 
-    return Response.json({ settings: decryptSettings(settings.toObject()) });
+    return Response.json({ settings: settings.toObject() });
 }
 
 // 添加系统提示词
@@ -51,18 +50,18 @@ export async function POST(req) {
     if (!settings) {
         settings = await UserSettings.create({
             userId: user.userId,
-            systemPrompts: encryptSystemPrompts([{ name, content }])
+            systemPrompts: [{ name, content }]
         });
     } else {
         const nextPrompts = Array.isArray(settings.systemPrompts)
             ? [...settings.systemPrompts, { name, content }]
             : [{ name, content }];
-        settings.systemPrompts = encryptSystemPrompts(nextPrompts);
+        settings.systemPrompts = nextPrompts;
         settings.updatedAt = Date.now();
         await settings.save();
     }
 
-    return Response.json({ settings: decryptSettings(settings.toObject()) });
+    return Response.json({ settings: settings.toObject() });
 }
 
 // 删除系统提示词
@@ -83,7 +82,7 @@ export async function DELETE(req) {
     settings.updatedAt = Date.now();
     await settings.save();
 
-    return Response.json({ settings: decryptSettings(settings.toObject()) });
+    return Response.json({ settings: settings.toObject() });
 }
 
 // 更新用户头像
@@ -108,7 +107,7 @@ export async function PUT(req) {
         await settings.save();
     }
 
-    return Response.json({ settings: decryptSettings(settings.toObject()) });
+    return Response.json({ settings: settings.toObject() });
 }
 
 // 编辑系统提示词
@@ -142,9 +141,8 @@ export async function PATCH(req) {
 
     p.name = String(name);
     p.content = String(content);
-    settings.systemPrompts = encryptSystemPrompts(settings.systemPrompts);
     settings.updatedAt = Date.now();
     await settings.save();
 
-    return Response.json({ settings: decryptSettings(settings.toObject()) });
+    return Response.json({ settings: settings.toObject() });
 }

@@ -1,7 +1,6 @@
 import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import { getAuthPayload } from '@/lib/auth';
-import { decryptString } from '@/lib/encryption';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,12 +16,7 @@ export async function GET() {
             .select('title model updatedAt pinned')
             .lean();
 
-        const decrypted = conversations.map((conv) => ({
-            ...conv,
-            title: decryptString(conv.title),
-        }));
-
-        return Response.json({ conversations: decrypted });
+        return Response.json({ conversations });
     } catch (error) {
         console.error('Failed to fetch conversations:', error?.message);
         return Response.json({ error: 'Internal Server Error' }, { status: 500 });

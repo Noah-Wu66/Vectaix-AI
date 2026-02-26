@@ -2,7 +2,6 @@ import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import { getAuthPayload } from '@/lib/auth';
 import mongoose from 'mongoose';
-import { decryptConversation, encryptMessages, encryptString } from '@/lib/encryption';
 
 const ALLOWED_UPDATE_KEYS = new Set(['title', 'messages', 'settings', 'pinned']);
 const ALLOWED_SETTINGS_KEYS = new Set(['thinkingLevel', 'historyLimit', 'maxTokens', 'budgetTokens', 'activePromptId']);
@@ -200,7 +199,7 @@ export async function GET(req, { params }) {
     const conversation = await Conversation.findOne({ _id: params.id, userId: user.userId }).lean();
     if (!conversation) return Response.json({ error: 'Not found' }, { status: 404 });
 
-    return Response.json({ conversation: decryptConversation(conversation) });
+    return Response.json({ conversation });
 }
 
 export async function DELETE(req, { params }) {
@@ -267,13 +266,13 @@ export async function PUT(req, { params }) {
         if (body.title.length > MAX_TITLE_CHARS) {
             return Response.json({ error: 'title too long' }, { status: 400 });
         }
-        updateObj.title = encryptString(body.title);
+        updateObj.title = body.title;
     }
 
     if (Array.isArray(body.messages)) {
         try {
             const sanitizedMessages = sanitizeMessages(body.messages);
-            updateObj.messages = encryptMessages(sanitizedMessages);
+            updateObj.messages = sanitizedMessages;
             shouldTouchUpdatedAt = true;
         } catch (e) {
             return Response.json({ error: e?.message }, { status: 400 });
@@ -299,7 +298,7 @@ export async function PUT(req, { params }) {
 
     if (Object.keys(updateObj).length === 0) {
         const conversation = await Conversation.findOne({ _id: params.id, userId: user.userId });
-        return Response.json({ conversation: decryptConversation(conversation?.toObject?.() || conversation) });
+        return Response.json({ conversation: conversation?.toObject?.() || conversation });
     }
 
     const conversation = await Conversation.findOneAndUpdate(
@@ -308,5 +307,5 @@ export async function PUT(req, { params }) {
         { new: true }
     );
 
-    return Response.json({ conversation: decryptConversation(conversation?.toObject?.() || conversation) });
+    return Response.json({ conversation: conversation?.toObject?.() || conversation });
 }

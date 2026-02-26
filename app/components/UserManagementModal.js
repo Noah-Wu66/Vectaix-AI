@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, KeyRound, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
+import { Copy, Eraser, KeyRound, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
 import { useToast } from "./ToastProvider";
 import ConfirmModal from "./ConfirmModal";
 
@@ -110,6 +110,27 @@ export default function UserManagementModal({ open, onClose }) {
     };
     setConfirmTitle("删除用户");
     setConfirmMessage(`确定要删除「${user.email}」吗？该用户的所有数据（对话、设置、文件）将被永久删除，此操作不可撤销。`);
+    setConfirmDanger(true);
+    setConfirmOpen(true);
+  };
+
+  // 清除加密数据
+  const requestCleanEncrypted = (user) => {
+    confirmActionRef.current = async () => {
+      setActionLoading(user.id);
+      try {
+        const res = await fetch(`/api/admin/users/${user.id}`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "操作失败");
+        toast.success(`已清除 ${data.deletedConversations} 个加密会话${data.deletedSettings ? '及加密设置' : ''}`);
+      } catch (e) {
+        toast.error(e?.message);
+      } finally {
+        setActionLoading(null);
+      }
+    };
+    setConfirmTitle("清除加密数据");
+    setConfirmMessage(`确定要清除「${user.email}」的旧加密数据吗？将删除包含加密内容的会话和系统提示词，此操作不可撤销。`);
     setConfirmDanger(true);
     setConfirmOpen(true);
   };
@@ -242,23 +263,31 @@ export default function UserManagementModal({ open, onClose }) {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 ml-3">
-                          <button
-                            onClick={() => requestResetPassword(u)}
-                            disabled={actionLoading === u.id}
-                            className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
-                            title="重置密码"
-                          >
-                            <KeyRound size={15} />
-                          </button>
-                          <button
-                            onClick={() => requestDeleteUser(u)}
-                            disabled={actionLoading === u.id}
-                            className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                            title="删除用户"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
+                           <button
+                             onClick={() => requestCleanEncrypted(u)}
+                             disabled={actionLoading === u.id}
+                             className="p-2 text-zinc-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+                             title="清除加密数据"
+                           >
+                             <Eraser size={15} />
+                           </button>
+                           <button
+                             onClick={() => requestResetPassword(u)}
+                             disabled={actionLoading === u.id}
+                             className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
+                             title="重置密码"
+                           >
+                             <KeyRound size={15} />
+                           </button>
+                           <button
+                             onClick={() => requestDeleteUser(u)}
+                             disabled={actionLoading === u.id}
+                             className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                             title="删除用户"
+                           >
+                             <Trash2 size={15} />
+                           </button>
+                         </div>
                       </div>
                     ))}
                   </div>

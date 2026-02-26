@@ -30,6 +30,10 @@ function getModelLineMeta(modelConfig, routeMode) {
     return { label: "优质", className: "text-green-500" };
   }
 
+  if (modelConfig?.provider === "claude" || modelConfig?.provider === "openai") {
+    return { label: "经济", className: "text-yellow-500" };
+  }
+
   if (routeMode === LINE_MODES.ECONOMY) {
     return { label: "经济", className: "text-yellow-500" };
   }

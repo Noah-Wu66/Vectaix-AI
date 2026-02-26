@@ -4,7 +4,6 @@ import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
-import { encryptMessage, encryptMessages, encryptString } from '@/lib/encryption';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
@@ -16,15 +15,13 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildEconomySystemPrompt, isEconomyLineMode } from '@/app/lib/economyModels';
+import { buildEconomySystemPrompt } from '@/app/lib/economyModels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const ZENMUX_ANTHROPIC_BASE_URL = "https://zenmux.ai/api/anthropic";
 const RIGHT_CODES_CLAUDE_BASE_URL = "https://www.right.codes/claude-aws";
-const ZENMUX_API_KEY = process.env.ZENMUX_API_KEY;
 const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
 
 async function storedPartToClaudePart(part) {
@@ -131,26 +128,18 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
 
-        const isEconomyLine = isEconomyLineMode(config?.lineMode);
-        const apiKey = isEconomyLine ? RIGHT_CODES_API_KEY : ZENMUX_API_KEY;
+        const apiKey = RIGHT_CODES_API_KEY;
         if (!apiKey) {
-            const missingKey = isEconomyLine ? 'RIGHT_CODES_API_KEY' : 'ZENMUX_API_KEY';
-            return Response.json({ error: `${missingKey} is not set` }, { status: 500 });
+            return Response.json({ error: 'RIGHT_CODES_API_KEY is not set' }, { status: 500 });
         }
-        const premiumApiModel = model.startsWith('claude-opus-4-6')
-            ? 'anthropic/claude-opus-4.6'
-            : model.startsWith('claude-sonnet-4-6')
-                ? 'anthropic/claude-sonnet-4.6'
-                : model;
-        const economyApiModel = model.startsWith('claude-opus-4-6')
+        const apiModel = model.startsWith('claude-opus-4-6')
             ? 'claude-opus-4-6'
             : model.startsWith('claude-sonnet-4-6')
                 ? 'claude-sonnet-4-6'
                 : model;
-        const apiModel = isEconomyLine ? economyApiModel : premiumApiModel;
         const client = new Anthropic({
             apiKey,
-            baseURL: isEconomyLine ? RIGHT_CODES_CLAUDE_BASE_URL : ZENMUX_ANTHROPIC_BASE_URL,
+            baseURL: RIGHT_CODES_CLAUDE_BASE_URL,
         });
 
         // 创建新会话
@@ -158,7 +147,7 @@ export async function POST(req) {
             const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
-                title: encryptString(title),
+                title: title,
                 model: model,
                 settings: settings,
                 messages: []
@@ -176,7 +165,7 @@ export async function POST(req) {
             const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },
-                { $set: { messages: encryptMessages(sanitized), updatedAt: regenerateTime } },
+                { $set: { messages: sanitized, updatedAt: regenerateTime } },
                 { new: true }
             ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
@@ -248,16 +237,16 @@ export async function POST(req) {
 
             const userMsgTime = Date.now();
             const resolvedUserMessageId = userMessageId;
-            const encryptedUserMessage = encryptMessage({
+            const userMessage = {
                 id: resolvedUserMessageId,
                 role: 'user',
                 content: prompt,
                 type: 'parts',
                 parts: storedUserParts
-            });
+            };
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
                 $push: {
-                    messages: encryptedUserMessage
+                    messages: userMessage
                 },
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
@@ -271,9 +260,7 @@ export async function POST(req) {
         const isClaudeAdaptiveThinkingModel = typeof model === "string"
             && (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6"));
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
-        const baseSystemPrompt = injectCurrentTimeSystemReminder(
-            isEconomyLine ? buildEconomySystemPrompt(userSystemPrompt) : userSystemPrompt
-        );
+        const baseSystemPrompt = injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         // 是否启用联网搜索
@@ -450,7 +437,7 @@ export async function POST(req) {
                         const resolvedModelMessageId = (isNonEmptyString(modelMessageId) && modelMessageId.length <= 128)
                             ? modelMessageId
                             : generateMessageId();
-                        const encryptedModelMessage = encryptMessage({
+                        const modelMessage = {
                             id: resolvedModelMessageId,
                             role: 'model',
                             content: fullText,
@@ -459,12 +446,12 @@ export async function POST(req) {
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
                             parts: [{ text: fullText }]
-                        });
+                        };
                         await Conversation.findOneAndUpdate(
                             writeCondition,
                             {
                                 $push: {
-                                    messages: encryptedModelMessage
+                                    messages: modelMessage
                                 },
                                 updatedAt: Date.now()
                             }

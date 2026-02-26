@@ -571,8 +571,6 @@ export default function ChatApp() {
           onFontSizeChange={updateFontSize}
           completionSoundVolume={completionSoundVolume}
           onCompletionSoundVolumeChange={setCompletionSoundVolume}
-          routeMode={routeMode}
-          onRouteModeChange={setRouteMode}
           sidebarOpen={sidebarOpen}
           conversations={conversations}
           currentConversationId={currentConversationId}
@@ -616,6 +614,7 @@ export default function ChatApp() {
             isWaitingForAI: loading && messages.length > 0,
             model,
             routeMode,
+            onRouteModeChange: setRouteMode,
             onModelChange: requestModelChange,
             messages,
             contextWindow: currentModelConfig?.contextWindow,

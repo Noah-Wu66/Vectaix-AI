@@ -17,6 +17,7 @@ export default function Composer({
   isWaitingForAI,
   model,
   routeMode,
+  onRouteModeChange,
   onModelChange,
   messages,
   contextWindow,
@@ -221,6 +222,8 @@ export default function Composer({
             setBudgetTokens={setBudgetTokens}
             webSearch={webSearch}
             setWebSearch={setWebSearch}
+            routeMode={routeMode}
+            onRouteModeChange={onRouteModeChange}
             systemPrompts={systemPrompts}
             activePromptIds={activePromptIds}
             setActivePromptIds={setActivePromptIds}
