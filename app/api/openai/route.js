@@ -19,11 +19,43 @@ import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const RIGHT_CODES_OPENAI_BASE_URL = 'https://www.right.codes/codex/v1';
+const RIGHT_CODES_OPENAI_BASE_URL = process.env.RIGHT_CODES_OPENAI_BASE_URL || 'https://www.right.codes/codex/v1';
 const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
 const MODEL_REASONING_EFFORTS = {};
+
+function extractUpstreamErrorMessage(status, rawText) {
+    const text = typeof rawText === 'string' ? rawText.trim() : '';
+    const lower = text.toLowerCase();
+
+    if (status === 502 || lower.includes('bad gateway')) {
+        return 'OpenAI 网关暂时不可用（502），请稍后重试';
+    }
+    if (status === 503 || lower.includes('service unavailable')) {
+        return 'OpenAI 服务暂时不可用（503），请稍后重试';
+    }
+    if (status === 504 || lower.includes('gateway timeout')) {
+        return 'OpenAI 网关超时（504），请稍后重试';
+    }
+
+    try {
+        const parsed = JSON.parse(text);
+        const message = parsed?.error?.message || parsed?.message;
+        if (typeof message === 'string' && message.trim()) {
+            return message.trim();
+        }
+    } catch {
+        // ignore
+    }
+
+    if (text.startsWith('<!DOCTYPE html') || text.startsWith('<html')) {
+        return `OpenAI 请求失败（${status}）`;
+    }
+
+    const compact = text.length > 600 ? `${text.slice(0, 600)}...` : text;
+    return compact || `OpenAI 请求失败（${status}）`;
+}
 
 
 
@@ -341,7 +373,7 @@ export async function POST(req) {
                         input: finalInput
                     };
 
-                    const response = await fetch(`${apiBaseUrl}/responses`, {
+                    const requestResponses = async () => fetch(`${apiBaseUrl}/responses`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -350,9 +382,24 @@ export async function POST(req) {
                         body: JSON.stringify(requestBody)
                     });
 
+                    let response = await requestResponses();
+                    if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
+                        await new Promise((resolve) => setTimeout(resolve, 800));
+                        response = await requestResponses();
+                    }
+
                     if (!response.ok) {
                         const errorText = await response.text();
-                        throw new Error(`OpenAI API Error: ${response.status} ${errorText}`);
+                        const message = extractUpstreamErrorMessage(response.status, errorText);
+                        const upstreamError = new Error(message);
+                        upstreamError.status = response.status;
+                        throw upstreamError;
+                    }
+
+                    if (!response.body) {
+                        const upstreamError = new Error('OpenAI 返回了空响应体，请稍后重试');
+                        upstreamError.status = 502;
+                        throw upstreamError;
                     }
 
                     const reader = response.body.getReader();
