@@ -19,7 +19,7 @@ import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const RIGHT_CODES_OPENAI_BASE_URL = 'https://www.right.codes/codex';
+const RIGHT_CODES_OPENAI_BASE_URL = 'https://www.right.codes/codex/v1';
 const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
