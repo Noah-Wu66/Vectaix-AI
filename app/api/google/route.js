@@ -387,17 +387,29 @@ export async function POST(req) {
 
                     for await (const chunk of streamResult) {
                         if (clientAborted) break;
-                        const candidate = chunk.candidates?.[0];
-                        const parts = candidate?.content?.parts;
+
+                        const candidate = Array.isArray(chunk?.candidates)
+                            ? chunk.candidates[0]
+                            : null;
+                        const parts = Array.isArray(candidate?.content?.parts)
+                            ? candidate.content.parts
+                            : [];
+
+                        if (parts.length === 0) continue;
 
                         for (const part of parts) {
                             if (clientAborted) break;
-                            if (part.thought && part.text) {
-                                fullThought += part.text;
-                                sendEvent({ type: 'thought', content: part.text });
-                            } else if (part.text) {
-                                fullText += part.text;
-                                sendEvent({ type: 'text', content: part.text });
+                            if (!part || typeof part !== 'object') continue;
+
+                            const text = typeof part.text === 'string' ? part.text : '';
+                            if (!text) continue;
+
+                            if (part.thought) {
+                                fullThought += text;
+                                sendEvent({ type: 'thought', content: text });
+                            } else {
+                                fullText += text;
+                                sendEvent({ type: 'text', content: text });
                             }
                         }
                     }
