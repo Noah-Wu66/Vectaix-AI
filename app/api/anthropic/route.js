@@ -72,6 +72,23 @@ async function buildClaudeMessagesFromHistory(messages) {
     return claudeMessages;
 }
 
+function extractAnthropicDecisionText(message, onThought) {
+    const blocks = Array.isArray(message?.content) ? message.content : [];
+    let text = '';
+
+    for (const block of blocks) {
+        if (block?.type === 'thinking' && typeof block.thinking === 'string') {
+            onThought?.(block.thinking);
+            continue;
+        }
+        if (block?.type === 'text' && typeof block.text === 'string') {
+            text += block.text;
+        }
+    }
+
+    return text;
+}
+
 export async function POST(req) {
     let writePermitTime = null;
 
@@ -147,6 +164,19 @@ export async function POST(req) {
             apiKey,
             baseURL: RIGHT_CODES_CLAUDE_BASE_URL,
         });
+        const runClaudeDecision = async ({ systemText, userText, isAborted, onThought }) => {
+            if (isAborted?.()) return '';
+
+            const message = await client.messages.create({
+                model: apiModel,
+                max_tokens: 512,
+                system: [{ type: 'text', text: systemText }],
+                messages: [{ role: 'user', content: [{ type: 'text', text: userText }] }],
+            });
+
+            if (isAborted?.()) return '';
+            return extractAnthropicDecisionText(message, onThought);
+        };
 
         // 创建新会话
         if (user && !currentConversationId) {
@@ -345,6 +375,7 @@ export async function POST(req) {
                         logDecision: true,
                         warnOnEmptyResults: true,
                         warnOnNoContext: true,
+                        decisionRunner: runClaudeDecision,
                     });
 
                     if (clientAborted) {

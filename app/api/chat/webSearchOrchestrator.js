@@ -82,6 +82,7 @@ export async function runWebSearchOrchestration(options) {
     logDecision = false,
     warnOnEmptyResults = false,
     warnOnNoContext = false,
+    decisionRunner,
   } = options || {};
 
   const aborted = () => typeof isClientAborted === 'function' && isClientAborted() === true;
@@ -89,7 +90,11 @@ export async function runWebSearchOrchestration(options) {
     return { searchContextText: '' };
   }
 
-  const runDecision = (systemText, userText) => runInternalDecision({
+  const runDecisionImpl = typeof decisionRunner === 'function'
+    ? decisionRunner
+    : runInternalDecision;
+
+  const runDecision = (systemText, userText) => runDecisionImpl({
     systemText,
     userText,
     isAborted: aborted,

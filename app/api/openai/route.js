@@ -58,6 +58,49 @@ function extractUpstreamErrorMessage(status, rawText) {
     return compact || `OpenAI 请求失败（${status}）`;
 }
 
+function normalizeDecisionText(value) {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+        return value.map((item) => normalizeDecisionText(item)).join('');
+    }
+    if (value && typeof value === 'object') {
+        if (typeof value.text === 'string') return value.text;
+        if (typeof value.content === 'string') return value.content;
+    }
+    return '';
+}
+
+function extractDecisionOutputFromResponses(data) {
+    let text = normalizeDecisionText(data?.output_text);
+    let thought = '';
+
+    const outputs = Array.isArray(data?.output) ? data.output : [];
+    for (const item of outputs) {
+        if (item?.type === 'reasoning' && Array.isArray(item?.summary)) {
+            thought += normalizeDecisionText(item.summary);
+        }
+
+        const content = Array.isArray(item?.content) ? item.content : [];
+        for (const part of content) {
+            const partType = typeof part?.type === 'string' ? part.type : '';
+            const partText = normalizeDecisionText(part?.text ?? part?.content);
+            if (!partText) continue;
+
+            if (partType.includes('reasoning') || partType.includes('summary')) {
+                thought += partText;
+            } else {
+                text += partText;
+            }
+        }
+    }
+
+    if (!text) {
+        text = normalizeDecisionText(data?.choices?.[0]?.message?.content);
+    }
+
+    return { text, thought };
+}
+
 
 
 export async function POST(req) {
@@ -128,6 +171,44 @@ export async function POST(req) {
         const isGpt52Model = model === 'gpt-5.2' || model === 'openai/gpt-5.2';
         const apiModel = isGpt52Model ? 'gpt-5.2' : model;
         const isSeedModel = typeof apiModel === 'string' && apiModel.startsWith('volcengine/doubao-seed');
+        const runOpenAIDecision = async ({ systemText, userText, isAborted, onThought }) => {
+            if (isAborted?.()) return '';
+
+            const response = await fetch(`${apiBaseUrl}/responses`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: apiModel,
+                    stream: false,
+                    max_output_tokens: 512,
+                    reasoning: {
+                        effort: 'low',
+                        summary: 'auto'
+                    },
+                    input: [
+                        { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
+                        { role: 'user', content: [{ type: 'input_text', text: userText }] }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                const message = extractUpstreamErrorMessage(response.status, errorText);
+                throw new Error(message);
+            }
+
+            const data = await response.json().catch(() => null);
+            if (!data || typeof data !== 'object') return '';
+            if (isAborted?.()) return '';
+
+            const { text, thought } = extractDecisionOutputFromResponses(data);
+            if (thought) onThought?.(thought);
+            return text;
+        };
 
         let currentConversationId = conversationId;
 
@@ -362,6 +443,7 @@ export async function POST(req) {
                         sendSearchError,
                         isClientAborted: () => clientAborted,
                         providerLabel: 'OpenAI',
+                        decisionRunner: runOpenAIDecision,
                     });
 
                     if (clientAborted) {

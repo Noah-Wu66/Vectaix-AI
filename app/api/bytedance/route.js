@@ -23,6 +23,49 @@ const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhi
 const MODEL_REASONING_EFFORTS = {};
 const MAX_REQUEST_BYTES = 2_000_000;
 
+function normalizeDecisionText(value) {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+        return value.map((item) => normalizeDecisionText(item)).join('');
+    }
+    if (value && typeof value === 'object') {
+        if (typeof value.text === 'string') return value.text;
+        if (typeof value.content === 'string') return value.content;
+    }
+    return '';
+}
+
+function extractDecisionOutputFromResponses(data) {
+    let text = normalizeDecisionText(data?.output_text);
+    let thought = '';
+
+    const outputs = Array.isArray(data?.output) ? data.output : [];
+    for (const item of outputs) {
+        if (item?.type === 'reasoning' && Array.isArray(item?.summary)) {
+            thought += normalizeDecisionText(item.summary);
+        }
+
+        const content = Array.isArray(item?.content) ? item.content : [];
+        for (const part of content) {
+            const partType = typeof part?.type === 'string' ? part.type : '';
+            const partText = normalizeDecisionText(part?.text ?? part?.content);
+            if (!partText) continue;
+
+            if (partType.includes('reasoning') || partType.includes('summary')) {
+                thought += partText;
+            } else {
+                text += partText;
+            }
+        }
+    }
+
+    if (!text) {
+        text = normalizeDecisionText(data?.choices?.[0]?.message?.content);
+    }
+
+    return { text, thought };
+}
+
 export async function POST(req) {
     let writePermitTime = null;
 
@@ -91,6 +134,49 @@ export async function POST(req) {
                 ? `volcengine/${model.split('/').pop()}`
                 : `volcengine/${model}`;
         const apiModel = normalizedModel;
+        const runSeedDecision = async ({ systemText, userText, isAborted, onThought }) => {
+            if (isAborted?.()) return '';
+
+            const response = await fetch(`${apiBaseUrl}/responses`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: apiModel,
+                    stream: false,
+                    max_output_tokens: 512,
+                    reasoning: {
+                        effort: 'low',
+                        summary: 'auto'
+                    },
+                    extra_body: {
+                        thinking: {
+                            type: 'enabled',
+                            budget_tokens: 256
+                        }
+                    },
+                    input: [
+                        { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
+                        { role: 'user', content: [{ type: 'input_text', text: userText }] }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Seed decision API Error: ${response.status} ${errorText}`);
+            }
+
+            const data = await response.json().catch(() => null);
+            if (!data || typeof data !== 'object') return '';
+            if (isAborted?.()) return '';
+
+            const { text, thought } = extractDecisionOutputFromResponses(data);
+            if (thought) onThought?.(thought);
+            return text;
+        };
 
         let currentConversationId = conversationId;
 
@@ -318,6 +404,7 @@ export async function POST(req) {
                         sendSearchError,
                         isClientAborted: () => clientAborted,
                         providerLabel: 'Seed',
+                        decisionRunner: runSeedDecision,
                     });
 
                     if (clientAborted) {
