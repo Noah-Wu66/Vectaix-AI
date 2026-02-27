@@ -10,11 +10,8 @@ import {
     getStoredPartsFromMessage,
     sanitizeStoredMessages,
     generateMessageId,
-    injectCurrentTimeSystemReminder,
-    buildWebSearchContextBlock,
-    estimateTokens
+    injectCurrentTimeSystemReminder
 } from '@/app/api/chat/utils';
-import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,7 +33,7 @@ async function storedPartToRequestPart(part) {
     const url = part?.inlineData?.url;
     if (isNonEmptyString(url)) {
         const { base64Data, mimeType: fetchedMimeType } = await fetchImageAsBase64(url);
-        const mimeType = part.inlineData?.mimeType;
+        const mimeType = part.inlineData?.mimeType || fetchedMimeType;
         const p = { inlineData: { mimeType, data: base64Data } };
         if (isNonEmptyString(part.thoughtSignature)) p.thoughtSignature = part.thoughtSignature;
         return p;
@@ -83,6 +80,24 @@ function resolveGeminiApiModel(model) {
     }
 
     return GEMINI_FLASH_MODEL;
+}
+
+function extractGroundingCitations(candidate) {
+    const groundingChunks = Array.isArray(candidate?.groundingMetadata?.groundingChunks)
+        ? candidate.groundingMetadata.groundingChunks
+        : [];
+
+    const citations = [];
+    for (const chunk of groundingChunks) {
+        const url = typeof chunk?.web?.uri === 'string' ? chunk.web.uri.trim() : '';
+        if (!url) continue;
+        const title = typeof chunk?.web?.title === 'string' ? chunk.web.title.trim() : '';
+        citations.push({
+            url,
+            title: title || url,
+        });
+    }
+    return citations;
 }
 
 export async function POST(req) {
@@ -249,11 +264,17 @@ export async function POST(req) {
         // 2. Prepare Payload
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemText = injectCurrentTimeSystemReminder(userSystemPrompt);
+        const generationConfig = (config?.generationConfig && typeof config.generationConfig === 'object' && !Array.isArray(config.generationConfig))
+            ? config.generationConfig
+            : {};
+        const safeGenerationConfig = { ...generationConfig };
+        delete safeGenerationConfig.temperature;
         const baseConfig = {
             systemInstruction: {
                 parts: [{ text: baseSystemText }]
             },
-            ...config?.generationConfig
+            ...safeGenerationConfig,
+            temperature: 1.0,
         };
 
         if (config?.maxTokens) {
@@ -261,9 +282,10 @@ export async function POST(req) {
         }
 
         if (config?.thinkingLevel) {
-            const thinkingLevel = typeof config.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
-            const flashAllowedLevels = new Set(['minimal', 'low', 'medium', 'high']);
-            const proAllowedLevels = new Set(['low', 'high']);
+            const rawThinkingLevel = typeof config.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
+            const thinkingLevel = rawThinkingLevel.toUpperCase();
+            const flashAllowedLevels = new Set(['MINIMAL', 'LOW', 'MEDIUM', 'HIGH']);
+            const proAllowedLevels = new Set(['LOW', 'MEDIUM', 'HIGH']);
             const isAllowed = apiModel === GEMINI_FLASH_MODEL
                 ? flashAllowedLevels.has(thinkingLevel)
                 : proAllowedLevels.has(thinkingLevel);
@@ -276,8 +298,10 @@ export async function POST(req) {
             }
         }
 
-        const enableWebSearch = config?.webSearch === true;
-        const webSearchGuide = buildWebSearchGuide(enableWebSearch);
+        const enableGrounding = config?.webSearch === true;
+        if (enableGrounding) {
+            baseConfig.tools = [{ googleSearch: {} }];
+        }
 
         // 3. Database Logic
         if (user && !isRegenerateMode) {
@@ -334,7 +358,6 @@ export async function POST(req) {
                 let fullText = "";
                 let fullThought = "";
                 let citations = [];
-                let searchContextTokens = 0;
                 const seenUrls = new Set();
                 try {
                     const sendHeartbeat = () => {
@@ -355,13 +378,6 @@ export async function POST(req) {
                         controller.enqueue(encoder.encode(data));
                     };
 
-                    let searchErrorSent = false;
-                    const sendSearchError = (message) => {
-                        if (searchErrorSent) return;
-                        searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message });
-                    };
-
                     const pushCitations = (items) => {
                         for (const item of items) {
                             if (!item?.url || seenUrls.has(item.url)) continue;
@@ -370,38 +386,10 @@ export async function POST(req) {
                         }
                     };
 
-                    const { searchContextText } = await runWebSearchOrchestration({
-                        enableWebSearch,
-                        prompt,
-                        sendEvent,
-                        pushCitations,
-                        sendSearchError,
-                        isClientAborted: () => clientAborted,
-                        providerLabel: 'Gemini',
-                    });
-
-                    if (clientAborted) {
-                        try { controller.close(); } catch { /* ignore */ }
-                        return;
-                    }
-
-                    const searchContextSection = searchContextText
-                        ? buildWebSearchContextBlock(searchContextText)
-                        : "";
-                    if (searchContextSection) {
-                        searchContextTokens = estimateTokens(searchContextSection);
-                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
-                    }
-                    const finalSystemText = `${baseSystemText}${webSearchGuide}${searchContextSection}`;
-                    const finalConfig = {
-                        ...baseConfig,
-                        systemInstruction: { parts: [{ text: finalSystemText }] }
-                    };
-
                     const streamResult = await ai.models.generateContentStream({
                         model: apiModel,
                         contents: contents,
-                        config: finalConfig
+                        config: baseConfig
                     });
 
                     for await (const chunk of streamResult) {
@@ -410,6 +398,8 @@ export async function POST(req) {
                         const candidate = Array.isArray(chunk?.candidates)
                             ? chunk.candidates[0]
                             : null;
+                        pushCitations(extractGroundingCitations(candidate));
+
                         const parts = Array.isArray(candidate?.content?.parts)
                             ? candidate.content.parts
                             : [];
@@ -457,7 +447,6 @@ export async function POST(req) {
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
-                            searchContextTokens: searchContextTokens || null,
                             type: 'text',
                             parts: [{ text: fullText }]
                         };

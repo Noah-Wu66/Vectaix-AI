@@ -12,8 +12,8 @@ const SEED_TOKEN_OPTIONS = BASE_TOKEN_OPTIONS;
 const CLAUDE_TOKEN_OPTIONS = BASE_TOKEN_OPTIONS;
 const CLAUDE_OPUS_TOKEN_OPTIONS = OPENAI_TOKEN_OPTIONS;
 const CLAUDE_SONNET_THINKING_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000];
-const GEMINI_FLASH_THINKING_LEVELS = ["minimal", "low", "medium", "high"];
-const GEMINI_PRO_THINKING_LEVELS = ["low", "high"];
+const GEMINI_FLASH_THINKING_LEVELS = ["MINIMAL", "LOW", "MEDIUM", "HIGH"];
+const GEMINI_PRO_THINKING_LEVELS = ["LOW", "MEDIUM", "HIGH"];
 const CLAUDE_THINKING_LEVELS = ["low", "medium", "high", "max"];
 const GPT_52_THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 const GPT_THINKING_LEVEL_LABELS = { none: "无", low: "低", medium: "中", high: "高", xhigh: "超高" };
@@ -81,16 +81,7 @@ export default function SettingsMenu({
 
   useEffect(() => {
     if (!model) return;
-    if (model === "gemini-3-flash-preview") {
-      if (!GEMINI_FLASH_THINKING_LEVELS.includes(thinkingLevel)) {
-        setThinkingLevel("high");
-      }
-      return;
-    }
-    if (model === "gemini-3.1-pro-preview") {
-      if (!GEMINI_PRO_THINKING_LEVELS.includes(thinkingLevel)) {
-        setThinkingLevel("high");
-      }
+    if (model === "gemini-3-flash-preview" || model === "gemini-3.1-pro-preview") {
       return;
     }
     if (isClaudeAdaptiveThinkingModel) {
@@ -480,11 +471,11 @@ export default function SettingsMenu({
                                 max="3"
                                 step="1"
                                 value={Math.max(0, GEMINI_FLASH_THINKING_LEVELS.indexOf(thinkingLevel))}
-                                onChange={(e) => setThinkingLevel(GEMINI_FLASH_THINKING_LEVELS[e.target.value])}
+                                onChange={(e) => setThinkingLevel(GEMINI_FLASH_THINKING_LEVELS[Number(e.target.value)])}
                                 className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                               />
                               <span className="text-xs text-right block mt-1 text-zinc-600">
-                                {{ minimal: "最小", low: "快速", medium: "平衡", high: "深度" }[thinkingLevel]}
+                                {{ MINIMAL: "最小", LOW: "快速", MEDIUM: "平衡", HIGH: "深度" }[thinkingLevel]}
                               </span>
                             </div>
                           ) : model === "gemini-3.1-pro-preview" ? (
@@ -495,14 +486,14 @@ export default function SettingsMenu({
                               <input
                                 type="range"
                                 min="0"
-                                max="1"
+                                max="2"
                                 step="1"
-                                value={thinkingLevel === "high" ? 1 : 0}
-                                onChange={(e) => setThinkingLevel(e.target.value === "1" ? "high" : "low")}
+                                value={Math.max(0, GEMINI_PRO_THINKING_LEVELS.indexOf(thinkingLevel))}
+                                onChange={(e) => setThinkingLevel(GEMINI_PRO_THINKING_LEVELS[Number(e.target.value)])}
                                 className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
                               />
                               <span className="text-xs text-right block mt-1 text-zinc-600">
-                                {thinkingLevel === "high" ? "深度" : "快速"}
+                                {{ LOW: "快速", MEDIUM: "平衡", HIGH: "深度" }[thinkingLevel]}
                               </span>
                             </div>
                           ) : model?.startsWith("claude-") ? (
