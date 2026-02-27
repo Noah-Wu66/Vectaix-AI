@@ -6,7 +6,7 @@ import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
-    sanitizeStoredMessages,
+    sanitizeStoredMessagesStrict,
     injectCurrentTimeSystemReminder,
     buildWebSearchContextBlock,
     estimateTokens
@@ -21,11 +21,17 @@ const ZENMUX_OPENAI_BASE_URL = 'https://zenmux.ai/api/v1';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
 const MODEL_REASONING_EFFORTS = {};
+const MAX_REQUEST_BYTES = 2_000_000;
 
 export async function POST(req) {
     let writePermitTime = null;
 
     try {
+        const contentLength = req.headers.get('content-length');
+        if (contentLength && Number(contentLength) > MAX_REQUEST_BYTES) {
+            return Response.json({ error: 'Request too large' }, { status: 413 });
+        }
+
         let body;
         try {
             body = await req.json();
@@ -106,7 +112,12 @@ export async function POST(req) {
         let storedMessagesForRegenerate = null;
 
         if (isRegenerateMode) {
-            const sanitized = sanitizeStoredMessages(messages);
+            let sanitized;
+            try {
+                sanitized = sanitizeStoredMessagesStrict(messages);
+            } catch (e) {
+                return Response.json({ error: e?.message || 'messages invalid' }, { status: 400 });
+            }
             const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },

@@ -3,6 +3,7 @@ import Conversation from '@/models/Conversation';
 import UserSettings from '@/models/UserSettings';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
+import mongoose from 'mongoose';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -228,6 +229,10 @@ export async function POST(req) {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
+  let conversations;
+  let settingsSrc;
+  const userId = user.userId;
+
   try {
     if (!isPlainObject(payload)) throw new Error('Body must be a JSON object');
 
@@ -244,34 +249,42 @@ export async function POST(req) {
       throw new Error(`Too many conversations (max ${MAX_CONVERSATIONS})`);
     }
 
-    const settingsSrc = payload.data.settings;
-
-    const userId = user.userId;
-    const conversations = conversationsSrc.map((c, ci) => sanitizeConversation(c, ci, userId));
-
-    // 全量覆盖：先清空再重建
-    await Conversation.deleteMany({ userId });
-    await UserSettings.deleteOne({ userId });
-
-    if (conversations.length > 0) {
-      await Conversation.insertMany(conversations, { ordered: true });
-    }
-
-    if (settingsSrc) {
-      const sanitizedSettings = sanitizeSettings(settingsSrc, userId);
-      if (sanitizedSettings) {
-        await UserSettings.create(sanitizedSettings);
-      }
-    }
-
-    return Response.json({
-      success: true,
-      imported: {
-        conversationsCount: conversations.length,
-        settings: Boolean(settingsSrc),
-      },
-    });
+    settingsSrc = payload.data.settings;
+    conversations = conversationsSrc.map((c, ci) => sanitizeConversation(c, ci, userId));
   } catch (e) {
     return Response.json({ error: e?.message }, { status: 400 });
   }
+
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      // 全量覆盖：事务内先清空再重建，失败自动回滚
+      await Conversation.deleteMany({ userId }, { session });
+      await UserSettings.deleteOne({ userId }, { session });
+
+      if (conversations.length > 0) {
+        await Conversation.insertMany(conversations, { ordered: true, session });
+      }
+
+      if (settingsSrc) {
+        const sanitizedSettings = sanitizeSettings(settingsSrc, userId);
+        if (sanitizedSettings) {
+          await UserSettings.create([sanitizedSettings], { session });
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Import transaction failed:', e?.message);
+    return Response.json({ error: 'Import failed' }, { status: 500 });
+  } finally {
+    await session.endSession();
+  }
+
+  return Response.json({
+    success: true,
+    imported: {
+      conversationsCount: conversations.length,
+      settings: Boolean(settingsSrc),
+    },
+  });
 }

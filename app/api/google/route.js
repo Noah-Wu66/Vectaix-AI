@@ -8,7 +8,7 @@ import {
     fetchImageAsBase64,
     isNonEmptyString,
     getStoredPartsFromMessage,
-    sanitizeStoredMessages,
+    sanitizeStoredMessagesStrict,
     generateMessageId,
     injectCurrentTimeSystemReminder
 } from '@/app/api/chat/utils';
@@ -20,6 +20,7 @@ const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
 const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
+const MAX_REQUEST_BYTES = 2_000_000;
 
 async function storedPartToRequestPart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -106,6 +107,11 @@ export async function POST(req) {
     let writePermitTime = null;
 
     try {
+        const contentLength = req.headers.get('content-length');
+        if (contentLength && Number(contentLength) > MAX_REQUEST_BYTES) {
+            return Response.json({ error: 'Request too large' }, { status: 413 });
+        }
+
         // Validate request body
         let body;
         try {
@@ -200,7 +206,12 @@ export async function POST(req) {
         let storedMessagesForRegenerate = null;
 
         if (isRegenerateMode) {
-            const sanitized = sanitizeStoredMessages(messages);
+            let sanitized;
+            try {
+                sanitized = sanitizeStoredMessagesStrict(messages);
+            } catch (e) {
+                return Response.json({ error: e?.message || 'messages invalid' }, { status: 400 });
+            }
             const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },
@@ -299,7 +310,8 @@ export async function POST(req) {
         }
 
         const enableGrounding = config?.webSearch === true;
-        if (enableGrounding) {
+        const isGroundingModel = apiModel === GEMINI_FLASH_MODEL || apiModel === GEMINI_PRO_MODEL;
+        if (enableGrounding && isGroundingModel) {
             baseConfig.tools = [{ googleSearch: {} }];
         }
 

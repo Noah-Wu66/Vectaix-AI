@@ -13,7 +13,7 @@ function generateNonce() {
 function buildCsp(nonce) {
   const directives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'unsafe-inline'`,
+    `script-src 'self' 'nonce-${nonce}'`,
     "script-src-attr 'none'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",

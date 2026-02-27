@@ -8,7 +8,7 @@ import {
     fetchImageAsBase64,
     isNonEmptyString,
     getStoredPartsFromMessage,
-    sanitizeStoredMessages,
+    sanitizeStoredMessagesStrict,
     generateMessageId,
     injectCurrentTimeSystemReminder,
     buildWebSearchContextBlock,
@@ -23,6 +23,7 @@ export const dynamic = 'force-dynamic';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const RIGHT_CODES_CLAUDE_BASE_URL = "https://www.right.codes/claude-aws";
 const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
+const MAX_REQUEST_BYTES = 2_000_000;
 
 async function storedPartToClaudePart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -75,6 +76,11 @@ export async function POST(req) {
     let writePermitTime = null;
 
     try {
+        const contentLength = req.headers.get('content-length');
+        if (contentLength && Number(contentLength) > MAX_REQUEST_BYTES) {
+            return Response.json({ error: 'Request too large' }, { status: 413 });
+        }
+
         let body;
         try {
             body = await req.json();
@@ -161,7 +167,12 @@ export async function POST(req) {
         let storedMessagesForRegenerate = null;
 
         if (isRegenerateMode) {
-            const sanitized = sanitizeStoredMessages(messages);
+            let sanitized;
+            try {
+                sanitized = sanitizeStoredMessagesStrict(messages);
+            } catch (e) {
+                return Response.json({ error: e?.message || 'messages invalid' }, { status: 400 });
+            }
             const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },

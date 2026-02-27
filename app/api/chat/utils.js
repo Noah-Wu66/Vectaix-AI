@@ -7,6 +7,20 @@ const ALLOWED_IMAGE_DOMAINS = [
     "public.blob.vercel-storage.com",
 ];
 
+const MAX_STORED_MESSAGES = 500;
+const MAX_STORED_MESSAGE_CHARS = 20000;
+const MAX_STORED_PART_TEXT_CHARS = 10000;
+const MAX_STORED_PARTS_PER_MESSAGE = 20;
+const MAX_STORED_MESSAGE_ID_CHARS = 128;
+const MAX_STORED_TOTAL_TEXT_CHARS = 1_000_000;
+const MAX_STORED_IMAGE_URL_CHARS = 2048;
+
+function createValidationError(message) {
+    const err = new Error(message);
+    err.status = 400;
+    return err;
+}
+
 function isAllowedImageDomain(url) {
     try {
         const parsed = new URL(url);
@@ -17,6 +31,20 @@ function isAllowedImageDomain(url) {
     } catch {
         return false;
     }
+}
+
+function isAllowedStoredImageUrl(url) {
+    if (typeof url !== "string" || !url.trim()) return false;
+    if (url.length > MAX_STORED_IMAGE_URL_CHARS) return false;
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            return false;
+        }
+    } catch {
+        return false;
+    }
+    return isAllowedImageDomain(url);
 }
 
 export async function fetchImageAsBase64(url) {
@@ -131,6 +159,72 @@ export function sanitizeStoredMessage(msg) {
 export function sanitizeStoredMessages(messages) {
     if (!Array.isArray(messages)) return [];
     return messages.map(sanitizeStoredMessage).filter(Boolean);
+}
+
+export function sanitizeStoredMessagesStrict(messages) {
+    if (!Array.isArray(messages)) {
+        throw createValidationError("messages must be an array");
+    }
+    if (messages.length > MAX_STORED_MESSAGES) {
+        throw createValidationError(`messages too many (max ${MAX_STORED_MESSAGES})`);
+    }
+
+    let totalTextChars = 0;
+    const sanitized = [];
+
+    for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        const normalized = sanitizeStoredMessage(msg);
+        if (!normalized) {
+            throw createValidationError(`messages[${i}] invalid`);
+        }
+
+        if (normalized.id && normalized.id.length > MAX_STORED_MESSAGE_ID_CHARS) {
+            throw createValidationError(`messages[${i}].id too long`);
+        }
+
+        if (normalized.content.length > MAX_STORED_MESSAGE_CHARS) {
+            throw createValidationError(`messages[${i}].content too long`);
+        }
+
+        if (normalized.thought && normalized.thought.length > MAX_STORED_MESSAGE_CHARS) {
+            throw createValidationError(`messages[${i}].thought too long`);
+        }
+
+        if (!Array.isArray(normalized.parts) || normalized.parts.length === 0) {
+            throw createValidationError(`messages[${i}].parts required`);
+        }
+
+        if (normalized.parts.length > MAX_STORED_PARTS_PER_MESSAGE) {
+            throw createValidationError(`messages[${i}].parts too many`);
+        }
+
+        for (let pi = 0; pi < normalized.parts.length; pi++) {
+            const part = normalized.parts[pi];
+            if (typeof part?.text === "string") {
+                if (part.text.length > MAX_STORED_PART_TEXT_CHARS) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].text too long`);
+                }
+                totalTextChars += part.text.length;
+            }
+
+            if (part?.inlineData?.url) {
+                if (!isAllowedStoredImageUrl(part.inlineData.url)) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].image invalid`);
+                }
+            }
+        }
+
+        totalTextChars += normalized.content.length;
+        if (normalized.thought) totalTextChars += normalized.thought.length;
+        if (totalTextChars > MAX_STORED_TOTAL_TEXT_CHARS) {
+            throw createValidationError("messages total text too large");
+        }
+
+        sanitized.push(normalized);
+    }
+
+    return sanitized;
 }
 
 export function injectCurrentTimeSystemReminder(systemText) {

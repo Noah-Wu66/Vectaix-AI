@@ -43,6 +43,7 @@ function pickFilenameFromUrl(url, fallbackExt) {
 }
 
 function extFromContentType(contentType) {
+  if (!isNonEmptyString(contentType)) return;
   const ct = contentType.split(";")[0].trim().toLowerCase();
   if (ct === "image/jpeg") return "jpg";
   if (ct === "image/png") return "png";
@@ -103,7 +104,13 @@ export async function GET(req) {
     return Response.json({ error: "Internal Server Error" }, { status: 500 });
   }
 
-  const upstream = await fetch(url, { cache: "no-store" });
+  let upstream;
+  try {
+    upstream = await fetch(url, { cache: "no-store" });
+  } catch {
+    return Response.json({ error: "Failed to fetch image" }, { status: 502 });
+  }
+
   if (!upstream.ok || !upstream.body) {
     return Response.json(
       { error: "Failed to fetch image" },
@@ -113,10 +120,10 @@ export async function GET(req) {
 
   const contentType = upstream.headers.get("content-type");
   const ext = extFromContentType(contentType);
-  const filename = pickFilenameFromUrl(url, ext);
+  const filename = pickFilenameFromUrl(url, ext) || `download.${ext || "bin"}`;
 
   const headers = new Headers();
-  headers.set("Content-Type", contentType);
+  headers.set("Content-Type", isNonEmptyString(contentType) ? contentType : "application/octet-stream");
   const len = upstream.headers.get("content-length");
   if (isNonEmptyString(len)) headers.set("Content-Length", len);
   headers.set("Content-Disposition", `attachment; filename="${filename}"`);

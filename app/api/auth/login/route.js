@@ -29,7 +29,21 @@ export async function POST(req) {
         }
 
         await dbConnect();
-        const { email, password } = await req.json();
+        let body;
+        try {
+            body = await req.json();
+        } catch {
+            return Response.json({ error: '请求体格式错误' }, { status: 400 });
+        }
+
+        const { email, password } = body || {};
+        if (typeof email !== 'string' || typeof password !== 'string') {
+            return Response.json({ error: '邮箱和密码格式错误' }, { status: 400 });
+        }
+
+        if (!email.trim() || !password) {
+            return Response.json({ error: '请填写邮箱和密码' }, { status: 400 });
+        }
 
         // Normalize email to match stored format
         const normalizedEmail = email.trim().toLowerCase();

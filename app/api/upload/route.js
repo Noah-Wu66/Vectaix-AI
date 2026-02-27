@@ -7,7 +7,13 @@ import BlobFile from '@/models/BlobFile';
 const UPLOAD_RATE_LIMIT = { limit: 30, windowMs: 10 * 60 * 1000 };
 
 export async function POST(request) {
-    const body = await request.json();
+    let body;
+    try {
+        body = await request.json();
+    } catch {
+        return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+
     const user = await getAuthPayload();
 
     const clientIP = getClientIP(request);

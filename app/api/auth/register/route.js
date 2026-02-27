@@ -54,7 +54,21 @@ export async function POST(req) {
         }
 
         await dbConnect();
-        const { email, password, confirmPassword } = await req.json();
+        let body;
+        try {
+            body = await req.json();
+        } catch {
+            return Response.json({ error: '请求体格式错误' }, { status: 400 });
+        }
+
+        const { email, password, confirmPassword } = body || {};
+        if (
+            typeof email !== 'string'
+            || typeof password !== 'string'
+            || typeof confirmPassword !== 'string'
+        ) {
+            return Response.json({ error: '邮箱或密码格式错误' }, { status: 400 });
+        }
 
         if (!email || !password || !confirmPassword) {
             return Response.json({ error: '请填写所有必填字段' }, { status: 400 });

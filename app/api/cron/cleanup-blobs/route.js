@@ -6,14 +6,22 @@ export const runtime = 'nodejs';
 
 const RETENTION_DAYS = 90;
 const BATCH_SIZE = 200;
+const CRON_SECRET = process.env.CRON_SECRET;
 
-function isCronRequest(request) {
-    const ua = request.headers.get('user-agent');
-    return ua.includes('vercel-cron/1.0');
+function isCronRequestAuthorized(request) {
+    if (!CRON_SECRET) return false;
+
+    const authorization = request.headers.get('authorization');
+    if (!authorization || typeof authorization !== 'string') return false;
+    return authorization === `Bearer ${CRON_SECRET}`;
 }
 
 export async function GET(request) {
-    if (!isCronRequest(request)) {
+    if (!CRON_SECRET) {
+        return Response.json({ error: 'CRON_SECRET is not configured' }, { status: 500 });
+    }
+
+    if (!isCronRequestAuthorized(request)) {
         return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -34,7 +42,10 @@ export async function GET(request) {
         if (expired.length === 0) break;
 
         const urls = expired.map((item) => item.url).filter(Boolean);
-        if (urls.length === 0) break;
+        if (urls.length === 0) {
+            await BlobFile.deleteMany({ _id: { $in: expired.map((item) => item._id) } });
+            continue;
+        }
 
         await del(urls);
         await BlobFile.deleteMany({ url: { $in: urls } });
