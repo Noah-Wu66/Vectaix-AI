@@ -91,11 +91,6 @@ export async function metasoReader(url) {
 
   const baseUrl = "https://metaso.cn";
 
-  console.info("MetaSo reader request", {
-    url: normalizedUrl,
-    baseUrl,
-  });
-
   const res = await fetch(`${baseUrl}/api/v1/reader`, {
     method: "POST",
     headers: {
@@ -108,20 +103,11 @@ export async function metasoReader(url) {
 
   if (!res.ok) {
     const errorText = await res.text();
-    console.error("MetaSo reader response error", {
-      status: res.status,
-      statusText: res.statusText,
-      errorText,
-    });
     throw new Error(`MetaSo reader error: ${res.status} ${errorText}`);
   }
 
   const content = await res.text();
   const normalizedContent = typeof content === "string" ? content.trim() : "";
-  console.info("MetaSo reader response ok", {
-    status: res.status,
-    contentChars: normalizedContent.length,
-  });
 
   return {
     content: normalizedContent,
@@ -148,16 +134,6 @@ export async function metasoSearch(query, options = {}) {
     conciseSnippet,
   };
 
-  console.info("MetaSo search request", {
-    query,
-    baseUrl,
-    scope,
-    size,
-    includeSummary,
-    includeRawContent,
-    conciseSnippet,
-  });
-
   const res = await fetch(`${baseUrl}/api/v1/search`, {
     method: "POST",
     headers: {
@@ -170,21 +146,11 @@ export async function metasoSearch(query, options = {}) {
 
   if (!res.ok) {
     const errorText = await res.text();
-    console.error("MetaSo search response error", {
-      status: res.status,
-      statusText: res.statusText,
-      errorText,
-    });
     throw new Error(`MetaSo API error: ${res.status} ${errorText}`);
   }
 
   const data = await res.json();
   const results = normalizeMetasoResults(data?.webpages);
-  console.info("MetaSo search response ok", {
-    status: res.status,
-    credits: data?.credits,
-    resultCount: Array.isArray(results) ? results.length : 0,
-  });
   return {
     credits: data?.credits,
     results,

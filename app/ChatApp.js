@@ -413,6 +413,9 @@ export default function ChatApp() {
         if (Number.isFinite(nextBudgetTokens) && nextBudgetTokens > 0) {
           setBudgetTokens(nextBudgetTokens);
         }
+        if (typeof settings.webSearch === "boolean") {
+          setWebSearch(settings.webSearch);
+        }
         // activePromptId：优先使用对话存储的值，但需验证该提示词是否仍存在
         if (settings.activePromptId !== undefined) {
           const promptExists = systemPrompts.some(
@@ -669,3 +672,4 @@ export default function ChatApp() {
     </>
   );
 }
+

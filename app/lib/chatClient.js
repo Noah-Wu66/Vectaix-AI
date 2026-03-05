@@ -263,8 +263,6 @@ export async function runChat({
 
   setLoading(true);
   let streamMsgId = modelMessageId;
-  const debugTag = "[chat-stream]";
-  const logProgressStep = 500;
 
   try {
     const res = await fetch(apiEndpoint, {
@@ -283,10 +281,6 @@ export async function runChat({
 
       // 检测上下文超出错误，自动触发压缩重试
       if (!_isCompressedRetry && isContextOverflowError(errorMessage) && historyMessages.length > 0) {
-        console.log(debugTag, "context overflow detected, compressing history...", {
-          historyLen: historyMessages.length,
-          errorMessage,
-        });
 
         // 显示压缩中的状态消息
         const compressMsgId = generateMessageId();
@@ -312,7 +306,6 @@ export async function runChat({
 
         try {
           const summary = await compressHistory(historyMessages);
-          console.log(debugTag, "compression done", { summaryLen: summary.length });
 
           // 构建压缩后的消息列表：摘要消息 + 最近一轮对话
           const summaryUserMsg = {
@@ -391,7 +384,6 @@ export async function runChat({
               _compressedSummary: summary,
             });
          } catch (compressErr) {
-           console.error(debugTag, "compression failed", compressErr?.message);
            // 移除压缩状态消息
            setMessages((prev) => prev.filter((m) => m.id !== compressMsgId));
            throw new Error("对话上下文过长，自动压缩失败：" + (compressErr?.message || "未知错误"));
@@ -450,8 +442,6 @@ export async function runChat({
     let searchContextTokens = 0; // 联网搜索注入的上下文 token 数
     let thinkingTimeline = [];
     let timelineStepSeq = 0;
-    let lastTextLogLen = 0;
-    let lastThoughtLogLen = 0;
 
     const nextTimelineId = () => `timeline_${Date.now()}_${++timelineStepSeq}`;
 
@@ -533,14 +523,6 @@ export async function runChat({
         return changed ? next : prev;
       });
     };
-
-    console.log(debugTag, "response ok", {
-      status: res.status,
-      endpoint: apiEndpoint,
-      conversationId: newConvId,
-      provider,
-      model,
-    });
 
     // 通用超时检测：统一30秒
     let timeoutId = null;
@@ -633,11 +615,6 @@ export async function runChat({
         closeStreamingThoughtSteps();
         displayedText = fullText;
         scheduleFlush();
-        console.log(debugTag, "sse done", {
-          fullTextLen: fullText.length,
-          fullThoughtLen: fullThought.length,
-          hasCitations: Array.isArray(citations) ? citations.length : 0,
-        });
         return;
       }
       try {
@@ -646,22 +623,10 @@ export async function runChat({
           const delta = typeof data.content === "string" ? data.content : "";
           fullThought += delta;
           appendThoughtStep(delta);
-          if (fullThought.length === delta.length) {
-            console.log(debugTag, "thought start", { len: fullThought.length });
-          } else if (fullThought.length - lastThoughtLogLen >= logProgressStep) {
-            lastThoughtLogLen = fullThought.length;
-            console.log(debugTag, "thought progress", { len: fullThought.length });
-          }
         } else if (data.type === "text") {
           const delta = typeof data.content === "string" ? data.content : "";
           fullText += delta;
           displayedText = fullText;
-          if (fullText.length === delta.length) {
-            console.log(debugTag, "text start", { len: fullText.length });
-          } else if (fullText.length - lastTextLogLen >= logProgressStep) {
-            lastTextLogLen = fullText.length;
-            console.log(debugTag, "text progress", { len: fullText.length });
-          }
           if (!thinkingEnded) {
             ensureSyntheticThoughtRunning();
             thinkingEnded = true;
@@ -671,7 +636,6 @@ export async function runChat({
           scheduleFlush();
         } else if (data.type === "search_start") {
           isSearching = true;
-          console.log(debugTag, "search start", { query: data.query });
           const query = typeof data.query === "string" ? data.query.trim() : "";
           if (query) searchQuery = query;
           ensureSyntheticThoughtRunning();
@@ -685,10 +649,6 @@ export async function runChat({
         } else if (data.type === "search_result") {
           isSearching = false;
           const resultCount = Array.isArray(data.results) ? data.results.length : 0;
-          console.log(debugTag, "search result", {
-            query: data.query,
-            resultCount,
-          });
           const query = typeof data.query === "string" ? data.query.trim() : "";
           if (query) searchQuery = query;
           const updated = patchLastRunningStep("search", {
@@ -783,20 +743,15 @@ export async function runChat({
           if (!thinkingEnded) ensureSyntheticThoughtRunning();
         } else if (data.type === "citations") {
           citations = data.citations;
-          console.log(debugTag, "citations", {
-            count: Array.isArray(citations) ? citations.length : 0,
-          });
         } else if (data.type === "search_context_tokens") {
           const tokens = typeof data.tokens === "number" ? data.tokens : 0;
           if (tokens > 0) searchContextTokens = tokens;
         } else if (data.type === "stream_error") {
           // 流内错误：记录错误信息，后续在主循环中处理
           streamErrorMessage = typeof data.message === "string" ? data.message : "Unknown stream error";
-          console.error(debugTag, "stream_error received", { message: streamErrorMessage });
         }
       } catch {
-        const preview = p.length > 200 ? `${p.slice(0, 200)}...` : p;
-        console.warn(debugTag, "invalid sse payload", preview);
+        return;
       }
     };
 
@@ -850,14 +805,6 @@ export async function runChat({
     consumeSseBuffer(true);
     displayedText = fullText;
     flushStreamingMessage();
-
-    console.log(debugTag, "stream finished", {
-      sawDone,
-      fullTextLen: fullText.length,
-      fullThoughtLen: fullThought.length,
-      timedOut,
-      streamErrorMessage,
-    });
 
     // 检查流内错误（AI API 在流式传输过程中报错，如上下文超出）
     if (streamErrorMessage && fullText.trim() === "") {
@@ -1041,10 +988,6 @@ export async function runChat({
 
       // 检测上下文超出错误，自动触发压缩重试（流内错误场景）
       if (!_isCompressedRetry && isContextOverflowError(errMsg) && historyMessages.length > 0) {
-        console.log(debugTag, "context overflow in stream, compressing history...", {
-          historyLen: historyMessages.length,
-          errorMessage: errMsg,
-        });
 
         // 移除正在流式输出的消息（如有）
         if (streamMsgId !== null) {
@@ -1075,7 +1018,6 @@ export async function runChat({
 
         try {
           const summary = await compressHistory(historyMessages);
-          console.log(debugTag, "compression done (stream error path)", { summaryLen: summary.length });
 
           const summaryUserMsg = {
             id: generateMessageId(),
@@ -1151,7 +1093,6 @@ export async function runChat({
             _compressedSummary: summary,
           });
         } catch (compressErr) {
-          console.error(debugTag, "compression failed (stream error path)", compressErr?.message);
           setMessages((prev) => prev.filter((m) => m.id !== compressMsgId));
           if (mode === "regenerate" && Array.isArray(refusalRestoreMessages)) {
             await restoreRegenerateMessages(newConvId || currentConversationId || conversationId);

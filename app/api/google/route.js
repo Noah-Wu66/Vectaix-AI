@@ -139,6 +139,9 @@ export async function POST(req) {
                 { status: 400 }
             );
         }
+        if (!Array.isArray(history)) {
+            return Response.json({ error: 'history must be an array' }, { status: 400 });
+        }
 
         const auth = await getAuthPayload();
         if (!auth) {
@@ -544,3 +547,5 @@ export async function POST(req) {
         );
     }
 }
+
+

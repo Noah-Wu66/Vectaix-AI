@@ -19,11 +19,20 @@ const MAX_TITLE_CHARS = 200;
 const MAX_PROMPTS = 50;
 const MAX_PROMPT_NAME_CHARS = 80;
 const MAX_PROMPT_CONTENT_CHARS = 8000;
+const MAX_MODEL_CHARS = 100;
 
 const IMPORT_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
 const ALLOWED_MESSAGE_TYPES = new Set(['text', 'parts', 'error']);
 const ALLOWED_ROLES = new Set(['user', 'model']);
+const ALLOWED_SETTINGS_KEYS = new Set([
+  'thinkingLevel',
+  'historyLimit',
+  'maxTokens',
+  'budgetTokens',
+  'activePromptId',
+  'webSearch',
+]);
 
 const ALLOWED_IMAGE_DOMAINS = [
   'blob.vercel-storage.com',
@@ -51,13 +60,9 @@ function isAllowedImageUrl(url) {
 function sanitizeMessage(msg, idx) {
   if (!isPlainObject(msg)) throw new Error(`messages[${idx}] must be an object`);
   const role = msg.role;
-  const type = msg.type;
+  const type = typeof msg.type === 'string' ? msg.type : 'text';
   if (!ALLOWED_ROLES.has(role)) throw new Error(`messages[${idx}].role invalid`);
   if (!ALLOWED_MESSAGE_TYPES.has(type)) throw new Error(`messages[${idx}].type invalid`);
-
-  if (!Array.isArray(msg.parts) || msg.parts.length === 0) {
-    throw new Error(`messages[${idx}].parts required`);
-  }
 
   const out = {
     role,
@@ -90,11 +95,17 @@ function sanitizeMessage(msg, idx) {
     }
     if (timeline.length > 0) out.thinkingTimeline = timeline;
   }
-  if (msg.parts.length > MAX_PARTS_PER_MESSAGE) {
+
+  const sourceParts = Array.isArray(msg.parts) && msg.parts.length > 0
+    ? msg.parts
+    : (out.content ? [{ text: out.content }] : []);
+
+  if (sourceParts.length > MAX_PARTS_PER_MESSAGE) {
     throw new Error(`messages[${idx}].parts too many`);
   }
+
   const parts = [];
-  for (const part of msg.parts) {
+  for (const part of sourceParts) {
     if (!isPlainObject(part)) continue;
     const p = {};
     if (typeof part.text === 'string') {
@@ -119,6 +130,7 @@ function sanitizeMessage(msg, idx) {
     }
     if (Object.keys(p).length > 0) parts.push(p);
   }
+
   if (parts.length === 0) {
     throw new Error(`messages[${idx}].parts invalid`);
   }
@@ -132,6 +144,46 @@ function sanitizeMessage(msg, idx) {
   return out;
 }
 
+function sanitizeConversationSettings(settings, idx) {
+  if (!isPlainObject(settings)) return undefined;
+
+  const out = {};
+  for (const [settingKey, settingValue] of Object.entries(settings)) {
+    if (!ALLOWED_SETTINGS_KEYS.has(settingKey)) continue;
+
+    if (settingKey === 'thinkingLevel') {
+      if (typeof settingValue !== 'string' || settingValue.length > 20) {
+        throw new Error(`conversations[${idx}].settings.thinkingLevel invalid`);
+      }
+      out.thinkingLevel = settingValue;
+      continue;
+    }
+
+    if (settingKey === 'activePromptId') {
+      if (typeof settingValue !== 'string' || settingValue.length > 128) {
+        throw new Error(`conversations[${idx}].settings.activePromptId invalid`);
+      }
+      out.activePromptId = settingValue;
+      continue;
+    }
+
+    if (settingKey === 'webSearch') {
+      if (typeof settingValue !== 'boolean') {
+        throw new Error(`conversations[${idx}].settings.webSearch invalid`);
+      }
+      out.webSearch = settingValue;
+      continue;
+    }
+
+    if (!Number.isFinite(settingValue) || settingValue < 0 || settingValue > 200000) {
+      throw new Error(`conversations[${idx}].settings.${settingKey} invalid`);
+    }
+    out[settingKey] = settingValue;
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function sanitizeConversation(conv, idx, userId) {
   if (!isPlainObject(conv)) throw new Error(`conversations[${idx}] must be an object`);
 
@@ -139,6 +191,7 @@ function sanitizeConversation(conv, idx, userId) {
   if (title.length > MAX_TITLE_CHARS) {
     throw new Error(`conversations[${idx}].title too long`);
   }
+
   const messagesSrc = Array.isArray(conv.messages) ? conv.messages : [];
   const pinned = typeof conv.pinned === 'boolean' ? conv.pinned : false;
 
@@ -154,6 +207,19 @@ function sanitizeConversation(conv, idx, userId) {
     messages,
     pinned,
   };
+
+  if (typeof conv.model === 'string' && conv.model.trim()) {
+    const model = conv.model.trim();
+    if (model.length > MAX_MODEL_CHARS) {
+      throw new Error(`conversations[${idx}].model too long`);
+    }
+    out.model = model;
+  }
+
+  const settings = sanitizeConversationSettings(conv.settings, idx);
+  if (settings) {
+    out.settings = settings;
+  }
 
   if (conv.updatedAt) {
     const d = new Date(conv.updatedAt);
@@ -189,7 +255,7 @@ function sanitizeSettings(settingsSrc, userId) {
 
   return {
     userId,
-    avatar: avatar,
+    avatar,
     systemPrompts: sanitizedPrompts,
     updatedAt: new Date(),
   };

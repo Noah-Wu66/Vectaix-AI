@@ -113,6 +113,9 @@ export async function POST(req) {
         if (!prompt || typeof prompt !== 'string') {
             return Response.json({ error: 'Prompt is required' }, { status: 400 });
         }
+        if (!Array.isArray(history)) {
+            return Response.json({ error: 'history must be an array' }, { status: 400 });
+        }
 
         const auth = await getAuthPayload();
         if (!auth) {
@@ -557,3 +560,5 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
+
+

@@ -4,7 +4,7 @@ import { getAuthPayload } from '@/lib/auth';
 import mongoose from 'mongoose';
 
 const ALLOWED_UPDATE_KEYS = new Set(['title', 'messages', 'settings', 'pinned']);
-const ALLOWED_SETTINGS_KEYS = new Set(['thinkingLevel', 'historyLimit', 'maxTokens', 'budgetTokens', 'activePromptId']);
+const ALLOWED_SETTINGS_KEYS = new Set(['thinkingLevel', 'historyLimit', 'maxTokens', 'budgetTokens', 'activePromptId', 'webSearch']);
 const ALLOWED_MESSAGE_TYPES = new Set(['text', 'parts', 'error']);
 const ALLOWED_ROLES = new Set(['user', 'model']);
 
@@ -180,6 +180,13 @@ function sanitizeSettings(settings) {
             updates[`settings.${settingKey}`] = settingValue;
             continue;
         }
+        if (settingKey === 'webSearch') {
+            if (typeof settingValue !== 'boolean') {
+                throw new Error('settings.webSearch invalid');
+            }
+            updates[`settings.${settingKey}`] = settingValue;
+            continue;
+        }
         if (!Number.isFinite(settingValue) || settingValue < 0 || settingValue > 200000) {
             throw new Error(`settings.${settingKey} invalid`);
         }
@@ -309,3 +316,6 @@ export async function PUT(req, { params }) {
 
     return Response.json({ conversation: conversation?.toObject?.() || conversation });
 }
+
+
+

@@ -172,7 +172,7 @@ export function useUserSettings() {
       }
       return;
     }
-    if (model.startsWith("gpt-") && maxTokens !== MAX_TOKENS_128K) {
+    if (model.startsWith("gpt-") && maxTokens > MAX_TOKENS_128K) {
       _setMaxTokens(MAX_TOKENS_128K);
       writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_128K));
     }
@@ -431,3 +431,4 @@ export function useUserSettings() {
     setAvatar,
   };
 }
+

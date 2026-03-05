@@ -223,6 +223,7 @@ export function createChatAppActions({
           historyLimit,
           maxTokens,
           budgetTokens,
+          webSearch,
           activePromptId: activePromptId != null ? String(activePromptId) : null,
         } : undefined,
         completionSoundVolume,
@@ -453,3 +454,4 @@ export function createChatAppActions({
     submitEditAndRegenerate,
   };
 }
+
