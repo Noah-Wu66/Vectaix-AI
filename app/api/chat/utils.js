@@ -2,6 +2,102 @@
  * 共用工具函数 - Gemini 和 Claude API 都会使用
  */
 
+// ── 节假日 & 节气缓存（每天只请求一次外部 API） ──
+let _holidayCache = { date: '', holiday: null, festival: null };
+
+function getTodayDateString() {
+    try {
+        const formatter = new Intl.DateTimeFormat('zh-CN', {
+            timeZone: 'Asia/Shanghai',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+        });
+        const parts = formatter.formatToParts(new Date());
+        const map = {};
+        for (const p of parts) map[p.type] = p.value;
+        return `${map.year}-${map.month}-${map.day}`;
+    } catch {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+}
+
+async function fetchHolidayInfo(dateStr) {
+    try {
+        const res = await fetch(`https://timor.tech/api/holiday/info/${dateStr}`, {
+            signal: AbortSignal.timeout(3000),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data?.code !== 0) return null;
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchFestivalInfo(dateStr) {
+    try {
+        const res = await fetch(`https://festival.wifilu.com/festival.php?format=json&date=${dateStr}`, {
+            signal: AbortSignal.timeout(3000),
+        });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch {
+        return null;
+    }
+}
+
+async function getHolidayAndFestival() {
+    const today = getTodayDateString();
+    if (_holidayCache.date === today) {
+        return { holiday: _holidayCache.holiday, festival: _holidayCache.festival };
+    }
+    const [holiday, festival] = await Promise.all([
+        fetchHolidayInfo(today),
+        fetchFestivalInfo(today),
+    ]);
+    _holidayCache = { date: today, holiday, festival };
+    return { holiday, festival };
+}
+
+function buildHolidayText(holiday, festival) {
+    const lines = [];
+
+    // 来自 timor.tech：日期类型 & 节假日信息
+    if (holiday) {
+        const typeMap = { 0: '工作日', 1: '周末', 2: '节日', 3: '调休' };
+        const t = holiday.type;
+        if (t) {
+            const weekMap = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' };
+            lines.push(`今日类型：${typeMap[t.type] ?? '未知'}（${weekMap[t.week] ?? t.name ?? ''}）`);
+        }
+        const h = holiday.holiday;
+        if (h) {
+            if (h.holiday) {
+                lines.push(`今日是法定节假日「${h.name}」（${h.wage}倍工资）`);
+            } else {
+                lines.push(`今日是「${h.name}」（调休，${h.target ? `为${h.target}补班` : '补班日'}）`);
+            }
+        }
+    }
+
+    // 来自 festival.wifilu.com：农历 & 节气/传统节日
+    if (festival) {
+        if (festival.lunar_year && festival.lunar_month && festival.lunar_day) {
+            lines.push(`农历：${festival.lunar_year}年${festival.lunar_month}${festival.lunar_day}`);
+        }
+        if (festival.solar_term) {
+            lines.push(`节气：${festival.solar_term}`);
+        }
+        if (festival.festival) {
+            lines.push(`节日：${festival.festival}`);
+        }
+    }
+
+    return lines.length > 0 ? lines.join('；') : '';
+}
+
 const ALLOWED_IMAGE_DOMAINS = [
     "blob.vercel-storage.com",
     "public.blob.vercel-storage.com",
@@ -227,7 +323,7 @@ export function sanitizeStoredMessagesStrict(messages) {
     return sanitized;
 }
 
-export function injectCurrentTimeSystemReminder(systemText) {
+export async function injectCurrentTimeSystemReminder(systemText) {
     if (typeof systemText !== 'string') return systemText;
     if (systemText.includes("<system-reminder>")) return systemText;
 
@@ -253,7 +349,19 @@ export function injectCurrentTimeSystemReminder(systemText) {
         timeText = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
 
-    const reminder = `\n\n<system-reminder>\n当前时间：${timeText}（时区：Asia/Shanghai）。你必须以此为准进行判断与回答，不要把现在当成 2024 年。\n</system-reminder>`;
+    // 获取节假日 & 节气信息（带缓存，每天只请求一次外部 API）
+    let holidayLine = '';
+    try {
+        const { holiday, festival } = await getHolidayAndFestival();
+        holidayLine = buildHolidayText(holiday, festival);
+    } catch { /* 获取失败不影响主流程 */ }
+
+    let reminderContent = `当前时间：${timeText}（时区：Asia/Shanghai）。你必须以此为准进行判断与回答，不要把现在当成 2024 年。`;
+    if (holidayLine) {
+        reminderContent += `\n${holidayLine}`;
+    }
+
+    const reminder = `\n\n<system-reminder>\n${reminderContent}\n</system-reminder>`;
     return `${systemText}${reminder}`;
 }
 

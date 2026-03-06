@@ -41,4 +41,11 @@ export const CHAT_MODELS = [
     provider: "seed",
     contextWindow: 256000,
   },
+  {
+    id: "deepseek-reasoner",
+    name: "DeepSeek",
+    shortName: "DeepSeek",
+    provider: "deepseek",
+    contextWindow: 128000,
+  },
 ];

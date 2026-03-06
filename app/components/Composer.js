@@ -183,6 +183,13 @@ export default function Composer({
     setSelectedImages([]);
   };
 
+  // 切换到不支持图片的模型时，自动清空已选图片
+  useEffect(() => {
+    if (model?.startsWith("deepseek-") && selectedImages.length > 0) {
+      setSelectedImages([]);
+    }
+  }, [model]);
+
   const handleKeyDown = (e) => {
     // 桌面端：Enter 发送，Shift+Enter 换行
     // 移动端：不拦截 Enter，避免 iOS 输入法换行按钮误触发送
@@ -266,26 +273,30 @@ export default function Composer({
         </div>
 
         <div className="relative flex items-center">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            className="hidden"
-            accept="image/*"
-            multiple
-          />
+          {!model?.startsWith("deepseek-") && (
+            <>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
+                accept="image/*"
+                multiple
+              />
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={selectedImages.length >= 4}
-            className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedImages.length > 0
-              ? "text-zinc-600 bg-zinc-200"
-              : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
-              } disabled:opacity-40 disabled:cursor-not-allowed`}
-            type="button"
-          >
-            <Paperclip size={16} />
-          </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={selectedImages.length >= 4}
+                className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedImages.length > 0
+                  ? "text-zinc-600 bg-zinc-200"
+                  : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                type="button"
+              >
+                <Paperclip size={16} />
+              </button>
+            </>
+          )}
 
           <textarea
             ref={textareaRef}
@@ -295,7 +306,7 @@ export default function Composer({
             onFocus={() => setIsMainInputFocused(true)}
             onBlur={() => setIsMainInputFocused(false)}
             placeholder="输入消息..."
-            className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl pl-11 pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors"
+            className={`flex-1 bg-zinc-50 border border-zinc-200 rounded-xl ${model?.startsWith("deepseek-") ? "pl-4" : "pl-11"} pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors`}
             rows={1}
             style={{ minHeight: "48px" }}
           />

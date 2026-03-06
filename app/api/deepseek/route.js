@@ -9,99 +9,66 @@ import {
     sanitizeStoredMessagesStrict,
     injectCurrentTimeSystemReminder,
     buildWebSearchContextBlock,
-    estimateTokens
+    estimateTokens,
+    getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
 import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildEconomySystemPrompt } from '@/app/lib/economyModels';
-
-import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const RIGHT_CODES_OPENAI_BASE_URL = process.env.RIGHT_CODES_OPENAI_BASE_URL || 'https://www.right.codes/codex/v1';
-const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
+const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
-const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
-const MODEL_REASONING_EFFORTS = {};
 
-function extractUpstreamErrorMessage(status, rawText) {
-    const text = typeof rawText === 'string' ? rawText.trim() : '';
-    const lower = text.toLowerCase();
+/**
+ * 将存储的历史消息转换为 DeepSeek（OpenAI兼容）格式
+ * DeepSeek 使用标准 OpenAI Chat Completions 消息格式：
+ * { role: "user"|"assistant", content: "..." }
+ * 
+ * 关键：多轮对话中只传递 content，不传递 reasoning_content
+ */
+async function buildDeepSeekMessagesFromHistory(messages) {
+    const result = [];
+    for (const msg of messages) {
+        if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
-    if (status === 502 || lower.includes('bad gateway')) {
-        return 'OpenAI 网关暂时不可用（502），请稍后重试';
-    }
-    if (status === 503 || lower.includes('service unavailable')) {
-        return 'OpenAI 服务暂时不可用（503），请稍后重试';
-    }
-    if (status === 504 || lower.includes('gateway timeout')) {
-        return 'OpenAI 网关超时（504），请稍后重试';
-    }
+        const storedParts = getStoredPartsFromMessage(msg);
+        if (!storedParts || storedParts.length === 0) continue;
 
-    try {
-        const parsed = JSON.parse(text);
-        const message = parsed?.error?.message || parsed?.message;
-        if (typeof message === 'string' && message.trim()) {
-            return message.trim();
-        }
-    } catch {
-        // ignore
-    }
+        const role = msg.role === 'model' ? 'assistant' : 'user';
 
-    if (text.startsWith('<!DOCTYPE html') || text.startsWith('<html')) {
-        return `OpenAI 请求失败（${status}）`;
-    }
+        // DeepSeek 支持图片：使用 content 数组格式
+        const hasImages = role === 'user' && storedParts.some(p => p?.inlineData?.url);
 
-    const compact = text.length > 600 ? `${text.slice(0, 600)}...` : text;
-    return compact || `OpenAI 请求失败（${status}）`;
-}
-
-function normalizeDecisionText(value) {
-    if (typeof value === 'string') return value;
-    if (Array.isArray(value)) {
-        return value.map((item) => normalizeDecisionText(item)).join('');
-    }
-    if (value && typeof value === 'object') {
-        if (typeof value.text === 'string') return value.text;
-        if (typeof value.content === 'string') return value.content;
-    }
-    return '';
-}
-
-function extractDecisionOutputFromResponses(data) {
-    let text = normalizeDecisionText(data?.output_text);
-    let thought = '';
-
-    const outputs = Array.isArray(data?.output) ? data.output : [];
-    for (const item of outputs) {
-        if (item?.type === 'reasoning' && Array.isArray(item?.summary)) {
-            thought += normalizeDecisionText(item.summary);
-        }
-
-        const content = Array.isArray(item?.content) ? item.content : [];
-        for (const part of content) {
-            const partType = typeof part?.type === 'string' ? part.type : '';
-            const partText = normalizeDecisionText(part?.text ?? part?.content);
-            if (!partText) continue;
-
-            if (partType.includes('reasoning') || partType.includes('summary')) {
-                thought += partText;
-            } else {
-                text += partText;
+        if (hasImages) {
+            const contentParts = [];
+            for (const part of storedParts) {
+                if (isNonEmptyString(part.text)) {
+                    contentParts.push({ type: 'text', text: part.text });
+                }
+                if (part?.inlineData?.url) {
+                    const { base64Data, mimeType } = await fetchImageAsBase64(part.inlineData.url);
+                    contentParts.push({
+                        type: 'image_url',
+                        image_url: { url: `data:${mimeType};base64,${base64Data}` }
+                    });
+                }
+            }
+            if (contentParts.length > 0) {
+                result.push({ role, content: contentParts });
+            }
+        } else {
+            // 纯文本消息
+            const textParts = storedParts.filter(p => isNonEmptyString(p?.text)).map(p => p.text);
+            const text = textParts.join('\n');
+            if (text) {
+                result.push({ role, content: text });
             }
         }
     }
-
-    if (!text) {
-        text = normalizeDecisionText(data?.choices?.[0]?.message?.content);
-    }
-
-    return { text, thought };
+    return result;
 }
-
-
 
 export async function POST(req) {
     let writePermitTime = null;
@@ -162,73 +129,64 @@ export async function POST(req) {
             }
             user = auth;
         } catch (dbError) {
-            console.error("Database connection error:", dbError?.message);
+            console.error('Database connection error:', dbError?.message);
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        const apiBaseUrl = RIGHT_CODES_OPENAI_BASE_URL;
-        const apiKey = RIGHT_CODES_API_KEY;
-        if (!apiKey) {
-            return Response.json({ error: 'RIGHT_CODES_API_KEY is not set' }, { status: 500 });
-        }
-        const isGpt52Model = model === 'gpt-5.2' || model === 'openai/gpt-5.2';
-        const apiModel = isGpt52Model ? 'gpt-5.2' : model;
-        const isSeedModel = typeof apiModel === 'string' && apiModel.startsWith('volcengine/doubao-seed');
-        const runOpenAIDecision = async ({ systemText, userText, isAborted, onThought }) => {
+        const apiKey = process.env.DEEPSEEK_API_KEY;
+        // 使用 deepseek-reasoner 作为 API 模型（内置思考模式）
+        const apiModel = model === 'deepseek-reasoner' ? 'deepseek-reasoner' : 'deepseek-chat';
+
+        // 联网搜索的决策调用（使用 deepseek-chat 非思考模式，快速轻量）
+        const runDeepSeekDecision = async ({ systemText, userText, isAborted, onThought }) => {
             if (isAborted?.()) return '';
 
-            const response = await fetch(`${apiBaseUrl}/responses`, {
+            const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    model: apiModel,
-                    stream: false,
-                    max_output_tokens: 512,
-                    reasoning: {
-                        effort: 'low',
-                        summary: 'auto'
-                    },
-                    input: [
-                        { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
-                        { role: 'user', content: [{ type: 'input_text', text: userText }] }
+                    model: 'deepseek-chat',
+                    max_tokens: 512,
+                    messages: [
+                        { role: 'system', content: systemText },
+                        { role: 'user', content: userText }
                     ]
                 })
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
-                const message = extractUpstreamErrorMessage(response.status, errorText);
-                throw new Error(message);
+                throw new Error(`DeepSeek decision API Error: ${response.status} ${errorText}`);
             }
 
             const data = await response.json().catch(() => null);
             if (!data || typeof data !== 'object') return '';
             if (isAborted?.()) return '';
 
-            const { text, thought } = extractDecisionOutputFromResponses(data);
+            const text = data?.choices?.[0]?.message?.content || '';
+            const thought = data?.choices?.[0]?.message?.reasoning_content || '';
             if (thought) onThought?.(thought);
             return text;
         };
 
         let currentConversationId = conversationId;
 
-        // 创建新会话
         if (user && !currentConversationId) {
-            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
+            const title = prompt.length > 30 ? `${prompt.substring(0, 30)}...` : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
                 title: title,
-                model: model,
-                settings: settings,
+                model,
+                settings,
                 messages: []
             });
             currentConversationId = newConv._id.toString();
         }
 
-        let openaiInput = [];
+        let deepseekMessages = [];
         const limit = Number.parseInt(historyLimit);
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
@@ -254,34 +212,36 @@ export async function POST(req) {
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
-            openaiInput = await buildOpenAIInputFromHistory(effectiveMsgs);
+            deepseekMessages = await buildDeepSeekMessagesFromHistory(effectiveMsgs);
         } else {
-            const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
-            openaiInput = await buildOpenAIInputFromHistory(effectiveHistory);
+            const safeHistory = Array.isArray(history) ? history : [];
+            const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? safeHistory.slice(-limit) : safeHistory;
+            deepseekMessages = await buildDeepSeekMessagesFromHistory(effectiveHistory);
         }
 
         let dbImageEntries = [];
 
         if (!isRegenerateMode) {
-            const userContent = [{ type: 'input_text', text: prompt }];
-
+            // 构建用户消息内容
             if (config?.images?.length > 0) {
+                const contentParts = [{ type: 'text', text: prompt }];
                 for (const img of config.images) {
                     if (img?.url) {
                         const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
-                        userContent.push({
-                            type: 'input_image',
-                            image_url: `data:${mimeType};base64,${base64Data}`
+                        contentParts.push({
+                            type: 'image_url',
+                            image_url: { url: `data:${mimeType};base64,${base64Data}` }
                         });
                         dbImageEntries.push({ url: img.url, mimeType });
                     }
                 }
+                deepseekMessages.push({ role: 'user', content: contentParts });
+            } else {
+                deepseekMessages.push({ role: 'user', content: prompt });
             }
-
-            openaiInput.push({ role: 'user', content: userContent });
         }
 
-        // 保存用户消息
+        // 存储用户消息到数据库
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
@@ -298,9 +258,8 @@ export async function POST(req) {
             }
 
             const userMsgTime = Date.now();
-            const resolvedUserMessageId = userMessageId;
             const userMessage = {
-                id: resolvedUserMessageId,
+                id: userMessageId,
                 role: 'user',
                 content: prompt,
                 type: 'parts',
@@ -315,47 +274,14 @@ export async function POST(req) {
             writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
-        // 构建 Responses API 请求
         const maxTokens = config?.maxTokens;
-        const thinkingLevel = config?.thinkingLevel;
         const budgetTokens = Number.parseInt(config?.budgetTokens, 10);
 
-        const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
-        const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
+        const baseSystemPrompt = await injectCurrentTimeSystemReminder(
+            typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
+        );
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
-        const baseInputWithInstructions = [
-            { role: 'developer', content: [{ type: 'input_text', text: baseSystemPrompt }] },
-            ...(Array.isArray(openaiInput) ? openaiInput : [])
-        ];
 
-        const baseRequestBody = {
-            model: apiModel,
-            stream: true,
-            max_output_tokens: maxTokens,
-            reasoning: {
-                effort: "high",
-                summary: "auto"
-            }
-        };
-
-        // Map UI thinkingLevel to Responses API reasoning.effort
-        const allowedEfforts = MODEL_REASONING_EFFORTS[model] || DEFAULT_REASONING_EFFORTS;
-        if (allowedEfforts.has(thinkingLevel)) {
-            baseRequestBody.reasoning.effort = thinkingLevel;
-        }
-
-        if (isSeedModel) {
-            baseRequestBody.extra_body = {
-                thinking: {
-                    type: 'enabled',
-                    ...(Number.isFinite(budgetTokens) && budgetTokens > 0
-                        ? { budget_tokens: budgetTokens }
-                        : {})
-                }
-            };
-        }
-
-        // 是否启用联网搜索
         const enableWebSearch = config?.webSearch === true;
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
 
@@ -364,44 +290,17 @@ export async function POST(req) {
         const onAbort = () => { clientAborted = true; };
         try {
             req?.signal?.addEventListener?.('abort', onAbort, { once: true });
-        } catch { /* ignore */ }
+        } catch { }
 
         const PADDING = ' '.repeat(2048);
         let paddingSent = false;
         const HEARTBEAT_INTERVAL_MS = 15000;
         let heartbeatTimer = null;
 
-        const normalizeChunkText = (value) => {
-            if (typeof value === 'string') return value;
-            if (!Array.isArray(value)) return '';
-            return value.map((item) => {
-                if (typeof item === 'string') return item;
-                if (item && typeof item.text === 'string') return item.text;
-                return '';
-            }).join('');
-        };
-
-        const normalizeChunkThought = (value) => {
-            if (typeof value === 'string') return value;
-            if (Array.isArray(value)) {
-                return value.map((item) => {
-                    if (typeof item === 'string') return item;
-                    if (item && typeof item.text === 'string') return item.text;
-                    if (item && typeof item.content === 'string') return item.content;
-                    return '';
-                }).join('');
-            }
-            if (value && typeof value === 'object') {
-                if (typeof value.text === 'string') return value.text;
-                if (typeof value.content === 'string') return value.content;
-            }
-            return '';
-        };
-
         const responseStream = new ReadableStream({
             async start(controller) {
-                let fullText = "";
-                let fullThought = "";
+                let fullText = '';
+                let fullThought = '';
                 let citations = [];
                 let searchContextTokens = 0;
 
@@ -410,7 +309,7 @@ export async function POST(req) {
                         try {
                             if (clientAborted) return;
                             controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
-                        } catch { /* ignore */ }
+                        } catch { }
                     };
                     heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
                     sendHeartbeat();
@@ -432,12 +331,13 @@ export async function POST(req) {
                     const pushCitations = (items) => {
                         for (const item of items) {
                             if (!item?.url) continue;
-                            if (!citations.some(c => c.url === item.url)) {
+                            if (!citations.some((c) => c.url === item.url)) {
                                 citations.push({ url: item.url, title: item.title });
                             }
                         }
                     };
 
+                    // 联网搜索编排
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
                         prompt,
@@ -445,31 +345,39 @@ export async function POST(req) {
                         pushCitations,
                         sendSearchError,
                         isClientAborted: () => clientAborted,
-                        providerLabel: 'OpenAI',
-                        decisionRunner: runOpenAIDecision,
+                        providerLabel: 'DeepSeek',
+                        decisionRunner: runDeepSeekDecision,
                     });
 
                     if (clientAborted) {
-                        try { controller.close(); } catch { /* ignore */ }
+                        try { controller.close(); } catch { }
                         return;
                     }
 
                     const searchContextSection = searchContextText
                         ? buildWebSearchContextBlock(searchContextText)
-                        : "";
+                        : '';
                     if (searchContextSection) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
+
+                    // 构建最终请求
                     const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
-                    const finalInput = baseInputWithInstructions.slice();
-                    finalInput[0] = { role: 'developer', content: [{ type: 'input_text', text: finalSystemPrompt }] };
+                    const finalMessages = [
+                        { role: 'system', content: finalSystemPrompt },
+                        ...deepseekMessages
+                    ];
+
+                    // DeepSeek reasoner 使用 max_tokens，上限 65536
                     const requestBody = {
-                        ...baseRequestBody,
-                        input: finalInput
+                        model: apiModel,
+                        messages: finalMessages,
+                        stream: true,
+                        max_tokens: Math.min(maxTokens || 65536, 65536),
                     };
 
-                    const requestResponses = async () => fetch(`${apiBaseUrl}/responses`, {
+                    const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -478,29 +386,15 @@ export async function POST(req) {
                         body: JSON.stringify(requestBody)
                     });
 
-                    let response = await requestResponses();
-                    if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
-                        await new Promise((resolve) => setTimeout(resolve, 800));
-                        response = await requestResponses();
-                    }
-
                     if (!response.ok) {
                         const errorText = await response.text();
-                        const message = extractUpstreamErrorMessage(response.status, errorText);
-                        const upstreamError = new Error(message);
-                        upstreamError.status = response.status;
-                        throw upstreamError;
+                        throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
                     }
 
-                    if (!response.body) {
-                        const upstreamError = new Error('OpenAI 返回了空响应体，请稍后重试');
-                        upstreamError.status = 502;
-                        throw upstreamError;
-                    }
-
+                    // 解析 SSE 流式响应
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
-                    let buffer = "";
+                    let buffer = '';
 
                     while (true) {
                         const { value, done } = await reader.read();
@@ -519,52 +413,33 @@ export async function POST(req) {
 
                             try {
                                 const event = JSON.parse(dataStr);
+                                const choice = event?.choices?.[0];
+                                if (!choice) continue;
 
-                                // 处理 Responses API 和 Chat Completions 事件
-                                if (event.type === 'response.output_text.delta') {
-                                    const text = event.delta;
-                                    fullText += text;
-                                    sendEvent({ type: 'text', content: text });
-                                } else if (event.type === 'response.reasoning.delta' || event.type === 'response.reasoning_summary_text.delta') {
-                                    const thought = event.delta;
+                                const delta = choice.delta;
+
+                                // DeepSeek reasoner 的思考过程通过 reasoning_content 字段传递
+                                if (delta?.reasoning_content) {
+                                    const thought = delta.reasoning_content;
                                     fullThought += thought;
                                     sendEvent({ type: 'thought', content: thought });
-                                } else if (event.type === 'response.output_text.annotation.added') {
-                                    // Web search 引用（url_citation）
-                                    const ann = event.annotation;
-                                    if (ann?.type === 'url_citation' && ann?.url) {
-                                        const exists = citations.some(c => c?.url === ann.url);
-                                        if (!exists) {
-                                            citations.push({ url: ann.url, title: ann.title });
-                                            sendEvent({ type: 'citations', citations });
-                                        }
-                                    }
-                                } else if (Array.isArray(event?.choices)) {
-                                    const choice = event.choices[0] || null;
-                                    const delta = choice?.delta;
-
-                                    const text = normalizeChunkText(delta?.content);
-                                    if (text) {
-                                        fullText += text;
-                                        sendEvent({ type: 'text', content: text });
-                                    }
-
-                                    const thought = normalizeChunkThought(delta?.reasoning_content);
-                                    if (thought) {
-                                        fullThought += thought;
-                                        sendEvent({ type: 'thought', content: thought });
-                                    }
                                 }
-                            } catch { /* ignore parse errors */ }
+
+                                // 最终答案通过 content 字段传递
+                                if (delta?.content) {
+                                    const text = delta.content;
+                                    fullText += text;
+                                    sendEvent({ type: 'text', content: text });
+                                }
+                            } catch { }
                         }
                     }
 
                     if (clientAborted) {
-                        try { controller.close(); } catch { /* ignore */ }
+                        try { controller.close(); } catch { }
                         return;
                     }
 
-                    // 发送引用信息
                     if (citations.length > 0) {
                         const citationsData = `data: ${JSON.stringify({ type: 'citations', citations })}\n\n`;
                         controller.enqueue(encoder.encode(citationsData));
@@ -572,13 +447,13 @@ export async function POST(req) {
 
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
+                    // 存储 AI 回复到数据库
                     if (user && currentConversationId) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
                             : { _id: currentConversationId, userId: user.userId };
-                        const resolvedModelMessageId = modelMessageId;
                         const modelMessage = {
-                            id: resolvedModelMessageId,
+                            id: modelMessageId,
                             role: 'model',
                             content: fullText,
                             thought: fullThought,
@@ -600,10 +475,9 @@ export async function POST(req) {
                     controller.close();
                 } catch (err) {
                     if (clientAborted) {
-                        try { controller.close(); } catch { /* ignore */ }
+                        try { controller.close(); } catch { }
                         return;
                     }
-                    // 将错误作为 SSE 事件发送给客户端（而非 controller.error），保留原始错误信息
                     try {
                         const errorPayload = JSON.stringify({ type: 'stream_error', message: err?.message || 'Unknown error' });
                         const padding = !paddingSent ? PADDING : '';
@@ -621,7 +495,7 @@ export async function POST(req) {
                     }
                     try {
                         req?.signal?.removeEventListener?.('abort', onAbort);
-                    } catch { /* ignore */ }
+                    } catch { }
                 }
             }
         });
@@ -638,7 +512,7 @@ export async function POST(req) {
         return new Response(responseStream, { headers });
 
     } catch (error) {
-        console.error("OpenAI API Error:", {
+        console.error('DeepSeek API Error:', {
             message: error?.message,
             status: error?.status,
             name: error?.name,
@@ -649,11 +523,9 @@ export async function POST(req) {
         let errorMessage = error?.message;
 
         if (error?.message?.includes('API_KEY')) {
-            errorMessage = "API configuration error. Please check your API keys.";
+            errorMessage = 'API configuration error. Please check your API keys.';
         }
 
         return Response.json({ error: errorMessage }, { status });
     }
 }
-
-

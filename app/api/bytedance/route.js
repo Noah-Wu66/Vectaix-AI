@@ -285,7 +285,7 @@ export async function POST(req) {
         const thinkingLevel = config?.thinkingLevel;
         const budgetTokens = Number.parseInt(config?.budgetTokens, 10);
 
-        const baseSystemPrompt = injectCurrentTimeSystemReminder(
+        const baseSystemPrompt = await injectCurrentTimeSystemReminder(
             typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
         );
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";

@@ -5,6 +5,7 @@ import { isDataImageUrl, isHttpUrl } from "./messageImage";
 let msgIdCounter = 0;
 const generateMsgId = () => `msg_${Date.now()}_${++msgIdCounter}`;
 const SEED_MODEL_ID = "volcengine/doubao-seed-2.0-pro";
+const DEEPSEEK_MODEL_ID = "deepseek-reasoner";
 
 function getSeedThinkingLevelByBudget(budgetTokens) {
   const budget = Number(budgetTokens);
@@ -48,7 +49,7 @@ export function createChatAppActions({
   onConversationActivity,
 }) {
   const getEffectiveThinkingLevel = (m) => {
-    if (m === SEED_MODEL_ID) {
+    if (m === SEED_MODEL_ID || m === DEEPSEEK_MODEL_ID) {
       return getSeedThinkingLevelByBudget(budgetTokens);
     }
     const v = thinkingLevels?.[m];

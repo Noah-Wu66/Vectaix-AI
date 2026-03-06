@@ -21,8 +21,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const RIGHT_CODES_CLAUDE_BASE_URL = "https://www.right.codes/claude-aws";
-const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
+const AIGOCODE_CLAUDE_BASE_URL = "https://api.aigocode.com/v1";
+const AIGOCODE_API_KEY = process.env.AIGOCODE_API_KEY;
 const MAX_REQUEST_BYTES = 2_000_000;
 
 async function storedPartToClaudePart(part) {
@@ -154,9 +154,9 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
 
-        const apiKey = RIGHT_CODES_API_KEY;
+        const apiKey = AIGOCODE_API_KEY;
         if (!apiKey) {
-            return Response.json({ error: 'RIGHT_CODES_API_KEY is not set' }, { status: 500 });
+            return Response.json({ error: 'AIGOCODE_API_KEY is not set' }, { status: 500 });
         }
         const apiModel = model.startsWith('claude-opus-4-6')
             ? 'claude-opus-4-6'
@@ -165,7 +165,7 @@ export async function POST(req) {
                 : model;
         const client = new Anthropic({
             apiKey,
-            baseURL: RIGHT_CODES_CLAUDE_BASE_URL,
+            baseURL: AIGOCODE_CLAUDE_BASE_URL,
         });
         const runClaudeDecision = async ({ systemText, userText, isAborted, onThought }) => {
             if (isAborted?.()) return '';
@@ -304,7 +304,7 @@ export async function POST(req) {
         const isClaudeAdaptiveThinkingModel = typeof model === "string"
             && (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6"));
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
-        const baseSystemPrompt = injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
+        const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         // 是否启用联网搜索

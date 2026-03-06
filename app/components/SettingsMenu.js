@@ -67,13 +67,14 @@ export default function SettingsMenu({
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
   const isSeedModel = model === "volcengine/doubao-seed-2.0-pro";
+  const isDeepSeekModel = typeof model === "string" && model.startsWith("deepseek-");
   const isClaudeAdaptiveThinkingModel = typeof model === "string"
     && (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6"));
   const openAIThinkingLevels = isOpenAIModel ? getOpenAIThinkingLevels() : [];
   const claudeTokenOptions = isClaudeAdaptiveThinkingModel ? CLAUDE_OPUS_TOKEN_OPTIONS : CLAUDE_TOKEN_OPTIONS;
   const maxTokenOptions = isOpenAIModel
     ? OPENAI_TOKEN_OPTIONS
-    : isSeedModel
+    : isSeedModel || isDeepSeekModel
       ? SEED_TOKEN_OPTIONS
       : GEMINI_TOKEN_OPTIONS;
   const activePrompt = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
@@ -552,7 +553,7 @@ export default function SettingsMenu({
                                 </span>
                               </div>
                             </>
-                          ) : isSeedModel ? (
+                          ) : isSeedModel || isDeepSeekModel ? (
                             <div>
                               <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                                 思考深度

@@ -237,6 +237,8 @@ export async function runChat({
       ? "/api/bytedance"
       : provider === "openai"
       ? "/api/openai"
+      : provider === "deepseek"
+      ? "/api/deepseek"
       : "/api/google";
 
   const syncConversationMessages = async (convId, nextMessages) => {

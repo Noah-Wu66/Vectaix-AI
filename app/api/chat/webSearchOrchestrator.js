@@ -101,7 +101,7 @@ export async function runWebSearchOrchestration(options) {
     onThought: (content) => sendEvent({ type: 'thought', content }),
   });
 
-  const decisionSystem = injectCurrentTimeSystemReminder(DECISION_SYSTEM_TEXT);
+  const decisionSystem = await injectCurrentTimeSystemReminder(DECISION_SYSTEM_TEXT);
   const decisionUser = `用户问题：${prompt}\n\n判断是否必须联网检索才能回答。\n- 需要联网：输出 {"needSearch": true, "query": "精炼检索词"}\n- 不需要联网：输出 {"needSearch": false}`;
   const decisionText = await runDecision(decisionSystem, decisionUser);
   const decision = parseJsonFromText(decisionText);
@@ -180,7 +180,7 @@ export async function runWebSearchOrchestration(options) {
     const readerCandidates = Array.isArray(results) ? results : [];
     if (readerCandidates.length > 0 && readUrlSet.size < maxReadPages) {
       try {
-        const readerSystem = injectCurrentTimeSystemReminder(READER_SYSTEM_TEXT);
+        const readerSystem = await injectCurrentTimeSystemReminder(READER_SYSTEM_TEXT);
         const remainingQuota = maxReadPages - readUrlSet.size;
         const candidateText = readerCandidates
           .map((item, idx) => {
@@ -244,7 +244,7 @@ export async function runWebSearchOrchestration(options) {
             const remainingUrls = selectedUrls.slice(ri + 1).filter((u) => !readUrlSet.has(u));
             if (remainingUrls.length > 0 && readUrlSet.size < maxReadPages) {
               try {
-                const continueSystem = injectCurrentTimeSystemReminder(CONTINUE_SYSTEM_TEXT);
+                const continueSystem = await injectCurrentTimeSystemReminder(CONTINUE_SYSTEM_TEXT);
                 const readSoFar = Array.from(readUrlSet).join('\n');
                 const pendingList = remainingUrls.join('\n');
                 const continueUser = `用户问题：${prompt}\n\n已查看的网页内容摘要：\n${roundContextBlocks.join('\n\n')}\n\n待查看的 URL：\n${pendingList}\n\n已读过的全部 URL：\n${readSoFar}\n\n根据已获取的信息，判断：\n1. 是否还需要继续查看剩余网页\n2. 当前信息是否已足够回答用户问题，是否还需要下一轮搜索\n\n- 继续查看剩余网页：输出 {"continueRead": true}\n- 不再查看，但信息不够需要换词搜索：输出 {"continueRead": false, "enough": false, "nextQuery": "新的检索词"}\n- 不再查看，信息已足够：输出 {"continueRead": false, "enough": true}`;
@@ -289,7 +289,7 @@ export async function runWebSearchOrchestration(options) {
     if (skipEnoughCheck) continue;
 
     const recentContext = searchContextParts.join('\n\n');
-    const enoughSystem = injectCurrentTimeSystemReminder(ENOUGH_SYSTEM_TEXT);
+    const enoughSystem = await injectCurrentTimeSystemReminder(ENOUGH_SYSTEM_TEXT);
     const enoughUser = `用户问题：${prompt}\n\n已获得的检索摘要：\n${recentContext}\n\n判断这些信息是否足够回答。\n- 足够：输出 {"enough": true}\n- 不足：输出 {"enough": false, "nextQuery": "新的检索词"}`;
     const enoughText = await runDecision(enoughSystem, enoughUser);
     const enoughDecision = parseJsonFromText(enoughText);

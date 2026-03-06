@@ -298,13 +298,15 @@ export default function MessageList({
                 {/* 编辑模式 */}
                 {editingMsgIndex === i && msg.role === "user" ? (
                   <div className="w-full space-y-2">
-                    <input
-                      type="file"
-                      ref={editFileInputRef}
-                      onChange={handleEditFileSelect}
-                      className="hidden"
-                      accept="image/*"
-                    />
+                    {!model?.startsWith("deepseek-") && (
+                      <input
+                        type="file"
+                        ref={editFileInputRef}
+                        onChange={handleEditFileSelect}
+                        className="hidden"
+                        accept="image/*"
+                      />
+                    )}
 
                     {(() => {
                       const existing = getMessageImageSrc(msg);
@@ -342,15 +344,17 @@ export default function MessageList({
                       className="w-full bg-white border border-zinc-300 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400 resize-none min-h-[80px]"
                     />
                     <div className="flex gap-2 justify-end">
-                      <button
-                        type="button"
-                        onClick={() => editFileInputRef.current?.click()}
-                        className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors inline-flex items-center gap-1"
-                        title="添加/更换图片"
-                      >
-                        <Paperclip size={14} />
-                        图片
-                      </button>
+                      {!model?.startsWith("deepseek-") && (
+                        <button
+                          type="button"
+                          onClick={() => editFileInputRef.current?.click()}
+                          className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors inline-flex items-center gap-1"
+                          title="添加/更换图片"
+                        >
+                          <Paperclip size={14} />
+                          图片
+                        </button>
+                      )}
 
                       {(() => {
                         const existing = getMessageImageSrc(msg);

@@ -15,7 +15,7 @@ import {
 } from "./storageKeys";
 
 const SEED_MODEL_ID = "volcengine/doubao-seed-2.0-pro";
-const DEFAULT_MODEL = SEED_MODEL_ID;
+const DEFAULT_MODEL = "deepseek-chat";
 const MAX_TOKENS_64K = 64000;
 const MAX_TOKENS_128K = 128000;
 const DEFAULT_THINKING_LEVELS = {
@@ -25,6 +25,7 @@ const DEFAULT_THINKING_LEVELS = {
   "claude-opus-4-6-20260205": "high",
   "gpt-5.2": "medium",
   [SEED_MODEL_ID]: "medium",
+  "deepseek-reasoner": "medium",
 };
 const DEFAULT_MAX_TOKENS = MAX_TOKENS_64K;
 const DEFAULT_BUDGET_TOKENS = 32000;
@@ -151,7 +152,7 @@ export function useUserSettings() {
 
   useEffect(() => {
     if (typeof model !== "string") return;
-    if (model === SEED_MODEL_ID || model.startsWith("gemini-")) {
+    if (model === SEED_MODEL_ID || model.startsWith("gemini-") || model.startsWith("deepseek-")) {
       if (maxTokens > MAX_TOKENS_64K) {
         _setMaxTokens(MAX_TOKENS_64K);
         writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_64K));

@@ -277,7 +277,7 @@ export async function POST(req) {
 
         // 2. Prepare Payload
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
-        const baseSystemText = injectCurrentTimeSystemReminder(userSystemPrompt);
+        const baseSystemText = await injectCurrentTimeSystemReminder(userSystemPrompt);
         const generationConfig = (config?.generationConfig && typeof config.generationConfig === 'object' && !Array.isArray(config.generationConfig))
             ? config.generationConfig
             : {};

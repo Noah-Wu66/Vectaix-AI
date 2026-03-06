@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp } from "lucide-react";
-import { Gemini, Claude, OpenAI, Doubao } from "@lobehub/icons";
+import { Gemini, Claude, OpenAI, Doubao, DeepSeek } from "@lobehub/icons";
 import { CHAT_MODELS } from "./ChatModels";
 
 function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
@@ -17,6 +17,9 @@ function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
   }
   if (provider === "seed") {
     return <Doubao.Color size={size} />;
+  }
+  if (provider === "deepseek") {
+    return <DeepSeek.Color size={size} />;
   }
   if (Icon) {
     return <Icon size={size} className={isSelected ? "" : "text-blue-400"} />;
@@ -102,6 +105,8 @@ export default function ModelSelector({ model, onModelChange }) {
               {renderModelGroup("openai", "OpenAI")}
               <div className="my-1.5 border-t border-zinc-200" />
               {renderModelGroup("seed", "Seed")}
+              <div className="my-1.5 border-t border-zinc-200" />
+              {renderModelGroup("deepseek", "DeepSeek")}
             </motion.div>
           </>
         )}
