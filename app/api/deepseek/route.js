@@ -137,41 +137,6 @@ export async function POST(req) {
         // 使用 deepseek-reasoner 作为 API 模型（内置思考模式）
         const apiModel = model === 'deepseek-reasoner' ? 'deepseek-reasoner' : 'deepseek-chat';
 
-        // 联网搜索的决策调用（使用 deepseek-chat 非思考模式，快速轻量）
-        const runDeepSeekDecision = async ({ systemText, userText, isAborted, onThought }) => {
-            if (isAborted?.()) return '';
-
-            const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    model: 'deepseek-chat',
-                    max_tokens: 512,
-                    messages: [
-                        { role: 'system', content: systemText },
-                        { role: 'user', content: userText }
-                    ]
-                })
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`DeepSeek decision API Error: ${response.status} ${errorText}`);
-            }
-
-            const data = await response.json().catch(() => null);
-            if (!data || typeof data !== 'object') return '';
-            if (isAborted?.()) return '';
-
-            const text = data?.choices?.[0]?.message?.content || '';
-            const thought = data?.choices?.[0]?.message?.reasoning_content || '';
-            if (thought) onThought?.(thought);
-            return text;
-        };
-
         let currentConversationId = conversationId;
 
         if (user && !currentConversationId) {
@@ -337,16 +302,16 @@ export async function POST(req) {
                         }
                     };
 
-                    // 联网搜索编排
+                    // 博查搜索编排
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
                         prompt,
+                        historyMessages: history,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
                         isClientAborted: () => clientAborted,
                         providerLabel: 'DeepSeek',
-                        decisionRunner: runDeepSeekDecision,
                     });
 
                     if (clientAborted) {

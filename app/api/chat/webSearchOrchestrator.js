@@ -1,62 +1,117 @@
-import { GoogleGenAI } from '@google/genai';
-import { injectCurrentTimeSystemReminder } from '@/app/api/chat/utils';
 import {
-  metasoSearch,
-  buildMetasoContext,
-  metasoReader,
-  buildMetasoReaderContext,
-  buildMetasoCitations,
-  buildMetasoSearchEventResults,
-} from '@/app/api/chat/metasoSearch';
-import { parseJsonFromText } from '@/app/api/chat/jsonUtils';
+  bochaSearch,
+  buildBochaContext,
+  buildBochaCitations,
+  buildBochaSearchEventResults,
+} from '@/app/api/chat/bochaSearch';
 
-const DECISION_SYSTEM_TEXT = '你是联网检索决策器。必须只输出严格 JSON，不要输出任何多余文本。';
-const READER_SYSTEM_TEXT = '你是网页全文查看决策器。必须只输出严格 JSON，不要输出任何多余文本。';
-const CONTINUE_SYSTEM_TEXT = '你是网页阅读继续决策器。必须只输出严格 JSON，不要输出任何多余文本。';
-const ENOUGH_SYSTEM_TEXT = '你是联网检索补充决策器。必须只输出严格 JSON，不要输出任何多余文本。';
-const INTERNAL_DECISION_MODEL = 'gemini-3-flash-preview';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const CONTEXTUAL_QUERY_PATTERNS = [
+  /^(那|这个|这个问题|这个事情|它|他|她|继续|然后|还有|再说|展开|详细说|那现在|现在呢)/i,
+  /(怎么样|如何|还有吗|继续说|再展开|再具体一点)\s*[?？!！]*$/i,
+];
 
-let decisionClient;
+const FORCE_SEARCH_PATTERNS = [
+  /(帮我查|帮我搜|查一下|搜一下|搜索一下|检索一下)/i,
+  /(最新|最近|当前|现在|实时|今日|今天|刚刚|截至)/i,
+  /(新闻|公告|报道|官网|官方文档|官方说明|政策|法规|价格|股价|汇率|天气|赛程|比分|票房|排名|版本|发布|更新日志|release|changelog)/i,
+  /(总统|首相|ceo|市值|融资|财报|票价|机票|酒店|餐厅)/i,
+];
 
-function getDecisionClient() {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not set');
+const ONE_DAY_PATTERNS = [
+  /(今天|今日|现在|当前|实时|刚刚|最新消息|breaking|live)/i,
+];
+
+const ONE_WEEK_PATTERNS = [
+  /(最新|最近|近况|本周|这一周|过去一周|这几天|最近几天)/i,
+];
+
+const ONE_MONTH_PATTERNS = [
+  /(本月|这个月|最近一个月|近一个月|过去一个月)/i,
+];
+
+const ONE_YEAR_PATTERNS = [
+  /(今年|近一年|过去一年|这一年)/i,
+];
+
+function normalizeMessageText(message) {
+  if (!message || typeof message !== 'object') return '';
+  if (typeof message.content === 'string' && message.content.trim()) {
+    return message.content.trim();
   }
-  if (!decisionClient) {
-    decisionClient = new GoogleGenAI({
-      apiKey: GEMINI_API_KEY,
-    });
+  if (Array.isArray(message.parts)) {
+    return message.parts
+      .map((part) => (typeof part?.text === 'string' ? part.text.trim() : ''))
+      .filter(Boolean)
+      .join('\n')
+      .trim();
   }
-  return decisionClient;
+  return '';
 }
 
-async function runInternalDecision({ systemText, userText, isAborted, onThought }) {
-  const ai = getDecisionClient();
-  let decisionText = '';
-  const stream = await ai.models.generateContentStream({
-    model: INTERNAL_DECISION_MODEL,
-    contents: [{ role: 'user', parts: [{ text: userText }] }],
-    config: {
-      systemInstruction: { parts: [{ text: systemText }] },
-    },
-  });
+function buildRecentConversation(historyMessages, maxItems = 4) {
+  const list = Array.isArray(historyMessages) ? historyMessages : [];
+  return list
+    .slice(-maxItems)
+    .map((item) => {
+      const text = normalizeMessageText(item);
+      if (!text) return '';
+      const role = item?.role === 'model' ? '助手' : '用户';
+      return `${role}: ${text}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
 
-  for await (const chunk of stream) {
-    if (isAborted?.()) break;
-    const candidate = chunk.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
-    for (const part of parts) {
-      if (isAborted?.()) break;
-      if (part.thought && part.text) {
-        onThought?.(part.text);
-      } else if (part.text) {
-        decisionText += part.text;
-      }
-    }
+function inferFreshness(text) {
+  if (ONE_DAY_PATTERNS.some((pattern) => pattern.test(text))) return 'oneDay';
+  if (ONE_WEEK_PATTERNS.some((pattern) => pattern.test(text))) return 'oneWeek';
+  if (ONE_MONTH_PATTERNS.some((pattern) => pattern.test(text))) return 'oneMonth';
+  if (ONE_YEAR_PATTERNS.some((pattern) => pattern.test(text))) return 'oneYear';
+  return 'noLimit';
+}
+
+function cleanQuery(text) {
+  if (typeof text !== 'string') return '';
+  return text
+    .replace(/^[\s,，。；;:：]+/, '')
+    .replace(/^(请|帮我|麻烦|顺便|再|然后|那就|那你|你再)\s*/u, '')
+    .replace(/[?？!！]+$/u, '')
+    .trim()
+    .slice(0, 160);
+}
+
+function buildSearchQuery(prompt, historyMessages) {
+  const current = cleanQuery(prompt);
+  if (!current) return '';
+
+  const isContextual = CONTEXTUAL_QUERY_PATTERNS.some((pattern) => pattern.test(current)) || current.length <= 10;
+  if (!isContextual) return current;
+
+  const recentUserTexts = (Array.isArray(historyMessages) ? historyMessages : [])
+    .slice(-4)
+    .filter((item) => item?.role === 'user')
+    .map((item) => normalizeMessageText(item))
+    .filter(Boolean);
+
+  if (recentUserTexts.length === 0) return current;
+
+  const joined = cleanQuery(`${recentUserTexts.join(' ')} ${current}`);
+  return joined || current;
+}
+
+function planWebSearch({ prompt, historyMessages }) {
+  const currentPrompt = typeof prompt === 'string' ? prompt.trim() : '';
+  if (!currentPrompt) {
+    return { needSearch: false, query: '', freshness: 'noLimit' };
   }
 
-  return decisionText;
+  const recentConversation = buildRecentConversation(historyMessages);
+  const combinedText = `${recentConversation}\n用户当前问题: ${currentPrompt}`.trim();
+  const needSearch = FORCE_SEARCH_PATTERNS.some((pattern) => pattern.test(combinedText));
+  const query = needSearch ? buildSearchQuery(currentPrompt, historyMessages) : '';
+  const freshness = inferFreshness(combinedText);
+
+  return { needSearch, query, freshness };
 }
 
 export function buildWebSearchGuide(enableWebSearch) {
@@ -69,6 +124,7 @@ export async function runWebSearchOrchestration(options) {
   const {
     enableWebSearch,
     prompt,
+    historyMessages,
     sendEvent,
     pushCitations,
     sendSearchError,
@@ -76,13 +132,8 @@ export async function runWebSearchOrchestration(options) {
     providerLabel = 'AI',
     model,
     conversationId,
-    maxSearchRounds = 10,
-    maxReadPages = 10,
-    readerMaxContentChars = 10000,
     logDecision = false,
-    warnOnEmptyResults = false,
     warnOnNoContext = false,
-    decisionRunner,
   } = options || {};
 
   const aborted = () => typeof isClientAborted === 'function' && isClientAborted() === true;
@@ -90,223 +141,82 @@ export async function runWebSearchOrchestration(options) {
     return { searchContextText: '' };
   }
 
-  const runDecisionImpl = typeof decisionRunner === 'function'
-    ? decisionRunner
-    : runInternalDecision;
-
-  const runDecision = (systemText, userText) => runDecisionImpl({
-    systemText,
-    userText,
-    isAborted: aborted,
-    onThought: (content) => sendEvent({ type: 'thought', content }),
-  });
-
-  const decisionSystem = await injectCurrentTimeSystemReminder(DECISION_SYSTEM_TEXT);
-  const decisionUser = `用户问题：${prompt}\n\n判断是否必须联网检索才能回答。\n- 需要联网：输出 {"needSearch": true, "query": "精炼检索词"}\n- 不需要联网：输出 {"needSearch": false}`;
-  const decisionText = await runDecision(decisionSystem, decisionUser);
-  const decision = parseJsonFromText(decisionText);
-  let needSearch = decision?.needSearch === true;
-  let nextQuery = typeof decision?.query === 'string' ? decision.query.trim() : '';
+  const decision = planWebSearch({ prompt, historyMessages });
+  const needSearch = decision.needSearch === true;
+  const nextQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
+  const freshness = typeof decision.freshness === 'string' ? decision.freshness.trim() : 'noLimit';
 
   if (logDecision) {
-    console.info(`${providerLabel} web search decision`, {
+    console.info(`${providerLabel} bocha search decision`, {
       needSearch,
       hasQuery: Boolean(nextQuery),
+      freshness,
       model,
       conversationId,
     });
   }
 
-  const searchContextParts = [];
-  const readUrlSet = new Set();
-
-  for (let round = 0; round < maxSearchRounds && needSearch && nextQuery; round++) {
-    if (aborted()) break;
-    sendEvent({ type: 'search_start', query: nextQuery });
-
-    let results = [];
-    let searchFailed = false;
-    try {
-      const searchData = await metasoSearch(nextQuery, {
-        scope: 'webpage',
-        includeSummary: false,
-        size: 100,
-        includeRawContent: false,
-        conciseSnippet: true,
-      });
-      results = searchData?.results;
-    } catch (searchError) {
-      console.error(`${providerLabel} web search failed`, {
-        query: nextQuery,
-        message: searchError?.message,
-        name: searchError?.name,
-      });
-      const msg = searchError?.message?.includes('METASO_API_KEY')
-        ? '未配置搜索服务'
-        : '检索失败，请稍后再试';
-      if (typeof sendSearchError === 'function') {
-        sendSearchError(msg);
-      }
-      searchFailed = true;
-    }
-
-    if (searchFailed) break;
-
-    if (warnOnEmptyResults && (!Array.isArray(results) || results.length === 0)) {
-      console.warn(`${providerLabel} web search empty results`, {
-        query: nextQuery,
-        round: round + 1,
-      });
-    }
-
-    sendEvent({
-      type: 'search_result',
-      query: nextQuery,
-      results: buildMetasoSearchEventResults(results),
-    });
-
-    if (typeof pushCitations === 'function') {
-      pushCitations(buildMetasoCitations(results));
-    }
-
-    const roundContextBlocks = [];
-    let skipEnoughCheck = false;
-
-    const contextBlock = buildMetasoContext(results);
-    if (contextBlock) {
-      roundContextBlocks.push(contextBlock);
-    }
-
-    const readerCandidates = Array.isArray(results) ? results : [];
-    if (readerCandidates.length > 0 && readUrlSet.size < maxReadPages) {
-      try {
-        const readerSystem = await injectCurrentTimeSystemReminder(READER_SYSTEM_TEXT);
-        const remainingQuota = maxReadPages - readUrlSet.size;
-        const candidateText = readerCandidates
-          .map((item, idx) => {
-            const title = typeof item?.title === 'string' ? item.title : '';
-            const url = typeof item?.url === 'string' ? item.url : '';
-            const rawSnippet = typeof item?.snippet === 'string' && item.snippet.trim()
-              ? item.snippet.trim()
-              : (typeof item?.summary === 'string' ? item.summary.trim() : '');
-            return `[${idx + 1}] ${title}\nURL: ${url}\n片段: ${rawSnippet || '（无）'}`;
-          })
-          .join('\n\n');
-        const alreadyRead = Array.from(readUrlSet);
-        const readerUser = `用户问题：${prompt}\n当前检索词：${nextQuery}\n\n候选结果：\n${candidateText}\n\n已查看过的 URL：\n${alreadyRead.length > 0 ? alreadyRead.join('\n') : '无'}\n\n剩余可查看配额：${remainingQuota} 个网页\n\n判断是否需要查看网页正文来提升答案质量。可以同时选择多个网页（不超过剩余配额）。\n- 需要：输出 {"needRead": true, "urls": ["候选URL1", "候选URL2", ...]}\n- 不需要：输出 {"needRead": false}`;
-        const readerDecisionText = await runDecision(readerSystem, readerUser);
-        const readerDecision = parseJsonFromText(readerDecisionText);
-        const shouldRead = readerDecision?.needRead === true;
-        const selectedUrls = Array.isArray(readerDecision?.urls)
-          ? readerDecision.urls.map((u) => (typeof u === 'string' ? u.trim() : '')).filter(Boolean)
-          : [];
-
-        if (shouldRead && selectedUrls.length > 0) {
-          for (let ri = 0; ri < selectedUrls.length; ri++) {
-            const selectedUrl = selectedUrls[ri];
-            if (readUrlSet.size >= maxReadPages) break;
-            if (readUrlSet.has(selectedUrl)) continue;
-
-            const selectedItem = readerCandidates.find((item) => item?.url === selectedUrl);
-            if (!selectedItem) continue;
-
-            sendEvent({ type: 'search_reader_start', url: selectedItem.url, title: selectedItem.title });
-
-            try {
-              const readerData = await metasoReader(selectedItem.url);
-              const readerContext = buildMetasoReaderContext(
-                {
-                  title: selectedItem.title,
-                  url: selectedItem.url,
-                  content: readerData?.content,
-                },
-                { maxContentChars: readerMaxContentChars }
-              );
-
-              if (readerContext) {
-                roundContextBlocks.push(readerContext);
-                readUrlSet.add(selectedItem.url);
-                sendEvent({
-                  type: 'search_reader_result',
-                  url: selectedItem.url,
-                  title: selectedItem.title,
-                });
-              }
-            } catch (readerError) {
-              console.error(`${providerLabel} web reader failed`, {
-                url: selectedItem.url,
-                message: readerError?.message,
-                name: readerError?.name,
-              });
-              sendEvent({ type: 'search_reader_error', url: selectedItem.url, title: selectedItem.title });
-            }
-
-            const remainingUrls = selectedUrls.slice(ri + 1).filter((u) => !readUrlSet.has(u));
-            if (remainingUrls.length > 0 && readUrlSet.size < maxReadPages) {
-              try {
-                const continueSystem = await injectCurrentTimeSystemReminder(CONTINUE_SYSTEM_TEXT);
-                const readSoFar = Array.from(readUrlSet).join('\n');
-                const pendingList = remainingUrls.join('\n');
-                const continueUser = `用户问题：${prompt}\n\n已查看的网页内容摘要：\n${roundContextBlocks.join('\n\n')}\n\n待查看的 URL：\n${pendingList}\n\n已读过的全部 URL：\n${readSoFar}\n\n根据已获取的信息，判断：\n1. 是否还需要继续查看剩余网页\n2. 当前信息是否已足够回答用户问题，是否还需要下一轮搜索\n\n- 继续查看剩余网页：输出 {"continueRead": true}\n- 不再查看，但信息不够需要换词搜索：输出 {"continueRead": false, "enough": false, "nextQuery": "新的检索词"}\n- 不再查看，信息已足够：输出 {"continueRead": false, "enough": true}`;
-                const continueText = await runDecision(continueSystem, continueUser);
-                const continueDecision = parseJsonFromText(continueText);
-                if (continueDecision?.continueRead === false) {
-                  if (continueDecision?.enough === true) {
-                    skipEnoughCheck = true;
-                    needSearch = false;
-                  } else if (
-                    continueDecision?.enough === false
-                    && typeof continueDecision?.nextQuery === 'string'
-                    && continueDecision.nextQuery.trim()
-                  ) {
-                    skipEnoughCheck = true;
-                    nextQuery = continueDecision.nextQuery.trim();
-                  }
-                  break;
-                }
-              } catch (continueError) {
-                console.error(`${providerLabel} continue-read decision failed`, {
-                  message: continueError?.message,
-                });
-              }
-            }
-          }
-        }
-      } catch (readerDecisionError) {
-        console.error(`${providerLabel} web reader decision failed`, {
-          query: nextQuery,
-          message: readerDecisionError?.message,
-          name: readerDecisionError?.name,
-        });
-      }
-    }
-
-    if (roundContextBlocks.length > 0) {
-      searchContextParts.push(`检索词: ${nextQuery}\n${roundContextBlocks.join('\n\n')}`);
-    }
-
-    if (round === maxSearchRounds - 1) break;
-    if (skipEnoughCheck) continue;
-
-    const recentContext = searchContextParts.join('\n\n');
-    const enoughSystem = await injectCurrentTimeSystemReminder(ENOUGH_SYSTEM_TEXT);
-    const enoughUser = `用户问题：${prompt}\n\n已获得的检索摘要：\n${recentContext}\n\n判断这些信息是否足够回答。\n- 足够：输出 {"enough": true}\n- 不足：输出 {"enough": false, "nextQuery": "新的检索词"}`;
-    const enoughText = await runDecision(enoughSystem, enoughUser);
-    const enoughDecision = parseJsonFromText(enoughText);
-    if (enoughDecision?.enough === true) break;
-    const candidateQuery = typeof enoughDecision?.nextQuery === 'string'
-      ? enoughDecision.nextQuery.trim()
-      : '';
-    if (!candidateQuery || candidateQuery === nextQuery) break;
-    nextQuery = candidateQuery;
+  if (!needSearch) {
+    return { searchContextText: '' };
   }
 
-  const searchContextText = searchContextParts.join('\n\n');
+  if (!nextQuery) {
+    const message = '搜索规划失败，请稍后再试';
+    sendSearchError?.(message);
+    throw new Error(message);
+  }
+
+  if (aborted()) {
+    return { searchContextText: '' };
+  }
+
+  sendEvent({ type: 'search_start', query: nextQuery });
+
+  let searchData;
+  try {
+    searchData = await bochaSearch(nextQuery, {
+      summary: true,
+      count: 8,
+      freshness,
+    });
+  } catch (searchError) {
+    console.error(`${providerLabel} bocha web search failed`, {
+      query: nextQuery,
+      freshness,
+      message: searchError?.message,
+      name: searchError?.name,
+    });
+    const message = searchError?.message?.includes('BOCHA_API_KEY')
+      ? '未配置博查搜索服务'
+      : '博查搜索失败，请稍后再试';
+    sendSearchError?.(message);
+    throw new Error(message);
+  }
+
+  const results = Array.isArray(searchData?.results) ? searchData.results : [];
+  const summary = typeof searchData?.summary === 'string' ? searchData.summary : '';
+
+  sendEvent({
+    type: 'search_result',
+    query: nextQuery,
+    results: buildBochaSearchEventResults(results),
+  });
+
+  if (typeof pushCitations === 'function') {
+    pushCitations(buildBochaCitations(results));
+  }
+
+  const searchContextText = buildBochaContext(summary, results, {
+    maxResults: 5,
+    maxSnippetChars: 280,
+  });
+
   if (warnOnNoContext && !searchContextText) {
-    console.warn(`${providerLabel} web search produced no context`, {
+    console.warn(`${providerLabel} bocha search produced no context`, {
       needSearch,
+      freshness,
       lastQuery: nextQuery,
-      rounds: searchContextParts.length,
+      resultCount: results.length,
     });
   }
 

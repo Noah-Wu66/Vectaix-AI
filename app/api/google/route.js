@@ -10,8 +10,11 @@ import {
     getStoredPartsFromMessage,
     sanitizeStoredMessagesStrict,
     generateMessageId,
-    injectCurrentTimeSystemReminder
+    injectCurrentTimeSystemReminder,
+    buildWebSearchContextBlock,
+    estimateTokens
 } from '@/app/api/chat/utils';
+import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -83,27 +86,7 @@ function resolveGeminiApiModel(model) {
     return GEMINI_FLASH_MODEL;
 }
 
-function extractGroundingCitations(candidate) {
-    const groundingChunks = Array.isArray(candidate?.groundingMetadata?.groundingChunks)
-        ? candidate.groundingMetadata.groundingChunks
-        : [];
-
-    const citations = [];
-    for (const chunk of groundingChunks) {
-        const url = typeof chunk?.web?.uri === 'string' ? chunk.web.uri.trim() : '';
-        if (!url) continue;
-        const title = typeof chunk?.web?.title === 'string' ? chunk.web.title.trim() : '';
-        citations.push({
-            url,
-            title: title || url,
-        });
-    }
-    return citations;
-}
-
 export async function POST(req) {
-    // 写入许可时间戳：只有当 conversation.updatedAt <= 此值时，才允许写入 model 消息
-    // 用于防止"停止后再 regenerate"时，旧请求晚于新请求覆盖导致重复回答
     let writePermitTime = null;
 
     try {
@@ -112,7 +95,6 @@ export async function POST(req) {
             return Response.json({ error: 'Request too large' }, { status: 413 });
         }
 
-        // Validate request body
         let body;
         try {
             body = await req.json();
@@ -125,7 +107,6 @@ export async function POST(req) {
 
         const { prompt, model, config, history, historyLimit, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
 
-        // Validate required fields
         if (!model || typeof model !== 'string') {
             return Response.json(
                 { error: 'Model is required and must be a string' },
@@ -189,7 +170,6 @@ export async function POST(req) {
         const apiModel = resolveGeminiApiModel(model);
         const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-        // 1) Ensure Conversation exists (for logged-in users)
         if (user && !currentConversationId) {
             const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
             const newConv = await Conversation.create({
@@ -202,7 +182,6 @@ export async function POST(req) {
             currentConversationId = newConv._id.toString();
         }
 
-        // 2) Prepare Request Contents
         let contents = [];
         const limit = Number.parseInt(historyLimit);
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
@@ -223,21 +202,18 @@ export async function POST(req) {
             ).select('messages updatedAt');
             if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
             storedMessagesForRegenerate = sanitized;
-            // 记录写入许可时间：只有 updatedAt 仍为此值时才允许写入 model 消息
             writePermitTime = conv.updatedAt?.getTime?.();
         }
 
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
-            // 使用 buildGeminiContentsFromMessages 正确处理图片消息
             contents = await buildGeminiContentsFromMessages(effectiveMsgs);
         } else {
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
             effectiveHistory.forEach(msg => {
                 if (msg.role === 'user' || msg.role === 'model') {
                     const hasImage = Array.isArray(msg.parts) && msg.parts.some((p) => typeof p?.inlineData?.url === 'string' && p.inlineData.url);
-                    // History remains text-only fallback to save bandwidth
                     contents.push({
                         role: msg.role,
                         parts: [{ text: `${msg.content} ${hasImage ? '[Image sent previously]' : ''}` }]
@@ -246,10 +222,7 @@ export async function POST(req) {
             });
         }
 
-        // regenerate 模式：最后一条用户消息已经在 messages 里了，这里不再追加"新用户消息"
         let currentParts = isRegenerateMode ? null : [{ text: prompt }];
-
-        // Handle Image Input (URL from Blob) - 支持多张图片
         let dbImageEntries = [];
 
         if (!isRegenerateMode && config?.images?.length > 0) {
@@ -275,7 +248,6 @@ export async function POST(req) {
             });
         }
 
-        // 2. Prepare Payload
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemText = await injectCurrentTimeSystemReminder(userSystemPrompt);
         const generationConfig = (config?.generationConfig && typeof config.generationConfig === 'object' && !Array.isArray(config.generationConfig))
@@ -312,18 +284,14 @@ export async function POST(req) {
             }
         }
 
-        const enableGrounding = config?.webSearch === true;
-        const isGroundingModel = apiModel === GEMINI_FLASH_MODEL || apiModel === GEMINI_PRO_MODEL;
-        if (enableGrounding && isGroundingModel) {
-            baseConfig.tools = [{ googleSearch: {} }];
-        }
+        const enableWebSearch = config?.webSearch === true;
+        const webSearchGuide = buildWebSearchGuide(enableWebSearch);
+        const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
-        // 3. Database Logic
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
 
-            // 支持多张图片存储
             if (dbImageEntries.length > 0) {
                 for (const entry of dbImageEntries) {
                     storedUserParts.push({
@@ -350,7 +318,6 @@ export async function POST(req) {
                 },
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
-            // 记录写入许可时间
             writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
@@ -373,6 +340,7 @@ export async function POST(req) {
                 let fullText = "";
                 let fullThought = "";
                 let citations = [];
+                let searchContextTokens = 0;
                 const seenUrls = new Set();
                 try {
                     const sendHeartbeat = () => {
@@ -393,6 +361,13 @@ export async function POST(req) {
                         controller.enqueue(encoder.encode(data));
                     };
 
+                    let searchErrorSent = false;
+                    const sendSearchError = (message) => {
+                        if (searchErrorSent) return;
+                        searchErrorSent = true;
+                        sendEvent({ type: 'search_error', message });
+                    };
+
                     const pushCitations = (items) => {
                         for (const item of items) {
                             if (!item?.url || seenUrls.has(item.url)) continue;
@@ -401,10 +376,45 @@ export async function POST(req) {
                         }
                     };
 
+                    const { searchContextText } = await runWebSearchOrchestration({
+                        enableWebSearch,
+                        prompt,
+                        historyMessages: history,
+                        sendEvent,
+                        pushCitations,
+                        sendSearchError,
+                        isClientAborted: () => clientAborted,
+                        providerLabel: 'Gemini',
+                        model,
+                        conversationId: currentConversationId,
+                        warnOnNoContext: true,
+                    });
+
+                    if (clientAborted) {
+                        try { controller.close(); } catch { /* ignore */ }
+                        return;
+                    }
+
+                    const searchContextSection = searchContextText
+                        ? buildWebSearchContextBlock(searchContextText)
+                        : "";
+                    if (searchContextSection) {
+                        searchContextTokens = estimateTokens(searchContextSection);
+                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
+                    }
+
+                    const finalSystemPrompt = `${baseSystemText}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
+                    const finalConfig = {
+                        ...baseConfig,
+                        systemInstruction: {
+                            parts: [{ text: finalSystemPrompt }]
+                        }
+                    };
+
                     const streamResult = await ai.models.generateContentStream({
                         model: apiModel,
                         contents: contents,
-                        config: baseConfig
+                        config: finalConfig
                     });
 
                     for await (const chunk of streamResult) {
@@ -413,8 +423,6 @@ export async function POST(req) {
                         const candidate = Array.isArray(chunk?.candidates)
                             ? chunk.candidates[0]
                             : null;
-                        pushCitations(extractGroundingCitations(candidate));
-
                         const parts = Array.isArray(candidate?.content?.parts)
                             ? candidate.content.parts
                             : [];
@@ -462,6 +470,7 @@ export async function POST(req) {
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
+                            searchContextTokens: searchContextTokens || null,
                             type: 'text',
                             parts: [{ text: fullText }]
                         };
@@ -481,7 +490,6 @@ export async function POST(req) {
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
-                    // 将错误作为 SSE 事件发送给客户端（而非 controller.error），保留原始错误信息
                     try {
                         const errorPayload = JSON.stringify({ type: 'stream_error', message: err?.message || 'Unknown error' });
                         const padding = !paddingSent ? PADDING : '';
@@ -510,13 +518,12 @@ export async function POST(req) {
             'Content-Type': 'text/event-stream; charset=utf-8',
             'Cache-Control': 'no-cache, no-transform',
             'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no', // 禁用 nginx/反向代理缓冲
+            'X-Accel-Buffering': 'no',
         };
         if (currentConversationId) { headers['X-Conversation-Id'] = currentConversationId; }
         return new Response(stream, { headers });
 
     } catch (error) {
-        // Log detailed error information
         console.error("Gemini API Error:", {
             message: error?.message,
             status: error?.status,
@@ -528,10 +535,8 @@ export async function POST(req) {
         const isUpstreamAuthError = rawStatus === 401;
         const status = isUpstreamAuthError ? 500 : rawStatus;
 
-        // Provide user-friendly error messages
         let errorMessage = error?.message;
 
-        // Add context for common errors
         if (isUpstreamAuthError) {
             errorMessage = '模型服务认证失败，请检查接口配置';
         } else if (error?.message?.includes('API_KEY')) {
@@ -551,4 +556,3 @@ export async function POST(req) {
         );
     }
 }
-

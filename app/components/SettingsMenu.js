@@ -406,7 +406,7 @@ export default function SettingsMenu({
 
                 <div>
                   <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                    智能联网
+                    博查搜索
                   </label>
                   <button
                     onClick={() => setWebSearch(!webSearch)}

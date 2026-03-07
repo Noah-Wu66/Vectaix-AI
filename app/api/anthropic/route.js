@@ -72,23 +72,6 @@ async function buildClaudeMessagesFromHistory(messages) {
     return claudeMessages;
 }
 
-function extractAnthropicDecisionText(message, onThought) {
-    const blocks = Array.isArray(message?.content) ? message.content : [];
-    let text = '';
-
-    for (const block of blocks) {
-        if (block?.type === 'thinking' && typeof block.thinking === 'string') {
-            onThought?.(block.thinking);
-            continue;
-        }
-        if (block?.type === 'text' && typeof block.text === 'string') {
-            text += block.text;
-        }
-    }
-
-    return text;
-}
-
 export async function POST(req) {
     let writePermitTime = null;
 
@@ -167,19 +150,6 @@ export async function POST(req) {
             apiKey,
             baseURL: AIGOCODE_CLAUDE_BASE_URL,
         });
-        const runClaudeDecision = async ({ systemText, userText, isAborted, onThought }) => {
-            if (isAborted?.()) return '';
-
-            const message = await client.messages.create({
-                model: apiModel,
-                max_tokens: 512,
-                system: [{ type: 'text', text: systemText }],
-                messages: [{ role: 'user', content: [{ type: 'text', text: userText }] }],
-            });
-
-            if (isAborted?.()) return '';
-            return extractAnthropicDecisionText(message, onThought);
-        };
 
         // 创建新会话
         if (user && !currentConversationId) {
@@ -297,7 +267,7 @@ export async function POST(req) {
             writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
-        // 构建请求参数（联网检索上下文将在流式开始前注入）
+        // 构建请求参数（博查搜索上下文将在流式开始前注入）
         const maxTokens = config?.maxTokens;
         const budgetTokens = config?.budgetTokens;
         const thinkingLevel = config?.thinkingLevel;
@@ -307,10 +277,10 @@ export async function POST(req) {
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
-        // 是否启用联网搜索
+        // 是否启用博查搜索
         const enableWebSearch = config?.webSearch === true;
 
-        // 联网搜索时禁用来源括号标注
+        // 启用博查搜索时禁用来源括号标注
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
 
         const encoder = new TextEncoder();
@@ -368,6 +338,7 @@ export async function POST(req) {
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
                         prompt,
+                        historyMessages: history,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
@@ -376,9 +347,7 @@ export async function POST(req) {
                         model,
                         conversationId: currentConversationId,
                         logDecision: true,
-                        warnOnEmptyResults: true,
                         warnOnNoContext: true,
-                        decisionRunner: runClaudeDecision,
                     });
 
                     if (clientAborted) {
@@ -440,23 +409,6 @@ export async function POST(req) {
                                 sendEvent({ type: 'thought', content: delta.thinking });
                             } else if (delta.type === 'text_delta') {
                                 fullText += delta.text;
-                                const citationData = Array.isArray(delta.citations) ? delta.citations : [];
-                                if (citationData.length > 0) {
-                                    for (const c of citationData) {
-                                        if (c?.type === 'web_search_result_location') {
-                                            const exists = citations.some(
-                                                existing => existing.url === c.url && existing.cited_text === c.cited_text
-                                            );
-                                            if (!exists) {
-                                                citations.push({
-                                                    url: c.url,
-                                                    title: c.title,
-                                                    cited_text: c.cited_text
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
                                 sendEvent({ type: 'text', content: delta.text });
                             }
                         }
