@@ -52,6 +52,9 @@ export default function ChatApp() {
   const scrollRafRef = useRef(0);
   const chatAbortRef = useRef(null);
   const chatRequestLockRef = useRef(false);
+  const syncSettingsTimeoutRef = useRef(null);
+  const pendingSettingsRef = useRef({});
+  const pendingConversationIdRef = useRef(null);
   const lastTextModelRef = useRef("gemini-3-flash-preview");
   const isStreamingRef = useRef(false);
   const isStreaming = messages.some((m) => m.isStreaming);
@@ -66,6 +69,30 @@ export default function ChatApp() {
       lastSettingsErrorRef.current = settingsError;
     }
   }, [settingsError, toast]);
+
+  const stopOngoingChatWork = () => {
+    chatAbortRef.current?.abort();
+    chatAbortRef.current = null;
+    chatRequestLockRef.current = false;
+    userInterruptedRef.current = false;
+    if (syncSettingsTimeoutRef.current) {
+      clearTimeout(syncSettingsTimeoutRef.current);
+      syncSettingsTimeoutRef.current = null;
+    }
+    pendingSettingsRef.current = {};
+    pendingConversationIdRef.current = null;
+    setLoading(false);
+  };
+
+  const handleAuthExpired = () => {
+    stopOngoingChatWork();
+    setUser(null);
+    setShowProfileModal(false);
+    setShowAuthModal(true);
+    setAuthMode("login");
+    setPassword("");
+    setConfirmPassword("");
+  };
 
   const distanceToBottom = (el) => {
     if (!el) return 0;
@@ -101,11 +128,11 @@ export default function ChatApp() {
           fetchConversations();
           fetchSettings(); // 只获取系统提示词
         } else {
-          setShowAuthModal(true);
+          handleAuthExpired();
         }
       })
       .catch(() => {
-        setShowAuthModal(true);
+        handleAuthExpired();
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -119,6 +146,12 @@ export default function ChatApp() {
         cancelAnimationFrame(scrollRafRef.current);
         scrollRafRef.current = 0;
       }
+      if (syncSettingsTimeoutRef.current) {
+        clearTimeout(syncSettingsTimeoutRef.current);
+        syncSettingsTimeoutRef.current = null;
+      }
+      pendingSettingsRef.current = {};
+      pendingConversationIdRef.current = null;
     };
   }, []);
 
@@ -137,9 +170,31 @@ export default function ChatApp() {
   const fetchConversations = async () => {
     try {
       const res = await fetch("/api/conversations");
-      const data = await res.json();
-      if (data.conversations) setConversations(sortConversations(data.conversations));
+      if (res.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      if (!res.ok) return;
+      const nextConversations = data?.conversations ? sortConversations(data.conversations) : [];
+      setConversations(nextConversations);
+      if (currentConversationId && !nextConversations.some((conv) => conv._id === currentConversationId)) {
+        setCurrentConversationId(null);
+        setMessages([]);
+      }
     } catch { }
+  };
+
+  const handleConversationMissing = () => {
+    stopOngoingChatWork();
+    setCurrentConversationId(null);
+    setMessages([]);
+    fetchConversations();
   };
 
   const handleSensitiveRefusal = (payload) => {
@@ -183,6 +238,8 @@ export default function ChatApp() {
     setEditingImage,
     completionSoundVolume,
     onSensitiveRefusal: handleSensitiveRefusal,
+    onAuthExpired: handleAuthExpired,
+    onConversationMissing: handleConversationMissing,
     onConversationActivity: (id) => {
       setConversations((prev) => {
         const idx = prev.findIndex((c) => c._id === id);
@@ -314,8 +371,13 @@ export default function ChatApp() {
       });
       const data = await res.json();
       if (data.success || data.user) {
+        stopOngoingChatWork();
         setUser(data.user);
         setShowAuthModal(false);
+        setAuthMode("login");
+        setSettingsError(null);
+        setPassword("");
+        setConfirmPassword("");
         toast.success(authMode === "login" ? "登录成功" : "注册成功");
         fetchConversations();
         fetchSettings();
@@ -329,6 +391,7 @@ export default function ChatApp() {
 
   const handleLogout = async () => {
     await fetch("/api/auth/me", { method: "DELETE" });
+    stopOngoingChatWork();
     setUser(null);
     setMessages([]);
     setConversations([]);
@@ -348,7 +411,24 @@ export default function ChatApp() {
     if (window.innerWidth < 768) setSidebarOpen(false); // 移动端立即折叠侧边栏
     try {
       const res = await fetch(`/api/conversations/${id}`);
-      const data = await res.json(); if (!res.ok) throw new Error(data?.error);
+      if (res.status === 401) {
+        handleAuthExpired();
+        throw new Error("登录已过期，请重新登录");
+      }
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      if (res.status === 404) {
+        setConversations((prev) => prev.filter((conv) => conv._id !== id));
+        if (currentConversationId === id) {
+          setCurrentConversationId(null);
+          setMessages([]);
+        }
+      }
+      if (!res.ok) throw new Error(data?.error || "加载会话失败");
       if (data.conversation) {
         const nextMessages = data.conversation.messages;
         userInterruptedRef.current = false;
@@ -440,9 +520,6 @@ export default function ChatApp() {
   };
 
   // 同步对话参数到数据库（防抖，累积多个设置变更）
-  const syncSettingsTimeoutRef = useRef(null);
-  const pendingSettingsRef = useRef({});
-  const pendingConversationIdRef = useRef(null);
   const syncConversationSettings = (settingsUpdate) => {
     if (!currentConversationId) return;
     // 如果切换了对话，清空之前的待同步设置（避免跨对话污染）
@@ -675,4 +752,3 @@ export default function ChatApp() {
     </>
   );
 }
-

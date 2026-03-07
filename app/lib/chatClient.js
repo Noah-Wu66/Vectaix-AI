@@ -28,6 +28,29 @@ function isContextOverflowError(errorMessage) {
   );
 }
 
+function isUnauthorizedError(errorMessage) {
+  if (typeof errorMessage !== "string") return false;
+  const lower = errorMessage.toLowerCase();
+  return lower.includes("401") || lower.includes("unauthorized");
+}
+
+function isConversationMissingError(errorMessage) {
+  if (typeof errorMessage !== "string") return false;
+  const normalized = errorMessage.trim().toLowerCase();
+  return (
+    normalized === "not found" ||
+    normalized === "invalid id" ||
+    normalized.includes("conversation not found") ||
+    normalized.includes("会话不存在")
+  );
+}
+
+function isUpstreamRouteMissingError(errorMessage) {
+  if (typeof errorMessage !== "string") return false;
+  const lower = errorMessage.toLowerCase();
+  return /\b404\b.*page not found/.test(lower);
+}
+
 /**
  * 调用压缩 API，将历史消息压缩为摘要
  */
@@ -162,6 +185,8 @@ export async function runChat({
   refusalRestoreMessages,
   onSensitiveRefusal,
   onError,
+  onUnauthorized,
+  onConversationMissing,
   userMessageId,
   // 上下文压缩相关
   _isCompressedRetry = false,
@@ -381,6 +406,8 @@ export async function runChat({
               refusalRestoreMessages,
               onSensitiveRefusal,
               onError,
+              onUnauthorized,
+              onConversationMissing,
               userMessageId,
               _isCompressedRetry: true,
               _compressedSummary: summary,
@@ -987,6 +1014,9 @@ export async function runChat({
       }
     } else {
       const errMsg = err?.message;
+      const isUnauthorized = isUnauthorizedError(errMsg);
+      const isConversationMissing = isConversationMissingError(errMsg);
+      const isUpstreamRouteMissing = isUpstreamRouteMissingError(errMsg);
 
       // 检测上下文超出错误，自动触发压缩重试（流内错误场景）
       if (!_isCompressedRetry && isContextOverflowError(errMsg) && historyMessages.length > 0) {
@@ -1090,6 +1120,8 @@ export async function runChat({
             refusalRestoreMessages,
             onSensitiveRefusal,
             onError,
+            onUnauthorized,
+            onConversationMissing,
             userMessageId,
             _isCompressedRetry: true,
             _compressedSummary: summary,
@@ -1113,8 +1145,12 @@ export async function runChat({
         errorMessage = "网络连接失败，请检查网络后重试";
       } else if (errMsg?.includes("rate limit") || errMsg?.includes("429")) {
         errorMessage = "请求过于频繁，请稍后再试";
-      } else if (errMsg?.includes("401") || errMsg?.includes("Unauthorized")) {
+      } else if (isUnauthorized) {
         errorMessage = "登录已过期，请刷新页面重新登录";
+      } else if (isConversationMissing) {
+        errorMessage = "当前对话已失效，已切回新对话，请重新发送消息";
+      } else if (isUpstreamRouteMissing) {
+        errorMessage = "模型服务接口异常，请稍后再试";
       } else if (errMsg?.includes("500") || errMsg?.includes("Internal Server Error")) {
         errorMessage = "服务器内部错误，请稍后再试";
       } else if (errMsg?.includes("503") || errMsg?.includes("Service Unavailable")) {
@@ -1147,6 +1183,12 @@ export async function runChat({
           return next;
         });
         await syncConversationMessages(convIdForSync, nextMessagesForSync);
+      }
+      if (isConversationMissing) {
+        onConversationMissing?.();
+      }
+      if (isUnauthorized) {
+        onUnauthorized?.();
       }
       // 通过回调通知错误（由调用方显示 toast）
       onError?.(errorMessage);

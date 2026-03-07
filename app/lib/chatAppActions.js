@@ -46,6 +46,8 @@ export function createChatAppActions({
   setEditingImage,
   completionSoundVolume,
   onSensitiveRefusal,
+  onAuthExpired,
+  onConversationMissing,
   onConversationActivity,
 }) {
   const getEffectiveThinkingLevel = (m) => {
@@ -229,6 +231,8 @@ export function createChatAppActions({
         } : undefined,
         completionSoundVolume,
         onSensitiveRefusal,
+        onUnauthorized: onAuthExpired,
+        onConversationMissing,
         onError: (msg) => toast.error(msg),
       });
     } catch (err) {
@@ -288,6 +292,8 @@ export function createChatAppActions({
         completionSoundVolume,
         refusalRestoreMessages: messagesBeforeRegenerate,
         onSensitiveRefusal,
+        onUnauthorized: onAuthExpired,
+        onConversationMissing,
         onError: (msg) => toast.error(msg),
       });
     } finally {
@@ -433,6 +439,8 @@ export function createChatAppActions({
         completionSoundVolume,
         refusalRestoreMessages: messagesBeforeEdit,
         onSensitiveRefusal,
+        onUnauthorized: onAuthExpired,
+        onConversationMissing,
         onError: (msg) => toast.error(msg),
       });
     } finally {
@@ -455,4 +463,3 @@ export function createChatAppActions({
     submitEditAndRegenerate,
   };
 }
-
