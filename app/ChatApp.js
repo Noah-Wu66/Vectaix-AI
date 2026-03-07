@@ -87,6 +87,10 @@ export default function ChatApp() {
   const handleAuthExpired = () => {
     stopOngoingChatWork();
     setUser(null);
+    setConversations([]);
+    setCurrentConversationId(null);
+    setMessages([]);
+    setSettingsError(null);
     setShowProfileModal(false);
     setShowAuthModal(true);
     setAuthMode("login");

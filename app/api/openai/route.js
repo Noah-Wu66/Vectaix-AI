@@ -645,15 +645,18 @@ export async function POST(req) {
             code: error?.code
         });
 
-        const status = typeof error?.status === 'number' ? error.status : 500;
+        const rawStatus = typeof error?.status === 'number' ? error.status : 500;
+        const isUpstreamAuthError = rawStatus === 401;
+        const status = isUpstreamAuthError ? 500 : rawStatus;
         let errorMessage = error?.message;
 
-        if (error?.message?.includes('API_KEY')) {
+        if (isUpstreamAuthError) {
+            errorMessage = '模型服务认证失败，请检查接口配置';
+        } else if (error?.message?.includes('API_KEY')) {
             errorMessage = "API configuration error. Please check your API keys.";
         }
 
         return Response.json({ error: errorMessage }, { status });
     }
 }
-
 

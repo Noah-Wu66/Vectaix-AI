@@ -419,7 +419,9 @@ export async function runChat({
         }
       }
 
-      throw new Error(errorMessage);
+      const responseError = new Error(errorMessage);
+      responseError.httpStatus = res.status;
+      throw responseError;
     }
 
 
@@ -1014,8 +1016,13 @@ export async function runChat({
       }
     } else {
       const errMsg = err?.message;
-      const isUnauthorized = isUnauthorizedError(errMsg);
-      const isConversationMissing = isConversationMissingError(errMsg);
+      const errorStatus = typeof err?.httpStatus === "number" ? err.httpStatus : undefined;
+      const isUnauthorized = errorStatus === 401;
+      const isProviderUnauthorized = !isUnauthorized && isUnauthorizedError(errMsg);
+      const isConversationMissing = (
+        errorStatus === 404 ||
+        (errorStatus === 400 && typeof errMsg === "string" && errMsg.trim().toLowerCase() === "invalid id")
+      ) && isConversationMissingError(errMsg);
       const isUpstreamRouteMissing = isUpstreamRouteMissingError(errMsg);
 
       // 检测上下文超出错误，自动触发压缩重试（流内错误场景）
@@ -1147,6 +1154,8 @@ export async function runChat({
         errorMessage = "请求过于频繁，请稍后再试";
       } else if (isUnauthorized) {
         errorMessage = "登录已过期，请刷新页面重新登录";
+      } else if (isProviderUnauthorized) {
+        errorMessage = "模型服务认证失败，请稍后再试";
       } else if (isConversationMissing) {
         errorMessage = "当前对话已失效，已切回新对话，请重新发送消息";
       } else if (isUpstreamRouteMissing) {
