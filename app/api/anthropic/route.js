@@ -21,7 +21,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const AIGOCODE_CLAUDE_BASE_URL = "https://api.aigocode.com/v1";
+const AIGOCODE_CLAUDE_BASE_URL = "https://api.aigocode.com";
 const AIGOCODE_API_KEY = process.env.AIGOCODE_API_KEY;
 const MAX_REQUEST_BYTES = 2_000_000;
 
@@ -564,4 +564,3 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
-
