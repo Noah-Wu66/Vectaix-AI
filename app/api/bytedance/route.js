@@ -88,6 +88,9 @@ export async function POST(req) {
 
         const apiBaseUrl = ZENMUX_OPENAI_BASE_URL;
         const apiKey = process.env.ZENMUX_API_KEY;
+        if (!apiKey) {
+            return Response.json({ error: 'ZENMUX_API_KEY is not set' }, { status: 500 });
+        }
         const normalizedModel = model.startsWith('volcengine/')
             ? model
             : model.includes('/')
@@ -273,6 +276,10 @@ export async function POST(req) {
                 model: apiModel,
                 stream: false,
                 max_output_tokens: 200,
+                reasoning: {
+                    effort: baseRequestBody.reasoning?.effort || 'low',
+                },
+                extra_body: baseRequestBody.extra_body,
                 input: [
                     { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
                     { role: 'user', content: [{ type: 'input_text', text: userText }] }
@@ -427,6 +434,10 @@ export async function POST(req) {
                         throw new Error(`Seed API Error: ${response.status} ${errorText}`);
                     }
 
+                    if (!response.body) {
+                        throw new Error('Seed 返回了空响应体，请稍后重试');
+                    }
+
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
@@ -574,4 +585,3 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
-

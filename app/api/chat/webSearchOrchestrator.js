@@ -8,6 +8,240 @@ import {
 } from '@/app/api/chat/bochaSearch';
 
 const VALID_FRESHNESS_VALUES = new Set(['oneDay', 'oneWeek', 'oneMonth', 'oneYear', 'noLimit']);
+const EXPLICIT_SEARCH_KEYWORDS = [
+  '查一下',
+  '查一查',
+  '搜一下',
+  '搜一搜',
+  '搜索',
+  '检索',
+  '联网',
+  '上网',
+  '官网',
+  '官方文档',
+  '官方说明',
+  '最新',
+  '最近',
+  '实时',
+  '新闻',
+  '公告',
+  '价格',
+  '股价',
+  '汇率',
+  '天气',
+  '航班',
+  '比分',
+  '开奖',
+];
+const EXPLICIT_SEARCH_KEYWORDS_EN = [
+  'search',
+  'look up',
+  'google',
+  'official site',
+  'official docs',
+  'latest',
+  'recent',
+  'news',
+  'announcement',
+  'price',
+  'weather',
+  'stock price',
+  'exchange rate',
+  'release note',
+  'changelog',
+];
+const NON_SEARCH_REPLY_KEYWORDS = [
+  '继续',
+  '展开说说',
+  '再详细一点',
+  '详细说说',
+  '翻译一下',
+  '润色一下',
+  '总结一下',
+  '概括一下',
+  '改写一下',
+  '谢谢',
+  '谢了',
+  '好的',
+  '收到',
+];
+const FOLLOW_UP_SEARCH_KEYWORDS = ['价格', '官网', '文档', '教程', '资料', '来源', '新闻', '消息', '更新', '进展', '最新', '最近'];
+
+function includesAnyKeyword(text, keywords) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function normalizeBooleanDecisionValue(value) {
+  if (value === true || value === false) return value;
+  if (typeof value !== 'string') return null;
+
+  const normalized = value.trim().toLowerCase();
+  if (['true', 'yes', '1', 'need', 'needed', '需要', '是'].includes(normalized)) return true;
+  if (['false', 'no', '0', 'none', '无需', '不需要', '否'].includes(normalized)) return false;
+  return null;
+}
+
+function isClearlyNonSearchReply(text) {
+  if (typeof text !== 'string') return false;
+  const normalized = text.replace(/[？?。！!]/g, '').trim();
+  return NON_SEARCH_REPLY_KEYWORDS.includes(normalized);
+}
+
+function normalizeFreshnessValue(value) {
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (VALID_FRESHNESS_VALUES.has(trimmed)) return trimmed;
+
+  const compact = trimmed.toLowerCase().replace(/[^a-z]/g, '');
+  const aliasMap = {
+    day: 'oneDay',
+    today: 'oneDay',
+    oneday: 'oneDay',
+    daily: 'oneDay',
+    week: 'oneWeek',
+    weekly: 'oneWeek',
+    oneweek: 'oneWeek',
+    recent: 'oneWeek',
+    month: 'oneMonth',
+    monthly: 'oneMonth',
+    onemonth: 'oneMonth',
+    year: 'oneYear',
+    yearly: 'oneYear',
+    oneyear: 'oneYear',
+    nolimit: 'noLimit',
+    none: 'noLimit',
+    all: 'noLimit',
+    any: 'noLimit',
+  };
+
+  return aliasMap[compact] || null;
+}
+
+function extractDecisionQuery(candidate) {
+  const raw = candidate?.query
+    ?? candidate?.searchQuery
+    ?? candidate?.search_query
+    ?? candidate?.keyword
+    ?? candidate?.keywords
+    ?? '';
+
+  if (Array.isArray(raw)) {
+    return raw
+      .filter((item) => typeof item === 'string')
+      .join(' ')
+      .trim()
+      .slice(0, 160);
+  }
+
+  return typeof raw === 'string'
+    ? raw.trim().slice(0, 160)
+    : '';
+}
+
+function cleanupQueryText(text) {
+  if (typeof text !== 'string') return '';
+
+  let query = text.replace(/\s+/g, ' ').trim();
+  query = query.replace(/^(请|麻烦|帮我|你帮我|帮忙|可以|能不能|能否|给我|替我)+/u, '').trim();
+  query = query.replace(/^(去)?(查一下|查一查|搜一下|搜一搜|搜索一下|搜索|检索一下|检索|联网查一下|上网查一下|看看|找一下|找找)/u, '').trim();
+  query = query.replace(/[？?。！!]+$/u, '').trim();
+  query = query.replace(/^(关于|有关)/u, '').trim();
+  query = query.replace(/(是什么|是啥|吗|呢)$/u, '').trim();
+  return query.slice(0, 160);
+}
+
+function inferFreshnessFromQuery(text) {
+  const source = typeof text === 'string' ? text : '';
+  const lower = source.toLowerCase();
+
+  if (
+    includesAnyKeyword(source, ['今天', '今日', '刚刚', '刚才', '现在', '实时', '目前', '股价', '汇率', '天气', '航班', '比分', '开奖', '热搜'])
+    || /\b(today|now|live|real-time|realtime)\b/.test(lower)
+  ) {
+    return 'oneDay';
+  }
+
+  if (
+    includesAnyKeyword(source, ['最新', '最近', '新闻', '公告', '动态', '进展', '近况', '更新', '发布'])
+    || /\b(latest|recent|news|update|updates|announcement|announcements)\b/.test(lower)
+  ) {
+    return 'oneWeek';
+  }
+
+  if (includesAnyKeyword(source, ['本月', '这个月', '近一个月', '近30天']) || /\bthis month\b/.test(lower)) {
+    return 'oneMonth';
+  }
+
+  if (includesAnyKeyword(source, ['今年', '近一年', '过去一年']) || /\bthis year\b/.test(lower)) {
+    return 'oneYear';
+  }
+
+  return 'noLimit';
+}
+
+function isLikelySearchFollowUp(text) {
+  if (typeof text !== 'string') return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  if (/^(那|那它|那这个|那这个东西|这个|这个东西|那边|然后)(.+)?呢[？?]?$/u.test(trimmed)) return true;
+  if (/^(那|这个)?(价格|官网|文档|教程|资料|来源|新闻|消息|更新|进展|最新|最近)(呢)?[？?]?$/u.test(trimmed)) return true;
+  return false;
+}
+
+function getRecentTopicHint(historyMessages) {
+  const recentMessages = getRecentDecisionMessages(historyMessages);
+
+  for (let index = recentMessages.length - 1; index >= 0; index -= 1) {
+    const item = recentMessages[index];
+    if (item?.role !== 'user') continue;
+    const text = cleanupQueryText(item.text);
+    if (text) return text;
+  }
+
+  for (let index = recentMessages.length - 1; index >= 0; index -= 1) {
+    const text = cleanupQueryText(recentMessages[index]?.text);
+    if (text) return text;
+  }
+
+  return '';
+}
+
+function buildHeuristicWebSearchDecision({ prompt, historyMessages }) {
+  const currentPrompt = typeof prompt === 'string' ? prompt.trim() : '';
+  if (!currentPrompt) return null;
+
+  if (isClearlyNonSearchReply(currentPrompt)) {
+    return { needSearch: false, query: '', freshness: 'noLimit' };
+  }
+
+  const lowerPrompt = currentPrompt.toLowerCase();
+  const hasExplicitIntent = includesAnyKeyword(currentPrompt, EXPLICIT_SEARCH_KEYWORDS)
+    || includesAnyKeyword(lowerPrompt, EXPLICIT_SEARCH_KEYWORDS_EN);
+  const isFollowUp = isLikelySearchFollowUp(currentPrompt)
+    || (currentPrompt.length <= 12 && includesAnyKeyword(currentPrompt, FOLLOW_UP_SEARCH_KEYWORDS));
+
+  if (!hasExplicitIntent && !isFollowUp) {
+    return null;
+  }
+
+  const topicHint = isFollowUp ? getRecentTopicHint(historyMessages) : '';
+  if (isFollowUp && !topicHint) {
+    return null;
+  }
+
+  const mergedQuery = cleanupQueryText(topicHint ? `${topicHint} ${currentPrompt}` : currentPrompt);
+  if (!mergedQuery) {
+    return null;
+  }
+
+  return {
+    needSearch: true,
+    query: mergedQuery,
+    freshness: inferFreshnessFromQuery(mergedQuery),
+  };
+}
 
 function normalizeMessageText(message) {
   if (!message || typeof message !== 'object') return '';
@@ -73,9 +307,10 @@ export function normalizeWebSearchDecision(rawDecision) {
     : rawDecision;
 
   if (!candidate || typeof candidate !== 'object') return null;
-  if (candidate.needSearch !== true && candidate.needSearch !== false) return null;
+  const needSearch = normalizeBooleanDecisionValue(candidate.needSearch ?? candidate.need_search);
+  if (needSearch !== true && needSearch !== false) return null;
 
-  if (candidate.needSearch === false) {
+  if (needSearch === false) {
     return {
       needSearch: false,
       query: '',
@@ -83,12 +318,8 @@ export function normalizeWebSearchDecision(rawDecision) {
     };
   }
 
-  const query = typeof candidate.query === 'string'
-    ? candidate.query.trim().slice(0, 160)
-    : '';
-  const freshness = typeof candidate.freshness === 'string'
-    ? candidate.freshness.trim()
-    : '';
+  const query = extractDecisionQuery(candidate);
+  const freshness = normalizeFreshnessValue(candidate.freshness) || inferFreshnessFromQuery(query);
 
   if (!query) return null;
   if (!VALID_FRESHNESS_VALUES.has(freshness)) return null;
@@ -157,15 +388,30 @@ export async function runWebSearchOrchestration(options) {
     if (aborted()) {
       return { searchContextText: '' };
     }
-    console.error(`${providerLabel} bocha search decision failed`, {
-      message: decisionError?.message,
-      name: decisionError?.name,
-      model,
-      conversationId,
+
+    const fallbackDecision = buildHeuristicWebSearchDecision({
+      prompt: currentPrompt,
+      historyMessages,
     });
-    const message = '联网判断失败，请稍后再试';
-    sendSearchError?.(message);
-    throw new Error(message);
+
+    if (fallbackDecision) {
+      console.warn(`${providerLabel} bocha search decision fallback`, {
+        message: decisionError?.message,
+        model,
+        conversationId,
+        needSearch: fallbackDecision.needSearch,
+        freshness: fallbackDecision.freshness,
+      });
+      decision = fallbackDecision;
+    } else {
+      console.error(`${providerLabel} bocha search decision failed`, {
+        message: decisionError?.message,
+        name: decisionError?.name,
+        model,
+        conversationId,
+      });
+      return { searchContextText: '' };
+    }
   }
 
   const needSearch = decision.needSearch === true;

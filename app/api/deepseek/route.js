@@ -134,6 +134,9 @@ export async function POST(req) {
         }
 
         const apiKey = process.env.DEEPSEEK_API_KEY;
+        if (!apiKey) {
+            return Response.json({ error: 'DEEPSEEK_API_KEY is not set' }, { status: 500 });
+        }
         // 使用 deepseek-reasoner 作为 API 模型（内置思考模式）
         const apiModel = model === 'deepseek-reasoner' ? 'deepseek-reasoner' : 'deepseek-chat';
 

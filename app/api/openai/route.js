@@ -317,11 +317,18 @@ export async function POST(req) {
                 model: apiModel,
                 stream: false,
                 max_output_tokens: 200,
+                reasoning: {
+                    effort: baseRequestBody.reasoning?.effort || 'low',
+                },
                 input: [
                     { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
                     { role: 'user', content: [{ type: 'input_text', text: userText }] }
                 ]
             };
+
+            if (isSeedModel && baseRequestBody.extra_body) {
+                requestBody.extra_body = baseRequestBody.extra_body;
+            }
 
             const requestDecision = async () => fetch(`${apiBaseUrl}/responses`, {
                 method: 'POST',
@@ -643,4 +650,3 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
-
