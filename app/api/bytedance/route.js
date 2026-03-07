@@ -276,10 +276,6 @@ export async function POST(req) {
                 model: apiModel,
                 stream: false,
                 max_output_tokens: 200,
-                reasoning: {
-                    effort: baseRequestBody.reasoning?.effort || 'low',
-                },
-                extra_body: baseRequestBody.extra_body,
                 input: [
                     { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
                     { role: 'user', content: [{ type: 'input_text', text: userText }] }
@@ -398,6 +394,8 @@ export async function POST(req) {
                         sendSearchError,
                         isClientAborted: () => clientAborted,
                         providerLabel: 'Seed',
+                        model,
+                        conversationId: currentConversationId,
                     });
 
                     if (clientAborted) {

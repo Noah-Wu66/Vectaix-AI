@@ -321,14 +321,7 @@ export async function POST(req) {
                         content: [{ type: 'input_text', text: userText }]
                     }
                 ],
-                reasoning: {
-                    effort: baseRequestBody.reasoning?.effort || 'low',
-                },
             };
-
-            if (isSeedModel && baseRequestBody.extra_body) {
-                requestBody.extra_body = baseRequestBody.extra_body;
-            }
 
             const requestDecision = async () => fetch(`${apiBaseUrl}/responses`, {
                 method: 'POST',
@@ -455,6 +448,8 @@ export async function POST(req) {
                         sendSearchError,
                         isClientAborted: () => clientAborted,
                         providerLabel: 'OpenAI',
+                        model,
+                        conversationId: currentConversationId,
                     });
 
                     if (clientAborted) {

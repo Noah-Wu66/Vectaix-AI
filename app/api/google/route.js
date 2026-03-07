@@ -23,6 +23,8 @@ const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
 const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
+const GEMINI_DECISION_MODEL = GEMINI_FLASH_MODEL;
+const GEMINI_DECISION_THINKING_LEVEL = 'MINIMAL';
 const MAX_REQUEST_BYTES = 2_000_000;
 
 async function storedPartToRequestPart(part) {
@@ -305,7 +307,7 @@ export async function POST(req) {
             });
 
             const result = await ai.models.generateContent({
-                model: apiModel,
+                model: GEMINI_DECISION_MODEL,
                 contents: [{
                     role: 'user',
                     parts: [{ text: userText }]
@@ -315,7 +317,11 @@ export async function POST(req) {
                         parts: [{ text: systemText }]
                     },
                     maxOutputTokens: 200,
-                    temperature: 0.1
+                    temperature: 0.1,
+                    thinkingConfig: {
+                        thinkingLevel: GEMINI_DECISION_THINKING_LEVEL,
+                        includeThoughts: false
+                    }
                 }
             });
 

@@ -18,6 +18,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
+const DEEPSEEK_DECISION_MODEL = 'deepseek-chat';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
 
@@ -277,7 +278,7 @@ export async function POST(req) {
                     'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify({
-                    model: apiModel,
+                    model: DEEPSEEK_DECISION_MODEL,
                     messages: [
                         { role: 'system', content: systemText },
                         { role: 'user', content: userText }
@@ -364,6 +365,8 @@ export async function POST(req) {
                         sendSearchError,
                         isClientAborted: () => clientAborted,
                         providerLabel: 'DeepSeek',
+                        model,
+                        conversationId: currentConversationId,
                     });
 
                     if (clientAborted) {
