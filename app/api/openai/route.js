@@ -250,8 +250,7 @@ export async function POST(req) {
             instructions: baseSystemPrompt,
             input: baseInput,
             reasoning: {
-                effort: "high",
-                generate_summary: true
+                effort: "high"
             }
         };
 
