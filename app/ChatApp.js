@@ -1,3 +1,4 @@
+// ChatApp - 主聊天应用组件
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createChatAppActions } from "./lib/chatAppActions";
