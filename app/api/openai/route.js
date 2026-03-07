@@ -316,7 +316,12 @@ export async function POST(req) {
                 stream: false,
                 max_output_tokens: 200,
                 instructions: systemText,
-                input: userText,
+                input: [
+                    {
+                        role: 'user',
+                        content: [{ type: 'input_text', text: userText }]
+                    }
+                ],
                 reasoning: {
                     effort: baseRequestBody.reasoning?.effort || 'low',
                 },
