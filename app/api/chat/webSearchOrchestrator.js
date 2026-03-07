@@ -1,3 +1,5 @@
+import { parseJsonFromText } from '@/app/api/chat/jsonUtils';
+import { injectCurrentTimeSystemReminder } from '@/app/api/chat/utils';
 import {
   bochaSearch,
   buildBochaContext,
@@ -5,33 +7,7 @@ import {
   buildBochaSearchEventResults,
 } from '@/app/api/chat/bochaSearch';
 
-const CONTEXTUAL_QUERY_PATTERNS = [
-  /^(那|这个|这个问题|这个事情|它|他|她|继续|然后|还有|再说|展开|详细说|那现在|现在呢)/i,
-  /(怎么样|如何|还有吗|继续说|再展开|再具体一点)\s*[?？!！]*$/i,
-];
-
-const FORCE_SEARCH_PATTERNS = [
-  /(帮我查|帮我搜|查一下|搜一下|搜索一下|检索一下)/i,
-  /(最新|最近|当前|现在|实时|今日|今天|刚刚|截至)/i,
-  /(新闻|公告|报道|官网|官方文档|官方说明|政策|法规|价格|股价|汇率|天气|赛程|比分|票房|排名|版本|发布|更新日志|release|changelog)/i,
-  /(总统|首相|ceo|市值|融资|财报|票价|机票|酒店|餐厅)/i,
-];
-
-const ONE_DAY_PATTERNS = [
-  /(今天|今日|现在|当前|实时|刚刚|最新消息|breaking|live)/i,
-];
-
-const ONE_WEEK_PATTERNS = [
-  /(最新|最近|近况|本周|这一周|过去一周|这几天|最近几天)/i,
-];
-
-const ONE_MONTH_PATTERNS = [
-  /(本月|这个月|最近一个月|近一个月|过去一个月)/i,
-];
-
-const ONE_YEAR_PATTERNS = [
-  /(今年|近一年|过去一年|这一年)/i,
-];
+const VALID_FRESHNESS_VALUES = new Set(['oneDay', 'oneWeek', 'oneMonth', 'oneYear', 'noLimit']);
 
 function normalizeMessageText(message) {
   if (!message || typeof message !== 'object') return '';
@@ -48,70 +24,80 @@ function normalizeMessageText(message) {
   return '';
 }
 
-function buildRecentConversation(historyMessages, maxItems = 4) {
+function getRecentDecisionMessages(historyMessages) {
   const list = Array.isArray(historyMessages) ? historyMessages : [];
   return list
-    .slice(-maxItems)
+    .filter((item) => item?.role === 'user' || item?.role === 'model')
+    .slice(-4)
     .map((item) => {
       const text = normalizeMessageText(item);
-      if (!text) return '';
-      const role = item?.role === 'model' ? '助手' : '用户';
-      return `${role}: ${text}`;
+      if (!text) return null;
+      return {
+        role: item.role === 'model' ? 'assistant' : 'user',
+        text: text.slice(0, 500),
+      };
     })
-    .filter(Boolean)
-    .join('\n');
-}
-
-function inferFreshness(text) {
-  if (ONE_DAY_PATTERNS.some((pattern) => pattern.test(text))) return 'oneDay';
-  if (ONE_WEEK_PATTERNS.some((pattern) => pattern.test(text))) return 'oneWeek';
-  if (ONE_MONTH_PATTERNS.some((pattern) => pattern.test(text))) return 'oneMonth';
-  if (ONE_YEAR_PATTERNS.some((pattern) => pattern.test(text))) return 'oneYear';
-  return 'noLimit';
-}
-
-function cleanQuery(text) {
-  if (typeof text !== 'string') return '';
-  return text
-    .replace(/^[\s,，。；;:：]+/, '')
-    .replace(/^(请|帮我|麻烦|顺便|再|然后|那就|那你|你再)\s*/u, '')
-    .replace(/[?？!！]+$/u, '')
-    .trim()
-    .slice(0, 160);
-}
-
-function buildSearchQuery(prompt, historyMessages) {
-  const current = cleanQuery(prompt);
-  if (!current) return '';
-
-  const isContextual = CONTEXTUAL_QUERY_PATTERNS.some((pattern) => pattern.test(current)) || current.length <= 10;
-  if (!isContextual) return current;
-
-  const recentUserTexts = (Array.isArray(historyMessages) ? historyMessages : [])
-    .slice(-4)
-    .filter((item) => item?.role === 'user')
-    .map((item) => normalizeMessageText(item))
     .filter(Boolean);
-
-  if (recentUserTexts.length === 0) return current;
-
-  const joined = cleanQuery(`${recentUserTexts.join(' ')} ${current}`);
-  return joined || current;
 }
 
-function planWebSearch({ prompt, historyMessages }) {
+export async function buildWebSearchDecisionPrompts({ prompt, historyMessages }) {
   const currentPrompt = typeof prompt === 'string' ? prompt.trim() : '';
-  if (!currentPrompt) {
-    return { needSearch: false, query: '', freshness: 'noLimit' };
+  const recentMessages = getRecentDecisionMessages(historyMessages);
+  const conversationText = recentMessages.length > 0
+    ? recentMessages.map((item, index) => `${index + 1}. [${item.role}] ${item.text}`).join('\n')
+    : '(无最近对话)';
+
+  const systemText = await injectCurrentTimeSystemReminder(`你是“是否需要博查联网”的判断器。你的唯一任务，是判断当前用户这句话在回答前是否必须先做一次博查 Web Search。
+
+判断原则：
+1. 默认保守。除非确实需要外部信息、最新信息、会变化的信息、官网链接、官方文档、新闻公告、价格行情、实时数据，否则一律 needSearch=false。
+2. 用户明确要求“查一下、搜一下、去官网、找官方文档、看最新消息、看最近动态、帮我检索资料”等，通常 needSearch=true。
+3. 如果当前消息是指代型追问，例如“那价格呢”“那官网呢”，你可以结合最近对话补全搜索意图；但像“继续”“展开说说”“再详细一点”“谢谢”“翻译一下”“润色一下”这种，不要联网。
+4. 常识解释、代码问题、数学题、创作、改写、翻译、总结用户已提供内容、基于已有上下文继续展开，这些通常 needSearch=false。
+5. query 必须是适合搜索引擎的一句话关键词，不要加解释，不要加 site: 等高级语法。
+6. freshness 只能是 oneDay、oneWeek、oneMonth、oneYear、noLimit 之一。
+7. 如果 needSearch=false，query 必须是空字符串，freshness 必须是 noLimit。
+8. 只输出 JSON，不要输出任何别的文字。
+
+返回格式：
+{"needSearch":true,"query":"搜索词","freshness":"oneWeek"}`);
+
+  const userText = `请只根据下面信息做判断。\n\n最近对话（最多 4 条）：\n${conversationText}\n\n当前用户消息：\n[user] ${currentPrompt}`;
+
+  return { systemText, userText };
+}
+
+export function normalizeWebSearchDecision(rawDecision) {
+  const candidate = typeof rawDecision === 'string'
+    ? parseJsonFromText(rawDecision)
+    : rawDecision;
+
+  if (!candidate || typeof candidate !== 'object') return null;
+  if (candidate.needSearch !== true && candidate.needSearch !== false) return null;
+
+  if (candidate.needSearch === false) {
+    return {
+      needSearch: false,
+      query: '',
+      freshness: 'noLimit',
+    };
   }
 
-  const recentConversation = buildRecentConversation(historyMessages);
-  const combinedText = `${recentConversation}\n用户当前问题: ${currentPrompt}`.trim();
-  const needSearch = FORCE_SEARCH_PATTERNS.some((pattern) => pattern.test(combinedText));
-  const query = needSearch ? buildSearchQuery(currentPrompt, historyMessages) : '';
-  const freshness = inferFreshness(combinedText);
+  const query = typeof candidate.query === 'string'
+    ? candidate.query.trim().slice(0, 160)
+    : '';
+  const freshness = typeof candidate.freshness === 'string'
+    ? candidate.freshness.trim()
+    : '';
 
-  return { needSearch, query, freshness };
+  if (!query) return null;
+  if (!VALID_FRESHNESS_VALUES.has(freshness)) return null;
+
+  return {
+    needSearch: true,
+    query,
+    freshness,
+  };
 }
 
 export function buildWebSearchGuide(enableWebSearch) {
@@ -125,6 +111,7 @@ export async function runWebSearchOrchestration(options) {
     enableWebSearch,
     prompt,
     historyMessages,
+    decisionRunner,
     sendEvent,
     pushCitations,
     sendSearchError,
@@ -141,7 +128,46 @@ export async function runWebSearchOrchestration(options) {
     return { searchContextText: '' };
   }
 
-  const decision = planWebSearch({ prompt, historyMessages });
+  const currentPrompt = typeof prompt === 'string' ? prompt.trim() : '';
+  if (!currentPrompt) {
+    return { searchContextText: '' };
+  }
+
+  if (typeof decisionRunner !== 'function') {
+    const message = '未配置联网判断模型';
+    sendSearchError?.(message);
+    throw new Error(message);
+  }
+
+  let decision;
+  try {
+    const rawDecision = await decisionRunner({
+      prompt: currentPrompt,
+      historyMessages,
+      providerLabel,
+      model,
+      conversationId,
+    });
+
+    decision = normalizeWebSearchDecision(rawDecision);
+    if (!decision) {
+      throw new Error('搜索判断模型未返回合法 JSON');
+    }
+  } catch (decisionError) {
+    if (aborted()) {
+      return { searchContextText: '' };
+    }
+    console.error(`${providerLabel} bocha search decision failed`, {
+      message: decisionError?.message,
+      name: decisionError?.name,
+      model,
+      conversationId,
+    });
+    const message = '联网判断失败，请稍后再试';
+    sendSearchError?.(message);
+    throw new Error(message);
+  }
+
   const needSearch = decision.needSearch === true;
   const nextQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
   const freshness = typeof decision.freshness === 'string' ? decision.freshness.trim() : 'noLimit';

@@ -11,7 +11,7 @@ import {
     buildWebSearchContextBlock,
     estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import { buildBytedanceInputFromHistory } from '@/app/api/bytedance/bytedanceHelpers';
 
 export const runtime = 'nodejs';
@@ -233,6 +233,74 @@ export async function POST(req) {
 
         const enableWebSearch = config?.webSearch === true;
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
+        const normalizeDecisionText = (value) => {
+            if (typeof value === 'string') return value;
+            if (Array.isArray(value)) {
+                return value.map((item) => {
+                    if (typeof item === 'string') return item;
+                    if (item && typeof item.text === 'string') return item.text;
+                    if (item && typeof item.content === 'string') return item.content;
+                    return '';
+                }).join('');
+            }
+            if (value && typeof value === 'object') {
+                if (typeof value.text === 'string') return value.text;
+                if (typeof value.content === 'string') return value.content;
+            }
+            return '';
+        };
+
+        const extractDecisionOutputFromResponses = (payload) => {
+            if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
+                return payload.output_text.trim();
+            }
+
+            const outputs = Array.isArray(payload?.output) ? payload.output : [];
+            return outputs
+                .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
+                .map((item) => normalizeDecisionText(item?.text ?? item))
+                .join('')
+                .trim();
+        };
+
+        const runSeedDecision = async ({ prompt: decisionPrompt, historyMessages }) => {
+            const { systemText, userText } = await buildWebSearchDecisionPrompts({
+                prompt: decisionPrompt,
+                historyMessages,
+            });
+
+            const requestBody = {
+                model: apiModel,
+                stream: false,
+                max_output_tokens: 200,
+                input: [
+                    { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
+                    { role: 'user', content: [{ type: 'input_text', text: userText }] }
+                ]
+            };
+
+            const response = await fetch(`${apiBaseUrl}/responses`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Seed 联网判断失败（${response.status}）：${errorText}`);
+            }
+
+            const payload = await response.json();
+            const text = extractDecisionOutputFromResponses(payload);
+            if (!text) {
+                throw new Error('联网判断未返回有效内容');
+            }
+
+            return text;
+        };
 
         const encoder = new TextEncoder();
         let clientAborted = false;
@@ -317,6 +385,7 @@ export async function POST(req) {
                         enableWebSearch,
                         prompt,
                         historyMessages: history,
+                        decisionRunner: runSeedDecision,
                         sendEvent,
                         pushCitations,
                         sendSearchError,

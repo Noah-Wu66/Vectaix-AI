@@ -12,7 +12,7 @@ import {
     estimateTokens,
     getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
-import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -249,6 +249,54 @@ export async function POST(req) {
 
         const enableWebSearch = config?.webSearch === true;
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
+        const normalizeDecisionMessageText = (value) => {
+            if (typeof value === 'string') return value;
+            if (Array.isArray(value)) {
+                return value.map((item) => {
+                    if (typeof item === 'string') return item;
+                    if (item && typeof item.text === 'string') return item.text;
+                    return '';
+                }).join('');
+            }
+            return '';
+        };
+
+        const runDeepSeekDecision = async ({ prompt: decisionPrompt, historyMessages }) => {
+            const { systemText, userText } = await buildWebSearchDecisionPrompts({
+                prompt: decisionPrompt,
+                historyMessages,
+            });
+
+            const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: apiModel,
+                    messages: [
+                        { role: 'system', content: systemText },
+                        { role: 'user', content: userText }
+                    ],
+                    stream: false,
+                    max_tokens: 200
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`DeepSeek 联网判断失败（${response.status}）：${errorText}`);
+            }
+
+            const payload = await response.json();
+            const text = normalizeDecisionMessageText(payload?.choices?.[0]?.message?.content).trim();
+            if (!text) {
+                throw new Error('联网判断未返回有效内容');
+            }
+
+            return text;
+        };
 
         const encoder = new TextEncoder();
         let clientAborted = false;
@@ -307,6 +355,7 @@ export async function POST(req) {
                         enableWebSearch,
                         prompt,
                         historyMessages: history,
+                        decisionRunner: runDeepSeekDecision,
                         sendEvent,
                         pushCitations,
                         sendSearchError,

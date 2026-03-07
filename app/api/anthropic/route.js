@@ -14,7 +14,7 @@ import {
     buildWebSearchContextBlock,
     estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import { buildEconomySystemPrompt } from '@/app/lib/economyModels';
 
 export const runtime = 'nodejs';
@@ -282,6 +282,37 @@ export async function POST(req) {
 
         // 启用博查搜索时禁用来源括号标注
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
+        const runClaudeDecision = async ({ prompt: decisionPrompt, historyMessages }) => {
+            const { systemText, userText } = await buildWebSearchDecisionPrompts({
+                prompt: decisionPrompt,
+                historyMessages,
+            });
+
+            const response = await client.messages.create({
+                model: apiModel,
+                max_tokens: 200,
+                system: systemText,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [{ type: 'text', text: userText }]
+                    }
+                ]
+            });
+
+            const text = Array.isArray(response?.content)
+                ? response.content
+                    .map((item) => (typeof item?.text === 'string' ? item.text : ''))
+                    .join('')
+                    .trim()
+                : '';
+
+            if (!text) {
+                throw new Error('联网判断未返回有效内容');
+            }
+
+            return text;
+        };
 
         const encoder = new TextEncoder();
         let clientAborted = false;
@@ -339,6 +370,7 @@ export async function POST(req) {
                         enableWebSearch,
                         prompt,
                         historyMessages: history,
+                        decisionRunner: runClaudeDecision,
                         sendEvent,
                         pushCitations,
                         sendSearchError,

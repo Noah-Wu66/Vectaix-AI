@@ -14,7 +14,7 @@ import {
     buildWebSearchContextBlock,
     estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -286,6 +286,46 @@ export async function POST(req) {
 
         const enableWebSearch = config?.webSearch === true;
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
+        const extractGeminiDecisionText = (result) => {
+            const parts = Array.isArray(result?.candidates?.[0]?.content?.parts)
+                ? result.candidates[0].content.parts
+                : [];
+
+            return parts
+                .filter((part) => !part?.thought && typeof part?.text === 'string')
+                .map((part) => part.text)
+                .join('')
+                .trim();
+        };
+
+        const runGeminiDecision = async ({ prompt: decisionPrompt, historyMessages }) => {
+            const { systemText, userText } = await buildWebSearchDecisionPrompts({
+                prompt: decisionPrompt,
+                historyMessages,
+            });
+
+            const result = await ai.models.generateContent({
+                model: apiModel,
+                contents: [{
+                    role: 'user',
+                    parts: [{ text: userText }]
+                }],
+                config: {
+                    systemInstruction: {
+                        parts: [{ text: systemText }]
+                    },
+                    maxOutputTokens: 200,
+                    temperature: 0.1
+                }
+            });
+
+            const text = extractGeminiDecisionText(result);
+            if (!text) {
+                throw new Error('联网判断未返回有效内容');
+            }
+
+            return text;
+        };
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         if (user && !isRegenerateMode) {
@@ -380,6 +420,7 @@ export async function POST(req) {
                         enableWebSearch,
                         prompt,
                         historyMessages: history,
+                        decisionRunner: runGeminiDecision,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
