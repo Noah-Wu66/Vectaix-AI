@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createChatAppActions } from "./lib/chatAppActions";
 import { useThemeMode } from "./lib/useThemeMode";
 import { useUserSettings } from "./lib/useUserSettings";
+import { OPENAI_PRIMARY_MODEL } from "./lib/openaiModel";
 import { useToast } from "./components/ToastProvider";
 import { CHAT_MODELS } from "./components/ChatModels";
 import AuthModal from "./components/AuthModal";
@@ -458,7 +459,7 @@ export default function ChatApp() {
         } else if (conversationProvider === "claude" && currentProvider !== "claude") {
           targetModel = "claude-sonnet-4-6-20260219";
         } else if (conversationProvider === "openai" && currentProvider !== "openai") {
-          targetModel = "gpt-5.2";
+          targetModel = OPENAI_PRIMARY_MODEL;
         } else if (conversationProvider === "seed" && currentProvider !== "seed") {
           targetModel = "volcengine/doubao-seed-2.0-pro";
         } else if (conversationProvider === "deepseek" && currentProvider !== "deepseek") {

@@ -1,3 +1,5 @@
+import { OPENAI_PRIMARY_MODEL } from "../lib/openaiModel";
+
 export const CHAT_MODELS = [
   {
     id: "gemini-3-flash-preview",
@@ -28,11 +30,11 @@ export const CHAT_MODELS = [
     contextWindow: 200000,
   },
   {
-    id: "gpt-5.2",
-    name: "GPT",
+    id: OPENAI_PRIMARY_MODEL,
+    name: "GPT-5.4",
     shortName: "GPT",
     provider: "openai",
-    contextWindow: 1000000,
+    contextWindow: 1050000,
   },
   {
     id: "volcengine/doubao-seed-2.0-pro",

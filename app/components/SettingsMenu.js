@@ -15,12 +15,12 @@ const CLAUDE_SONNET_THINKING_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 320
 const GEMINI_FLASH_THINKING_LEVELS = ["MINIMAL", "LOW", "MEDIUM", "HIGH"];
 const GEMINI_PRO_THINKING_LEVELS = ["LOW", "MEDIUM", "HIGH"];
 const CLAUDE_THINKING_LEVELS = ["low", "medium", "high", "max"];
-const GPT_52_THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
+const GPT_5_THINKING_LEVELS = ["none", "low", "medium", "high", "xhigh"];
 const GPT_THINKING_LEVEL_LABELS = { none: "无", low: "低", medium: "中", high: "高", xhigh: "超高" };
 const CLAUDE_THINKING_LEVEL_LABELS = { low: "低", medium: "中", high: "高", max: "最大" };
 
 function getOpenAIThinkingLevels() {
-  return GPT_52_THINKING_LEVELS;
+  return GPT_5_THINKING_LEVELS;
 }
 
 function formatTokenLabel(value) {

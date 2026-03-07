@@ -128,8 +128,7 @@ export async function POST(req) {
         if (!apiKey) {
             return Response.json({ error: 'RIGHT_CODES_API_KEY is not set' }, { status: 500 });
         }
-        const isGpt52Model = model === 'gpt-5.2' || model === 'openai/gpt-5.2';
-        const apiModel = isGpt52Model ? 'gpt-5.2' : model;
+        const apiModel = model;
         const isSeedModel = typeof apiModel === 'string' && apiModel.startsWith('volcengine/doubao-seed');
 
         let currentConversationId = conversationId;
@@ -242,18 +241,17 @@ export async function POST(req) {
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
-        const baseInputWithInstructions = [
-            { role: 'developer', content: [{ type: 'input_text', text: baseSystemPrompt }] },
-            ...(Array.isArray(openaiInput) ? openaiInput : [])
-        ];
+        const baseInput = Array.isArray(openaiInput) ? openaiInput : [];
 
         const baseRequestBody = {
             model: apiModel,
             stream: true,
             max_output_tokens: maxTokens,
+            instructions: baseSystemPrompt,
+            input: baseInput,
             reasoning: {
                 effort: "high",
-                summary: "auto"
+                generate_summary: true
             }
         };
 
@@ -317,13 +315,11 @@ export async function POST(req) {
                 model: apiModel,
                 stream: false,
                 max_output_tokens: 200,
+                instructions: systemText,
+                input: userText,
                 reasoning: {
                     effort: baseRequestBody.reasoning?.effort || 'low',
                 },
-                input: [
-                    { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
-                    { role: 'user', content: [{ type: 'input_text', text: userText }] }
-                ]
             };
 
             if (isSeedModel && baseRequestBody.extra_body) {
@@ -398,6 +394,13 @@ export async function POST(req) {
             return '';
         };
 
+        const normalizeEventDelta = (event) => {
+            if (typeof event?.delta === 'string') return event.delta;
+            if (typeof event?.text === 'string') return event.text;
+            if (typeof event?.data?.text === 'string') return event.data.text;
+            return '';
+        };
+
         const responseStream = new ReadableStream({
             async start(controller) {
                 let fullText = "";
@@ -463,11 +466,9 @@ export async function POST(req) {
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
                     const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
-                    const finalInput = baseInputWithInstructions.slice();
-                    finalInput[0] = { role: 'developer', content: [{ type: 'input_text', text: finalSystemPrompt }] };
                     const requestBody = {
                         ...baseRequestBody,
-                        input: finalInput
+                        instructions: finalSystemPrompt
                     };
 
                     const requestResponses = async () => fetch(`${apiBaseUrl}/responses`, {
@@ -522,12 +523,12 @@ export async function POST(req) {
                                 const event = JSON.parse(dataStr);
 
                                 // 处理 Responses API 和 Chat Completions 事件
-                                if (event.type === 'response.output_text.delta') {
-                                    const text = event.delta;
+                                if (event.type === 'output.text.delta' || event.type === 'response.output_text.delta') {
+                                    const text = normalizeEventDelta(event);
                                     fullText += text;
                                     sendEvent({ type: 'text', content: text });
                                 } else if (event.type === 'response.reasoning.delta' || event.type === 'response.reasoning_summary_text.delta') {
-                                    const thought = event.delta;
+                                    const thought = normalizeEventDelta(event);
                                     fullThought += thought;
                                     sendEvent({ type: 'thought', content: thought });
                                 } else if (Array.isArray(event?.choices)) {

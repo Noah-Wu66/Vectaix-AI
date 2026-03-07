@@ -317,5 +317,3 @@ export async function PUT(req, { params }) {
     return Response.json({ conversation: conversation?.toObject?.() || conversation });
 }
 
-
-

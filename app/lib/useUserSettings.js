@@ -13,6 +13,7 @@ import {
   UI_THINKING_LEVELS_KEY,
   UI_WEB_SEARCH_KEY,
 } from "./storageKeys";
+import { OPENAI_PRIMARY_MODEL } from "./openaiModel";
 
 const SEED_MODEL_ID = "volcengine/doubao-seed-2.0-pro";
 const DEFAULT_MODEL = "deepseek-chat";
@@ -23,7 +24,7 @@ const DEFAULT_THINKING_LEVELS = {
   "gemini-3.1-pro-preview": "MEDIUM",
   "claude-sonnet-4-6-20260219": "high",
   "claude-opus-4-6-20260205": "high",
-  "gpt-5.2": "medium",
+  [OPENAI_PRIMARY_MODEL]: "medium",
   [SEED_MODEL_ID]: "medium",
   "deepseek-reasoner": "medium",
 };
@@ -190,8 +191,12 @@ export function useUserSettings() {
   }, []);
 
   const setThinkingLevels = useCallback((levels) => {
-    _setThinkingLevels(levels);
-    writeLocalJson(UI_THINKING_LEVELS_KEY, levels);
+    _setThinkingLevels((prev) => {
+      const next = typeof levels === "function" ? levels(prev) : levels;
+      const normalized = isPlainObject(next) ? next : {};
+      writeLocalJson(UI_THINKING_LEVELS_KEY, normalized);
+      return normalized;
+    });
   }, []);
 
   const setHistoryLimit = useCallback((limit) => {
@@ -432,4 +437,3 @@ export function useUserSettings() {
     setAvatar,
   };
 }
-
