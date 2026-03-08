@@ -77,15 +77,16 @@ export function buildChatConfig({
   maxTokens,
   budgetTokens,
   webSearch,
-}) {
+} = {}) {
   const cfg = {};
   cfg.thinkingLevel = thinkingLevel;
   cfg.maxTokens = maxTokens;
   cfg.budgetTokens = budgetTokens;
   cfg.webSearch = webSearch === true;
 
+  const promptList = Array.isArray(systemPrompts) ? systemPrompts : [];
   const activeId = activePromptId == null ? null : String(activePromptId);
-  const activePrompt = systemPrompts.find((p) => String(p?._id) === activeId);
+  const activePrompt = promptList.find((p) => String(p?._id) === activeId);
   if (activePrompt) cfg.systemPrompt = activePrompt.content;
 
   // 支持多张图片
