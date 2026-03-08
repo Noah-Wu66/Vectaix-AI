@@ -273,6 +273,8 @@ export async function POST(req) {
         const thinkingLevel = config?.thinkingLevel;
         const isClaudeAdaptiveThinkingModel = typeof model === "string"
             && (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6"));
+        const maxTokenCap = typeof model === "string" && model.startsWith("claude-opus-4-6") ? 128000 : 64000;
+        const normalizedMaxTokens = Math.min(Number(maxTokens) || maxTokenCap, maxTokenCap);
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
@@ -397,7 +399,7 @@ export async function POST(req) {
                     const systemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
                     const requestParams = {
                         model: apiModel,
-                        max_tokens: maxTokens,
+                        max_tokens: normalizedMaxTokens,
                         system: [
                             {
                                 type: "text",

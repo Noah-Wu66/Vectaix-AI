@@ -6,14 +6,6 @@ import { SEED_MODEL_ID } from "./seedModel";
 
 let msgIdCounter = 0;
 const generateMsgId = () => `msg_${Date.now()}_${++msgIdCounter}`;
-const DEEPSEEK_MODEL_ID = "deepseek-reasoner";
-
-function getDeepSeekThinkingLevelByBudget(budgetTokens) {
-  const budget = Number(budgetTokens);
-  if (budget <= 4000) return "low";
-  if (budget <= 16000) return "medium";
-  return "high";
-}
 
 export function createChatAppActions({
   toast,
@@ -56,10 +48,7 @@ export function createChatAppActions({
   const getEffectiveThinkingLevel = (m) => {
     if (m === SEED_MODEL_ID) {
       const v = thinkingLevels?.[m];
-      return typeof v === "string" && v ? v : "medium";
-    }
-    if (m === DEEPSEEK_MODEL_ID) {
-      return getDeepSeekThinkingLevelByBudget(budgetTokens);
+      return typeof v === "string" && v ? v : "high";
     }
     const v = thinkingLevels?.[m];
     if (typeof v === "string" && v) return v;
@@ -237,10 +226,6 @@ export function createChatAppActions({
         provider: currentModelConfig?.provider,
         userMessageId: userMsg.id,
         settings: !currentConversationId && !isCouncil ? {
-          thinkingLevel: getEffectiveThinkingLevel(model),
-          historyLimit,
-          maxTokens,
-          budgetTokens,
           webSearch,
           activePromptId: activePromptId != null ? String(activePromptId) : null,
         } : undefined,

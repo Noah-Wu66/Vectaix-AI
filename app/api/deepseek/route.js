@@ -244,7 +244,6 @@ export async function POST(req) {
         }
 
         const maxTokens = config?.maxTokens;
-        const budgetTokens = Number.parseInt(config?.budgetTokens, 10);
 
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(
             typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''

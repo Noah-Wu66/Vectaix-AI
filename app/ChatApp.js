@@ -33,7 +33,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, setModel, thinkingLevels, setThinkingLevels, historyLimit, setHistoryLimit, maxTokens, setMaxTokens, budgetTokens, setBudgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
+  const { model, setModel, thinkingLevels, historyLimit, maxTokens, budgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
   useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -446,8 +446,7 @@ export default function ChatApp() {
         setCurrentConversationId(id);
 
         // 获取对话的模型和 provider
-        const conversationModel = normalizeSeedModelId(data.conversation.model);
-        const conversationModelConfig = CHAT_MODELS.find((m) => m.id === conversationModel);
+        const conversationModelConfig = CHAT_MODELS.find((m) => m.id === normalizeSeedModelId(data.conversation.model));
         const conversationProvider = conversationModelConfig?.provider;
         const currentProvider = currentModelConfig?.provider;
 
@@ -481,35 +480,11 @@ export default function ChatApp() {
           lastTextModelRef.current = targetModel;
         }
 
-        // 恢复对话的参数设置（使用默认值填充缺失的字段）
+        // 只恢复仍然保留在前端里的设置
         if (conversationProvider !== "council") {
           const settings = data.conversation.settings && typeof data.conversation.settings === "object"
             ? data.conversation.settings
             : {};
-          // 思考级别：恢复对话存储的值
-          if (typeof settings.thinkingLevel === "string" && settings.thinkingLevel && conversationModel) {
-            setThinkingLevels((prev) => ({
-              ...prev,
-              [targetModel]: settings.thinkingLevel
-            }));
-          }
-          // 其他参数：使用对话设置，否则使用默认值
-          const nextHistoryLimit = Number(settings.historyLimit);
-          if (Number.isFinite(nextHistoryLimit) && nextHistoryLimit >= 0) {
-            setHistoryLimit(nextHistoryLimit);
-          }
-          const isClaudeAdaptiveConv = typeof conversationModel === "string"
-            && (conversationModel.startsWith("claude-opus-4-6") || conversationModel.startsWith("claude-sonnet-4-6"));
-          const maxTokensValue = Number(settings.maxTokens);
-          if (Number.isFinite(maxTokensValue) && maxTokensValue > 0) {
-            const providerLimits = { claude: isClaudeAdaptiveConv ? 128000 : 64000, openai: 128000, gemini: 64000, seed: 64000, deepseek: 64000 };
-            const maxAllowed = providerLimits[conversationProvider];
-            setMaxTokens(Number.isFinite(maxAllowed) ? Math.min(maxTokensValue, maxAllowed) : maxTokensValue);
-          }
-          const nextBudgetTokens = Number(settings.budgetTokens);
-          if (Number.isFinite(nextBudgetTokens) && nextBudgetTokens > 0) {
-            setBudgetTokens(nextBudgetTokens);
-          }
           if (typeof settings.webSearch === "boolean") {
             setWebSearch(settings.webSearch);
           }
@@ -713,26 +688,7 @@ export default function ChatApp() {
             onModelChange: requestModelChange,
             messages,
             contextWindow: currentModelConfig?.contextWindow,
-            thinkingLevel: thinkingLevels?.[model],
-            setThinkingLevel: (v) => {
-              setThinkingLevels((prev) => ({ ...prev, [model]: v }));
-              syncConversationSettings({ thinkingLevel: v });
-            },
             historyLimit,
-            setHistoryLimit: (v) => {
-              setHistoryLimit(v);
-              syncConversationSettings({ historyLimit: v });
-            },
-            maxTokens,
-            setMaxTokens: (v) => {
-              setMaxTokens(v);
-              syncConversationSettings({ maxTokens: v });
-            },
-            budgetTokens,
-            setBudgetTokens: (v) => {
-              setBudgetTokens(v);
-              syncConversationSettings({ budgetTokens: v });
-            },
             webSearch,
             setWebSearch: (v) => {
               setWebSearch(v);

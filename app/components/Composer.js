@@ -20,14 +20,7 @@ export default function Composer({
   onModelChange,
   messages,
   contextWindow,
-  thinkingLevel,
-  setThinkingLevel,
   historyLimit,
-  setHistoryLimit,
-  maxTokens,
-  setMaxTokens,
-  budgetTokens,
-  setBudgetTokens,
   webSearch,
   setWebSearch,
   systemPrompts,
@@ -223,14 +216,6 @@ export default function Composer({
             <>
               <SettingsMenu
                 model={model}
-                thinkingLevel={thinkingLevel}
-                setThinkingLevel={setThinkingLevel}
-                historyLimit={historyLimit}
-                setHistoryLimit={setHistoryLimit}
-                maxTokens={maxTokens}
-                setMaxTokens={setMaxTokens}
-                budgetTokens={budgetTokens}
-                setBudgetTokens={setBudgetTokens}
                 webSearch={webSearch}
                 setWebSearch={setWebSearch}
                 systemPrompts={systemPrompts}

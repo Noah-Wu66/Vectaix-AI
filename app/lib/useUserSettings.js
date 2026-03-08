@@ -1,16 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   UI_ACTIVE_PROMPT_IDS_KEY,
-  UI_BUDGET_TOKENS_KEY,
   UI_COMPLETION_SOUND_VOLUME_KEY,
   UI_FONT_SIZE_KEY,
-  UI_HISTORY_LIMIT_KEY,
-  UI_MAX_TOKENS_KEY,
   UI_MODEL_KEY,
   UI_THEME_MODE_KEY,
-  UI_THINKING_LEVELS_KEY,
   UI_WEB_SEARCH_KEY,
 } from "./storageKeys";
 import { OPENAI_PRIMARY_MODEL } from "./openaiModel";
@@ -26,18 +22,15 @@ const MAX_TOKENS_64K = 64000;
 const MAX_TOKENS_128K = 128000;
 const DEFAULT_THINKING_LEVELS = {
   "gemini-3-flash-preview": "HIGH",
-  "gemini-3.1-pro-preview": "MEDIUM",
-  "claude-sonnet-4-6-20260219": "high",
-  "claude-opus-4-6-20260205": "high",
-  [OPENAI_PRIMARY_MODEL]: "medium",
-  [SEED_MODEL_ID]: "medium",
+  "gemini-3.1-pro-preview": "HIGH",
+  "claude-sonnet-4-6-20260219": "max",
+  "claude-opus-4-6-20260205": "max",
+  [OPENAI_PRIMARY_MODEL]: "xhigh",
+  [SEED_MODEL_ID]: "high",
   "deepseek-reasoner": "medium",
 };
-const DEFAULT_MAX_TOKENS = MAX_TOKENS_64K;
 const DEFAULT_BUDGET_TOKENS = 32000;
 const DEFAULT_COMPLETION_SOUND_VOLUME = 60;
-
-// localStorage keys - 所有设置都本地存储，只有 systemPrompts 内容存数据库
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -46,8 +39,8 @@ function isPlainObject(value) {
 function readLocalSetting(key) {
   try {
     if (typeof window === "undefined") return null;
-    const v = window.localStorage?.getItem?.(key);
-    return typeof v === "string" && v ? v : null;
+    const value = window.localStorage?.getItem?.(key);
+    return typeof value === "string" && value ? value : null;
   } catch {
     return null;
   }
@@ -55,8 +48,8 @@ function readLocalSetting(key) {
 
 function readLocalJson(key) {
   try {
-    const v = readLocalSetting(key);
-    return v ? JSON.parse(v) : null;
+    const value = readLocalSetting(key);
+    return value ? JSON.parse(value) : null;
   } catch {
     return null;
   }
@@ -95,35 +88,36 @@ function normalizeModelKeyedObject(value) {
   return next;
 }
 
+function getDefaultMaxTokensForModel(model) {
+  if (typeof model !== "string" || !model) return MAX_TOKENS_64K;
+  if (model.startsWith("gpt-") || model.startsWith("claude-opus-4-6")) {
+    return MAX_TOKENS_128K;
+  }
+  return MAX_TOKENS_64K;
+}
+
 export function useUserSettings() {
   const [model, _setModel] = useState(DEFAULT_MODEL);
-  const [thinkingLevels, _setThinkingLevels] = useState(DEFAULT_THINKING_LEVELS);
-  const [historyLimit, _setHistoryLimit] = useState(0);
   const [systemPrompts, setSystemPrompts] = useState([]);
   const [activePromptIds, _setActivePromptIds] = useState({});
   const [activePromptId, _setActivePromptId] = useState(null);
   const [themeMode, _setThemeMode] = useState("system");
   const [fontSize, _setFontSize] = useState("medium");
-  const [maxTokens, _setMaxTokens] = useState(DEFAULT_MAX_TOKENS);
-  const [budgetTokens, _setBudgetTokens] = useState(DEFAULT_BUDGET_TOKENS);
   const [webSearch, _setWebSearch] = useState(true);
   const [avatar, _setAvatar] = useState(null);
   const [completionSoundVolume, _setCompletionSoundVolume] = useState(DEFAULT_COMPLETION_SOUND_VOLUME);
   const [settingsError, setSettingsError] = useState(null);
 
-  const modelRef = useRef(model);
-  modelRef.current = model;
+  const thinkingLevels = DEFAULT_THINKING_LEVELS;
+  const historyLimit = 0;
+  const maxTokens = getDefaultMaxTokensForModel(model);
+  const budgetTokens = DEFAULT_BUDGET_TOKENS;
 
-  // 从 localStorage 读取所有本地设置
   useEffect(() => {
     const localTheme = readLocalSetting(UI_THEME_MODE_KEY);
     const localFont = readLocalSetting(UI_FONT_SIZE_KEY);
     const localModel = readLocalSetting(UI_MODEL_KEY);
-    const localThinkingLevels = readLocalJson(UI_THINKING_LEVELS_KEY);
-    const localHistoryLimit = readLocalSetting(UI_HISTORY_LIMIT_KEY);
     const localActivePromptIds = readLocalJson(UI_ACTIVE_PROMPT_IDS_KEY);
-    const localMaxTokens = readLocalSetting(UI_MAX_TOKENS_KEY);
-    const localBudgetTokens = readLocalSetting(UI_BUDGET_TOKENS_KEY);
     const localWebSearch = readLocalSetting(UI_WEB_SEARCH_KEY);
     const localCompletionSoundVolume = readLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY);
 
@@ -140,15 +134,6 @@ export function useUserSettings() {
       _setModel(initialModel);
       writeLocalSetting(UI_MODEL_KEY, initialModel);
     }
-    if (isPlainObject(localThinkingLevels)) {
-      const normalizedThinkingLevels = normalizeModelKeyedObject(localThinkingLevels);
-      _setThinkingLevels(normalizedThinkingLevels);
-      writeLocalJson(UI_THINKING_LEVELS_KEY, normalizedThinkingLevels);
-    }
-    if (localHistoryLimit !== null) {
-      const parsed = Number(localHistoryLimit);
-      _setHistoryLimit(Number.isFinite(parsed) ? parsed : 0);
-    }
     if (isPlainObject(localActivePromptIds)) {
       const normalizedActivePromptIds = normalizeModelKeyedObject(localActivePromptIds);
       _setActivePromptIds(normalizedActivePromptIds);
@@ -158,14 +143,6 @@ export function useUserSettings() {
         _setActivePromptId(remembered);
       }
     }
-    if (localMaxTokens !== null) {
-      const parsed = Number(localMaxTokens);
-      _setMaxTokens(Number.isFinite(parsed) ? parsed : DEFAULT_MAX_TOKENS);
-    }
-    if (localBudgetTokens !== null) {
-      const parsed = Number(localBudgetTokens);
-      _setBudgetTokens(Number.isFinite(parsed) ? parsed : DEFAULT_BUDGET_TOKENS);
-    }
     if (localWebSearch === "true") _setWebSearch(true);
     else if (localWebSearch === "false") _setWebSearch(false);
     if (localCompletionSoundVolume !== null) {
@@ -174,40 +151,11 @@ export function useUserSettings() {
     }
   }, []);
 
-  const setModel = useCallback((m) => {
-    const normalized = normalizeSeedModelId(m);
+  const setModel = useCallback((nextModel) => {
+    const normalized = normalizeSeedModelId(nextModel);
     _setModel(normalized);
     writeLocalSetting(UI_MODEL_KEY, normalized);
   }, []);
-
-  useEffect(() => {
-    if (typeof model !== "string") return;
-    if (model === SEED_MODEL_ID || model.startsWith("gemini-") || model.startsWith("deepseek-")) {
-      if (maxTokens > MAX_TOKENS_64K) {
-        _setMaxTokens(MAX_TOKENS_64K);
-        writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_64K));
-      }
-      return;
-    }
-    if (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6")) {
-      if (maxTokens > MAX_TOKENS_128K) {
-        _setMaxTokens(MAX_TOKENS_128K);
-        writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_128K));
-      }
-      return;
-    }
-    if (model.startsWith("claude-")) {
-      if (maxTokens > MAX_TOKENS_64K) {
-        _setMaxTokens(MAX_TOKENS_64K);
-        writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_64K));
-      }
-      return;
-    }
-    if (model.startsWith("gpt-") && maxTokens > MAX_TOKENS_128K) {
-      _setMaxTokens(MAX_TOKENS_128K);
-      writeLocalSetting(UI_MAX_TOKENS_KEY, String(MAX_TOKENS_128K));
-    }
-  }, [model, maxTokens]);
 
   const setThemeMode = useCallback((mode) => {
     _setThemeMode(mode);
@@ -217,20 +165,6 @@ export function useUserSettings() {
   const setFontSize = useCallback((size) => {
     _setFontSize(size);
     writeLocalSetting(UI_FONT_SIZE_KEY, size);
-  }, []);
-
-  const setThinkingLevels = useCallback((levels) => {
-    _setThinkingLevels((prev) => {
-      const next = typeof levels === "function" ? levels(prev) : levels;
-      const normalized = isPlainObject(next) ? next : {};
-      writeLocalJson(UI_THINKING_LEVELS_KEY, normalized);
-      return normalized;
-    });
-  }, []);
-
-  const setHistoryLimit = useCallback((limit) => {
-    _setHistoryLimit(limit);
-    writeLocalSetting(UI_HISTORY_LIMIT_KEY, String(limit));
   }, []);
 
   const setActivePromptIds = useCallback((ids) => {
@@ -244,16 +178,6 @@ export function useUserSettings() {
 
   const setActivePromptId = useCallback((id) => {
     _setActivePromptId(typeof id === "string" && id ? id : null);
-  }, []);
-
-  const setMaxTokens = useCallback((tokens) => {
-    _setMaxTokens(tokens);
-    writeLocalSetting(UI_MAX_TOKENS_KEY, String(tokens));
-  }, []);
-
-  const setBudgetTokens = useCallback((tokens) => {
-    _setBudgetTokens(tokens);
-    writeLocalSetting(UI_BUDGET_TOKENS_KEY, String(tokens));
   }, []);
 
   const setWebSearch = useCallback((enabled) => {
@@ -288,7 +212,6 @@ export function useUserSettings() {
       }
 
       setSettingsError(null);
-      // 只从服务器读取 systemPrompts 和 avatar，其他都从 localStorage
       if (Array.isArray(settings.systemPrompts)) {
         setSystemPrompts(settings.systemPrompts);
       }
@@ -435,9 +358,7 @@ export function useUserSettings() {
     model,
     setModel,
     thinkingLevels,
-    setThinkingLevels,
     historyLimit,
-    setHistoryLimit,
     systemPrompts,
     setSystemPrompts,
     activePromptIds,
@@ -449,9 +370,7 @@ export function useUserSettings() {
     fontSize,
     setFontSize,
     maxTokens,
-    setMaxTokens,
     budgetTokens,
-    setBudgetTokens,
     webSearch,
     setWebSearch,
     completionSoundVolume,
