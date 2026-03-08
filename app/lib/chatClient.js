@@ -512,6 +512,8 @@ export async function runChat({
         thinkingTimeline: [],
         citations: null,
         councilExperts: null,
+        councilExpertStates: null,
+        councilSummaryState: null,
         searchError: null,
       },
     ]);
@@ -534,6 +536,8 @@ export async function runChat({
     let searchResults = null;
     let citations = null;
     let councilExperts = null;
+    let councilExpertStates = null;
+    let councilSummaryState = null;
     let searchError = null;
     let streamErrorMessage = null; // 流内错误消息（来自 stream_error 事件）
     let searchContextTokens = 0; // 联网搜索注入的上下文 token 数
@@ -553,6 +557,24 @@ export async function runChat({
     const appendTimelineStep = (step) => {
       if (!step || typeof step !== "object") return;
       updateThinkingTimeline((prev) => [...prev, { id: nextTimelineId(), ...step }]);
+    };
+
+    const upsertCouncilExpertState = (nextState) => {
+      if (!nextState || typeof nextState !== "object") return;
+      const key = typeof nextState.key === "string" && nextState.key
+        ? nextState.key
+        : (typeof nextState.modelId === "string" && nextState.modelId ? nextState.modelId : null);
+      if (!key) return;
+
+      const base = Array.isArray(councilExpertStates) ? councilExpertStates : [];
+      const index = base.findIndex((item) => item?.key === key);
+      if (index >= 0) {
+        const next = base.slice();
+        next[index] = { ...next[index], ...nextState, key };
+        councilExpertStates = next;
+        return;
+      }
+      councilExpertStates = [...base, { ...nextState, key }];
     };
 
     const getLastTimelineStep = () => {
@@ -648,6 +670,8 @@ export async function runChat({
           fullThought.length > 0 ||
           isSearching ||
           searchError ||
+          (Array.isArray(councilExpertStates) && councilExpertStates.length > 0) ||
+          (councilSummaryState && typeof councilSummaryState === "object") ||
           (Array.isArray(thinkingTimeline) && thinkingTimeline.length > 0);
         if (nowHasContent && !hasReceivedContent) {
           hasReceivedContent = true;
@@ -670,6 +694,8 @@ export async function runChat({
           thinkingTimeline,
           citations,
           councilExperts,
+          councilExpertStates,
+          councilSummaryState,
           searchError,
           searchContextTokens: searchContextTokens || undefined,
         };
@@ -684,6 +710,8 @@ export async function runChat({
           base.thinkingTimeline === nextMsg.thinkingTimeline &&
           base.citations === nextMsg.citations &&
           base.councilExperts === nextMsg.councilExperts &&
+          base.councilExpertStates === nextMsg.councilExpertStates &&
+          base.councilSummaryState === nextMsg.councilSummaryState &&
           base.searchError === nextMsg.searchError &&
           base.searchContextTokens === nextMsg.searchContextTokens
         ) {
@@ -793,6 +821,17 @@ export async function runChat({
           citations = data.citations;
         } else if (data.type === "council_experts") {
           councilExperts = Array.isArray(data.experts) ? data.experts : null;
+          scheduleFlush();
+        } else if (data.type === "council_expert_states") {
+          councilExpertStates = Array.isArray(data.experts) ? data.experts : null;
+          scheduleFlush();
+        } else if (data.type === "council_expert_state") {
+          upsertCouncilExpertState(data.expert);
+          scheduleFlush();
+        } else if (data.type === "council_summary_state") {
+          councilSummaryState = data.summary && typeof data.summary === "object"
+            ? data.summary
+            : null;
           scheduleFlush();
         } else if (data.type === "search_context_tokens") {
           const tokens = typeof data.tokens === "number" ? data.tokens : 0;
@@ -985,6 +1024,12 @@ export async function runChat({
             const streamCouncilExperts = Array.isArray(streamMsg?.councilExperts)
               ? streamMsg.councilExperts
               : null;
+            const streamCouncilExpertStates = Array.isArray(streamMsg?.councilExpertStates)
+              ? streamMsg.councilExpertStates
+              : null;
+            const streamCouncilSummaryState = streamMsg?.councilSummaryState && typeof streamMsg.councilSummaryState === "object"
+              ? streamMsg.councilSummaryState
+              : null;
             const streamSearchError = typeof streamMsg?.searchError === "string"
               ? streamMsg.searchError
               : null;
@@ -999,6 +1044,8 @@ export async function runChat({
                     id: streamMsgId,
                     ...(streamTimeline?.length ? { thinkingTimeline: streamTimeline } : {}),
                     ...(streamCouncilExperts?.length ? { councilExperts: streamCouncilExperts } : {}),
+                    ...(streamCouncilExpertStates?.length ? { councilExpertStates: streamCouncilExpertStates } : {}),
+                    ...(streamCouncilSummaryState ? { councilSummaryState: streamCouncilSummaryState } : {}),
                     ...(streamSearchError ? { searchError: streamSearchError } : {}),
                   };
                   break;

@@ -7,7 +7,9 @@ import { getClientIP, rateLimit } from "@/lib/rateLimit";
 import { generateMessageId } from "@/app/api/chat/utils";
 import { COUNCIL_MODEL_ID } from "@/app/lib/councilModel";
 import {
+  buildCouncilExpertState,
   buildCouncilFinalMessage,
+  buildCouncilSummaryState,
   buildCouncilUserInput,
   COUNCIL_EXPERT_CONFIGS,
   createCouncilStreamHelpers,
@@ -205,14 +207,47 @@ export async function POST(req) {
         );
       };
 
-      const pushStage = (message) => {
-        if (!message) return;
-        streamHelpers.sendThought(`${message}\n`);
-      };
-
       try {
-        pushStage("正在召集三位专家。");
-        pushStage("专家正在联网分析，请稍候。");
+        const expertStateMap = new Map(
+          COUNCIL_EXPERT_CONFIGS.map((expert) => [expert.key, buildCouncilExpertState(expert, {
+            status: "pending",
+            phase: "pending",
+            message: "等待开始",
+          })])
+        );
+        let summaryState = buildCouncilSummaryState({
+          status: "pending",
+          phase: "pending",
+          message: "等待三位专家完成",
+        });
+
+        streamHelpers.sendCouncilExpertStates(Array.from(expertStateMap.values()));
+        streamHelpers.sendCouncilSummaryState(summaryState);
+
+        const updateExpertState = (expert, patch) => {
+          const nextState = buildCouncilExpertState(expert, {
+            ...expertStateMap.get(expert.key),
+            ...patch,
+          });
+          expertStateMap.set(expert.key, nextState);
+          try {
+            streamHelpers.sendCouncilExpertState(nextState);
+          } catch {
+            // ignore stream state send failure
+          }
+        };
+
+        const updateSummaryState = (patch) => {
+          summaryState = buildCouncilSummaryState({
+            ...summaryState,
+            ...patch,
+          });
+          try {
+            streamHelpers.sendCouncilSummaryState(summaryState);
+          } catch {
+            // ignore stream state send failure
+          }
+        };
 
         const experts = await Promise.all(
           COUNCIL_EXPERT_CONFIGS.map((expert) =>
@@ -222,7 +257,7 @@ export async function POST(req) {
               expert,
               conversationId: currentConversationId,
               clientAborted: () => clientAborted,
-              pushStage,
+              updateStatus: (patch) => updateExpertState(expert, patch),
             })
           )
         );
@@ -231,7 +266,11 @@ export async function POST(req) {
           throw new Error("COUNCIL_ABORTED");
         }
 
-        pushStage("Seed 正在汇总结论。");
+        updateSummaryState({
+          status: "running",
+          phase: "thinking",
+          message: "正在汇总结论",
+        });
         const summary = await runSeedCouncilSummary({
           prompt: promptText,
           experts,
@@ -258,9 +297,23 @@ export async function POST(req) {
         streamCouncilSummary(streamHelpers, summary);
         streamHelpers.sendCouncilExperts(experts);
         streamHelpers.sendCitations(finalMessage.citations);
+        updateSummaryState({
+          status: "done",
+          phase: "done",
+          message: "已完成汇总",
+        });
         streamHelpers.sendDone();
         controller.close();
       } catch (error) {
+        try {
+          streamHelpers.sendCouncilSummaryState(buildCouncilSummaryState({
+            status: "error",
+            phase: "error",
+            message: error?.message === "COUNCIL_ABORTED" ? "已停止" : (error?.message || "执行失败"),
+          }));
+        } catch {
+          // ignore stream state send failure
+        }
         try {
           await restoreConversationSnapshot();
         } catch {

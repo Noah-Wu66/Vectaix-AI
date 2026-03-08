@@ -1,6 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 import Anthropic from "@anthropic-ai/sdk";
-import { parseJsonFromText } from "@/app/api/chat/jsonUtils";
 import {
   buildWebSearchContextBlock,
   fetchImageAsBase64,
@@ -29,7 +28,6 @@ const FORMATTING_GUARD =
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
 const SEED_MAX_OUTPUT_TOKENS = 8000;
 const MAX_RAW_MARKDOWN_CHARS = 20000;
-const MAX_FINDING_ITEMS = 12;
 const MAX_FINDING_TEXT_CHARS = 1000;
 
 export const COUNCIL_EXPERT_CONFIGS = [
@@ -71,82 +69,6 @@ function normalizeString(value, maxChars = MAX_FINDING_TEXT_CHARS) {
   return value.trim().slice(0, maxChars);
 }
 
-function normalizeStringArray(value, maxItems = MAX_FINDING_ITEMS, maxChars = MAX_FINDING_TEXT_CHARS) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => normalizeString(item, maxChars))
-    .filter(Boolean)
-    .slice(0, maxItems);
-}
-
-function normalizeEvidence(value) {
-  if (Array.isArray(value)) {
-    return normalizeStringArray(value, 6, 600);
-  }
-  const single = normalizeString(value, 600);
-  return single ? [single] : [];
-}
-
-function normalizeConsensusItems(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      if (!isPlainObject(item)) return null;
-      const finding = normalizeString(item.finding, 600);
-      if (!finding) return null;
-      const evidence = normalizeEvidence(item.evidence);
-      return { finding, evidence };
-    })
-    .filter(Boolean)
-    .slice(0, MAX_FINDING_ITEMS);
-}
-
-function normalizeDifferenceItems(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      if (!isPlainObject(item)) return null;
-      const topic = normalizeString(item.topic, 400);
-      const position = normalizeString(item.position, 1000);
-      const reason = normalizeString(item.reason, 1000);
-      if (!topic || !position) return null;
-      return { topic, position, reason };
-    })
-    .filter(Boolean)
-    .slice(0, MAX_FINDING_ITEMS);
-}
-
-function normalizeUniqueFindingItems(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      if (!isPlainObject(item)) return null;
-      const finding = normalizeString(item.finding, 1000);
-      const whyItMatters = normalizeString(item.whyItMatters, 1000);
-      if (!finding) return null;
-      return { finding, whyItMatters };
-    })
-    .filter(Boolean)
-    .slice(0, MAX_FINDING_ITEMS);
-}
-
-function normalizeStructuredFindings(value) {
-  if (!isPlainObject(value)) {
-    return {
-      consensusCandidates: [],
-      differences: [],
-      uniqueFindings: [],
-      analysisNotes: [],
-    };
-  }
-  return {
-    consensusCandidates: normalizeConsensusItems(value.consensusCandidates),
-    differences: normalizeDifferenceItems(value.differences),
-    uniqueFindings: normalizeUniqueFindingItems(value.uniqueFindings),
-    analysisNotes: normalizeStringArray(value.analysisNotes, 8, 1000),
-  };
-}
-
 function normalizeCitations(value) {
   if (!Array.isArray(value)) return [];
   const seen = new Set();
@@ -170,6 +92,26 @@ function normalizeCitations(value) {
 
 function mergeCitations(...lists) {
   return normalizeCitations(lists.flat());
+}
+
+export function buildCouncilExpertState(expert, patch = {}) {
+  return {
+    key: expert.key,
+    modelId: expert.modelId,
+    label: expert.label,
+    status: typeof patch.status === "string" ? patch.status : "pending",
+    phase: typeof patch.phase === "string" ? patch.phase : "pending",
+    message: typeof patch.message === "string" ? patch.message : "",
+  };
+}
+
+export function buildCouncilSummaryState(patch = {}) {
+  return {
+    label: "Seed 汇总",
+    status: typeof patch.status === "string" ? patch.status : "pending",
+    phase: typeof patch.phase === "string" ? patch.phase : "pending",
+    message: typeof patch.message === "string" ? patch.message : "",
+  };
 }
 
 function chunkText(text, chunkSize = 180) {
@@ -268,55 +210,27 @@ function buildStoredUserParts(prompt, imagePayloads) {
   return parts;
 }
 
-function buildExpertJsonPrompt(label) {
+function buildExpertMarkdownPrompt(label) {
   return `你现在是 Council 专家团中的 ${label}。请独立分析用户问题，给出你自己的判断，不要迎合其他模型，也不要假设其他模型会怎么说。
 
-你必须只输出一个合法 JSON 对象，不要输出 Markdown 代码块，不要输出解释文字。
-
-JSON 结构必须严格为：
-{
-  "rawMarkdown": "你给用户看的完整原始回答，使用 Markdown，不能是空字符串",
-  "structuredFindings": {
-    "consensusCandidates": [
-      {
-        "finding": "你认为其他模型大概率也会认同的关键结论",
-        "evidence": ["支撑这个结论的简短依据 1", "支撑这个结论的简短依据 2"]
-      }
-    ],
-    "differences": [
-      {
-        "topic": "可能出现分歧的议题",
-        "position": "你在这个议题上的明确立场",
-        "reason": "你为什么这样判断"
-      }
-    ],
-    "uniqueFindings": [
-      {
-        "finding": "你独有或最值得强调的发现",
-        "whyItMatters": "它为什么重要"
-      }
-    ],
-    "analysisNotes": ["供后续综合分析使用的关键判断 1", "关键判断 2"]
-  }
-}
+请直接输出给用户看的最终 Markdown 回答，不要输出 JSON，不要输出解释你在做什么，也不要用代码块包住整个回答。
 
 要求：
-1. rawMarkdown 必须是你真正想给用户看的完整答复，内容要独立成立。
-2. structuredFindings 必须基于 rawMarkdown 提炼，不能凭空捏造。
-3. 如果某一类没有内容，仍保留该字段并输出空数组。
-4. 不要输出你的思维链，不要输出“我不能提供 JSON”之类的废话。
-5. 不要在 rawMarkdown 中附加裸链接或裸域名括号。`;
+1. 回答必须能单独成立，先给出明确结论，再写依据、风险、不确定性。
+2. 如果信息有时效性，要明确时间条件；如果信息不足，要直接说明不足点。
+3. 不要输出思维链，不要编造资料，不要假装看过不存在的来源。
+4. 不要在正文里附加裸链接或裸域名括号。`;
 }
 
 async function buildExpertSystemPrompt({ label, enableWebSearch, searchContextText }) {
-  const base = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(buildExpertJsonPrompt(label)));
+  const base = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(buildExpertMarkdownPrompt(label)));
   const webSearchGuide = buildWebSearchGuide(enableWebSearch);
   const searchContextSection = searchContextText ? buildWebSearchContextBlock(searchContextText) : "";
   return `${base}\n\n${FORMATTING_GUARD}${webSearchGuide}${searchContextSection}`;
 }
 
 async function buildSeedSystemPrompt() {
-  return injectCurrentTimeSystemReminder(`你是 Council 的最终汇总模型 Seed。你的任务是综合三位专家的结构化结果与原始回答，输出一份最终 Markdown 结论。
+  return injectCurrentTimeSystemReminder(`你是 Council 的最终汇总模型 Seed。你会收到用户问题、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务是比较三位专家已经写出的正式回答，输出一份最终 Markdown 结论。
 
 必须严格遵守：
 1. 只能输出 Markdown，不要输出 JSON，不要输出代码块。
@@ -333,9 +247,10 @@ Topic | GPT-5.4 Thinking | Claude Opus 4.6 Thinking | Gemini 3.1 Pro Thinking | 
 6. 第 3 节表头固定为：
 Model | Unique Finding | Why It Matters
 7. 若某节没有内容，仍保留标题和表头，并补一行占位说明。
-8. 在第 1、2 节中，用“✓”表示该模型支持该条观点；不支持或未明确提到时留空。
-9. 不要编造不存在的共识或分歧；若信息不足，要明确写成占位说明。
-10. 不要泄露任何模型思维链，不要输出裸链接。`);
+8. 在第 1、2 节中，只有当某位专家明确表达过该观点时，才用“✓”；没有明确表达就留空。
+9. Evidence 和 Why They Differ 只能基于专家回答或提供的资料来写，不要脑补。
+10. 不要编造不存在的共识或分歧；若信息不足，要明确写成占位说明。
+11. 不要泄露任何模型思维链，不要输出裸链接。`);
 }
 
 async function buildGeminiDecisionRunner(ai) {
@@ -441,16 +356,44 @@ async function collectSearchContext({
   expert,
   conversationId,
   clientAborted,
-  pushStage,
+  updateStatus,
 }) {
   const citations = [];
   const pushCitations = (items) => {
     citations.push(...normalizeCitations(items));
   };
   const sendSearchError = (message) => {
+    updateStatus?.({
+      status: "error",
+      phase: "error",
+      message: message || "联网搜索失败",
+    });
     throw new Error(message || "联网搜索失败");
   };
-  const noOpEvent = () => {};
+  const handleSearchEvent = (event) => {
+    if (!isPlainObject(event)) return;
+    if (event.type === "search_start") {
+      const query = typeof event.query === "string" ? event.query.trim() : "";
+      updateStatus?.({
+        status: "running",
+        phase: "searching",
+        message: query ? `联网检索：${query}` : "联网检索中",
+      });
+    }
+    if (event.type === "search_result") {
+      updateStatus?.({
+        status: "running",
+        phase: "thinking",
+        message: "已完成联网检索，开始生成回答",
+      });
+    }
+  };
+
+  updateStatus?.({
+    status: "running",
+    phase: "decision",
+    message: "判断是否需要联网",
+  });
 
   if (expert.provider === "gemini") {
     assertConfigured(GEMINI_API_KEY, "GEMINI_API_KEY is not set");
@@ -461,7 +404,7 @@ async function collectSearchContext({
       prompt,
       historyMessages: [],
       decisionRunner,
-      sendEvent: noOpEvent,
+      sendEvent: handleSearchEvent,
       pushCitations,
       sendSearchError,
       isClientAborted: () => clientAborted(),
@@ -470,7 +413,6 @@ async function collectSearchContext({
       conversationId,
       allowHeuristicFallback: false,
     });
-    if (searchContextText) pushStage?.(`已完成 ${expert.label} 的联网检索。`);
     return { searchContextText, citations: normalizeCitations(citations) };
   }
 
@@ -486,7 +428,7 @@ async function collectSearchContext({
       prompt,
       historyMessages: [],
       decisionRunner,
-      sendEvent: noOpEvent,
+      sendEvent: handleSearchEvent,
       pushCitations,
       sendSearchError,
       isClientAborted: () => clientAborted(),
@@ -495,7 +437,6 @@ async function collectSearchContext({
       conversationId,
       allowHeuristicFallback: false,
     });
-    if (searchContextText) pushStage?.(`已完成 ${expert.label} 的联网检索。`);
     return { searchContextText, citations: normalizeCitations(citations) };
   }
 
@@ -506,7 +447,7 @@ async function collectSearchContext({
       prompt,
       historyMessages: [],
       decisionRunner,
-      sendEvent: noOpEvent,
+      sendEvent: handleSearchEvent,
       pushCitations,
       sendSearchError,
       isClientAborted: () => clientAborted(),
@@ -515,7 +456,6 @@ async function collectSearchContext({
       conversationId,
       allowHeuristicFallback: false,
     });
-    if (searchContextText) pushStage?.(`已完成 ${expert.label} 的联网检索。`);
     return { searchContextText, citations: normalizeCitations(citations) };
   }
 
@@ -635,19 +575,14 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
 }
 
 function normalizeExpertOutput(rawText, expert, citations) {
-  const parsed = parseJsonFromText(rawText);
-  if (!isPlainObject(parsed)) {
-    throw new Error(`${expert.label} 未返回合法 JSON`);
-  }
-  const rawMarkdown = normalizeString(parsed.rawMarkdown, MAX_RAW_MARKDOWN_CHARS);
+  const rawMarkdown = normalizeString(rawText, MAX_RAW_MARKDOWN_CHARS);
   if (!rawMarkdown) {
-    throw new Error(`${expert.label} 的 rawMarkdown 为空`);
+    throw new Error(`${expert.label} 未返回有效内容`);
   }
   return {
     modelId: expert.modelId,
     label: expert.label,
     rawMarkdown,
-    structuredFindings: normalizeStructuredFindings(parsed.structuredFindings),
     citations: normalizeCitations(citations),
   };
 }
@@ -658,71 +593,104 @@ export async function runCouncilExpert({
   expert,
   conversationId,
   clientAborted,
-  pushStage,
+  updateStatus,
 }) {
-  pushStage?.(`${expert.label} 开始独立分析。`);
-  const { searchContextText, citations } = await collectSearchContext({
-    prompt,
-    expert,
-    conversationId,
-    clientAborted,
-    pushStage,
+  updateStatus?.({
+    status: "running",
+    phase: "starting",
+    message: "开始分析问题",
   });
-  if (clientAborted()) {
-    throw new Error("COUNCIL_ABORTED");
-  }
 
-  const expertPrompt = `${prompt}\n\n请基于上面的用户问题完成任务。`;
-  const finalPrompt = `${expertPrompt}`;
-  let rawText = "";
+  try {
+    const { searchContextText, citations } = await collectSearchContext({
+      prompt,
+      expert,
+      conversationId,
+      clientAborted,
+      updateStatus,
+    });
+    if (clientAborted()) {
+      throw new Error("COUNCIL_ABORTED");
+    }
 
-  if (expert.provider === "gemini") {
-    rawText = await requestGeminiExpert({
-      prompt: finalPrompt,
-      imagePayloads,
-      expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
-      searchContextText,
+    updateStatus?.({
+      status: "running",
+      phase: "thinking",
+      message: searchContextText ? "整理资料并生成回答" : "直接生成回答",
     });
-  } else if (expert.provider === "claude") {
-    rawText = await requestClaudeExpert({
-      prompt: finalPrompt,
-      imagePayloads,
-      expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
-      searchContextText,
-    });
-  } else if (expert.provider === "openai") {
-    rawText = await requestOpenAIExpert({
-      prompt: finalPrompt,
-      imagePayloads,
-      expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
-      searchContextText,
-    });
-  } else {
-    throw new Error(`未知专家 provider：${expert.provider}`);
-  }
 
-  if (!rawText) {
-    throw new Error(`${expert.label} 未返回有效内容`);
+    const finalPrompt = `${prompt}\n\n请基于上面的用户问题完成任务。`;
+    let rawText = "";
+
+    if (expert.provider === "gemini") {
+      rawText = await requestGeminiExpert({
+        prompt: finalPrompt,
+        imagePayloads,
+        expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
+        searchContextText,
+      });
+    } else if (expert.provider === "claude") {
+      rawText = await requestClaudeExpert({
+        prompt: finalPrompt,
+        imagePayloads,
+        expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
+        searchContextText,
+      });
+    } else if (expert.provider === "openai") {
+      rawText = await requestOpenAIExpert({
+        prompt: finalPrompt,
+        imagePayloads,
+        expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
+        searchContextText,
+      });
+    } else {
+      throw new Error(`未知专家 provider：${expert.provider}`);
+    }
+
+    const normalized = normalizeExpertOutput(rawText, expert, citations);
+    updateStatus?.({
+      status: "done",
+      phase: "done",
+      message: "已完成回答",
+    });
+    return normalized;
+  } catch (error) {
+    if (error?.message !== "COUNCIL_ABORTED") {
+      updateStatus?.({
+        status: "error",
+        phase: "error",
+        message: error?.message || "执行失败",
+      });
+    }
+    throw error;
   }
-  pushStage?.(`${expert.label} 已完成回答。`);
-  return normalizeExpertOutput(rawText, expert, citations);
 }
 
 function buildSeedPayload({ prompt, experts }) {
-  return JSON.stringify(
-    {
-      userQuestion: prompt,
-      experts: experts.map((expert) => ({
-        modelId: expert.modelId,
-        label: expert.label,
-        rawMarkdown: expert.rawMarkdown,
-        structuredFindings: expert.structuredFindings,
-        citations: expert.citations,
-      })),
-    },
-    null,
-    2
-  );
+  const sections = [
+    `# 用户问题\n${prompt}`,
+    "# 专家原始回答",
+  ];
+
+  for (const expert of experts) {
+    const citations = normalizeCitations(expert.citations);
+    const citationText = citations.length > 0
+      ? citations.map((item, index) => {
+          const lines = [`${index + 1}. ${item.title}`, `链接：${item.url}`];
+          if (item.cited_text) lines.push(`摘录：${item.cited_text}`);
+          return lines.join("\n");
+        }).join("\n")
+      : "无";
+
+    sections.push(
+      `## ${expert.label}`,
+      expert.rawMarkdown,
+      `### ${expert.label} 参考资料`,
+      citationText
+    );
+  }
+
+  return sections.join("\n\n");
 }
 
 export async function runSeedCouncilSummary({ prompt, experts }) {
@@ -804,13 +772,24 @@ export function createCouncilStreamHelpers(controller) {
     sendEvent(payload) {
       controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
     },
-    sendThought(text) {
-      if (!text) return;
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "thought", content: text })}\n\n`));
-    },
     sendText(content) {
       if (!content) return;
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "text", content })}\n\n`));
+    },
+    sendCouncilExpertStates(experts) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ type: "council_expert_states", experts })}\n\n`)
+      );
+    },
+    sendCouncilExpertState(expert) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ type: "council_expert_state", expert })}\n\n`)
+      );
+    },
+    sendCouncilSummaryState(summary) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ type: "council_summary_state", summary })}\n\n`)
+      );
     },
     sendCouncilExperts(experts) {
       controller.enqueue(

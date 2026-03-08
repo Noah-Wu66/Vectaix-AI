@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, ChevronDown, ChevronUp, Lightbulb, Search, Zap } from "lucide-react";
 import Markdown from "./Markdown";
+import { ModelAvatar } from "./ModelVisuals";
 
 function normalizeTimeline(timeline) {
   if (!Array.isArray(timeline)) return [];
@@ -24,6 +25,88 @@ function normalizeTimeline(timeline) {
     .filter((step) => step.kind === "thought" || step.kind === "search" || step.kind === "reader");
 }
 
+function normalizeCouncilExpertStates(states) {
+  if (!Array.isArray(states)) return [];
+  return states
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      key: typeof item.key === "string" ? item.key : "",
+      modelId: typeof item.modelId === "string" ? item.modelId : "",
+      label: typeof item.label === "string" ? item.label : "专家",
+      status: typeof item.status === "string" ? item.status : "pending",
+      phase: typeof item.phase === "string" ? item.phase : "pending",
+      message: typeof item.message === "string" ? item.message : "",
+    }))
+    .filter((item) => item.key || item.modelId || item.label);
+}
+
+function normalizeCouncilSummaryState(state) {
+  if (!state || typeof state !== "object") return null;
+  return {
+    label: typeof state.label === "string" ? state.label : "Seed 汇总",
+    status: typeof state.status === "string" ? state.status : "pending",
+    phase: typeof state.phase === "string" ? state.phase : "pending",
+    message: typeof state.message === "string" ? state.message : "",
+  };
+}
+
+function getCouncilStatusMeta(status, phase, kind = "expert") {
+  if (status === "error") {
+    return {
+      label: "失败",
+      pillClass: "bg-red-100 text-red-700",
+      cardClass: "border-red-200 bg-red-50/80",
+      dotClass: "bg-red-500",
+    };
+  }
+  if (status === "done") {
+    return {
+      label: "已完成",
+      pillClass: "bg-emerald-100 text-emerald-700",
+      cardClass: "border-emerald-200 bg-emerald-50/80",
+      dotClass: "bg-emerald-500",
+    };
+  }
+  if (phase === "searching") {
+    return {
+      label: "检索中",
+      pillClass: "bg-sky-100 text-sky-700",
+      cardClass: "border-sky-200 bg-sky-50/80",
+      dotClass: "bg-sky-500 animate-pulse",
+    };
+  }
+  if (phase === "thinking") {
+    return {
+      label: kind === "summary" ? "汇总中" : "回答中",
+      pillClass: "bg-amber-100 text-amber-700",
+      cardClass: "border-amber-200 bg-amber-50/80",
+      dotClass: "bg-amber-500 animate-pulse",
+    };
+  }
+  if (phase === "decision") {
+    return {
+      label: "判断中",
+      pillClass: "bg-violet-100 text-violet-700",
+      cardClass: "border-violet-200 bg-violet-50/80",
+      dotClass: "bg-violet-500 animate-pulse",
+    };
+  }
+  if (phase === "starting") {
+    return {
+      label: "启动中",
+      pillClass: "bg-zinc-200 text-zinc-700",
+      cardClass: "border-zinc-200 bg-zinc-50/80",
+      dotClass: "bg-zinc-500 animate-pulse",
+    };
+  }
+  return {
+    label: "等待中",
+    pillClass: "bg-zinc-200 text-zinc-600",
+    cardClass: "border-zinc-200 bg-white/80",
+    dotClass: "bg-zinc-400",
+  };
+}
+
 function LoadingDots() {
   return (
     <span className="thinking-dots">
@@ -34,7 +117,17 @@ function LoadingDots() {
   );
 }
 
-export default function ThinkingBlock({ thought, isStreaming, isSearching, searchQuery, searchError, timeline, bodyText }) {
+export default function ThinkingBlock({
+  thought,
+  isStreaming,
+  isSearching,
+  searchQuery,
+  searchError,
+  timeline,
+  councilExpertStates,
+  councilSummaryState,
+  bodyText,
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
   const containerRef = useRef(null);
@@ -45,8 +138,10 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
   const safeBodyText = typeof bodyText === "string" ? bodyText : "";
   const safeSearchError = typeof searchError === "string" ? searchError : "";
   const timelineItems = normalizeTimeline(timeline);
+  const normalizedCouncilExpertStates = normalizeCouncilExpertStates(councilExpertStates);
+  const normalizedCouncilSummaryState = normalizeCouncilSummaryState(councilSummaryState);
+  const hasCouncilMode = normalizedCouncilExpertStates.length > 0 || normalizedCouncilSummaryState !== null;
   const hasTimeline = timelineItems.some((step) => step.kind === "search" || step.kind === "reader");
-  const activeReaderStep = [...timelineItems].reverse().find((step) => step.kind === "reader" && step.status === "running");
 
   // 滚动到容器底部（仅简单模式的思考内容）
   useEffect(() => {
@@ -60,6 +155,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
 
   // 时间线模式：自动展开最新的思考步骤
   useEffect(() => {
+    if (hasCouncilMode) return;
     if (!hasTimeline) return;
     if (autoCollapsedRef.current) return;
 
@@ -84,16 +180,17 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
       manualExpandedStepIdRef.current = null;
       return lastThoughtStep.id;
     });
-  }, [hasTimeline, timeline]);
+  }, [hasCouncilMode, hasTimeline, timeline]);
 
   // 简单模式：思考流式输出时自动展开内层思考气泡
   useEffect(() => {
+    if (hasCouncilMode) return;
     if (hasTimeline) return;
     if (autoCollapsedRef.current) return;
     if (isStreaming || safeThought) {
       setExpandedTimelineId("__simple__");
     }
-  }, [hasTimeline, isStreaming, safeThought]);
+  }, [hasCouncilMode, hasTimeline, isStreaming, safeThought]);
 
   // 正文开始输出后，自动折叠外层容器
   useEffect(() => {
@@ -115,6 +212,8 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
 
   // ── 外层图标（始终固定） ──
   const headerIcon = <Zap className="thinking-icon-header" />;
+  const isCouncilRunning = normalizedCouncilExpertStates.some((item) => item.status === "running")
+    || normalizedCouncilSummaryState?.status === "running";
 
   // ── 渲染时间线内的单个步骤（第二层折叠项）──
   const renderTimelineStep = (step, idx) => {
@@ -241,7 +340,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
         {headerIcon}
         <span className="thinking-btn-label flex items-center">
           <span className="truncate max-w-[240px]">{headerText}</span>
-          {!collapsed && !manualOpenMainRef.current && (isStreaming || isSearching) ? <LoadingDots /> : null}
+          {!collapsed && !manualOpenMainRef.current && (hasCouncilMode ? isCouncilRunning : (isStreaming || isSearching)) ? <LoadingDots /> : null}
         </span>
         {collapsed ? (
           <ChevronDown className="thinking-icon-chevron" />
@@ -267,7 +366,69 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className="overflow-hidden"
           >
-            {hasTimeline ? (
+            {hasCouncilMode ? (
+              <div className="space-y-3 pl-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  {normalizedCouncilExpertStates.map((expert) => {
+                    const meta = getCouncilStatusMeta(expert.status, expert.phase, "expert");
+                    return (
+                      <div
+                        key={expert.key || expert.modelId || expert.label}
+                        className={`rounded-2xl border px-4 py-3 ${meta.cardClass}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <ModelAvatar model={expert.modelId} size={28} />
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 text-sm font-semibold leading-5 text-zinc-800">
+                                <span className="block break-words">{expert.label}</span>
+                              </div>
+                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.pillClass}`}>
+                                {meta.label}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs leading-5 text-zinc-600">
+                              <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dotClass}`} />
+                              <span className="break-words">{expert.message || "等待开始"}</span>
+                              {expert.status === "running" ? <LoadingDots /> : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {normalizedCouncilSummaryState ? (() => {
+                  const meta = getCouncilStatusMeta(
+                    normalizedCouncilSummaryState.status,
+                    normalizedCouncilSummaryState.phase,
+                    "summary"
+                  );
+                  return (
+                    <div className={`rounded-2xl border px-4 py-3 ${meta.cardClass}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-zinc-800">
+                            {normalizedCouncilSummaryState.label}
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-xs leading-5 text-zinc-600">
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dotClass}`} />
+                            <span className="break-words">
+                              {normalizedCouncilSummaryState.message || "等待开始"}
+                            </span>
+                            {normalizedCouncilSummaryState.status === "running" ? <LoadingDots /> : null}
+                          </div>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.pillClass}`}>
+                          {meta.label}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })() : null}
+              </div>
+            ) : hasTimeline ? (
               /* 时间线模式：内层各步骤气泡（每个可独立折叠 = 第二层） */
               <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
                 {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
