@@ -1,34 +1,9 @@
 "use client";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronUp, Users } from "lucide-react";
-import { Gemini, Claude, OpenAI, Doubao, DeepSeek } from "@lobehub/icons";
+import { ChevronUp } from "lucide-react";
 import { CHAT_MODELS } from "./ChatModels";
-
-function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
-  if (provider === "council") {
-    return <Users size={size} className={isSelected ? "text-amber-500" : "text-amber-500"} />;
-  }
-  if (provider === "gemini") {
-    return <Gemini.Color size={size} />;
-  }
-  if (provider === "claude") {
-    return <Claude.Color size={size} />;
-  }
-  if (provider === "openai") {
-    return <OpenAI size={size} />;
-  }
-  if (provider === "seed") {
-    return <Doubao.Color size={size} />;
-  }
-  if (provider === "deepseek") {
-    return <DeepSeek.Color size={size} />;
-  }
-  if (Icon) {
-    return <Icon size={size} className={isSelected ? "" : "text-blue-400"} />;
-  }
-  return null;
-}
+import { ModelGlyph } from "./ModelVisuals";
 
 export default function ModelSelector({ model, onModelChange }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
@@ -55,7 +30,7 @@ export default function ModelSelector({ model, onModelChange }) {
               }`}
             type="button"
           >
-            <ModelIcon provider={m.provider} size={16} isSelected={model === m.id} />
+            <ModelGlyph provider={m.provider} size={16} />
             <span>{m.name}</span>
           </button>
         ))}
@@ -71,12 +46,7 @@ export default function ModelSelector({ model, onModelChange }) {
         type="button"
       >
         {currentModel && (
-          <ModelIcon
-            provider={currentModel.provider}
-            Icon={currentModel.Icon}
-            size={14}
-            isSelected={true}
-          />
+          <ModelGlyph provider={currentModel.provider} size={14} />
         )}
         <span className="truncate max-w-[90px]">{currentModelLabel}</span>
         <ChevronUp

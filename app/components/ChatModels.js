@@ -40,14 +40,14 @@ export const CHAT_MODELS = [
   },
   {
     id: OPENAI_PRIMARY_MODEL,
-    name: "GPT-5.4",
+    name: "GPT",
     shortName: "GPT",
     provider: "openai",
     contextWindow: 1050000,
   },
   {
     id: SEED_MODEL_ID,
-    name: "Seed 2.0 Pro",
+    name: "Seed",
     shortName: "Seed",
     provider: "seed",
     contextWindow: 256000,
