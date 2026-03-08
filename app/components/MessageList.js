@@ -528,7 +528,7 @@ export default function MessageList({
                               <RotateCcw size={14} />
                             </button>
                           </>
-                        )}
+                        ) : null}
                       </div>
                     )}
                   </>
