@@ -126,9 +126,9 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
       if (step.kind === "thought") return "思考过程";
       if (step.kind === "search") {
         const query = step.query ? `「${step.query}」` : "";
-        if (isRunning) return `博查搜索中${query}`;
-        if (isError) return `博查搜索失败${query}`;
-        return `博查搜索完成${query}`;
+        if (isRunning) return `联网搜索中${query}`;
+        if (isError) return `联网搜索失败${query}`;
+        return `联网搜索完成${query}`;
       }
       if (step.kind === "reader") return isRunning ? "查看网页中" : (isError ? "网页读取失败" : "网页正文已读取");
       return "处理中";
@@ -253,7 +253,7 @@ export default function ThinkingBlock({ thought, isStreaming, isSearching, searc
       {/* 搜索错误提示（非时间线模式） */}
       {!hasTimeline && !isSearching && safeSearchError ? (
         <div className="thinking-error-tip text-red-600 bg-red-50 border border-red-200">
-          博查搜索失败：{safeSearchError}
+          联网搜索失败：{safeSearchError}
         </div>
       ) : null}
 

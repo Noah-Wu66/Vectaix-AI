@@ -14,8 +14,13 @@ import {
   UI_WEB_SEARCH_KEY,
 } from "./storageKeys";
 import { OPENAI_PRIMARY_MODEL } from "./openaiModel";
+import {
+  LEGACY_PREFIXED_SEED_MODEL_ID,
+  LEGACY_SEED_MODEL_ID,
+  SEED_MODEL_ID,
+  normalizeSeedModelId,
+} from "./seedModel";
 
-const SEED_MODEL_ID = "volcengine/doubao-seed-2.0-pro";
 const DEFAULT_MODEL = "deepseek-chat";
 const MAX_TOKENS_64K = 64000;
 const MAX_TOKENS_128K = 128000;
@@ -77,6 +82,19 @@ function writeLocalJson(key, value) {
   }
 }
 
+function normalizeModelKeyedObject(value) {
+  if (!isPlainObject(value)) return value;
+  const next = { ...value };
+  const legacyKeys = [LEGACY_SEED_MODEL_ID, LEGACY_PREFIXED_SEED_MODEL_ID];
+  for (const legacyKey of legacyKeys) {
+    if (next[legacyKey] !== undefined && next[SEED_MODEL_ID] === undefined) {
+      next[SEED_MODEL_ID] = next[legacyKey];
+    }
+    delete next[legacyKey];
+  }
+  return next;
+}
+
 export function useUserSettings() {
   const [model, _setModel] = useState(DEFAULT_MODEL);
   const [thinkingLevels, _setThinkingLevels] = useState(DEFAULT_THINKING_LEVELS);
@@ -109,23 +127,33 @@ export function useUserSettings() {
     const localWebSearch = readLocalSetting(UI_WEB_SEARCH_KEY);
     const localCompletionSoundVolume = readLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY);
 
-    const initialModel = typeof localModel === "string" && localModel
-      ? localModel
+    const normalizedModel = typeof localModel === "string" && localModel
+      ? normalizeSeedModelId(localModel)
+      : null;
+    const initialModel = typeof normalizedModel === "string" && normalizedModel
+      ? normalizedModel
       : DEFAULT_MODEL;
 
     if (typeof localTheme === "string") _setThemeMode(localTheme);
     if (typeof localFont === "string") _setFontSize(localFont);
-    if (typeof localModel === "string") {
-      _setModel(localModel);
+    if (typeof initialModel === "string") {
+      _setModel(initialModel);
+      writeLocalSetting(UI_MODEL_KEY, initialModel);
     }
-    if (isPlainObject(localThinkingLevels)) _setThinkingLevels(localThinkingLevels);
+    if (isPlainObject(localThinkingLevels)) {
+      const normalizedThinkingLevels = normalizeModelKeyedObject(localThinkingLevels);
+      _setThinkingLevels(normalizedThinkingLevels);
+      writeLocalJson(UI_THINKING_LEVELS_KEY, normalizedThinkingLevels);
+    }
     if (localHistoryLimit !== null) {
       const parsed = Number(localHistoryLimit);
       _setHistoryLimit(Number.isFinite(parsed) ? parsed : 0);
     }
     if (isPlainObject(localActivePromptIds)) {
-      _setActivePromptIds(localActivePromptIds);
-      const remembered = localActivePromptIds?.[initialModel];
+      const normalizedActivePromptIds = normalizeModelKeyedObject(localActivePromptIds);
+      _setActivePromptIds(normalizedActivePromptIds);
+      writeLocalJson(UI_ACTIVE_PROMPT_IDS_KEY, normalizedActivePromptIds);
+      const remembered = normalizedActivePromptIds?.[initialModel];
       if (typeof remembered === "string" && remembered) {
         _setActivePromptId(remembered);
       }
@@ -147,8 +175,9 @@ export function useUserSettings() {
   }, []);
 
   const setModel = useCallback((m) => {
-    _setModel(m);
-    writeLocalSetting(UI_MODEL_KEY, m);
+    const normalized = normalizeSeedModelId(m);
+    _setModel(normalized);
+    writeLocalSetting(UI_MODEL_KEY, normalized);
   }, []);
 
   useEffect(() => {

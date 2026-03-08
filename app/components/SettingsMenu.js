@@ -4,6 +4,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, Globe, Pencil, Settings2, Trash2, X } from "lucide-react";
 import ConfirmModal from "./ConfirmModal";
 import PromptEditorModal from "./PromptEditorModal";
+import {
+  SEED_REASONING_LABELS,
+  SEED_REASONING_LEVELS,
+  isSeedModel,
+} from "../lib/seedModel";
 
 const BASE_TOKEN_OPTIONS = [1000, 2000, 4000, 8000, 16000, 32000, 64000];
 const OPENAI_TOKEN_OPTIONS = [...BASE_TOKEN_OPTIONS, 128000];
@@ -66,7 +71,7 @@ export default function SettingsMenu({
   const promptListRef = useRef(null);
 
   const isOpenAIModel = typeof model === "string" && model.startsWith("gpt-");
-  const isSeedModel = model === "volcengine/doubao-seed-2.0-pro";
+  const isSeedModelSelected = isSeedModel(model);
   const isDeepSeekModel = typeof model === "string" && model.startsWith("deepseek-");
   const isClaudeAdaptiveThinkingModel = typeof model === "string"
     && (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6"));
@@ -74,7 +79,7 @@ export default function SettingsMenu({
   const claudeTokenOptions = isClaudeAdaptiveThinkingModel ? CLAUDE_OPUS_TOKEN_OPTIONS : CLAUDE_TOKEN_OPTIONS;
   const maxTokenOptions = isOpenAIModel
     ? OPENAI_TOKEN_OPTIONS
-    : isSeedModel || isDeepSeekModel
+    : isSeedModelSelected || isDeepSeekModel
       ? SEED_TOKEN_OPTIONS
       : GEMINI_TOKEN_OPTIONS;
   const activePrompt = systemPrompts.find((p) => String(p?._id) === String(activePromptId));
@@ -83,6 +88,12 @@ export default function SettingsMenu({
   useEffect(() => {
     if (!model) return;
     if (model === "gemini-3-flash-preview" || model === "gemini-3.1-pro-preview") {
+      return;
+    }
+    if (isSeedModelSelected) {
+      if (!SEED_REASONING_LEVELS.includes(thinkingLevel)) {
+        setThinkingLevel("medium");
+      }
       return;
     }
     if (isClaudeAdaptiveThinkingModel) {
@@ -97,7 +108,7 @@ export default function SettingsMenu({
         setThinkingLevel("medium");
       }
     }
-  }, [model, thinkingLevel, setThinkingLevel, isClaudeAdaptiveThinkingModel]);
+  }, [model, thinkingLevel, setThinkingLevel, isClaudeAdaptiveThinkingModel, isSeedModelSelected]);
 
   useEffect(() => {
     const options = model?.startsWith("claude-") ? claudeTokenOptions : maxTokenOptions;
@@ -406,7 +417,7 @@ export default function SettingsMenu({
 
                 <div>
                   <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                    博查搜索
+                    联网搜索
                   </label>
                   <button
                     onClick={() => setWebSearch(!webSearch)}
@@ -553,7 +564,29 @@ export default function SettingsMenu({
                                 </span>
                               </div>
                             </>
-                          ) : isSeedModel || isDeepSeekModel ? (
+                          ) : isSeedModelSelected ? (
+                            <div>
+                              <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                                思考深度
+                              </label>
+                              <input
+                                type="range"
+                                min="0"
+                                max={SEED_REASONING_LEVELS.length - 1}
+                                step="1"
+                                value={(() => {
+                                  const idx = SEED_REASONING_LEVELS.indexOf(thinkingLevel);
+                                  const mediumIdx = SEED_REASONING_LEVELS.indexOf("medium");
+                                  return idx >= 0 ? idx : mediumIdx;
+                                })()}
+                                onChange={(e) => setThinkingLevel(SEED_REASONING_LEVELS[Number(e.target.value)])}
+                                className="w-full accent-zinc-900 h-1 bg-zinc-200 rounded-full"
+                              />
+                              <span className="text-xs text-right block mt-1 text-zinc-600">
+                                {SEED_REASONING_LABELS[thinkingLevel] || SEED_REASONING_LABELS.medium}
+                              </span>
+                            </div>
+                          ) : isDeepSeekModel ? (
                             <div>
                               <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                                 思考深度

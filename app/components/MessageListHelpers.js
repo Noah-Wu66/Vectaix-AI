@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { ExternalLink, Globe, X } from "lucide-react";
 import { Gemini, Claude, OpenAI, Doubao, DeepSeek } from "@lobehub/icons";
+import { isSeedModel } from "../lib/seedModel";
 
 export function AIAvatar({ model, size = 24 }) {
   const squareProps = { size, shape: "square" };
   const props = { ...squareProps, style: { borderRadius: 6 } };
-  if (model?.startsWith("volcengine/doubao-seed-")) {
+  if (isSeedModel(model)) {
     return <Doubao.Avatar {...props} />;
   }
   if (model?.startsWith("deepseek-")) {

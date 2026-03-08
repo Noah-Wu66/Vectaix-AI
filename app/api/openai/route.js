@@ -129,7 +129,6 @@ export async function POST(req) {
             return Response.json({ error: 'RIGHT_CODES_API_KEY is not set' }, { status: 500 });
         }
         const apiModel = model;
-        const isSeedModel = typeof apiModel === 'string' && apiModel.startsWith('volcengine/doubao-seed');
 
         let currentConversationId = conversationId;
 
@@ -236,8 +235,6 @@ export async function POST(req) {
         // 构建 Responses API 请求
         const maxTokens = config?.maxTokens;
         const thinkingLevel = config?.thinkingLevel;
-        const budgetTokens = Number.parseInt(config?.budgetTokens, 10);
-
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
@@ -258,17 +255,6 @@ export async function POST(req) {
         const allowedEfforts = MODEL_REASONING_EFFORTS[model] || DEFAULT_REASONING_EFFORTS;
         if (allowedEfforts.has(thinkingLevel)) {
             baseRequestBody.reasoning.effort = thinkingLevel;
-        }
-
-        if (isSeedModel) {
-            baseRequestBody.extra_body = {
-                thinking: {
-                    type: 'enabled',
-                    ...(Number.isFinite(budgetTokens) && budgetTokens > 0
-                        ? { budget_tokens: budgetTokens }
-                        : {})
-                }
-            };
         }
 
         // 是否启用博查搜索

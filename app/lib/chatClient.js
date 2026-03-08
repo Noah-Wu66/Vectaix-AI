@@ -470,7 +470,7 @@ export async function runChat({
     let citations = null;
     let searchError = null;
     let streamErrorMessage = null; // 流内错误消息（来自 stream_error 事件）
-    let searchContextTokens = 0; // 博查搜索注入的上下文 token 数
+    let searchContextTokens = 0; // 联网搜索注入的上下文 token 数
     let thinkingTimeline = [];
     let timelineStepSeq = 0;
 
@@ -702,7 +702,7 @@ export async function runChat({
           const query = typeof data.query === "string" ? data.query.trim() : "";
           const message = typeof data.message === "string" && data.message.trim()
             ? data.message.trim()
-            : "博查搜索失败，请稍后再试";
+            : "联网搜索失败，请稍后再试";
           const updated = patchLastRunningStep("search", {
             status: "error",
             query: query || undefined,

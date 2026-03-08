@@ -5,6 +5,7 @@ import { createChatAppActions } from "./lib/chatAppActions";
 import { useThemeMode } from "./lib/useThemeMode";
 import { useUserSettings } from "./lib/useUserSettings";
 import { OPENAI_PRIMARY_MODEL } from "./lib/openaiModel";
+import { SEED_MODEL_ID, normalizeSeedModelId } from "./lib/seedModel";
 import { useToast } from "./components/ToastProvider";
 import { CHAT_MODELS } from "./components/ChatModels";
 import AuthModal from "./components/AuthModal";
@@ -442,7 +443,7 @@ export default function ChatApp() {
         setCurrentConversationId(id);
 
         // 获取对话的模型和 provider
-        const conversationModel = data.conversation.model;
+        const conversationModel = normalizeSeedModelId(data.conversation.model);
         const conversationModelConfig = CHAT_MODELS.find((m) => m.id === conversationModel);
         const conversationProvider = conversationModelConfig?.provider;
         const currentProvider = currentModelConfig?.provider;
@@ -461,7 +462,7 @@ export default function ChatApp() {
         } else if (conversationProvider === "openai" && currentProvider !== "openai") {
           targetModel = OPENAI_PRIMARY_MODEL;
         } else if (conversationProvider === "seed" && currentProvider !== "seed") {
-          targetModel = "volcengine/doubao-seed-2.0-pro";
+          targetModel = SEED_MODEL_ID;
         } else if (conversationProvider === "deepseek" && currentProvider !== "deepseek") {
           targetModel = "deepseek-reasoner";
         } else if (conversationProvider === currentProvider) {

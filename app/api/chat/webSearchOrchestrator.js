@@ -66,6 +66,119 @@ const NON_SEARCH_REPLY_KEYWORDS = [
   '收到',
 ];
 const FOLLOW_UP_SEARCH_KEYWORDS = ['价格', '官网', '文档', '教程', '资料', '来源', '新闻', '消息', '更新', '进展', '最新', '最近'];
+const CONTEXT_REFERENCE_KEYWORDS = ['上面那段话', '上面的内容', '上文', '这段话', '这一段', '这句话', '这段内容', '刚才那段', '刚刚那段', '上一条', '上一段', '上一个回答', '上面的回答', '刚才的回答'];
+const REWRITE_TASK_KEYWORDS = ['润色', '翻译', '总结', '概括', '改写', '重写', '续写', '扩写', '精简'];
+const GENERIC_SEARCH_QUERY_TERMS = [
+  '官网',
+  '官方网站',
+  '官方文档',
+  '官方说明',
+  '文档',
+  '教程',
+  '资料',
+  '来源',
+  '新闻',
+  '消息',
+  '最新',
+  '最近',
+  '更新',
+  '进展',
+  '最新消息',
+  '价格',
+  '股价',
+  '汇率',
+  '天气',
+  '航班',
+  '比分',
+  '开奖',
+  'official site',
+  'official website',
+  'official docs',
+  'docs',
+  'documentation',
+  'news',
+  'latest',
+  'recent',
+  'price',
+  'weather',
+];
+const TOPIC_CUT_KEYWORDS = [
+  '官方网站',
+  '官网',
+  '官方文档',
+  '官方说明',
+  '文档',
+  '教程',
+  '资料',
+  '来源',
+  '最新消息',
+  '新闻',
+  '消息',
+  '更新',
+  '进展',
+  '最新',
+  '最近',
+  '价格',
+  '股价',
+  '汇率',
+  '天气',
+  '航班',
+  '比分',
+  '开奖',
+  '发布时间',
+  '发布日期',
+  '什么时候发布',
+  '何时发布',
+  '什么时候',
+  '在哪里',
+  '在哪',
+  '是什么',
+  '是啥',
+  '怎么样',
+];
+const MAX_FINAL_QUERY_LENGTH = 48;
+const MULTI_CLAUSE_QUERY_PATTERN = /[，,；;。]|顺便|另外|然后|再帮我|顺带|以及|并且|同时|\b(and also|also|then|by the way)\b/u;
+const ENGLISH_LEADING_POLITE_PATTERN = /^(please|can you|could you|would you|help me|show me|tell me|look up|search for|find)\b[\s,:-]*/i;
+const ENGLISH_SEARCH_VERB_PATTERN = /^(look up|search for|search|google|find)\b[\s,:-]*/i;
+
+function findKeywordIndex(text, keywords) {
+  if (typeof text !== 'string' || !text) return -1;
+
+  let bestIndex = -1;
+  for (const keyword of keywords) {
+    if (typeof keyword !== 'string' || !keyword) continue;
+    const index = text.indexOf(keyword);
+    if (index <= 0) continue;
+    if (bestIndex === -1 || index < bestIndex) bestIndex = index;
+  }
+
+  return bestIndex;
+}
+
+function normalizeComparableText(text) {
+  if (typeof text !== 'string') return '';
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function stripLeadingChatter(text) {
+  if (typeof text !== 'string') return '';
+
+  let query = text.trim();
+  let previous = '';
+
+  while (query && query !== previous) {
+    previous = query;
+    query = query.replace(/^(请问|请你|请|麻烦你|麻烦|帮我|你帮我|帮忙|可以帮我|能不能帮我|能否帮我|给我|替我|请帮我|请你帮我|我想知道|想问下|想问一下|那个|那就|那麻烦你)+/u, '').trim();
+    query = query.replace(/^(去)?(查一下|查一查|搜一下|搜一搜|搜索一下|搜索|检索一下|检索|联网查一下|上网查一下|上网搜一下|看看|看一下|找一下|找找|查查|搜搜)/u, '').trim();
+    query = query.replace(ENGLISH_LEADING_POLITE_PATTERN, '').trim();
+    query = query.replace(ENGLISH_SEARCH_VERB_PATTERN, '').trim();
+  }
+
+  return query;
+}
 
 function includesAnyKeyword(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword));
@@ -143,12 +256,178 @@ function cleanupQueryText(text) {
   if (typeof text !== 'string') return '';
 
   let query = text.replace(/\s+/g, ' ').trim();
-  query = query.replace(/^(请|麻烦|帮我|你帮我|帮忙|可以|能不能|能否|给我|替我)+/u, '').trim();
-  query = query.replace(/^(去)?(查一下|查一查|搜一下|搜一搜|搜索一下|搜索|检索一下|检索|联网查一下|上网查一下|看看|找一下|找找)/u, '').trim();
+  query = stripLeadingChatter(query);
   query = query.replace(/[？?。！!]+$/u, '').trim();
   query = query.replace(/^(关于|有关)/u, '').trim();
-  query = query.replace(/(是什么|是啥|吗|呢)$/u, '').trim();
+  query = query.replace(/^(那|那它|那这个|那这个东西|这个|这个东西|那边)\s*/u, '').trim();
+  query = query.replace(/(是什么|是啥|吗|呢|可以吗)$/u, '').trim();
   return query.slice(0, 160);
+}
+
+function shouldForceSkipSearch(text) {
+  if (typeof text !== 'string') return false;
+  const current = text.trim();
+  if (!current) return false;
+
+  const hasContextReference = includesAnyKeyword(current, CONTEXT_REFERENCE_KEYWORDS);
+  const hasRewriteAction = includesAnyKeyword(current, REWRITE_TASK_KEYWORDS);
+  return hasContextReference && hasRewriteAction;
+}
+
+function isGenericSearchQuery(text) {
+  const normalized = normalizeComparableText(cleanupQueryText(text));
+  if (!normalized) return true;
+
+  return GENERIC_SEARCH_QUERY_TERMS.some((term) => normalizeComparableText(term) === normalized);
+}
+
+function isQueryNearlySameAsPrompt(query, prompt) {
+  const normalizedQuery = normalizeComparableText(cleanupQueryText(query));
+  const normalizedPrompt = normalizeComparableText(cleanupQueryText(prompt));
+  if (!normalizedQuery || !normalizedPrompt) return false;
+
+  return normalizedQuery === normalizedPrompt
+    || (normalizedQuery.length >= 8 && normalizedPrompt.includes(normalizedQuery))
+    || (normalizedPrompt.length >= 8 && normalizedQuery.includes(normalizedPrompt));
+}
+
+function isCompactSearchQuery(text) {
+  const cleaned = cleanupQueryText(text);
+  if (!cleaned) return false;
+  if (cleaned.length > MAX_FINAL_QUERY_LENGTH) return false;
+  if (isGenericSearchQuery(cleaned)) return false;
+  if (MULTI_CLAUSE_QUERY_PATTERN.test(cleaned)) return false;
+  return true;
+}
+
+function extractTopicFromText(text) {
+  let topic = cleanupQueryText(text);
+  if (!topic) return '';
+
+  topic = topic.split(/[，,；;。!?！？\n]/u)[0].trim();
+  topic = topic.replace(/^(那|那它|那这个|那这个东西|这个|这个东西|那边|然后|另外|还有)\s*/u, '').trim();
+
+  const cutIndex = findKeywordIndex(topic, TOPIC_CUT_KEYWORDS);
+  if (cutIndex > 0) {
+    topic = topic.slice(0, cutIndex).trim();
+  }
+
+  topic = topic.replace(/(是什么|是啥|怎么样|怎么用|好不好|吗|呢)$/u, '').trim();
+  topic = topic.replace(/[的\s]+$/u, '').trim();
+
+  if (!topic || isGenericSearchQuery(topic)) return '';
+  return topic.slice(0, MAX_FINAL_QUERY_LENGTH);
+}
+
+function pushUniqueToken(tokens, token) {
+  if (!token || tokens.includes(token)) return;
+  tokens.push(token);
+}
+
+function extractIntentTokens(text) {
+  const source = cleanupQueryText(text);
+  const lower = source.toLowerCase();
+  const tokens = [];
+
+  if (!source) return tokens;
+
+  if (includesAnyKeyword(source, ['官网', '官方网站']) || /\b(official site|official website)\b/.test(lower)) {
+    pushUniqueToken(tokens, '官网');
+  }
+  if (includesAnyKeyword(source, ['官方文档', '官方说明']) || /\b(official docs|documentation|manual)\b/.test(lower)) {
+    pushUniqueToken(tokens, '官方文档');
+  } else if (includesAnyKeyword(source, ['文档']) || /\bdocs\b/.test(lower)) {
+    pushUniqueToken(tokens, '文档');
+  }
+  if (includesAnyKeyword(source, ['教程']) || /\b(tutorial|guide|guides)\b/.test(lower)) {
+    pushUniqueToken(tokens, '教程');
+  }
+  if (includesAnyKeyword(source, ['资料', '来源']) || /\b(resource|resources|reference)\b/.test(lower)) {
+    pushUniqueToken(tokens, '资料');
+  }
+  if (includesAnyKeyword(source, ['价格', '股价', '汇率', '报价', '费用', '售价']) || /\b(price|pricing|stock price|exchange rate)\b/.test(lower)) {
+    pushUniqueToken(tokens, '价格');
+  }
+  if (includesAnyKeyword(source, ['天气']) || /\bweather\b/.test(lower)) {
+    pushUniqueToken(tokens, '天气');
+  }
+  if (includesAnyKeyword(source, ['航班']) || /\bflight\b/.test(lower)) {
+    pushUniqueToken(tokens, '航班');
+  }
+  if (includesAnyKeyword(source, ['比分']) || /\bscore\b/.test(lower)) {
+    pushUniqueToken(tokens, '比分');
+  }
+  if (includesAnyKeyword(source, ['开奖']) || /\blottery\b/.test(lower)) {
+    pushUniqueToken(tokens, '开奖');
+  }
+  if (
+    includesAnyKeyword(source, ['发布时间', '发布日期', '什么时候发布', '何时发布', '发布', '上线', '发售', '推出'])
+    || /\b(release date|launch date|launch|release)\b/.test(lower)
+  ) {
+    pushUniqueToken(tokens, '发布时间');
+  }
+  if (
+    includesAnyKeyword(source, ['新闻', '消息', '动态', '进展', '公告', '更新'])
+    || /\b(news|announcement|announcements|update|updates|release note|changelog)\b/.test(lower)
+  ) {
+    pushUniqueToken(tokens, '最新消息');
+  } else if (includesAnyKeyword(source, ['最新', '最近']) || /\b(latest|recent)\b/.test(lower)) {
+    pushUniqueToken(tokens, '最新');
+  }
+
+  return tokens.slice(0, 3);
+}
+
+function buildQueryFromTopic({ topic, intentTokens, freshness }) {
+  const parts = [];
+  const tokens = Array.isArray(intentTokens) ? intentTokens : [];
+
+  if (topic) parts.push(topic);
+  for (const token of tokens) {
+    if (!token) continue;
+    if (parts.includes(token)) continue;
+    parts.push(token);
+  }
+
+  const shouldAppendFreshness = freshness === 'oneWeek'
+    && !tokens.some((token) => token.includes('最新'));
+
+  if (shouldAppendFreshness && !parts.includes('最新')) {
+    parts.push('最新');
+  }
+
+  return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, MAX_FINAL_QUERY_LENGTH);
+}
+
+function finalizeSearchQuery({ prompt, historyMessages, rawQuery, freshness }) {
+  const cleanedQuery = cleanupQueryText(rawQuery);
+  const promptIsCompact = isCompactSearchQuery(prompt);
+
+  if (
+    cleanedQuery
+    && cleanedQuery.length <= MAX_FINAL_QUERY_LENGTH
+    && !isGenericSearchQuery(cleanedQuery)
+    && !MULTI_CLAUSE_QUERY_PATTERN.test(cleanedQuery)
+    && (promptIsCompact || !isQueryNearlySameAsPrompt(cleanedQuery, prompt))
+  ) {
+    return cleanedQuery;
+  }
+
+  const topic = extractTopicFromText(prompt)
+    || extractTopicFromText(rawQuery)
+    || getRecentTopicHint(historyMessages);
+  const intentTokens = extractIntentTokens(`${rawQuery || ''}\n${prompt || ''}`);
+  const rebuiltQuery = buildQueryFromTopic({ topic, intentTokens, freshness });
+
+  if (rebuiltQuery && isCompactSearchQuery(rebuiltQuery)) {
+    return rebuiltQuery;
+  }
+
+  if (!rebuiltQuery && topic && isCompactSearchQuery(topic)) {
+    return topic;
+  }
+
+  return '';
 }
 
 function inferFreshnessFromQuery(text) {
@@ -196,12 +475,12 @@ function getRecentTopicHint(historyMessages) {
   for (let index = recentMessages.length - 1; index >= 0; index -= 1) {
     const item = recentMessages[index];
     if (item?.role !== 'user') continue;
-    const text = cleanupQueryText(item.text);
+    const text = extractTopicFromText(item.text) || cleanupQueryText(item.text);
     if (text) return text;
   }
 
   for (let index = recentMessages.length - 1; index >= 0; index -= 1) {
-    const text = cleanupQueryText(recentMessages[index]?.text);
+    const text = extractTopicFromText(recentMessages[index]?.text) || cleanupQueryText(recentMessages[index]?.text);
     if (text) return text;
   }
 
@@ -212,7 +491,7 @@ function buildHeuristicWebSearchDecision({ prompt, historyMessages }) {
   const currentPrompt = typeof prompt === 'string' ? prompt.trim() : '';
   if (!currentPrompt) return null;
 
-  if (isClearlyNonSearchReply(currentPrompt)) {
+  if (isClearlyNonSearchReply(currentPrompt) || shouldForceSkipSearch(currentPrompt)) {
     return { needSearch: false, query: '', freshness: 'noLimit' };
   }
 
@@ -288,10 +567,12 @@ export async function buildWebSearchDecisionPrompts({ prompt, historyMessages })
 2. 用户明确要求“查一下、搜一下、去官网、找官方文档、看最新消息、看最近动态、帮我检索资料”等，通常 needSearch=true。
 3. 如果当前消息是指代型追问，例如“那价格呢”“那官网呢”，你可以结合最近对话补全搜索意图；但像“继续”“展开说说”“再详细一点”“谢谢”“翻译一下”“润色一下”这种，不要联网。
 4. 常识解释、代码问题、数学题、创作、改写、翻译、总结用户已提供内容、基于已有上下文继续展开，这些通常 needSearch=false。
-5. query 必须是适合搜索引擎的一句话关键词，不要加解释，不要加 site: 等高级语法。
-6. freshness 只能是 oneDay、oneWeek、oneMonth、oneYear、noLimit 之一。
-7. 如果 needSearch=false，query 必须是空字符串，freshness 必须是 noLimit。
-8. 只输出 JSON，不要输出任何别的文字。
+5. query 必须是适合搜索引擎的短搜索词或短搜索短语，不能照抄当前用户原话整句，不要加解释，不要加 site: 等高级语法。
+6. 正例：用户说“帮我查一下马斯克最近新闻”，query 应写成“马斯克 最近新闻”；用户说“那官网呢”且最近主题是 Cloudflare R2，query 应写成“Cloudflare R2 官网”。
+7. 反例：用户说“帮我查一下 2026 年某产品什么时候发布，顺便看看最近有没有新消息”，query 不能原样照抄整句，应提炼成“某产品 2026 发布时间 最新消息”这类短搜索词。
+8. freshness 只能是 oneDay、oneWeek、oneMonth、oneYear、noLimit 之一。
+9. 如果 needSearch=false，query 必须是空字符串，freshness 必须是 noLimit。
+10. 只输出 JSON，不要输出任何别的文字。
 
 返回格式：
 {"needSearch":true,"query":"搜索词","freshness":"oneWeek"}`);
@@ -350,7 +631,6 @@ export async function runWebSearchOrchestration(options) {
     providerLabel = 'AI',
     model,
     conversationId,
-    logDecision = false,
     warnOnNoContext = false,
   } = options || {};
 
@@ -361,6 +641,9 @@ export async function runWebSearchOrchestration(options) {
 
   const currentPrompt = typeof prompt === 'string' ? prompt.trim() : '';
   if (!currentPrompt) {
+    return { searchContextText: '' };
+  }
+  if (isClearlyNonSearchReply(currentPrompt) || shouldForceSkipSearch(currentPrompt)) {
     return { searchContextText: '' };
   }
 
@@ -415,27 +698,42 @@ export async function runWebSearchOrchestration(options) {
   }
 
   const needSearch = decision.needSearch === true;
-  const nextQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
+  const rawQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
+  const nextQuery = finalizeSearchQuery({
+    prompt: currentPrompt,
+    historyMessages,
+    rawQuery,
+    freshness: decision.freshness,
+  });
   const freshness = typeof decision.freshness === 'string' ? decision.freshness.trim() : 'noLimit';
+  const finalFreshness = freshness !== 'noLimit'
+    ? freshness
+    : inferFreshnessFromQuery(nextQuery);
 
-  if (logDecision) {
-    console.info(`${providerLabel} bocha search decision`, {
-      needSearch,
-      hasQuery: Boolean(nextQuery),
-      freshness,
-      model,
-      conversationId,
-    });
-  }
+  console.info(`${providerLabel} bocha search decision`, {
+    needSearch,
+    rawQuery: rawQuery || null,
+    finalQuery: nextQuery || null,
+    queryChanged: rawQuery !== nextQuery,
+    queryDiscarded: needSearch && !nextQuery,
+    freshness: finalFreshness,
+    model,
+    conversationId,
+  });
 
   if (!needSearch) {
     return { searchContextText: '' };
   }
 
   if (!nextQuery) {
-    const message = '搜索规划失败，请稍后再试';
-    sendSearchError?.(message);
-    throw new Error(message);
+    console.warn(`${providerLabel} bocha search skipped invalid query`, {
+      rawQuery: rawQuery || null,
+      finalQuery: null,
+      freshness: finalFreshness,
+      model,
+      conversationId,
+    });
+    return { searchContextText: '' };
   }
 
   if (aborted()) {
@@ -449,12 +747,13 @@ export async function runWebSearchOrchestration(options) {
     searchData = await bochaSearch(nextQuery, {
       summary: true,
       count: 8,
-      freshness,
+      freshness: finalFreshness,
     });
   } catch (searchError) {
     console.error(`${providerLabel} bocha web search failed`, {
+      rawQuery: rawQuery || null,
       query: nextQuery,
-      freshness,
+      freshness: finalFreshness,
       message: searchError?.message,
       name: searchError?.name,
     });
@@ -486,7 +785,9 @@ export async function runWebSearchOrchestration(options) {
   if (warnOnNoContext && !searchContextText) {
     console.warn(`${providerLabel} bocha search produced no context`, {
       needSearch,
-      freshness,
+      rawQuery: rawQuery || null,
+      finalQuery: nextQuery,
+      freshness: finalFreshness,
       lastQuery: nextQuery,
       resultCount: results.length,
     });

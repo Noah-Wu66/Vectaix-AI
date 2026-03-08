@@ -5,23 +5,239 @@ import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
     fetchImageAsBase64,
+    injectCurrentTimeSystemReminder,
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
-    injectCurrentTimeSystemReminder,
-    buildWebSearchContextBlock,
-    estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import { buildBytedanceInputFromHistory } from '@/app/api/bytedance/bytedanceHelpers';
+import {
+    SEED_MODEL_ID,
+    SEED_REASONING_LEVELS,
+    isSeedModel,
+    normalizeSeedModelId,
+} from '@/app/lib/seedModel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const ZENMUX_OPENAI_BASE_URL = 'https://zenmux.ai/api/v1';
+const SEED_API_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
+const SEED_API_TIMEOUT_MS = 1_800_000;
+const SEED_MAX_RETRIES = 2;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
-const MODEL_REASONING_EFFORTS = {};
 const MAX_REQUEST_BYTES = 2_000_000;
+const WEB_SEARCH_TOOL = {
+    type: 'web_search',
+    max_keyword: 2,
+    limit: 8,
+};
+const VALID_SEED_REASONING_LEVELS = new Set(SEED_REASONING_LEVELS);
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createUpstreamSignal(req) {
+    const timeoutSignal = AbortSignal.timeout(SEED_API_TIMEOUT_MS);
+    if (req?.signal) {
+        return AbortSignal.any([req.signal, timeoutSignal]);
+    }
+    return timeoutSignal;
+}
+
+function normalizeChunkText(value) {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) {
+        return value.map((item) => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item.text === 'string') return item.text;
+            if (item && typeof item.content === 'string') return item.content;
+            return '';
+        }).join('');
+    }
+    if (value && typeof value === 'object') {
+        if (typeof value.text === 'string') return value.text;
+        if (typeof value.content === 'string') return value.content;
+    }
+    return '';
+}
+
+function normalizeSearchQuery(raw) {
+    if (typeof raw === 'string') {
+        return raw.trim();
+    }
+    if (Array.isArray(raw)) {
+        return raw
+            .filter((item) => typeof item === 'string' && item.trim())
+            .join(' ')
+            .trim();
+    }
+    return '';
+}
+
+function extractSearchQueryFromAction(action) {
+    if (!action || typeof action !== 'object') return '';
+    return normalizeSearchQuery(
+        action.query
+        ?? action.keyword
+        ?? action.keywords
+        ?? action.search_query
+    );
+}
+
+function isWebSearchOutputItem(item) {
+    if (!item || typeof item !== 'object') return false;
+    if (typeof item.type === 'string' && item.type.includes('web_search_call')) return true;
+    return typeof item.id === 'string' && item.id.startsWith('ws_');
+}
+
+function normalizeCitation(annotation) {
+    if (!annotation || typeof annotation !== 'object') return null;
+
+    const url = annotation.url
+        ?? annotation.uri
+        ?? annotation?.source?.url
+        ?? annotation?.url_citation?.url
+        ?? annotation?.web_search_result?.url;
+    const title = annotation.title
+        ?? annotation?.source?.title
+        ?? annotation?.url_citation?.title
+        ?? annotation?.web_search_result?.title
+        ?? url;
+    const citedText = annotation.cited_text
+        ?? annotation.quote
+        ?? annotation.text
+        ?? annotation?.url_citation?.text;
+
+    if (!isNonEmptyString(url)) return null;
+
+    const citation = {
+        url,
+        title: isNonEmptyString(title) ? title : url,
+    };
+
+    if (isNonEmptyString(citedText)) {
+        citation.cited_text = citedText;
+    }
+
+    return citation;
+}
+
+function extractCitationsFromContent(content) {
+    const items = Array.isArray(content) ? content : [];
+    return items
+        .flatMap((item) => Array.isArray(item?.annotations) ? item.annotations : [])
+        .map(normalizeCitation)
+        .filter(Boolean);
+}
+
+function extractCitationsFromOutputItem(item) {
+    if (!item || typeof item !== 'object') return [];
+    if (item.type !== 'message') return [];
+    return extractCitationsFromContent(item.content);
+}
+
+function extractCitationsFromResponsePayload(payload) {
+    const outputs = Array.isArray(payload?.output) ? payload.output : [];
+    return outputs.flatMap((item) => extractCitationsFromOutputItem(item));
+}
+
+function pushUniqueCitations(target, items) {
+    if (!Array.isArray(target) || !Array.isArray(items)) return;
+    for (const item of items) {
+        if (!item?.url) continue;
+        if (!target.some((citation) => citation.url === item.url)) {
+            target.push(item);
+        }
+    }
+}
+
+function buildSeedRequestBody({
+    model,
+    input,
+    instructions,
+    maxTokens,
+    thinkingLevel,
+    enableWebSearch,
+}) {
+    const normalizedThinkingLevel = typeof thinkingLevel === 'string'
+        ? thinkingLevel.trim().toLowerCase()
+        : '';
+
+    const requestBody = {
+        model,
+        stream: true,
+        input,
+        instructions,
+        temperature: 1,
+        top_p: 0.95,
+    };
+
+    if (Number.isFinite(maxTokens) && maxTokens > 0) {
+        requestBody.max_output_tokens = maxTokens;
+    }
+
+    if (normalizedThinkingLevel === 'minimal') {
+        requestBody.thinking = { type: 'disabled' };
+    } else {
+        requestBody.thinking = { type: 'enabled' };
+        requestBody.reasoning = {
+            effort: VALID_SEED_REASONING_LEVELS.has(normalizedThinkingLevel)
+                ? normalizedThinkingLevel
+                : 'medium',
+        };
+    }
+
+    if (enableWebSearch) {
+        requestBody.tools = [WEB_SEARCH_TOOL];
+        requestBody.max_tool_calls = 3;
+    }
+
+    return requestBody;
+}
+
+async function requestSeedResponses({ apiKey, requestBody, req }) {
+    const url = `${SEED_API_BASE_URL}/responses`;
+
+    for (let attempt = 0; attempt < SEED_MAX_RETRIES; attempt += 1) {
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify(requestBody),
+                signal: createUpstreamSignal(req),
+            });
+
+            if (response.ok) {
+                return response;
+            }
+
+            const errorText = await response.text();
+            const shouldRetry = response.status >= 500 && attempt < SEED_MAX_RETRIES - 1;
+
+            if (shouldRetry) {
+                await sleep(800 * (attempt + 1));
+                continue;
+            }
+
+            const error = new Error(`Seed 官方接口请求失败（${response.status}）：${errorText}`);
+            error.status = response.status;
+            throw error;
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                throw error;
+            }
+            if (attempt >= SEED_MAX_RETRIES - 1) {
+                throw error;
+            }
+            await sleep(800 * (attempt + 1));
+        }
+    }
+
+    throw new Error('Seed 官方接口请求失败');
+}
 
 export async function POST(req) {
     let writePermitTime = null;
@@ -39,7 +255,19 @@ export async function POST(req) {
             return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
         }
 
-        const { prompt, model, config, history, historyLimit, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
+        const {
+            prompt,
+            model,
+            config,
+            history,
+            historyLimit,
+            conversationId,
+            mode,
+            messages,
+            settings,
+            userMessageId,
+            modelMessageId,
+        } = body;
 
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
@@ -86,34 +314,31 @@ export async function POST(req) {
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        const apiBaseUrl = ZENMUX_OPENAI_BASE_URL;
-        const apiKey = process.env.ZENMUX_API_KEY;
+        const apiKey = process.env.ARK_API_KEY;
         if (!apiKey) {
-            return Response.json({ error: 'ZENMUX_API_KEY is not set' }, { status: 500 });
+            return Response.json({ error: 'ARK_API_KEY 未配置' }, { status: 500 });
         }
-        const normalizedModel = model.startsWith('volcengine/')
-            ? model
-            : model.includes('/')
-                ? `volcengine/${model.split('/').pop()}`
-                : `volcengine/${model}`;
-        const apiModel = normalizedModel;
+
+        const apiModel = normalizeSeedModelId(model);
+        if (!isSeedModel(apiModel)) {
+            return Response.json({ error: '当前接口仅支持官方 Seed 模型' }, { status: 400 });
+        }
 
         let currentConversationId = conversationId;
-
         if (user && !currentConversationId) {
             const title = prompt.length > 30 ? `${prompt.substring(0, 30)}...` : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
-                title: title,
-                model,
+                title,
+                model: apiModel,
                 settings,
-                messages: []
+                messages: [],
             });
             currentConversationId = newConv._id.toString();
         }
 
-        let bytedanceInput = [];
-        const limit = Number.parseInt(historyLimit);
+        let seedInput = [];
+        const limit = Number.parseInt(historyLimit, 10);
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
 
@@ -121,49 +346,55 @@ export async function POST(req) {
             let sanitized;
             try {
                 sanitized = sanitizeStoredMessagesStrict(messages);
-            } catch (e) {
-                return Response.json({ error: e?.message || 'messages invalid' }, { status: 400 });
+            } catch (error) {
+                return Response.json({ error: error?.message || 'messages invalid' }, { status: 400 });
             }
+
             const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },
                 { $set: { messages: sanitized, updatedAt: regenerateTime } },
                 { new: true }
             ).select('messages updatedAt');
-            if (!conv) return Response.json({ error: 'Not found' }, { status: 404 });
+
+            if (!conv) {
+                return Response.json({ error: 'Not found' }, { status: 404 });
+            }
+
             storedMessagesForRegenerate = sanitized;
             writePermitTime = conv.updatedAt?.getTime?.();
         }
 
         if (isRegenerateMode) {
-            const msgs = storedMessagesForRegenerate;
-            const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
-            bytedanceInput = await buildBytedanceInputFromHistory(effectiveMsgs);
+            const effectiveMessages = (limit > 0 && Number.isFinite(limit))
+                ? storedMessagesForRegenerate.slice(-limit)
+                : storedMessagesForRegenerate;
+            seedInput = await buildBytedanceInputFromHistory(effectiveMessages);
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
-            const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? safeHistory.slice(-limit) : safeHistory;
-            bytedanceInput = await buildBytedanceInputFromHistory(effectiveHistory);
+            const effectiveHistory = (limit > 0 && Number.isFinite(limit))
+                ? safeHistory.slice(-limit)
+                : safeHistory;
+            seedInput = await buildBytedanceInputFromHistory(effectiveHistory);
         }
 
-        let dbImageEntries = [];
-
+        const dbImageEntries = [];
         if (!isRegenerateMode) {
             const userContent = [{ type: 'input_text', text: prompt }];
 
             if (config?.images?.length > 0) {
                 for (const img of config.images) {
-                    if (img?.url) {
-                        const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
-                        userContent.push({
-                            type: 'input_image',
-                            image_url: `data:${mimeType};base64,${base64Data}`
-                        });
-                        dbImageEntries.push({ url: img.url, mimeType });
-                    }
+                    if (!img?.url) continue;
+                    const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
+                    userContent.push({
+                        type: 'input_image',
+                        image_url: `data:${mimeType};base64,${base64Data}`,
+                    });
+                    dbImageEntries.push({ url: img.url, mimeType });
                 }
             }
 
-            bytedanceInput.push({ role: 'user', content: userContent });
+            seedInput.push({ role: 'user', content: userContent });
         }
 
         if (user && !isRegenerateMode) {
@@ -187,127 +418,50 @@ export async function POST(req) {
                 role: 'user',
                 content: prompt,
                 type: 'parts',
-                parts: storedUserParts
+                parts: storedUserParts,
             };
-            const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
-                $push: {
-                    messages: userMessage
+
+            const updatedConv = await Conversation.findOneAndUpdate(
+                { _id: currentConversationId, userId: user.userId },
+                {
+                    $push: { messages: userMessage },
+                    updatedAt: userMsgTime,
                 },
-                updatedAt: userMsgTime
-            }, { new: true }).select('updatedAt');
+                { new: true }
+            ).select('updatedAt');
+
             writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
-        const maxTokens = config?.maxTokens;
-        const thinkingLevel = config?.thinkingLevel;
-        const budgetTokens = Number.parseInt(config?.budgetTokens, 10);
-
+        const maxTokens = Number.parseInt(config?.maxTokens, 10);
+        const thinkingLevel = typeof config?.thinkingLevel === 'string'
+            ? config.thinkingLevel
+            : 'medium';
+        const enableWebSearch = config?.webSearch === true;
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(
             typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
         );
-        const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
-        const baseInputWithInstructions = [
-            { role: 'developer', content: [{ type: 'input_text', text: baseSystemPrompt }] },
-            ...(Array.isArray(bytedanceInput) ? bytedanceInput : [])
-        ];
+        const formattingGuard = 'Output formatting rules: Do not use Markdown horizontal rules or standalone lines of \'---\'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.';
+        const webSearchGuard = enableWebSearch
+            ? 'If you use web search, answer naturally and do not append raw source URLs or bare domains in parentheses.'
+            : '';
+        const instructions = [baseSystemPrompt, formattingGuard, webSearchGuard]
+            .filter((item) => typeof item === 'string' && item.trim())
+            .join('\n\n');
 
-        const baseRequestBody = {
-            model: apiModel,
-            stream: true,
-            max_output_tokens: maxTokens,
-            reasoning: {
-                effort: 'high',
-                summary: 'auto'
-            },
-            extra_body: {
-                thinking: {
-                    type: 'enabled',
-                    ...(Number.isFinite(budgetTokens) && budgetTokens > 0
-                        ? { budget_tokens: budgetTokens }
-                        : {})
-                }
-            }
-        };
-
-        const allowedEfforts = MODEL_REASONING_EFFORTS[model] || DEFAULT_REASONING_EFFORTS;
-        if (allowedEfforts.has(thinkingLevel)) {
-            baseRequestBody.reasoning.effort = thinkingLevel;
-        }
-
-        const enableWebSearch = config?.webSearch === true;
-        const webSearchGuide = buildWebSearchGuide(enableWebSearch);
-        const normalizeDecisionText = (value) => {
-            if (typeof value === 'string') return value;
-            if (Array.isArray(value)) {
-                return value.map((item) => {
-                    if (typeof item === 'string') return item;
-                    if (item && typeof item.text === 'string') return item.text;
-                    if (item && typeof item.content === 'string') return item.content;
-                    return '';
-                }).join('');
-            }
-            if (value && typeof value === 'object') {
-                if (typeof value.text === 'string') return value.text;
-                if (typeof value.content === 'string') return value.content;
-            }
-            return '';
-        };
-
-        const extractDecisionOutputFromResponses = (payload) => {
-            if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
-                return payload.output_text.trim();
-            }
-
-            const outputs = Array.isArray(payload?.output) ? payload.output : [];
-            return outputs
-                .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
-                .map((item) => normalizeDecisionText(item?.text ?? item))
-                .join('')
-                .trim();
-        };
-
-        const runSeedDecision = async ({ prompt: decisionPrompt, historyMessages }) => {
-            const { systemText, userText } = await buildWebSearchDecisionPrompts({
-                prompt: decisionPrompt,
-                historyMessages,
-            });
-
-            const requestBody = {
-                model: apiModel,
-                stream: false,
-                max_output_tokens: 200,
-                input: [
-                    { role: 'developer', content: [{ type: 'input_text', text: systemText }] },
-                    { role: 'user', content: [{ type: 'input_text', text: userText }] }
-                ]
-            };
-
-            const response = await fetch(`${apiBaseUrl}/responses`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Seed 联网判断失败（${response.status}）：${errorText}`);
-            }
-
-            const payload = await response.json();
-            const text = extractDecisionOutputFromResponses(payload);
-            if (!text) {
-                throw new Error('联网判断未返回有效内容');
-            }
-
-            return text;
-        };
+        const requestBody = buildSeedRequestBody({
+            model: apiModel || SEED_MODEL_ID,
+            input: seedInput,
+            instructions,
+            maxTokens,
+            thinkingLevel,
+            enableWebSearch,
+        });
 
         const encoder = new TextEncoder();
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
+
         try {
             req?.signal?.addEventListener?.('abort', onAbort, { once: true });
         } catch { }
@@ -317,39 +471,13 @@ export async function POST(req) {
         const HEARTBEAT_INTERVAL_MS = 15000;
         let heartbeatTimer = null;
 
-        const normalizeChunkText = (value) => {
-            if (typeof value === 'string') return value;
-            if (!Array.isArray(value)) return '';
-            return value.map((item) => {
-                if (typeof item === 'string') return item;
-                if (item && typeof item.text === 'string') return item.text;
-                return '';
-            }).join('');
-        };
-
-        const normalizeChunkThought = (value) => {
-            if (typeof value === 'string') return value;
-            if (Array.isArray(value)) {
-                return value.map((item) => {
-                    if (typeof item === 'string') return item;
-                    if (item && typeof item.text === 'string') return item.text;
-                    if (item && typeof item.content === 'string') return item.content;
-                    return '';
-                }).join('');
-            }
-            if (value && typeof value === 'object') {
-                if (typeof value.text === 'string') return value.text;
-                if (typeof value.content === 'string') return value.content;
-            }
-            return '';
-        };
-
         const responseStream = new ReadableStream({
             async start(controller) {
                 let fullText = '';
                 let fullThought = '';
-                let citations = [];
-                let searchContextTokens = 0;
+                const citations = [];
+                let searchInProgress = false;
+                let activeSearchQuery = '';
 
                 try {
                     const sendHeartbeat = () => {
@@ -358,142 +486,150 @@ export async function POST(req) {
                             controller.enqueue(encoder.encode(`: ping ${Date.now()}\n\n`));
                         } catch { }
                     };
+
                     heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
                     sendHeartbeat();
 
                     const sendEvent = (payload) => {
                         const padding = !paddingSent ? PADDING : '';
                         paddingSent = true;
-                        const data = `data: ${JSON.stringify(payload)}${padding}\n\n`;
-                        controller.enqueue(encoder.encode(data));
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}${padding}\n\n`));
                     };
 
-                    let searchErrorSent = false;
-                    const sendSearchError = (message) => {
-                        if (searchErrorSent) return;
-                        searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message });
-                    };
-
-                    const pushCitations = (items) => {
-                        for (const item of items) {
-                            if (!item?.url) continue;
-                            if (!citations.some((c) => c.url === item.url)) {
-                                citations.push({ url: item.url, title: item.title });
-                            }
-                        }
-                    };
-
-                    const { searchContextText } = await runWebSearchOrchestration({
-                        enableWebSearch,
-                        prompt,
-                        historyMessages: history,
-                        decisionRunner: runSeedDecision,
-                        sendEvent,
-                        pushCitations,
-                        sendSearchError,
-                        isClientAborted: () => clientAborted,
-                        providerLabel: 'Seed',
-                        model,
-                        conversationId: currentConversationId,
+                    const response = await requestSeedResponses({
+                        apiKey,
+                        requestBody,
+                        req,
                     });
-
-                    if (clientAborted) {
-                        try { controller.close(); } catch { }
-                        return;
-                    }
-
-                    const searchContextSection = searchContextText
-                        ? buildWebSearchContextBlock(searchContextText)
-                        : '';
-                    if (searchContextSection) {
-                        searchContextTokens = estimateTokens(searchContextSection);
-                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
-                    }
-                    const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
-                    const finalInput = baseInputWithInstructions.slice();
-                    finalInput[0] = { role: 'developer', content: [{ type: 'input_text', text: finalSystemPrompt }] };
-                    const requestBody = {
-                        ...baseRequestBody,
-                        input: finalInput
-                    };
-
-                    const response = await fetch(`${apiBaseUrl}/responses`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
-                        },
-                        body: JSON.stringify(requestBody)
-                    });
-
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`Seed API Error: ${response.status} ${errorText}`);
-                    }
 
                     if (!response.body) {
-                        throw new Error('Seed 返回了空响应体，请稍后重试');
+                        throw new Error('Seed 官方接口返回了空响应体，请稍后重试');
                     }
 
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
 
+                    const handleEvent = (event) => {
+                        const eventType = typeof event?.type === 'string' ? event.type : '';
+
+                        if (eventType === 'response.output_text.delta') {
+                            const text = normalizeChunkText(event?.delta);
+                            if (!text) return;
+                            fullText += text;
+                            sendEvent({ type: 'text', content: text });
+                            return;
+                        }
+
+                        if (eventType === 'response.reasoning.delta' || eventType === 'response.reasoning_summary_text.delta') {
+                            const thought = normalizeChunkText(event?.delta);
+                            if (!thought) return;
+                            fullThought += thought;
+                            sendEvent({ type: 'thought', content: thought });
+                            return;
+                        }
+
+                        if (eventType.includes('web_search_call') && eventType.includes('in_progress')) {
+                            const nextQuery = extractSearchQueryFromAction(event?.item?.action || event?.action);
+                            if (nextQuery) {
+                                activeSearchQuery = nextQuery;
+                            }
+                            if (!searchInProgress) {
+                                searchInProgress = true;
+                                sendEvent({
+                                    type: 'search_start',
+                                    ...(activeSearchQuery ? { query: activeSearchQuery } : {}),
+                                });
+                            }
+                            return;
+                        }
+
+                        if (eventType === 'response.output_item.done') {
+                            const item = event?.item;
+                            pushUniqueCitations(citations, extractCitationsFromOutputItem(item));
+
+                            if (!isWebSearchOutputItem(item)) {
+                                return;
+                            }
+
+                            const nextQuery = extractSearchQueryFromAction(item?.action) || activeSearchQuery;
+                            if (!searchInProgress) {
+                                searchInProgress = true;
+                                sendEvent({
+                                    type: 'search_start',
+                                    ...(nextQuery ? { query: nextQuery } : {}),
+                                });
+                            }
+
+                            sendEvent({
+                                type: 'search_result',
+                                ...(nextQuery ? { query: nextQuery } : {}),
+                                results: [],
+                            });
+
+                            searchInProgress = false;
+                            activeSearchQuery = '';
+                            return;
+                        }
+
+                        if (eventType === 'response.completed') {
+                            pushUniqueCitations(citations, extractCitationsFromResponsePayload(event?.response));
+                        }
+                    };
+
+                    const consumeSseBuffer = (final = false) => {
+                        const blocks = buffer.split(/\r?\n\r?\n/);
+                        buffer = final ? '' : (blocks.pop() || '');
+
+                        for (const block of blocks) {
+                            const trimmedBlock = block.trim();
+                            if (!trimmedBlock) continue;
+
+                            const lines = trimmedBlock.split(/\r?\n/);
+                            const dataLines = [];
+                            for (const line of lines) {
+                                if (!line || line.startsWith(':')) continue;
+                                if (line.startsWith('data:')) {
+                                    dataLines.push(line.slice(5).replace(/^\s*/, ''));
+                                }
+                            }
+
+                            if (!dataLines.length) continue;
+                            const dataStr = dataLines.join('\n');
+                            if (dataStr === '[DONE]') continue;
+
+                            try {
+                                handleEvent(JSON.parse(dataStr));
+                            } catch { }
+                        }
+                    };
+
                     while (true) {
                         const { value, done } = await reader.read();
                         if (done || clientAborted) break;
 
                         buffer += decoder.decode(value, { stream: true });
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop();
-
-                        for (const line of lines) {
-                            if (!line.trim() || line.startsWith(':')) continue;
-                            if (!line.startsWith('data: ')) continue;
-
-                            const dataStr = line.slice(6);
-                            if (dataStr === '[DONE]') continue;
-
-                            try {
-                                const event = JSON.parse(dataStr);
-
-                                if (event.type === 'response.output_text.delta') {
-                                    const text = event.delta;
-                                    fullText += text;
-                                    sendEvent({ type: 'text', content: text });
-                                } else if (event.type === 'response.reasoning.delta' || event.type === 'response.reasoning_summary_text.delta') {
-                                    const thought = event.delta;
-                                    fullThought += thought;
-                                    sendEvent({ type: 'thought', content: thought });
-                                } else if (Array.isArray(event?.choices)) {
-                                    const choice = event.choices[0] || null;
-                                    const delta = choice?.delta;
-
-                                    const text = normalizeChunkText(delta?.content);
-                                    if (text) {
-                                        fullText += text;
-                                        sendEvent({ type: 'text', content: text });
-                                    }
-
-                                    const thought = normalizeChunkThought(delta?.reasoning_content);
-                                    if (thought) {
-                                        fullThought += thought;
-                                        sendEvent({ type: 'thought', content: thought });
-                                    }
-                                }
-                            } catch { }
-                        }
+                        consumeSseBuffer(false);
                     }
+
+                    buffer += decoder.decode();
+                    consumeSseBuffer(true);
 
                     if (clientAborted) {
                         try { controller.close(); } catch { }
                         return;
                     }
 
+                    if (searchInProgress) {
+                        sendEvent({
+                            type: 'search_result',
+                            ...(activeSearchQuery ? { query: activeSearchQuery } : {}),
+                            results: [],
+                        });
+                    }
+
                     if (citations.length > 0) {
-                        const citationsData = `data: ${JSON.stringify({ type: 'citations', citations })}\n\n`;
-                        controller.enqueue(encoder.encode(citationsData));
+                        sendEvent({ type: 'citations', citations });
                     }
 
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
@@ -502,41 +638,45 @@ export async function POST(req) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
                             : { _id: currentConversationId, userId: user.userId };
+
                         const modelMessage = {
                             id: modelMessageId,
                             role: 'model',
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
-                            searchContextTokens: searchContextTokens || null,
                             type: 'text',
-                            parts: [{ text: fullText }]
+                            parts: [{ text: fullText }],
                         };
+
                         await Conversation.findOneAndUpdate(
                             writeCondition,
                             {
-                                $push: {
-                                    messages: modelMessage
-                                },
-                                updatedAt: Date.now()
+                                $push: { messages: modelMessage },
+                                updatedAt: Date.now(),
                             }
                         );
                     }
+
                     controller.close();
-                } catch (err) {
+                } catch (error) {
                     if (clientAborted) {
                         try { controller.close(); } catch { }
                         return;
                     }
+
                     try {
-                        const errorPayload = JSON.stringify({ type: 'stream_error', message: err?.message || 'Unknown error' });
+                        const errorPayload = JSON.stringify({
+                            type: 'stream_error',
+                            message: error?.message || 'Unknown error',
+                        });
                         const padding = !paddingSent ? PADDING : '';
                         paddingSent = true;
                         controller.enqueue(encoder.encode(`data: ${errorPayload}${padding}\n\n`));
                         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                         controller.close();
                     } catch {
-                        controller.error(err);
+                        controller.error(error);
                     }
                 } finally {
                     if (heartbeatTimer) {
@@ -556,28 +696,28 @@ export async function POST(req) {
             'Connection': 'keep-alive',
             'X-Accel-Buffering': 'no',
         };
+
         if (currentConversationId) {
             headers['X-Conversation-Id'] = currentConversationId;
         }
-        return new Response(responseStream, { headers });
 
+        return new Response(responseStream, { headers });
     } catch (error) {
         console.error('Seed API Error:', {
             message: error?.message,
             status: error?.status,
             name: error?.name,
-            code: error?.code
+            code: error?.code,
         });
 
         const rawStatus = typeof error?.status === 'number' ? error.status : 500;
-        const isUpstreamAuthError = rawStatus === 401;
-        const status = isUpstreamAuthError ? 500 : rawStatus;
+        const status = rawStatus === 401 ? 500 : rawStatus;
         let errorMessage = error?.message;
 
-        if (isUpstreamAuthError) {
-            errorMessage = '模型服务认证失败，请检查接口配置';
-        } else if (error?.message?.includes('API_KEY')) {
-            errorMessage = 'API configuration error. Please check your API keys.';
+        if (rawStatus === 401) {
+            errorMessage = 'Seed 官方接口认证失败，请检查 ARK_API_KEY';
+        } else if (error?.message?.includes('ARK_API_KEY')) {
+            errorMessage = 'Seed 官方接口未正确配置，请检查 ARK_API_KEY';
         }
 
         return Response.json({ error: errorMessage }, { status });

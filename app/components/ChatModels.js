@@ -1,4 +1,5 @@
 import { OPENAI_PRIMARY_MODEL } from "../lib/openaiModel";
+import { SEED_MODEL_ID } from "../lib/seedModel";
 
 export const CHAT_MODELS = [
   {
@@ -37,8 +38,8 @@ export const CHAT_MODELS = [
     contextWindow: 1050000,
   },
   {
-    id: "volcengine/doubao-seed-2.0-pro",
-    name: "Seed",
+    id: SEED_MODEL_ID,
+    name: "Seed 2.0 Pro",
     shortName: "Seed",
     provider: "seed",
     contextWindow: 256000,

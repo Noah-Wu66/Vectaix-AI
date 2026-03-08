@@ -99,7 +99,7 @@ export default function TokenCounter({
         }
       }
 
-      // 博查搜索注入的上下文 tokens（由后端计算）
+      // 联网搜索注入的上下文 tokens（由后端计算）
       if (typeof msg.searchContextTokens === "number" && msg.searchContextTokens > 0) {
         searchContextTokens += msg.searchContextTokens;
       }
@@ -264,7 +264,7 @@ export default function TokenCounter({
             )}
             {tokenData.searchContextTokens > 0 && (
               <div className="token-tooltip-row">
-                <span className="token-tooltip-label">博查搜索</span>
+                <span className="token-tooltip-label">联网搜索</span>
                 <span className="token-tooltip-value">
                   ~{formatTokensDetail(tokenData.searchContextTokens)}
                 </span>

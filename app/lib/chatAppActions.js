@@ -1,13 +1,13 @@
 import { upload } from "@vercel/blob/client";
 import { buildChatConfig, runChat, unlockCompletionSound } from "./chatClient";
 import { isDataImageUrl, isHttpUrl } from "./messageImage";
+import { SEED_MODEL_ID } from "./seedModel";
 
 let msgIdCounter = 0;
 const generateMsgId = () => `msg_${Date.now()}_${++msgIdCounter}`;
-const SEED_MODEL_ID = "volcengine/doubao-seed-2.0-pro";
 const DEEPSEEK_MODEL_ID = "deepseek-reasoner";
 
-function getSeedThinkingLevelByBudget(budgetTokens) {
+function getDeepSeekThinkingLevelByBudget(budgetTokens) {
   const budget = Number(budgetTokens);
   if (budget <= 4000) return "low";
   if (budget <= 16000) return "medium";
@@ -51,8 +51,12 @@ export function createChatAppActions({
   onConversationActivity,
 }) {
   const getEffectiveThinkingLevel = (m) => {
-    if (m === SEED_MODEL_ID || m === DEEPSEEK_MODEL_ID) {
-      return getSeedThinkingLevelByBudget(budgetTokens);
+    if (m === SEED_MODEL_ID) {
+      const v = thinkingLevels?.[m];
+      return typeof v === "string" && v ? v : "medium";
+    }
+    if (m === DEEPSEEK_MODEL_ID) {
+      return getDeepSeekThinkingLevelByBudget(budgetTokens);
     }
     const v = thinkingLevels?.[m];
     if (typeof v === "string" && v) return v;
