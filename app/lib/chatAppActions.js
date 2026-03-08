@@ -1,5 +1,6 @@
 import { upload } from "@vercel/blob/client";
 import { buildChatConfig, runChat, unlockCompletionSound } from "./chatClient";
+import { isCouncilModel } from "./councilModel";
 import { isDataImageUrl, isHttpUrl } from "./messageImage";
 import { SEED_MODEL_ID } from "./seedModel";
 
@@ -50,6 +51,8 @@ export function createChatAppActions({
   onConversationMissing,
   onConversationActivity,
 }) {
+  const isCouncilConversation = isCouncilModel(model);
+
   const getEffectiveThinkingLevel = (m) => {
     if (m === SEED_MODEL_ID) {
       const v = thinkingLevels?.[m];
@@ -106,12 +109,14 @@ export function createChatAppActions({
   };
 
   const deleteModelMessage = async (index) => {
+    if (isCouncilConversation) return;
     const nextMessages = messages.filter((_, i) => i !== index);
     setMessages(nextMessages);
     await syncConversationMessages(nextMessages);
   };
 
   const deleteUserMessage = async (index) => {
+    if (isCouncilConversation) return;
     const nextMessages = messages.filter(
       (_, i) => i !== index && i !== index + 1,
     );
@@ -122,6 +127,7 @@ export function createChatAppActions({
   const handleSendFromComposer = async ({ text, images }) => {
     if ((!text && (!images || images.length === 0)) || loading || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
+    const isCouncil = isCouncilConversation;
 
     if (currentConversationId) {
       onConversationActivity?.(currentConversationId);
@@ -199,16 +205,21 @@ export function createChatAppActions({
         });
       }
 
-      const config = buildChatConfig({
-        thinkingLevel: getEffectiveThinkingLevel(model),
-        mediaResolution,
-        systemPrompts,
-        activePromptId,
-        imageUrls,
-        maxTokens,
-        budgetTokens,
-        webSearch: webSearch,
-      });
+      const config = isCouncil
+        ? buildChatConfig({
+            mediaResolution,
+            imageUrls,
+          })
+        : buildChatConfig({
+            thinkingLevel: getEffectiveThinkingLevel(model),
+            mediaResolution,
+            systemPrompts,
+            activePromptId,
+            imageUrls,
+            maxTokens,
+            budgetTokens,
+            webSearch: webSearch,
+          });
 
       await runChat({
         prompt: text,
@@ -225,7 +236,7 @@ export function createChatAppActions({
         signal: (chatAbortRef.current = new AbortController()).signal,
         provider: currentModelConfig?.provider,
         userMessageId: userMsg.id,
-        settings: !currentConversationId ? {
+        settings: !currentConversationId && !isCouncil ? {
           thinkingLevel: getEffectiveThinkingLevel(model),
           historyLimit,
           maxTokens,
@@ -250,6 +261,7 @@ export function createChatAppActions({
   };
 
   const regenerateModelMessage = async (index) => {
+    if (isCouncilConversation) return;
     if (loading || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
     unlockCompletionSound();
@@ -306,6 +318,7 @@ export function createChatAppActions({
   };
 
   const startEdit = (index, msg) => {
+    if (isCouncilConversation) return;
     if (loading) return;
     setEditingMsgIndex(index);
     setEditingContent(msg?.content);
@@ -321,6 +334,7 @@ export function createChatAppActions({
   };
 
   const submitEditAndRegenerate = async (index) => {
+    if (isCouncilConversation) return;
     if (loading || editingMsgIndex === null || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
     unlockCompletionSound();

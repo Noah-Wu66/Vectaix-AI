@@ -6,6 +6,7 @@ import { useThemeMode } from "./lib/useThemeMode";
 import { useUserSettings } from "./lib/useUserSettings";
 import { OPENAI_PRIMARY_MODEL } from "./lib/openaiModel";
 import { SEED_MODEL_ID, normalizeSeedModelId } from "./lib/seedModel";
+import { COUNCIL_MODEL_ID, isCouncilModel } from "./lib/councilModel";
 import { useToast } from "./components/ToastProvider";
 import { CHAT_MODELS } from "./components/ChatModels";
 import AuthModal from "./components/AuthModal";
@@ -61,6 +62,8 @@ export default function ChatApp() {
   const lastTextModelRef = useRef("gemini-3-flash-preview");
   const isStreamingRef = useRef(false);
   const isStreaming = messages.some((m) => m.isStreaming);
+  const isCouncilConversationLocked =
+    isCouncilModel(model) && messages.some((m) => m.role === "model" && !m.isStreaming);
   isStreamingRef.current = isStreaming;
   const SCROLL_BOTTOM_THRESHOLD = 80;
   const lastSettingsErrorRef = useRef(null);
@@ -449,13 +452,16 @@ export default function ChatApp() {
         const currentProvider = currentModelConfig?.provider;
 
         // 铁律：根据对话的 provider 强制切换模型
+        // - Council 对话进入后，如果当前不是 Council，强制切为 Council
         // - Gemini 对话进入后，如果当前不是 Gemini 模型，强制变为 Flash
         // - Claude 对话进入后，如果当前不是 Claude 模型，强制变为 Sonnet
         // - OpenAI 对话进入后，如果当前不是 OpenAI 模型，强制变为 GPT
         // - Seed 对话进入后，如果当前不是 Seed 模型，强制变为 Seed
         // - DeepSeek 对话进入后，如果当前不是 DeepSeek 模型，强制变为 DeepSeek
         let targetModel = model; // 默认保持当前模型
-        if (conversationProvider === "gemini" && currentProvider !== "gemini") {
+        if (conversationProvider === "council" && currentProvider !== "council") {
+          targetModel = COUNCIL_MODEL_ID;
+        } else if (conversationProvider === "gemini" && currentProvider !== "gemini") {
           targetModel = "gemini-3-flash-preview";
         } else if (conversationProvider === "claude" && currentProvider !== "claude") {
           targetModel = "claude-sonnet-4-6-20260219";
@@ -476,46 +482,48 @@ export default function ChatApp() {
         }
 
         // 恢复对话的参数设置（使用默认值填充缺失的字段）
-        const settings = data.conversation.settings && typeof data.conversation.settings === "object"
-          ? data.conversation.settings
-          : {};
-        // 思考级别：恢复对话存储的值
-        if (typeof settings.thinkingLevel === "string" && settings.thinkingLevel && conversationModel) {
-          setThinkingLevels((prev) => ({
-            ...prev,
-            [targetModel]: settings.thinkingLevel
-          }));
-        }
-        // 其他参数：使用对话设置，否则使用默认值
-        const nextHistoryLimit = Number(settings.historyLimit);
-        if (Number.isFinite(nextHistoryLimit) && nextHistoryLimit >= 0) {
-          setHistoryLimit(nextHistoryLimit);
-        }
-        const isClaudeAdaptiveConv = typeof conversationModel === "string"
-          && (conversationModel.startsWith("claude-opus-4-6") || conversationModel.startsWith("claude-sonnet-4-6"));
-        const maxTokensValue = Number(settings.maxTokens);
-        if (Number.isFinite(maxTokensValue) && maxTokensValue > 0) {
-          const providerLimits = { claude: isClaudeAdaptiveConv ? 128000 : 64000, openai: 128000, gemini: 64000, seed: 64000, deepseek: 64000 };
-          const maxAllowed = providerLimits[conversationProvider];
-          setMaxTokens(Number.isFinite(maxAllowed) ? Math.min(maxTokensValue, maxAllowed) : maxTokensValue);
-        }
-        const nextBudgetTokens = Number(settings.budgetTokens);
-        if (Number.isFinite(nextBudgetTokens) && nextBudgetTokens > 0) {
-          setBudgetTokens(nextBudgetTokens);
-        }
-        if (typeof settings.webSearch === "boolean") {
-          setWebSearch(settings.webSearch);
-        }
-        // activePromptId：优先使用对话存储的值，但需验证该提示词是否仍存在
-        if (settings.activePromptId !== undefined) {
-          const promptExists = systemPrompts.some(
-            (p) => String(p?._id) === String(settings.activePromptId)
-          );
-          if (promptExists) {
-            setActivePromptId(settings.activePromptId);
-          } else {
-            // 提示词已删除，回到“无”
-            setActivePromptId(null);
+        if (conversationProvider !== "council") {
+          const settings = data.conversation.settings && typeof data.conversation.settings === "object"
+            ? data.conversation.settings
+            : {};
+          // 思考级别：恢复对话存储的值
+          if (typeof settings.thinkingLevel === "string" && settings.thinkingLevel && conversationModel) {
+            setThinkingLevels((prev) => ({
+              ...prev,
+              [targetModel]: settings.thinkingLevel
+            }));
+          }
+          // 其他参数：使用对话设置，否则使用默认值
+          const nextHistoryLimit = Number(settings.historyLimit);
+          if (Number.isFinite(nextHistoryLimit) && nextHistoryLimit >= 0) {
+            setHistoryLimit(nextHistoryLimit);
+          }
+          const isClaudeAdaptiveConv = typeof conversationModel === "string"
+            && (conversationModel.startsWith("claude-opus-4-6") || conversationModel.startsWith("claude-sonnet-4-6"));
+          const maxTokensValue = Number(settings.maxTokens);
+          if (Number.isFinite(maxTokensValue) && maxTokensValue > 0) {
+            const providerLimits = { claude: isClaudeAdaptiveConv ? 128000 : 64000, openai: 128000, gemini: 64000, seed: 64000, deepseek: 64000 };
+            const maxAllowed = providerLimits[conversationProvider];
+            setMaxTokens(Number.isFinite(maxAllowed) ? Math.min(maxTokensValue, maxAllowed) : maxTokensValue);
+          }
+          const nextBudgetTokens = Number(settings.budgetTokens);
+          if (Number.isFinite(nextBudgetTokens) && nextBudgetTokens > 0) {
+            setBudgetTokens(nextBudgetTokens);
+          }
+          if (typeof settings.webSearch === "boolean") {
+            setWebSearch(settings.webSearch);
+          }
+          // activePromptId：优先使用对话存储的值，但需验证该提示词是否仍存在
+          if (settings.activePromptId !== undefined) {
+            const promptExists = systemPrompts.some(
+              (p) => String(p?._id) === String(settings.activePromptId)
+            );
+            if (promptExists) {
+              setActivePromptId(settings.activePromptId);
+            } else {
+              // 提示词已删除，回到“无”
+              setActivePromptId(null);
+            }
           }
         }
       }
@@ -528,7 +536,7 @@ export default function ChatApp() {
 
   // 同步对话参数到数据库（防抖，累积多个设置变更）
   const syncConversationSettings = (settingsUpdate) => {
-    if (!currentConversationId) return;
+    if (!currentConversationId || isCouncilModel(model)) return;
     // 如果切换了对话，清空之前的待同步设置（避免跨对话污染）
     if (pendingConversationIdRef.current && pendingConversationIdRef.current !== currentConversationId) {
       pendingSettingsRef.current = {};
@@ -585,7 +593,7 @@ export default function ChatApp() {
 
     // 如果有对话历史且 provider 不同，提示用户需要新建对话
     if (messages.length > 0 && currentProvider && nextProvider && currentProvider !== nextProvider) {
-      const providerNames = { gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "Seed", deepseek: "DeepSeek" };
+      const providerNames = { council: "Council", gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "Seed", deepseek: "DeepSeek" };
       setConfirmModalConfig({
         title: "切换模型",
         message: `切换到 ${providerNames[nextProvider]} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider]} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,
@@ -741,6 +749,7 @@ export default function ChatApp() {
             onSend: actions.handleSendFromComposer,
             onStop: actions.stopStreaming,
             prefill: composerPrefill,
+            isConversationLocked: isCouncilConversationLocked,
           }}
         />
       )}

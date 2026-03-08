@@ -1,12 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { LogOut, Pencil, Pin, Plus, Trash2, X, Check } from "lucide-react";
+import { LogOut, Pencil, Pin, Plus, Trash2, X, Check, Users } from "lucide-react";
 import { Gemini, Claude, OpenAI, Doubao, DeepSeek } from "@lobehub/icons";
 import ConfirmModal from "./ConfirmModal";
+import { isCouncilModel } from "../lib/councilModel";
 import { isSeedModel } from "../lib/seedModel";
 
 function ConversationIcon({ model }) {
+  if (isCouncilModel(model)) {
+    return <Users size={16} className="text-amber-500" />;
+  }
   if (isSeedModel(model)) {
     return <Doubao.Color size={16} />;
   }

@@ -1,11 +1,14 @@
 "use client";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, Users } from "lucide-react";
 import { Gemini, Claude, OpenAI, Doubao, DeepSeek } from "@lobehub/icons";
 import { CHAT_MODELS } from "./ChatModels";
 
 function ModelIcon({ provider, Icon, size = 16, isSelected = false }) {
+  if (provider === "council") {
+    return <Users size={size} className={isSelected ? "text-amber-500" : "text-amber-500"} />;
+  }
   if (provider === "gemini") {
     return <Gemini.Color size={size} />;
   }
@@ -98,6 +101,8 @@ export default function ModelSelector({ model, onModelChange }) {
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px]"
             >
+              {renderModelGroup("council", "Council")}
+              <div className="my-1.5 border-t border-zinc-200" />
               {renderModelGroup("gemini", "Gemini")}
               <div className="my-1.5 border-t border-zinc-200" />
               {renderModelGroup("claude", "Claude")}

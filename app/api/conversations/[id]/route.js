@@ -22,6 +22,10 @@ const MAX_CITATION_TEXT_CHARS = 1000;
 const MAX_TIMELINE_STEPS = 50;
 const MAX_TIMELINE_CONTENT_CHARS = 20000;
 const MAX_TIMELINE_STRING_CHARS = 2048;
+const MAX_COUNCIL_EXPERTS = 3;
+const MAX_EXPERT_MODEL_CHARS = 100;
+const MAX_EXPERT_LABEL_CHARS = 120;
+const MAX_EXPERT_CONTENT_CHARS = 20000;
 const ALLOWED_TIMELINE_KINDS = new Set(['thought', 'search', 'reader']);
 const ALLOWED_TIMELINE_STATUSES = new Set(['streaming', 'running', 'done', 'error']);
 
@@ -45,7 +49,24 @@ function isAllowedImageUrl(url) {
         );
     } catch {
         return false;
+  }
+}
+
+function sanitizeCitations(value, fieldPath) {
+    if (!Array.isArray(value)) return [];
+    if (value.length > MAX_CITATIONS) throw new Error(`${fieldPath} too many`);
+    const citations = [];
+    for (const c of value) {
+        if (!isPlainObject(c)) continue;
+        const url = typeof c.url === 'string' ? c.url : '';
+        const title = typeof c.title === 'string' ? c.title : '';
+        const citedText = typeof c.cited_text === 'string' ? c.cited_text : '';
+        if (!url || url.length > MAX_URL_CHARS) continue;
+        const entry = { url, title: title.slice(0, MAX_CITATION_TITLE_CHARS) };
+        if (citedText) entry.cited_text = citedText.slice(0, MAX_CITATION_TEXT_CHARS);
+        citations.push(entry);
     }
+    return citations;
 }
 
 function sanitizeMessage(msg, idx) {
@@ -77,21 +98,8 @@ function sanitizeMessage(msg, idx) {
         if (msg.thought) out.thought = msg.thought;
     }
 
-    if (Array.isArray(msg.citations)) {
-        if (msg.citations.length > MAX_CITATIONS) throw new Error(`messages[${idx}].citations too many`);
-        const citations = [];
-        for (const c of msg.citations) {
-            if (!isPlainObject(c)) continue;
-            const url = typeof c.url === 'string' ? c.url : '';
-            const title = typeof c.title === 'string' ? c.title : '';
-            const citedText = typeof c.cited_text === 'string' ? c.cited_text : '';
-            if (!url || url.length > MAX_URL_CHARS) continue;
-            const entry = { url, title: title.slice(0, MAX_CITATION_TITLE_CHARS) };
-            if (citedText) entry.cited_text = citedText.slice(0, MAX_CITATION_TEXT_CHARS);
-            citations.push(entry);
-        }
-        if (citations.length > 0) out.citations = citations;
-    }
+    const citations = sanitizeCitations(msg.citations, `messages[${idx}].citations`);
+    if (citations.length > 0) out.citations = citations;
 
     if (Array.isArray(msg.thinkingTimeline) && msg.thinkingTimeline.length > 0) {
         if (msg.thinkingTimeline.length > MAX_TIMELINE_STEPS) throw new Error(`messages[${idx}].thinkingTimeline too many`);
@@ -147,6 +155,36 @@ function sanitizeMessage(msg, idx) {
         throw new Error(`messages[${idx}].parts invalid`);
     }
     out.parts = parts;
+
+    if (Array.isArray(msg.councilExperts)) {
+        if (msg.councilExperts.length > MAX_COUNCIL_EXPERTS) {
+            throw new Error(`messages[${idx}].councilExperts too many`);
+        }
+        const experts = [];
+        for (const [expertIdx, expert] of msg.councilExperts.entries()) {
+            if (!isPlainObject(expert)) continue;
+            const modelId = typeof expert.modelId === 'string' ? expert.modelId.trim() : '';
+            const label = typeof expert.label === 'string' ? expert.label.trim() : '';
+            const content = typeof expert.content === 'string' ? expert.content : '';
+            if (!modelId || modelId.length > MAX_EXPERT_MODEL_CHARS) {
+                throw new Error(`messages[${idx}].councilExperts[${expertIdx}].modelId invalid`);
+            }
+            if (!label || label.length > MAX_EXPERT_LABEL_CHARS) {
+                throw new Error(`messages[${idx}].councilExperts[${expertIdx}].label invalid`);
+            }
+            if (!content || content.length > MAX_EXPERT_CONTENT_CHARS) {
+                throw new Error(`messages[${idx}].councilExperts[${expertIdx}].content invalid`);
+            }
+            const expertEntry = { modelId, label, content };
+            const expertCitations = sanitizeCitations(
+                expert.citations,
+                `messages[${idx}].councilExperts[${expertIdx}].citations`
+            );
+            if (expertCitations.length > 0) expertEntry.citations = expertCitations;
+            experts.push(expertEntry);
+        }
+        if (experts.length > 0) out.councilExperts = experts;
+    }
 
     if (msg.createdAt) {
         const d = new Date(msg.createdAt);
@@ -316,4 +354,3 @@ export async function PUT(req, { params }) {
 
     return Response.json({ conversation: conversation?.toObject?.() || conversation });
 }
-

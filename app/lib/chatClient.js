@@ -264,6 +264,8 @@ export async function runChat({
       ? "/api/openai"
       : provider === "deepseek"
       ? "/api/deepseek"
+      : provider === "council"
+      ? "/api/council"
       : "/api/google";
 
   const syncConversationMessages = async (convId, nextMessages) => {
@@ -288,8 +290,70 @@ export async function runChat({
     return true;
   };
 
+  const removePendingUserMessage = (messagesList) => {
+    if (!Array.isArray(messagesList) || messagesList.length === 0) return messagesList;
+    const next = messagesList.slice();
+
+    if (typeof userMessageId === "string" && userMessageId) {
+      const targetIndex = next.findIndex((msg) => msg?.id === userMessageId);
+      if (targetIndex >= 0) {
+        next.splice(targetIndex, 1);
+        return next;
+      }
+    }
+
+    const hasPromptText = typeof prompt === "string" && prompt.trim();
+    for (let i = next.length - 1; i >= 0; i -= 1) {
+      const msg = next[i];
+      if (msg?.role !== "user") continue;
+      if (hasPromptText) {
+        if (msg?.content === prompt) {
+          next.splice(i, 1);
+          break;
+        }
+      } else if (typeof msg?.content === "string" && msg.content.trim() === "") {
+        next.splice(i, 1);
+        break;
+      }
+    }
+    return next;
+  };
+
   setLoading(true);
   let streamMsgId = modelMessageId;
+  const shouldDelayConversationActivation = provider === "council";
+  let conversationActivated = false;
+
+  const ensureConversationActivated = () => {
+    if (conversationActivated) return;
+    if (!newConvId || currentConversationId) {
+      conversationActivated = true;
+      return;
+    }
+    conversationActivated = true;
+    setCurrentConversationId(newConvId);
+    fetchConversations();
+  };
+
+  const rollbackCouncilTurn = async (convId) => {
+    let nextMessagesForSync = null;
+    setMessages((prev) => {
+      if (!Array.isArray(prev) || prev.length === 0) return prev;
+      let next = prev;
+      if (streamMsgId !== null) {
+        next = next.filter((msg) => msg.id !== streamMsgId);
+      }
+      next = removePendingUserMessage(next);
+      nextMessagesForSync = next;
+      return next;
+    });
+    await syncConversationMessages(convId, nextMessagesForSync);
+    if (newConvId) {
+      setCurrentConversationId((prevId) => (prevId === newConvId ? null : prevId));
+      fetchConversations();
+    }
+    streamMsgId = null;
+  };
 
   try {
     const res = await fetch(apiEndpoint, {
@@ -426,9 +490,8 @@ export async function runChat({
 
 
     newConvId = res.headers.get("X-Conversation-Id");
-    if (newConvId && !currentConversationId) {
-      setCurrentConversationId(newConvId);
-      fetchConversations();
+    if (newConvId && !currentConversationId && !shouldDelayConversationActivation) {
+      ensureConversationActivated();
     }
 
     setMessages((prev) => [
@@ -447,6 +510,7 @@ export async function runChat({
         searchResults: null,
         thinkingTimeline: [],
         citations: null,
+        councilExperts: null,
         searchError: null,
       },
     ]);
@@ -468,6 +532,7 @@ export async function runChat({
     let searchQuery = null;
     let searchResults = null;
     let citations = null;
+    let councilExperts = null;
     let searchError = null;
     let streamErrorMessage = null; // 流内错误消息（来自 stream_error 事件）
     let searchContextTokens = 0; // 联网搜索注入的上下文 token 数
@@ -603,6 +668,7 @@ export async function runChat({
           searchResults,
           thinkingTimeline,
           citations,
+          councilExperts,
           searchError,
           searchContextTokens: searchContextTokens || undefined,
         };
@@ -616,6 +682,7 @@ export async function runChat({
           base.searchResults === nextMsg.searchResults &&
           base.thinkingTimeline === nextMsg.thinkingTimeline &&
           base.citations === nextMsg.citations &&
+          base.councilExperts === nextMsg.councilExperts &&
           base.searchError === nextMsg.searchError &&
           base.searchContextTokens === nextMsg.searchContextTokens
         ) {
@@ -658,6 +725,9 @@ export async function runChat({
           const delta = typeof data.content === "string" ? data.content : "";
           fullText += delta;
           displayedText = fullText;
+          if (shouldDelayConversationActivation && fullText.trim()) {
+            ensureConversationActivated();
+          }
           if (!thinkingEnded) {
             ensureSyntheticThoughtRunning();
             thinkingEnded = true;
@@ -720,6 +790,9 @@ export async function runChat({
           if (!thinkingEnded) ensureSyntheticThoughtRunning();
         } else if (data.type === "citations") {
           citations = data.citations;
+        } else if (data.type === "council_experts") {
+          councilExperts = Array.isArray(data.experts) ? data.experts : null;
+          scheduleFlush();
         } else if (data.type === "search_context_tokens") {
           const tokens = typeof data.tokens === "number" ? data.tokens : 0;
           if (tokens > 0) searchContextTokens = tokens;
@@ -781,6 +854,9 @@ export async function runChat({
     buffer += decoder.decode();
     consumeSseBuffer(true);
     displayedText = fullText;
+    if (shouldDelayConversationActivation && fullText.trim()) {
+      ensureConversationActivated();
+    }
     flushStreamingMessage();
 
     // 检查流内错误（AI API 在流式传输过程中报错，如上下文超出）
@@ -905,6 +981,9 @@ export async function runChat({
             const streamTimeline = Array.isArray(streamMsg?.thinkingTimeline)
               ? streamMsg.thinkingTimeline
               : null;
+            const streamCouncilExperts = Array.isArray(streamMsg?.councilExperts)
+              ? streamMsg.councilExperts
+              : null;
             const streamSearchError = typeof streamMsg?.searchError === "string"
               ? streamMsg.searchError
               : null;
@@ -918,6 +997,7 @@ export async function runChat({
                     ...next[i],
                     id: streamMsgId,
                     ...(streamTimeline?.length ? { thinkingTimeline: streamTimeline } : {}),
+                    ...(streamCouncilExperts?.length ? { councilExperts: streamCouncilExperts } : {}),
                     ...(streamSearchError ? { searchError: streamSearchError } : {}),
                   };
                   break;
@@ -959,6 +1039,8 @@ export async function runChat({
       const restored = await restoreRegenerateMessages(convIdForSync);
       if (restored) {
         streamMsgId = null;
+      } else if (provider === "council") {
+        await rollbackCouncilTurn(convIdForSync);
       }
     } else {
       const errMsg = err?.message;
@@ -1116,8 +1198,12 @@ export async function runChat({
       } else {
         errorMessage = "请求失败，请重试";
       }
-      // 移除正在流式输出的消息（如有）
-      if (streamMsgId !== null) {
+      let councilRolledBack = false;
+      if (provider === "council" && mode !== "regenerate") {
+        await rollbackCouncilTurn(convIdForSync);
+        councilRolledBack = true;
+      } else if (streamMsgId !== null) {
+        // 移除正在流式输出的消息（如有）
         setMessages((prev) => prev.filter((msg) => msg.id !== streamMsgId));
       }
       // regenerate 失败：恢复原消息，避免旧回答丢失
@@ -1126,7 +1212,7 @@ export async function runChat({
       }
 
       // 超时：回滚本次用户消息，避免"悬空提问"扰乱上下文
-      if (errMsg === "API_TIMEOUT" && mode !== "regenerate") {
+      if (errMsg === "API_TIMEOUT" && mode !== "regenerate" && !councilRolledBack) {
         let nextMessagesForSync = null;
         setMessages((prev) => {
           if (!Array.isArray(prev) || prev.length === 0) return prev;

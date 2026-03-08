@@ -17,6 +17,7 @@ import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
 import ImageLightbox from "./ImageLightbox";
 import ConfirmModal from "./ConfirmModal";
+import CouncilExpertsBlock from "./CouncilExpertsBlock";
 import { getMessageImageSrc, isKeepableImageSrc } from "../lib/messageImage";
 import {
   AIAvatar,
@@ -29,6 +30,7 @@ import {
   Citations,
 } from "./MessageListHelpers";
 import { CHAT_MODELS } from "./ChatModels";
+import { isCouncilModel } from "../lib/councilModel";
 
 
 export default function MessageList({
@@ -62,6 +64,7 @@ export default function MessageList({
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, index: null, role: null });
   const prevMessagesRef = useRef([]);
+  const isCouncilConversation = isCouncilModel(model);
 
   useEffect(() => {
     prevMessagesRef.current = messages;
@@ -459,6 +462,10 @@ export default function MessageList({
                         {msg.role === "model" && !msg.isStreaming && msg.citations && (
                           <Citations citations={msg.citations} />
                         )}
+
+                        {msg.role === "model" && !msg.isStreaming && (
+                          <CouncilExpertsBlock experts={msg.councilExperts} />
+                        )}
                       </div>
                     )}
 
@@ -486,7 +493,7 @@ export default function MessageList({
                           </button>
                         )}
 
-                        {msg.role === "user" ? (
+                        {!isCouncilConversation && msg.role === "user" ? (
                           <>
                             <button
                               onClick={() => handleDeleteClick(i, "user")}
@@ -503,7 +510,7 @@ export default function MessageList({
                               <Edit3 size={14} />
                             </button>
                           </>
-                        ) : (
+                        ) : !isCouncilConversation && msg.role === "model" ? (
                           <>
                             <button
                               onClick={() => handleDeleteClick(i, "model")}

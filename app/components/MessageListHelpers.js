@@ -1,11 +1,22 @@
 import { useState } from "react";
-import { ExternalLink, Globe, X } from "lucide-react";
+import { ExternalLink, Globe, Users, X } from "lucide-react";
 import { Gemini, Claude, OpenAI, Doubao, DeepSeek } from "@lobehub/icons";
+import { isCouncilModel } from "../lib/councilModel";
 import { isSeedModel } from "../lib/seedModel";
 
 export function AIAvatar({ model, size = 24 }) {
   const squareProps = { size, shape: "square" };
   const props = { ...squareProps, style: { borderRadius: 6 } };
+  if (isCouncilModel(model)) {
+    return (
+      <div
+        className="flex items-center justify-center rounded-md bg-amber-100 text-amber-600"
+        style={{ width: size, height: size }}
+      >
+        <Users size={Math.max(14, Math.round(size * 0.65))} />
+      </div>
+    );
+  }
   if (isSeedModel(model)) {
     return <Doubao.Avatar {...props} />;
   }

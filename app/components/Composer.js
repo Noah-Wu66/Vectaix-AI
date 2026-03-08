@@ -10,6 +10,7 @@ import { useToast } from "./ToastProvider";
 import ModelSelector from "./ModelSelector";
 import SettingsMenu from "./SettingsMenu";
 import TokenCounter from "./TokenCounter";
+import { isCouncilModel } from "../lib/councilModel";
 
 export default function Composer({
   loading,
@@ -40,6 +41,7 @@ export default function Composer({
   onSend,
   onStop,
   prefill,
+  isConversationLocked,
 }) {
   const toast = useToast();
   const [input, setInput] = useState("");
@@ -48,6 +50,8 @@ export default function Composer({
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const mountedRef = useRef(true);
+  const isCouncilSelected = isCouncilModel(model);
+  const isCouncilLocked = isCouncilSelected && isConversationLocked === true;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -204,7 +208,7 @@ export default function Composer({
 
   const handleSend = () => {
     const text = input.trim();
-    if ((!text && selectedImages.length === 0) || loading) return;
+    if ((!text && selectedImages.length === 0) || loading || isCouncilLocked) return;
     onSend({ text, images: selectedImages });
     setInput("");
     clearAllImages();
@@ -215,34 +219,38 @@ export default function Composer({
       <div className="max-w-3xl mx-auto space-y-2">
         <div className="flex items-center gap-2">
           <ModelSelector model={model} onModelChange={onModelChange} />
-          <SettingsMenu
-            model={model}
-            thinkingLevel={thinkingLevel}
-            setThinkingLevel={setThinkingLevel}
-            historyLimit={historyLimit}
-            setHistoryLimit={setHistoryLimit}
-            maxTokens={maxTokens}
-            setMaxTokens={setMaxTokens}
-            budgetTokens={budgetTokens}
-            setBudgetTokens={setBudgetTokens}
-            webSearch={webSearch}
-            setWebSearch={setWebSearch}
-            systemPrompts={systemPrompts}
-            activePromptIds={activePromptIds}
-            setActivePromptIds={setActivePromptIds}
-            activePromptId={activePromptId}
-            setActivePromptId={setActivePromptId}
-            onAddPrompt={onAddPrompt}
-            onDeletePrompt={onDeletePrompt}
-            onUpdatePrompt={onUpdatePrompt}
-          />
-          <TokenCounter
-            messages={messages}
-            systemPrompts={systemPrompts}
-            activePromptId={activePromptId}
-            historyLimit={historyLimit}
-            contextWindow={contextWindow}
-          />
+          {!isCouncilSelected && (
+            <>
+              <SettingsMenu
+                model={model}
+                thinkingLevel={thinkingLevel}
+                setThinkingLevel={setThinkingLevel}
+                historyLimit={historyLimit}
+                setHistoryLimit={setHistoryLimit}
+                maxTokens={maxTokens}
+                setMaxTokens={setMaxTokens}
+                budgetTokens={budgetTokens}
+                setBudgetTokens={setBudgetTokens}
+                webSearch={webSearch}
+                setWebSearch={setWebSearch}
+                systemPrompts={systemPrompts}
+                activePromptIds={activePromptIds}
+                setActivePromptIds={setActivePromptIds}
+                activePromptId={activePromptId}
+                setActivePromptId={setActivePromptId}
+                onAddPrompt={onAddPrompt}
+                onDeletePrompt={onDeletePrompt}
+                onUpdatePrompt={onUpdatePrompt}
+              />
+              <TokenCounter
+                messages={messages}
+                systemPrompts={systemPrompts}
+                activePromptId={activePromptId}
+                historyLimit={historyLimit}
+                contextWindow={contextWindow}
+              />
+            </>
+          )}
 
           {selectedImages.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
@@ -286,7 +294,7 @@ export default function Composer({
 
               <button
                 onClick={() => fileInputRef.current?.click()}
-                disabled={selectedImages.length >= 4}
+                disabled={selectedImages.length >= 4 || isCouncilLocked}
                 className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedImages.length > 0
                   ? "text-zinc-600 bg-zinc-200"
                   : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
@@ -304,16 +312,17 @@ export default function Composer({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => setIsMainInputFocused(true)}
-            onBlur={() => setIsMainInputFocused(false)}
-            placeholder="输入消息..."
-            className={`flex-1 bg-zinc-50 border border-zinc-200 rounded-xl ${model?.startsWith("deepseek-") ? "pl-4" : "pl-11"} pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors`}
-            rows={1}
-            style={{ minHeight: "48px" }}
-          />
+              onBlur={() => setIsMainInputFocused(false)}
+              placeholder={isCouncilLocked ? "Council 为单轮模式，请新建对话继续" : "输入消息..."}
+              className={`flex-1 bg-zinc-50 border border-zinc-200 rounded-xl ${model?.startsWith("deepseek-") ? "pl-4" : "pl-11"} pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors`}
+              rows={1}
+              style={{ minHeight: "48px" }}
+              disabled={isCouncilLocked}
+            />
 
           <button
             onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
-            disabled={!isStreaming && !isWaitingForAI && !input.trim() && selectedImages.length === 0}
+            disabled={(!isStreaming && !isWaitingForAI && !input.trim() && selectedImages.length === 0) || isCouncilLocked}
             className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${isStreaming || isWaitingForAI ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
               }`}
             type="button"
@@ -321,6 +330,12 @@ export default function Composer({
             {isStreaming || isWaitingForAI ? <Square size={16} /> : <Send size={16} />}
           </button>
         </div>
+
+        {isCouncilLocked && (
+          <div className="text-xs text-zinc-500 px-1">
+            Council 为单轮模式，本轮结果已完成，请新建对话继续。
+          </div>
+        )}
       </div>
     </div>
   );

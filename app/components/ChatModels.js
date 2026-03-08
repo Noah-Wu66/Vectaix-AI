@@ -1,7 +1,15 @@
 import { OPENAI_PRIMARY_MODEL } from "../lib/openaiModel";
 import { SEED_MODEL_ID } from "../lib/seedModel";
+import { COUNCIL_MODEL_ID } from "../lib/councilModel";
 
 export const CHAT_MODELS = [
+  {
+    id: COUNCIL_MODEL_ID,
+    name: "Council",
+    shortName: "Council",
+    provider: "council",
+    contextWindow: 0,
+  },
   {
     id: "gemini-3-flash-preview",
     name: "Flash",

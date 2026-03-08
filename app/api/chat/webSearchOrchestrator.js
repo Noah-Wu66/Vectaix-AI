@@ -632,6 +632,7 @@ export async function runWebSearchOrchestration(options) {
     model,
     conversationId,
     warnOnNoContext = false,
+    allowHeuristicFallback = true,
   } = options || {};
 
   const aborted = () => typeof isClientAborted === 'function' && isClientAborted() === true;
@@ -672,10 +673,12 @@ export async function runWebSearchOrchestration(options) {
       return { searchContextText: '' };
     }
 
-    const fallbackDecision = buildHeuristicWebSearchDecision({
-      prompt: currentPrompt,
-      historyMessages,
-    });
+    const fallbackDecision = allowHeuristicFallback
+      ? buildHeuristicWebSearchDecision({
+          prompt: currentPrompt,
+          historyMessages,
+        })
+      : null;
 
     if (fallbackDecision) {
       console.warn(`${providerLabel} bocha search decision fallback`, {

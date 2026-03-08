@@ -20,6 +20,13 @@ const MAX_PROMPTS = 50;
 const MAX_PROMPT_NAME_CHARS = 80;
 const MAX_PROMPT_CONTENT_CHARS = 8000;
 const MAX_MODEL_CHARS = 100;
+const MAX_CITATIONS = 20;
+const MAX_CITATION_TITLE_CHARS = 200;
+const MAX_CITATION_TEXT_CHARS = 1000;
+const MAX_COUNCIL_EXPERTS = 3;
+const MAX_EXPERT_MODEL_CHARS = 100;
+const MAX_EXPERT_LABEL_CHARS = 120;
+const MAX_EXPERT_CONTENT_CHARS = 20000;
 
 const IMPORT_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 
@@ -57,6 +64,25 @@ function isAllowedImageUrl(url) {
   }
 }
 
+function sanitizeCitations(value, fieldPath) {
+  if (!Array.isArray(value)) return [];
+  if (value.length > MAX_CITATIONS) {
+    throw new Error(`${fieldPath} too many`);
+  }
+  const citations = [];
+  for (const citation of value) {
+    if (!isPlainObject(citation)) continue;
+    const url = typeof citation.url === 'string' ? citation.url : '';
+    const title = typeof citation.title === 'string' ? citation.title : '';
+    const citedText = typeof citation.cited_text === 'string' ? citation.cited_text : '';
+    if (!url || url.length > MAX_URL_CHARS) continue;
+    const entry = { url, title: title.slice(0, MAX_CITATION_TITLE_CHARS) };
+    if (citedText) entry.cited_text = citedText.slice(0, MAX_CITATION_TEXT_CHARS);
+    citations.push(entry);
+  }
+  return citations;
+}
+
 function sanitizeMessage(msg, idx) {
   if (!isPlainObject(msg)) throw new Error(`messages[${idx}] must be an object`);
   const role = msg.role;
@@ -75,6 +101,10 @@ function sanitizeMessage(msg, idx) {
   }
 
   if (typeof msg.thought === 'string' && msg.thought) out.thought = msg.thought;
+  const topLevelCitations = sanitizeCitations(msg.citations, `messages[${idx}].citations`);
+  if (topLevelCitations.length > 0) {
+    out.citations = topLevelCitations;
+  }
   if (Array.isArray(msg.thinkingTimeline) && msg.thinkingTimeline.length > 0) {
     const ALLOWED_KINDS = ['thought', 'search', 'reader'];
     const timeline = [];
@@ -135,6 +165,40 @@ function sanitizeMessage(msg, idx) {
     throw new Error(`messages[${idx}].parts invalid`);
   }
   out.parts = parts;
+
+  if (Array.isArray(msg.councilExperts)) {
+    if (msg.councilExperts.length > MAX_COUNCIL_EXPERTS) {
+      throw new Error(`messages[${idx}].councilExperts too many`);
+    }
+    const experts = [];
+    for (const [expertIdx, expert] of msg.councilExperts.entries()) {
+      if (!isPlainObject(expert)) continue;
+      const modelId = typeof expert.modelId === 'string' ? expert.modelId.trim() : '';
+      const label = typeof expert.label === 'string' ? expert.label.trim() : '';
+      const content = typeof expert.content === 'string' ? expert.content : '';
+      if (!modelId || modelId.length > MAX_EXPERT_MODEL_CHARS) {
+        throw new Error(`messages[${idx}].councilExperts[${expertIdx}].modelId invalid`);
+      }
+      if (!label || label.length > MAX_EXPERT_LABEL_CHARS) {
+        throw new Error(`messages[${idx}].councilExperts[${expertIdx}].label invalid`);
+      }
+      if (!content || content.length > MAX_EXPERT_CONTENT_CHARS) {
+        throw new Error(`messages[${idx}].councilExperts[${expertIdx}].content invalid`);
+      }
+      const entry = { modelId, label, content };
+      const citations = sanitizeCitations(
+        expert.citations,
+        `messages[${idx}].councilExperts[${expertIdx}].citations`
+      );
+      if (citations.length > 0) {
+        entry.citations = citations;
+      }
+      experts.push(entry);
+    }
+    if (experts.length > 0) {
+      out.councilExperts = experts;
+    }
+  }
 
   if (msg.createdAt) {
     const d = new Date(msg.createdAt);
