@@ -11,7 +11,7 @@ import {
   runWebSearchOrchestration,
 } from "@/app/api/chat/webSearchOrchestrator";
 import { buildEconomySystemPrompt } from "@/app/lib/economyModels";
-import { OPENAI_PRIMARY_MODEL } from "@/app/lib/openaiModel";
+import { COUNCIL_EXPERTS } from "@/app/lib/councilModel";
 import { SEED_MODEL_ID } from "@/app/lib/seedModel";
 
 const RIGHT_CODES_OPENAI_BASE_URL = process.env.RIGHT_CODES_OPENAI_BASE_URL || "https://www.right.codes/codex/v1";
@@ -30,29 +30,7 @@ const SEED_MAX_OUTPUT_TOKENS = 8000;
 const MAX_RAW_MARKDOWN_CHARS = 20000;
 const MAX_FINDING_TEXT_CHARS = 1000;
 
-export const COUNCIL_EXPERT_CONFIGS = [
-  {
-    key: "gpt",
-    modelId: OPENAI_PRIMARY_MODEL,
-    label: "GPT-5.4 Thinking",
-    provider: "openai",
-    thinkingLevel: "xhigh",
-  },
-  {
-    key: "opus",
-    modelId: "claude-opus-4-6-20260205",
-    label: "Claude Opus 4.6 Thinking",
-    provider: "claude",
-    thinkingLevel: "max",
-  },
-  {
-    key: "pro",
-    modelId: "gemini-3.1-pro-preview",
-    label: "Gemini 3.1 Pro Thinking",
-    provider: "gemini",
-    thinkingLevel: "HIGH",
-  },
-];
+export const COUNCIL_EXPERT_CONFIGS = COUNCIL_EXPERTS.map((expert) => ({ ...expert }));
 
 function assertConfigured(value, message) {
   if (!value) {
@@ -112,17 +90,6 @@ export function buildCouncilSummaryState(patch = {}) {
     phase: typeof patch.phase === "string" ? patch.phase : "pending",
     message: typeof patch.message === "string" ? patch.message : "",
   };
-}
-
-function chunkText(text, chunkSize = 180) {
-  if (typeof text !== "string" || !text) return [];
-  const chunks = [];
-  let index = 0;
-  while (index < text.length) {
-    chunks.push(text.slice(index, index + chunkSize));
-    index += chunkSize;
-  }
-  return chunks;
 }
 
 function extractGeminiText(result) {
@@ -228,6 +195,8 @@ async function buildExpertSystemPrompt({ label, enableWebSearch, searchContextTe
 }
 
 async function buildSeedSystemPrompt() {
+  const [firstExpertLabel = "专家1", secondExpertLabel = "专家2", thirdExpertLabel = "专家3"] =
+    COUNCIL_EXPERT_CONFIGS.map((expert) => expert.label);
   return injectCurrentTimeSystemReminder(`你是 Council 的最终汇总模型 Seed。你会收到用户问题、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务是比较三位专家已经写出的正式回答，输出一份最终 Markdown 结论。
 
 必须严格遵守：
@@ -238,9 +207,9 @@ async function buildSeedSystemPrompt() {
 - 综合分析
 2. 第 1、2、3 节必须使用 Markdown 表格。
 3. 第 1 节表头固定为：
-Finding | GPT-5.4 Thinking | Claude Opus 4.6 Thinking | Gemini 3.1 Pro Thinking | Evidence
+Finding | ${firstExpertLabel} | ${secondExpertLabel} | ${thirdExpertLabel} | Evidence
 4. 第 2 节表头固定为：
-Topic | GPT-5.4 Thinking | Claude Opus 4.6 Thinking | Gemini 3.1 Pro Thinking | Why They Differ
+Topic | ${firstExpertLabel} | ${secondExpertLabel} | ${thirdExpertLabel} | Why They Differ
 5. 第 3 节表头固定为：
 Model | Unique Finding | Why It Matters
 6. 若某节没有内容，仍保留标题和表头，并补一行占位说明。
@@ -759,7 +728,7 @@ function buildSeedPayload({ prompt, experts }) {
   return sections.join("\n\n");
 }
 
-export async function runSeedCouncilSummary({ prompt, experts }) {
+export async function runSeedCouncilSummary({ prompt, experts, onTextDelta, signal }) {
   assertConfigured(ARK_API_KEY, "ARK_API_KEY 未配置");
   const instructions = await buildSeedSystemPrompt();
   const response = await fetch(`${SEED_API_BASE_URL}/responses`, {
@@ -770,7 +739,7 @@ export async function runSeedCouncilSummary({ prompt, experts }) {
     },
     body: JSON.stringify({
       model: SEED_MODEL_ID,
-      stream: false,
+      stream: true,
       input: [
         {
           role: "user",
@@ -789,13 +758,97 @@ export async function runSeedCouncilSummary({ prompt, experts }) {
       thinking: { type: "enabled" },
       reasoning: { effort: "high" },
     }),
+    signal,
   });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(extractUpstreamErrorMessage(response.status, errorText));
   }
-  const payload = await response.json();
-  const text = extractResponsesText(payload);
+  if (!response.body) {
+    throw new Error("Seed 未返回有效汇总内容");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let streamedText = "";
+  let completedText = "";
+
+  const emitDelta = (value) => {
+    const delta = normalizeResponseText(value);
+    if (!delta) return;
+    streamedText += delta;
+    onTextDelta?.(delta);
+  };
+
+  const applyCompletedText = (value) => {
+    const nextText = typeof value === "string" ? value.trim() : "";
+    if (!nextText) return;
+    completedText = nextText;
+    if (!streamedText) {
+      streamedText = nextText;
+      onTextDelta?.(nextText);
+      return;
+    }
+    if (nextText.startsWith(streamedText) && nextText.length > streamedText.length) {
+      const tail = nextText.slice(streamedText.length);
+      streamedText = nextText;
+      onTextDelta?.(tail);
+    }
+  };
+
+  const handleEvent = (event) => {
+    const eventType = typeof event?.type === "string" ? event.type : "";
+    if (eventType === "response.output_text.delta" || eventType === "output.text.delta") {
+      emitDelta(event?.delta ?? event?.text ?? event?.data?.text);
+      return;
+    }
+    if (eventType === "response.completed") {
+      applyCompletedText(extractResponsesText(event?.response));
+    }
+  };
+
+  const consumeSseBuffer = (final = false) => {
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = final ? "" : (blocks.pop() || "");
+
+    for (const block of blocks) {
+      const trimmedBlock = block.trim();
+      if (!trimmedBlock) continue;
+
+      const lines = trimmedBlock.split(/\r?\n/);
+      const dataLines = [];
+      for (const line of lines) {
+        if (!line || line.startsWith(":")) continue;
+        if (line.startsWith("data:")) {
+          dataLines.push(line.slice(5).replace(/^\s*/, ""));
+        }
+      }
+
+      if (!dataLines.length) continue;
+      const dataStr = dataLines.join("\n");
+      if (dataStr === "[DONE]") continue;
+
+      try {
+        handleEvent(JSON.parse(dataStr));
+      } catch {
+        // ignore malformed SSE payloads
+      }
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    consumeSseBuffer(false);
+  }
+
+  buffer += decoder.decode();
+  consumeSseBuffer(true);
+
+  const text = (streamedText || completedText).trim();
   if (!text) {
     throw new Error("Seed 未返回有效汇总内容");
   }
@@ -880,10 +933,4 @@ export function createCouncilStreamHelpers(controller) {
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
     },
   };
-}
-
-export function streamCouncilSummary(streamHelpers, summary) {
-  for (const chunk of chunkText(summary)) {
-    streamHelpers.sendText(chunk);
-  }
 }

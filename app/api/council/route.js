@@ -15,7 +15,6 @@ import {
   createCouncilStreamHelpers,
   runCouncilExpert,
   runSeedCouncilSummary,
-  streamCouncilSummary,
 } from "./councilHelpers";
 
 export const runtime = "nodejs";
@@ -274,6 +273,8 @@ export async function POST(req) {
         const summary = await runSeedCouncilSummary({
           prompt: promptText,
           experts,
+          onTextDelta: (delta) => streamHelpers.sendText(delta),
+          signal: req?.signal,
         });
 
         if (clientAborted) {
@@ -294,7 +295,6 @@ export async function POST(req) {
           }
         );
 
-        streamCouncilSummary(streamHelpers, summary);
         streamHelpers.sendCouncilExperts(experts);
         streamHelpers.sendCitations(finalMessage.citations);
         updateSummaryState({
