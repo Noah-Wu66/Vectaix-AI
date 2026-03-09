@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, ChevronDown, ChevronUp, Lightbulb, Search, Zap } from "lucide-react";
 import Markdown from "./Markdown";
-import { ModelAvatar } from "./ModelVisuals";
+import { ModelGlyph } from "./ModelVisuals";
 
 function normalizeTimeline(timeline) {
   if (!Array.isArray(timeline)) return [];
@@ -47,63 +47,6 @@ function normalizeCouncilSummaryState(state) {
     status: typeof state.status === "string" ? state.status : "pending",
     phase: typeof state.phase === "string" ? state.phase : "pending",
     message: typeof state.message === "string" ? state.message : "",
-  };
-}
-
-function getCouncilStatusMeta(status, phase, kind = "expert") {
-  if (status === "error") {
-    return {
-      label: "失败",
-      pillClass: "bg-red-100 text-red-700",
-      cardClass: "border-red-200 bg-red-50/80",
-      dotClass: "bg-red-500",
-    };
-  }
-  if (status === "done") {
-    return {
-      label: "已完成",
-      pillClass: "bg-emerald-100 text-emerald-700",
-      cardClass: "border-emerald-200 bg-emerald-50/80",
-      dotClass: "bg-emerald-500",
-    };
-  }
-  if (phase === "searching") {
-    return {
-      label: "检索中",
-      pillClass: "bg-sky-100 text-sky-700",
-      cardClass: "border-sky-200 bg-sky-50/80",
-      dotClass: "bg-sky-500 animate-pulse",
-    };
-  }
-  if (phase === "thinking") {
-    return {
-      label: kind === "summary" ? "汇总中" : "回答中",
-      pillClass: "bg-amber-100 text-amber-700",
-      cardClass: "border-amber-200 bg-amber-50/80",
-      dotClass: "bg-amber-500 animate-pulse",
-    };
-  }
-  if (phase === "decision") {
-    return {
-      label: "判断中",
-      pillClass: "bg-violet-100 text-violet-700",
-      cardClass: "border-violet-200 bg-violet-50/80",
-      dotClass: "bg-violet-500 animate-pulse",
-    };
-  }
-  if (phase === "starting") {
-    return {
-      label: "启动中",
-      pillClass: "bg-zinc-200 text-zinc-700",
-      cardClass: "border-zinc-200 bg-zinc-50/80",
-      dotClass: "bg-zinc-500 animate-pulse",
-    };
-  }
-  return {
-    label: "等待中",
-    pillClass: "bg-zinc-200 text-zinc-600",
-    cardClass: "border-zinc-200 bg-white/80",
-    dotClass: "bg-zinc-400",
   };
 }
 
@@ -212,8 +155,6 @@ export default function ThinkingBlock({
 
   // ── 外层图标（始终固定） ──
   const headerIcon = <Zap className="thinking-icon-header" />;
-  const isCouncilRunning = normalizedCouncilExpertStates.some((item) => item.status === "running")
-    || normalizedCouncilSummaryState?.status === "running";
 
   // ── 渲染时间线内的单个步骤（第二层折叠项）──
   const renderTimelineStep = (step, idx) => {
@@ -325,150 +266,126 @@ export default function ThinkingBlock({
   // ══════════════════════════════════════════
   return (
     <div className="thinking-block mb-2 w-full max-w-full">
-      {/* ── 第一层：外层折叠按钮 ── */}
-      <button
-        onClick={() => {
-          if (collapsed) {
-            manualOpenMainRef.current = true;
-          } else {
-            manualOpenMainRef.current = false;
-          }
-          setCollapsed(!collapsed);
-        }}
-        className="thinking-btn flex items-center font-medium mb-1.5 transition-colors text-zinc-500 hover:text-zinc-700 bg-zinc-100"
-      >
-        {headerIcon}
-        <span className="thinking-btn-label flex items-center">
-          <span className="truncate max-w-[240px]">{headerText}</span>
-          {!collapsed && !manualOpenMainRef.current && (hasCouncilMode ? isCouncilRunning : (isStreaming || isSearching)) ? <LoadingDots /> : null}
-        </span>
-        {collapsed ? (
-          <ChevronDown className="thinking-icon-chevron" />
-        ) : (
-          <ChevronUp className="thinking-icon-chevron" />
-        )}
-      </button>
-
-      {/* 搜索错误提示（非时间线模式） */}
-      {!hasTimeline && !isSearching && safeSearchError ? (
-        <div className="thinking-error-tip text-red-600 bg-red-50 border border-red-200">
-          联网搜索失败：{safeSearchError}
+      {hasCouncilMode ? (
+        /* ── Council 模式：直接以内联胶囊显示，不包裹折叠按钮 ── */
+        <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
+          {normalizedCouncilExpertStates.map((expert) => {
+            const isRunning = expert.status === "running";
+            const isError = expert.status === "error";
+            const statusText = isError ? "回答失败" : expert.status === "done" ? "已完成" : isRunning ? "回答中" : "等待中";
+            return (
+              <div key={expert.key || expert.modelId || expert.label} className="w-full max-w-[760px]">
+                <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
+                  <ModelGlyph model={expert.modelId} size={14} />
+                  <span>{expert.label} · {statusText}</span>
+                  {isRunning ? <LoadingDots /> : null}
+                </div>
+              </div>
+            );
+          })}
+          {normalizedCouncilSummaryState ? (() => {
+            const s = normalizedCouncilSummaryState;
+            const isRunning = s.status === "running";
+            const isError = s.status === "error";
+            const statusText = isError ? "汇总失败" : s.status === "done" ? "已汇总" : isRunning ? "汇总中" : "等待中";
+            return (
+              <div className="w-full max-w-[760px]">
+                <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
+                  <Zap className="thinking-icon-step" />
+                  <span>Seed · {statusText}</span>
+                  {isRunning ? <LoadingDots /> : null}
+                </div>
+              </div>
+            );
+          })() : null}
         </div>
-      ) : null}
-
-      {/* ── 内层内容（第二层折叠区域）── */}
-      <AnimatePresence>
-        {!collapsed && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="overflow-hidden"
+      ) : (
+        /* ── 非 Council 模式：外层折叠按钮 + 内层步骤 ── */
+        <>
+          {/* 第一层：外层折叠按钮 */}
+          <button
+            onClick={() => {
+              if (collapsed) {
+                manualOpenMainRef.current = true;
+              } else {
+                manualOpenMainRef.current = false;
+              }
+              setCollapsed(!collapsed);
+            }}
+            className="thinking-btn flex items-center font-medium mb-1.5 transition-colors text-zinc-500 hover:text-zinc-700 bg-zinc-100"
           >
-            {hasCouncilMode ? (
-              <div className="space-y-3 pl-4">
-                <div className="grid gap-3 md:grid-cols-3">
-                  {normalizedCouncilExpertStates.map((expert) => {
-                    const meta = getCouncilStatusMeta(expert.status, expert.phase, "expert");
-                    return (
-                      <div
-                        key={expert.key || expert.modelId || expert.label}
-                        className={`rounded-2xl border px-4 py-3 ${meta.cardClass}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <ModelAvatar model={expert.modelId} size={28} />
-                          <div className="min-w-0 flex-1 space-y-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0 text-sm font-semibold leading-5 text-zinc-800">
-                                <span className="block break-words">{expert.label}</span>
-                              </div>
-                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.pillClass}`}>
-                                {meta.label}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs leading-5 text-zinc-600">
-                              <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dotClass}`} />
-                              <span className="break-words">{expert.message || "等待开始"}</span>
-                              {expert.status === "running" ? <LoadingDots /> : null}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {normalizedCouncilSummaryState ? (() => {
-                  const meta = getCouncilStatusMeta(
-                    normalizedCouncilSummaryState.status,
-                    normalizedCouncilSummaryState.phase,
-                    "summary"
-                  );
-                  return (
-                    <div className={`rounded-2xl border px-4 py-3 ${meta.cardClass}`}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-zinc-800">
-                            {normalizedCouncilSummaryState.label}
-                          </div>
-                          <div className="mt-1 flex items-center gap-2 text-xs leading-5 text-zinc-600">
-                            <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dotClass}`} />
-                            <span className="break-words">
-                              {normalizedCouncilSummaryState.message || "等待开始"}
-                            </span>
-                            {normalizedCouncilSummaryState.status === "running" ? <LoadingDots /> : null}
-                          </div>
-                        </div>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.pillClass}`}>
-                          {meta.label}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })() : null}
-              </div>
-            ) : hasTimeline ? (
-              /* 时间线模式：内层各步骤气泡（每个可独立折叠 = 第二层） */
-              <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
-                {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
-              </div>
+            {headerIcon}
+            <span className="thinking-btn-label flex items-center">
+              <span className="truncate max-w-[240px]">{headerText}</span>
+              {!collapsed && !manualOpenMainRef.current && (isStreaming || isSearching) ? <LoadingDots /> : null}
+            </span>
+            {collapsed ? (
+              <ChevronDown className="thinking-icon-chevron" />
             ) : (
-              /* 简单模式：内嵌一个"思考过程"气泡（第二层） */
-              <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
-                <div className="w-full max-w-[760px]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!safeThought) return;
-                      setExpandedTimelineId((prev) => prev === "__simple__" ? null : "__simple__");
-                    }}
-                    className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors text-zinc-500 ${safeThought ? "cursor-pointer" : "cursor-default"}`}
-                  >
-                    <Lightbulb className="thinking-icon-step" />
-                    <span>{isStreaming ? "思考中" : "思考过程"}</span>
-                    {isStreaming && expandedTimelineId !== "__simple__" ? <LoadingDots /> : null}
-                    {safeThought ? (expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />) : null}
-                  </button>
-                  {expandedTimelineId === "__simple__" && safeThought ? (
-                    <div
-                      className="thinking-content thinking-content-panel bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-[760px] text-zinc-400"
-                      ref={containerRef}
-                    >
-                      <Markdown
-                        enableHighlight={!isStreaming}
-                        className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
-                      >
-                        {safeThought}
-                      </Markdown>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
+              <ChevronUp className="thinking-icon-chevron" />
             )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </button>
+
+          {/* 搜索错误提示（非时间线模式） */}
+          {!hasTimeline && !isSearching && safeSearchError ? (
+            <div className="thinking-error-tip text-red-600 bg-red-50 border border-red-200">
+              联网搜索失败：{safeSearchError}
+            </div>
+          ) : null}
+
+          {/* 内层内容（第二层折叠区域） */}
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeInOut" }}
+                className="overflow-hidden"
+              >
+                {hasTimeline ? (
+                  /* 时间线模式：内层各步骤气泡（每个可独立折叠 = 第二层） */
+                  <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
+                    {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
+                  </div>
+                ) : (
+                  /* 简单模式：内嵌一个"思考过程"气泡（第二层） */
+                  <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
+                    <div className="w-full max-w-[760px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!safeThought) return;
+                          setExpandedTimelineId((prev) => prev === "__simple__" ? null : "__simple__");
+                        }}
+                        className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors text-zinc-500 ${safeThought ? "cursor-pointer" : "cursor-default"}`}
+                      >
+                        <Lightbulb className="thinking-icon-step" />
+                        <span>{isStreaming ? "思考中" : "思考过程"}</span>
+                        {isStreaming && expandedTimelineId !== "__simple__" ? <LoadingDots /> : null}
+                        {safeThought ? (expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />) : null}
+                      </button>
+                      {expandedTimelineId === "__simple__" && safeThought ? (
+                        <div
+                          className="thinking-content thinking-content-panel bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-[760px] text-zinc-400"
+                          ref={containerRef}
+                        >
+                          <Markdown
+                            enableHighlight={!isStreaming}
+                            className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
+                          >
+                            {safeThought}
+                          </Markdown>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      )}
     </div>
   );
 }

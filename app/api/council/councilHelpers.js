@@ -213,8 +213,6 @@ function buildStoredUserParts(prompt, imagePayloads) {
 function buildExpertMarkdownPrompt(label) {
   return `你现在是 Council 专家团中的 ${label}。请独立分析用户问题，给出你自己的判断，不要迎合其他模型，也不要假设其他模型会怎么说。
 
-请直接输出给用户看的最终 Markdown 回答，不要输出 JSON，不要输出解释你在做什么，也不要用代码块包住整个回答。
-
 要求：
 1. 回答必须能单独成立，先给出明确结论，再写依据、风险、不确定性。
 2. 如果信息有时效性，要明确时间条件；如果信息不足，要直接说明不足点。
@@ -233,24 +231,23 @@ async function buildSeedSystemPrompt() {
   return injectCurrentTimeSystemReminder(`你是 Council 的最终汇总模型 Seed。你会收到用户问题、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务是比较三位专家已经写出的正式回答，输出一份最终 Markdown 结论。
 
 必须严格遵守：
-1. 只能输出 Markdown，不要输出 JSON，不要输出代码块。
-2. 必须严格包含且只包含以下四个一级标题：
-1. 模型共识
-2. 模型分歧
-3. 独特发现
-4. 综合分析
-3. 第 1、2、3 节必须使用 Markdown 表格。
-4. 第 1 节表头固定为：
+1. 必须严格包含且只包含以下四个一级标题：
+- 模型共识
+- 模型分歧
+- 独特发现
+- 综合分析
+2. 第 1、2、3 节必须使用 Markdown 表格。
+3. 第 1 节表头固定为：
 Finding | GPT-5.4 Thinking | Claude Opus 4.6 Thinking | Gemini 3.1 Pro Thinking | Evidence
-5. 第 2 节表头固定为：
+4. 第 2 节表头固定为：
 Topic | GPT-5.4 Thinking | Claude Opus 4.6 Thinking | Gemini 3.1 Pro Thinking | Why They Differ
-6. 第 3 节表头固定为：
+5. 第 3 节表头固定为：
 Model | Unique Finding | Why It Matters
-7. 若某节没有内容，仍保留标题和表头，并补一行占位说明。
-8. 在第 1、2 节中，只有当某位专家明确表达过该观点时，才用“✓”；没有明确表达就留空。
-9. Evidence 和 Why They Differ 只能基于专家回答或提供的资料来写，不要脑补。
-10. 不要编造不存在的共识或分歧；若信息不足，要明确写成占位说明。
-11. 不要泄露任何模型思维链，不要输出裸链接。`);
+6. 若某节没有内容，仍保留标题和表头，并补一行占位说明。
+7. 在第 1、2 节中，只有当某位专家明确表达过该观点时，才用“✓”；没有明确表达就留空。
+8. Evidence 和 Why They Differ 只能基于专家回答或提供的资料来写，不要脑补。
+9. 不要编造不存在的共识或分歧；若信息不足，要明确写成占位说明。
+10. 不要泄露任何模型思维链，不要输出裸链接。`);
 }
 
 async function buildGeminiDecisionRunner(ai) {
@@ -314,13 +311,84 @@ function extractUpstreamErrorMessage(status, rawText) {
   return text.length > 600 ? `${text.slice(0, 600)}...` : text;
 }
 
+async function consumeOpenAIStream(response) {
+  if (!response.body) {
+    throw new Error("OpenAI 返回了空响应体");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullText = "";
+
+  const consumeLine = (line) => {
+    if (!line.trim() || line.startsWith(":")) return;
+    if (!line.startsWith("data: ")) return;
+
+    const dataStr = line.slice(6);
+    if (dataStr === "[DONE]") return;
+
+    try {
+      const event = JSON.parse(dataStr);
+      if (event.type === "output.text.delta" || event.type === "response.output_text.delta") {
+        const delta = typeof event.delta === "string"
+          ? event.delta
+          : (typeof event.text === "string"
+            ? event.text
+            : (typeof event?.data?.text === "string" ? event.data.text : ""));
+        if (delta) fullText += delta;
+        return;
+      }
+
+      if (Array.isArray(event?.choices)) {
+        const choice = event.choices[0] || null;
+        const delta = choice?.delta?.content;
+        if (typeof delta === "string") {
+          fullText += delta;
+          return;
+        }
+        if (Array.isArray(delta)) {
+          fullText += delta
+            .map((item) => {
+              if (typeof item === "string") return item;
+              if (item && typeof item.text === "string") return item.text;
+              return "";
+            })
+            .join("");
+        }
+      }
+    } catch {
+      // ignore malformed SSE payloads
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || "";
+
+    for (const line of lines) consumeLine(line);
+  }
+
+  buffer += decoder.decode();
+  if (buffer) {
+    const lines = buffer.split(/\r?\n/);
+    for (const line of lines) consumeLine(line);
+  }
+
+  return fullText.trim();
+}
+
 function buildOpenAIDecisionRunner(modelId) {
   assertConfigured(RIGHT_CODES_API_KEY, "RIGHT_CODES_API_KEY is not set");
   return async ({ prompt, historyMessages }) => {
     const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages });
     const requestBody = {
       model: modelId,
-      stream: false,
+      stream: true,
       max_output_tokens: 200,
       instructions: systemText,
       input: [
@@ -342,8 +410,7 @@ function buildOpenAIDecisionRunner(modelId) {
       const errorText = await response.text();
       throw new Error(extractUpstreamErrorMessage(response.status, errorText));
     }
-    const payload = await response.json();
-    const text = extractResponsesText(payload);
+    const text = await consumeOpenAIStream(response);
     if (!text) {
       throw new Error("联网判断未返回有效内容");
     }
@@ -557,7 +624,7 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
     },
     body: JSON.stringify({
       model: expert.modelId,
-      stream: false,
+      stream: true,
       max_output_tokens: EXPERT_MAX_OUTPUT_TOKENS,
       instructions: systemPrompt,
       input: [{ role: "user", content }],
@@ -570,8 +637,7 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
     const errorText = await response.text();
     throw new Error(extractUpstreamErrorMessage(response.status, errorText));
   }
-  const payload = await response.json();
-  return extractResponsesText(payload);
+  return consumeOpenAIStream(response);
 }
 
 function normalizeExpertOutput(rawText, expert, citations) {
