@@ -265,6 +265,8 @@ export async function POST(req) {
           throw new Error("COUNCIL_ABORTED");
         }
 
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
         updateSummaryState({
           status: "running",
           phase: "thinking",

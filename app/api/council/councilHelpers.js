@@ -207,11 +207,11 @@ async function buildSeedSystemPrompt() {
 - 综合分析
 2. 第 1、2、3 节必须使用 Markdown 表格。
 3. 第 1 节表头固定为：
-Finding | ${firstExpertLabel} | ${secondExpertLabel} | ${thirdExpertLabel} | Evidence
+发现 | ${firstExpertLabel} | ${secondExpertLabel} | ${thirdExpertLabel} | 证据
 4. 第 2 节表头固定为：
-Topic | ${firstExpertLabel} | ${secondExpertLabel} | ${thirdExpertLabel} | Why They Differ
+主题 | ${firstExpertLabel} | ${secondExpertLabel} | ${thirdExpertLabel} | 分歧原因
 5. 第 3 节表头固定为：
-Model | Unique Finding | Why It Matters
+模型 | 独特发现 | 重要性
 6. 若某节没有内容，仍保留标题和表头，并补一行占位说明。
 7. 在第 1、2 节中，只有当某位专家明确表达过该观点时，才用“✓”；没有明确表达就留空。
 8. Evidence 和 Why They Differ 只能基于专家回答或提供的资料来写，不要脑补。
