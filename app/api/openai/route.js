@@ -257,7 +257,7 @@ export async function POST(req) {
             baseRequestBody.reasoning.effort = thinkingLevel;
         }
 
-        // 是否启用博查搜索
+        // 是否启用联网搜索
         const enableWebSearch = config?.webSearch === true;
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const normalizeDecisionText = (value) => {
@@ -290,10 +290,11 @@ export async function POST(req) {
                 .trim();
         };
 
-        const runOpenAIDecision = async ({ prompt: decisionPrompt, historyMessages }) => {
+        const runOpenAIDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
             const { systemText, userText } = await buildWebSearchDecisionPrompts({
                 prompt: decisionPrompt,
                 historyMessages,
+                searchRounds,
             });
 
             const requestBody = {
@@ -409,10 +410,10 @@ export async function POST(req) {
                     };
 
                     let searchErrorSent = false;
-                    const sendSearchError = (message) => {
+                    const sendSearchError = (message, details = {}) => {
                         if (searchErrorSent) return;
                         searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message });
+                        sendEvent({ type: 'search_error', message, ...details });
                     };
 
                     const pushCitations = (items) => {

@@ -256,6 +256,13 @@ export async function POST(req) {
               conversationId: currentConversationId,
               clientAborted: () => clientAborted,
               updateStatus: (patch) => updateExpertState(expert, patch),
+              onDone: (result) => {
+                try {
+                  streamHelpers.sendCouncilExpertResult(result);
+                } catch {
+                  // ignore
+                }
+              },
             })
           )
         );

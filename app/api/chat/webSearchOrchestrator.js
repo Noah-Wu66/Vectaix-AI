@@ -1,11 +1,15 @@
 import { parseJsonFromText } from '@/app/api/chat/jsonUtils';
 import { injectCurrentTimeSystemReminder } from '@/app/api/chat/utils';
 import {
-  bochaSearch,
-  buildBochaContext,
-  buildBochaCitations,
-  buildBochaSearchEventResults,
-} from '@/app/api/chat/bochaSearch';
+  ARK_WEB_SEARCH_LIMIT,
+  ARK_WEB_SEARCH_MAX_ROUNDS,
+  ARK_WEB_SEARCH_SINGLE_ROUND_TOOL_CALLS,
+} from '@/app/lib/arkWebSearchConfig';
+import {
+  arkWebSearch,
+  buildArkSearchContext,
+  buildArkSearchEventResults,
+} from '@/app/api/chat/arkWebSearch';
 
 const VALID_FRESHNESS_VALUES = new Set(['oneDay', 'oneWeek', 'oneMonth', 'oneYear', 'noLimit']);
 const EXPLICIT_SEARCH_KEYWORDS = [
@@ -537,6 +541,68 @@ function normalizeMessageText(message) {
   return '';
 }
 
+function clipHelperText(text, maxLen = 0) {
+  if (typeof text !== 'string') return '';
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  if (!Number.isFinite(maxLen) || maxLen <= 0 || trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen)}...`;
+}
+
+function buildSearchRoundsDecisionText(searchRounds) {
+  const rounds = Array.isArray(searchRounds) ? searchRounds : [];
+  if (rounds.length === 0) return '(暂无已完成的联网检索结果)';
+
+  return rounds.map((round) => {
+    const titles = Array.isArray(round?.results)
+      ? round.results
+        .slice(0, 3)
+        .map((item) => item?.title || item?.url || '')
+        .filter(Boolean)
+      : [];
+
+    const lines = [
+      `第 ${round.round} 轮`,
+      `搜索词：${round.query || '(空)'}`,
+      `时效：${round.freshness || 'noLimit'}`,
+      `结果数：${Array.isArray(round?.results) ? round.results.length : 0}`,
+    ];
+
+    const summary = clipHelperText(round?.summary, 420);
+    if (summary) lines.push(`摘要：${summary}`);
+    if (titles.length > 0) lines.push(`主要来源：${titles.join('；')}`);
+
+    return lines.join('\n');
+  }).join('\n\n');
+}
+
+function buildAccumulatedSearchContext(searchRounds) {
+  const rounds = Array.isArray(searchRounds) ? searchRounds : [];
+  if (rounds.length === 0) return '';
+
+  return rounds
+    .map((round) => {
+      const lines = [`第${round.round}轮联网检索（关键词：${round.query || '(空)'}）`];
+      if (round.freshness && round.freshness !== 'noLimit') {
+        lines.push(`时效要求：${round.freshness}`);
+      }
+      if (round.contextText) {
+        lines.push(round.contextText);
+      }
+      return lines.join('\n');
+    })
+    .join('\n\n');
+}
+
+function hasSeenQuery(searchRounds, query) {
+  const normalized = normalizeComparableText(cleanupQueryText(query));
+  if (!normalized) return false;
+  return (Array.isArray(searchRounds) ? searchRounds : []).some((round) => {
+    const previous = normalizeComparableText(cleanupQueryText(round?.query || ''));
+    return previous === normalized;
+  });
+}
+
 function getRecentDecisionMessages(historyMessages) {
   const list = Array.isArray(historyMessages) ? historyMessages : [];
   return list
@@ -553,31 +619,35 @@ function getRecentDecisionMessages(historyMessages) {
     .filter(Boolean);
 }
 
-export async function buildWebSearchDecisionPrompts({ prompt, historyMessages }) {
+export async function buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds }) {
   const currentPrompt = typeof prompt === 'string' ? prompt.trim() : '';
   const recentMessages = getRecentDecisionMessages(historyMessages);
+  const completedSearchRounds = Array.isArray(searchRounds) ? searchRounds : [];
   const conversationText = recentMessages.length > 0
     ? recentMessages.map((item, index) => `${index + 1}. [${item.role}] ${item.text}`).join('\n')
     : '(无最近对话)';
+  const searchRoundsText = buildSearchRoundsDecisionText(completedSearchRounds);
 
-  const systemText = await injectCurrentTimeSystemReminder(`你是“是否需要博查联网”的判断器。你的唯一任务，是判断当前用户这句话在回答前是否必须先做一次博查 Web Search。
+  const systemText = await injectCurrentTimeSystemReminder(`你是“是否需要联网搜索”的判断器。你的唯一任务，是判断当前用户这句话在回答前是否必须先做一次联网 Web Search。
 
 判断原则：
 1. 默认保守。除非确实需要外部信息、最新信息、会变化的信息、官网链接、官方文档、新闻公告、价格行情、实时数据，否则一律 needSearch=false。
 2. 用户明确要求“查一下、搜一下、去官网、找官方文档、看最新消息、看最近动态、帮我检索资料”等，通常 needSearch=true。
 3. 如果当前消息是指代型追问，例如“那价格呢”“那官网呢”，你可以结合最近对话补全搜索意图；但像“继续”“展开说说”“再详细一点”“谢谢”“翻译一下”“润色一下”这种，不要联网。
 4. 常识解释、代码问题、数学题、创作、改写、翻译、总结用户已提供内容、基于已有上下文继续展开，这些通常 needSearch=false。
-5. query 必须是适合搜索引擎的短搜索词或短搜索短语，不能照抄当前用户原话整句，不要加解释，不要加 site: 等高级语法。
-6. 正例：用户说“帮我查一下马斯克最近新闻”，query 应写成“马斯克 最近新闻”；用户说“那官网呢”且最近主题是 Cloudflare R2，query 应写成“Cloudflare R2 官网”。
-7. 反例：用户说“帮我查一下 2026 年某产品什么时候发布，顺便看看最近有没有新消息”，query 不能原样照抄整句，应提炼成“某产品 2026 发布时间 最新消息”这类短搜索词。
-8. freshness 只能是 oneDay、oneWeek、oneMonth、oneYear、noLimit 之一。
-9. 如果 needSearch=false，query 必须是空字符串，freshness 必须是 noLimit。
-10. 只输出 JSON，不要输出任何别的文字。
+5. 如果已经给出过联网结果，你必须先判断这些结果是否已经足够回答。只有明显还缺关键事实、关键来源、关键时间点、关键数据时，才允许继续下一轮搜索。
+6. query 必须是适合搜索引擎的短搜索词或短搜索短语，不能照抄当前用户原话整句，不要加解释，不要加 site: 等高级语法。
+7. 如果继续搜索，query 必须和之前轮次不同，应该更具体、补充缺口，或者换一个更合适的关键词方向，不能重复同一搜索词。
+8. 正例：用户说“帮我查一下马斯克最近新闻”，query 应写成“马斯克 最近新闻”；用户说“那官网呢”且最近主题是 Cloudflare R2，query 应写成“Cloudflare R2 官网”。
+9. 反例：用户说“帮我查一下 2026 年某产品什么时候发布，顺便看看最近有没有新消息”，query 不能原样照抄整句，应提炼成“某产品 2026 发布时间 最新消息”这类短搜索词。
+10. freshness 只能是 oneDay、oneWeek、oneMonth、oneYear、noLimit 之一。
+11. 如果 needSearch=false，query 必须是空字符串，freshness 必须是 noLimit。
+12. 只输出 JSON，不要输出任何别的文字。
 
 返回格式：
 {"needSearch":true,"query":"搜索词","freshness":"oneWeek"}`);
 
-  const userText = `请只根据下面信息做判断。\n\n最近对话（最多 4 条）：\n${conversationText}\n\n当前用户消息：\n[user] ${currentPrompt}`;
+  const userText = `请只根据下面信息做判断。\n\n最近对话（最多 4 条）：\n${conversationText}\n\n已经完成的联网检索轮次：\n${searchRoundsText}\n\n当前用户消息：\n[user] ${currentPrompt}`;
 
   return { systemText, userText };
 }
@@ -654,147 +724,202 @@ export async function runWebSearchOrchestration(options) {
     throw new Error(message);
   }
 
-  let decision;
-  try {
-    const rawDecision = await decisionRunner({
-      prompt: currentPrompt,
-      historyMessages,
-      providerLabel,
-      model,
-      conversationId,
-    });
+  const searchRounds = [];
 
-    decision = normalizeWebSearchDecision(rawDecision);
-    if (!decision) {
-      throw new Error('搜索判断模型未返回合法 JSON');
-    }
-  } catch (decisionError) {
-    if (aborted()) {
-      return { searchContextText: '' };
+  for (let roundIndex = 0; roundIndex < ARK_WEB_SEARCH_MAX_ROUNDS; roundIndex += 1) {
+    let decision;
+
+    try {
+      const rawDecision = await decisionRunner({
+        prompt: currentPrompt,
+        historyMessages,
+        providerLabel,
+        model,
+        conversationId,
+        searchRounds,
+        accumulatedSearchContextText: buildAccumulatedSearchContext(searchRounds),
+      });
+
+      decision = normalizeWebSearchDecision(rawDecision);
+      if (!decision) {
+        throw new Error('搜索判断模型未返回合法 JSON');
+      }
+    } catch (decisionError) {
+      if (aborted()) {
+        return {
+          searchContextText: buildAccumulatedSearchContext(searchRounds),
+          searchRounds,
+        };
+      }
+
+      const fallbackDecision = allowHeuristicFallback && searchRounds.length === 0
+        ? buildHeuristicWebSearchDecision({
+            prompt: currentPrompt,
+            historyMessages,
+          })
+        : null;
+
+      if (fallbackDecision) {
+        console.warn(`${providerLabel} web search decision fallback`, {
+          round: roundIndex + 1,
+          message: decisionError?.message,
+          model,
+          conversationId,
+          needSearch: fallbackDecision.needSearch,
+          freshness: fallbackDecision.freshness,
+        });
+        decision = fallbackDecision;
+      } else {
+        console.error(`${providerLabel} web search decision failed`, {
+          round: roundIndex + 1,
+          message: decisionError?.message,
+          name: decisionError?.name,
+          model,
+          conversationId,
+          priorSearchRounds: searchRounds.length,
+        });
+        break;
+      }
     }
 
-    const fallbackDecision = allowHeuristicFallback
-      ? buildHeuristicWebSearchDecision({
+    const needSearch = decision.needSearch === true;
+    const rawQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
+    const nextQuery = needSearch
+      ? finalizeSearchQuery({
           prompt: currentPrompt,
           historyMessages,
+          rawQuery,
+          freshness: decision.freshness,
         })
-      : null;
+      : '';
+    const freshness = typeof decision.freshness === 'string' ? decision.freshness.trim() : 'noLimit';
+    const finalFreshness = freshness !== 'noLimit'
+      ? freshness
+      : inferFreshnessFromQuery(nextQuery);
+    const duplicateQuery = needSearch && hasSeenQuery(searchRounds, nextQuery);
 
-    if (fallbackDecision) {
-      console.warn(`${providerLabel} bocha search decision fallback`, {
-        message: decisionError?.message,
-        model,
-        conversationId,
-        needSearch: fallbackDecision.needSearch,
-        freshness: fallbackDecision.freshness,
-      });
-      decision = fallbackDecision;
-    } else {
-      console.error(`${providerLabel} bocha search decision failed`, {
-        message: decisionError?.message,
-        name: decisionError?.name,
-        model,
-        conversationId,
-      });
-      return { searchContextText: '' };
-    }
-  }
-
-  const needSearch = decision.needSearch === true;
-  const rawQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
-  const nextQuery = finalizeSearchQuery({
-    prompt: currentPrompt,
-    historyMessages,
-    rawQuery,
-    freshness: decision.freshness,
-  });
-  const freshness = typeof decision.freshness === 'string' ? decision.freshness.trim() : 'noLimit';
-  const finalFreshness = freshness !== 'noLimit'
-    ? freshness
-    : inferFreshnessFromQuery(nextQuery);
-
-  console.info(`${providerLabel} bocha search decision`, {
-    needSearch,
-    rawQuery: rawQuery || null,
-    finalQuery: nextQuery || null,
-    queryChanged: rawQuery !== nextQuery,
-    queryDiscarded: needSearch && !nextQuery,
-    freshness: finalFreshness,
-    model,
-    conversationId,
-  });
-
-  if (!needSearch) {
-    return { searchContextText: '' };
-  }
-
-  if (!nextQuery) {
-    console.warn(`${providerLabel} bocha search skipped invalid query`, {
+    console.info(`${providerLabel} web search decision`, {
+      round: roundIndex + 1,
+      needSearch,
       rawQuery: rawQuery || null,
-      finalQuery: null,
+      finalQuery: nextQuery || null,
+      queryChanged: rawQuery !== nextQuery,
+      queryDiscarded: needSearch && !nextQuery,
+      duplicateQuery,
       freshness: finalFreshness,
       model,
       conversationId,
+      priorSearchRounds: searchRounds.length,
     });
-    return { searchContextText: '' };
-  }
 
-  if (aborted()) {
-    return { searchContextText: '' };
-  }
+    if (!needSearch) {
+      break;
+    }
 
-  sendEvent({ type: 'search_start', query: nextQuery });
+    if (!nextQuery) {
+      console.warn(`${providerLabel} web search skipped invalid query`, {
+        round: roundIndex + 1,
+        rawQuery: rawQuery || null,
+        finalQuery: null,
+        freshness: finalFreshness,
+        model,
+        conversationId,
+      });
+      break;
+    }
 
-  let searchData;
-  try {
-    searchData = await bochaSearch(nextQuery, {
-      summary: true,
-      count: 8,
-      freshness: finalFreshness,
+    if (duplicateQuery) {
+      console.warn(`${providerLabel} web search skipped duplicate query`, {
+        round: roundIndex + 1,
+        query: nextQuery,
+        freshness: finalFreshness,
+        model,
+        conversationId,
+      });
+      break;
+    }
+
+    if (aborted()) {
+      return {
+        searchContextText: buildAccumulatedSearchContext(searchRounds),
+        searchRounds,
+      };
+    }
+
+    const round = searchRounds.length + 1;
+    sendEvent({ type: 'search_start', query: nextQuery, round });
+
+    let searchData;
+    try {
+      searchData = await arkWebSearch(nextQuery, {
+        count: ARK_WEB_SEARCH_LIMIT,
+        freshness: finalFreshness,
+        maxToolCalls: ARK_WEB_SEARCH_SINGLE_ROUND_TOOL_CALLS,
+      });
+    } catch (searchError) {
+      console.error(`${providerLabel} web search failed`, {
+        round,
+        rawQuery: rawQuery || null,
+        query: nextQuery,
+        freshness: finalFreshness,
+        message: searchError?.message,
+        name: searchError?.name,
+      });
+      const message = searchError?.message?.includes('ARK_API_KEY')
+        ? '未配置火山方舟联网服务'
+        : '联网搜索失败，请稍后再试';
+      sendSearchError?.(message, { round, query: nextQuery });
+      throw new Error(message);
+    }
+
+    const results = Array.isArray(searchData?.results) ? searchData.results : [];
+    const summary = typeof searchData?.summary === 'string' ? searchData.summary : '';
+    const citations = Array.isArray(searchData?.citations) ? searchData.citations : [];
+
+    sendEvent({
+      type: 'search_result',
+      query: nextQuery,
+      round,
+      results: buildArkSearchEventResults(results),
     });
-  } catch (searchError) {
-    console.error(`${providerLabel} bocha web search failed`, {
-      rawQuery: rawQuery || null,
+
+    if (typeof pushCitations === 'function') {
+      pushCitations(citations);
+    }
+
+    const roundContextText = buildArkSearchContext(summary, results, {
+      maxResults: 5,
+      maxSnippetChars: 280,
+    });
+
+    if (warnOnNoContext && !roundContextText) {
+      console.warn(`${providerLabel} web search produced no context`, {
+        round,
+        needSearch,
+        rawQuery: rawQuery || null,
+        finalQuery: nextQuery,
+        freshness: finalFreshness,
+        lastQuery: nextQuery,
+        resultCount: results.length,
+      });
+    }
+
+    searchRounds.push({
+      round,
       query: nextQuery,
       freshness: finalFreshness,
-      message: searchError?.message,
-      name: searchError?.name,
+      summary,
+      results,
+      contextText: roundContextText,
     });
-    const message = searchError?.message?.includes('BOCHA_API_KEY')
-      ? '未配置博查搜索服务'
-      : '博查搜索失败，请稍后再试';
-    sendSearchError?.(message);
-    throw new Error(message);
+
+    if (aborted()) {
+      break;
+    }
   }
 
-  const results = Array.isArray(searchData?.results) ? searchData.results : [];
-  const summary = typeof searchData?.summary === 'string' ? searchData.summary : '';
-
-  sendEvent({
-    type: 'search_result',
-    query: nextQuery,
-    results: buildBochaSearchEventResults(results),
-  });
-
-  if (typeof pushCitations === 'function') {
-    pushCitations(buildBochaCitations(results));
-  }
-
-  const searchContextText = buildBochaContext(summary, results, {
-    maxResults: 5,
-    maxSnippetChars: 280,
-  });
-
-  if (warnOnNoContext && !searchContextText) {
-    console.warn(`${providerLabel} bocha search produced no context`, {
-      needSearch,
-      rawQuery: rawQuery || null,
-      finalQuery: nextQuery,
-      freshness: finalFreshness,
-      lastQuery: nextQuery,
-      resultCount: results.length,
-    });
-  }
-
-  return { searchContextText };
+  return {
+    searchContextText: buildAccumulatedSearchContext(searchRounds),
+    searchRounds,
+  };
 }

@@ -16,6 +16,7 @@ import {
     isSeedModel,
     normalizeSeedModelId,
 } from '@/app/lib/seedModel';
+import { ARK_WEB_SEARCH_MAX_TOOL_CALLS, createArkWebSearchTool } from '@/app/lib/arkWebSearchConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,11 +26,6 @@ const SEED_API_TIMEOUT_MS = 1_800_000;
 const SEED_MAX_RETRIES = 2;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
-const WEB_SEARCH_TOOL = {
-    type: 'web_search',
-    max_keyword: 2,
-    limit: 8,
-};
 const VALID_SEED_REASONING_LEVELS = new Set(SEED_REASONING_LEVELS);
 
 function sleep(ms) {
@@ -188,8 +184,8 @@ function buildSeedRequestBody({
     }
 
     if (enableWebSearch) {
-        requestBody.tools = [WEB_SEARCH_TOOL];
-        requestBody.max_tool_calls = 3;
+        requestBody.tools = [createArkWebSearchTool()];
+        requestBody.max_tool_calls = ARK_WEB_SEARCH_MAX_TOOL_CALLS;
     }
 
     return requestBody;
@@ -478,6 +474,7 @@ export async function POST(req) {
                 const citations = [];
                 let searchInProgress = false;
                 let activeSearchQuery = '';
+                let activeSearchRound = 0;
 
                 try {
                     const sendHeartbeat = () => {
@@ -536,8 +533,10 @@ export async function POST(req) {
                             }
                             if (!searchInProgress) {
                                 searchInProgress = true;
+                                activeSearchRound += 1;
                                 sendEvent({
                                     type: 'search_start',
+                                    ...(activeSearchRound > 0 ? { round: activeSearchRound } : {}),
                                     ...(activeSearchQuery ? { query: activeSearchQuery } : {}),
                                 });
                             }
@@ -555,14 +554,17 @@ export async function POST(req) {
                             const nextQuery = extractSearchQueryFromAction(item?.action) || activeSearchQuery;
                             if (!searchInProgress) {
                                 searchInProgress = true;
+                                activeSearchRound += 1;
                                 sendEvent({
                                     type: 'search_start',
+                                    ...(activeSearchRound > 0 ? { round: activeSearchRound } : {}),
                                     ...(nextQuery ? { query: nextQuery } : {}),
                                 });
                             }
 
                             sendEvent({
                                 type: 'search_result',
+                                ...(activeSearchRound > 0 ? { round: activeSearchRound } : {}),
                                 ...(nextQuery ? { query: nextQuery } : {}),
                                 results: [],
                             });
@@ -623,6 +625,7 @@ export async function POST(req) {
                     if (searchInProgress) {
                         sendEvent({
                             type: 'search_result',
+                            ...(activeSearchRound > 0 ? { round: activeSearchRound } : {}),
                             ...(activeSearchQuery ? { query: activeSearchQuery } : {}),
                             results: [],
                         });

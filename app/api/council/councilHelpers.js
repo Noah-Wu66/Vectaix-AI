@@ -220,8 +220,8 @@ async function buildSeedSystemPrompt() {
 }
 
 async function buildGeminiDecisionRunner(ai) {
-  return async ({ prompt, historyMessages }) => {
-    const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages });
+  return async ({ prompt, historyMessages, searchRounds }) => {
+    const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
     const result = await ai.models.generateContent({
       model: GEMINI_DECISION_MODEL,
       contents: [{ role: "user", parts: [{ text: userText }] }],
@@ -244,8 +244,8 @@ async function buildGeminiDecisionRunner(ai) {
 }
 
 function buildClaudeDecisionRunner(client, modelId) {
-  return async ({ prompt, historyMessages }) => {
-    const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages });
+  return async ({ prompt, historyMessages, searchRounds }) => {
+    const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
     const response = await client.messages.create({
       model: modelId,
       max_tokens: 200,
@@ -353,8 +353,8 @@ async function consumeOpenAIStream(response) {
 
 function buildOpenAIDecisionRunner(modelId) {
   assertConfigured(RIGHT_CODES_API_KEY, "RIGHT_CODES_API_KEY is not set");
-  return async ({ prompt, historyMessages }) => {
-    const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages });
+  return async ({ prompt, historyMessages, searchRounds }) => {
+    const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
     const requestBody = {
       model: modelId,
       stream: true,
@@ -410,10 +410,13 @@ async function collectSearchContext({
     if (!isPlainObject(event)) return;
     if (event.type === "search_start") {
       const query = typeof event.query === "string" ? event.query.trim() : "";
+      const round = Number.isFinite(event.round) ? event.round : null;
       updateStatus?.({
         status: "running",
         phase: "searching",
-        message: query ? `联网检索：${query}` : "联网检索中",
+        message: query
+          ? `${round ? `第${round}轮` : ""}联网检索：${query}`
+          : `${round ? `第${round}轮` : ""}联网检索中`,
       });
     }
     if (event.type === "search_result") {
@@ -623,6 +626,7 @@ export async function runCouncilExpert({
   conversationId,
   clientAborted,
   updateStatus,
+  onDone,
 }) {
   try {
     const { searchContextText, citations } = await collectSearchContext({
@@ -676,6 +680,7 @@ export async function runCouncilExpert({
       phase: "done",
       message: "已完成回答",
     });
+    onDone?.(normalized);
     return normalized;
   } catch (error) {
     if (error?.message !== "COUNCIL_ABORTED") {
@@ -908,6 +913,19 @@ export function createCouncilStreamHelpers(controller) {
             content: expert.rawMarkdown,
             citations: expert.citations,
           })),
+        })}\n\n`)
+      );
+    },
+    sendCouncilExpertResult(expert) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({
+          type: "council_expert_result",
+          expert: {
+            modelId: expert.modelId,
+            label: expert.label,
+            content: expert.rawMarkdown,
+            citations: expert.citations,
+          },
         })}\n\n`)
       );
     },

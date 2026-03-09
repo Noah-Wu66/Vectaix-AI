@@ -767,12 +767,14 @@ export async function runChat({
         } else if (data.type === "search_start") {
           isSearching = true;
           const query = typeof data.query === "string" ? data.query.trim() : "";
+          const round = Number.isFinite(data.round) ? data.round : null;
           if (query) searchQuery = query;
           ensureSyntheticThoughtRunning();
           closeStreamingThoughtSteps();
           appendTimelineStep({
             kind: "search",
             status: "running",
+            ...(round ? { round } : {}),
             query: query || "（空检索词）",
           });
           searchError = null;
@@ -780,9 +782,11 @@ export async function runChat({
           isSearching = false;
           const resultCount = Array.isArray(data.results) ? data.results.length : 0;
           const query = typeof data.query === "string" ? data.query.trim() : "";
+          const round = Number.isFinite(data.round) ? data.round : null;
           if (query) searchQuery = query;
           const updated = patchLastRunningStep("search", {
             status: "done",
+            ...(round ? { round } : {}),
             query: query || undefined,
             resultCount,
           });
@@ -790,6 +794,7 @@ export async function runChat({
             appendTimelineStep({
               kind: "search",
               status: "done",
+              ...(round ? { round } : {}),
               query: query || "（空检索词）",
               resultCount,
             });
@@ -799,11 +804,13 @@ export async function runChat({
         } else if (data.type === "search_error") {
           isSearching = false;
           const query = typeof data.query === "string" ? data.query.trim() : "";
+          const round = Number.isFinite(data.round) ? data.round : null;
           const message = typeof data.message === "string" && data.message.trim()
             ? data.message.trim()
             : "联网搜索失败，请稍后再试";
           const updated = patchLastRunningStep("search", {
             status: "error",
+            ...(round ? { round } : {}),
             query: query || undefined,
             message,
           });
@@ -811,6 +818,7 @@ export async function runChat({
             appendTimelineStep({
               kind: "search",
               status: "error",
+              ...(round ? { round } : {}),
               query: query || searchQuery || "（空检索词）",
               message,
             });
@@ -822,6 +830,17 @@ export async function runChat({
         } else if (data.type === "council_experts") {
           councilExperts = Array.isArray(data.experts) ? data.experts : null;
           scheduleFlush();
+        } else if (data.type === "council_expert_result") {
+          if (data.expert && typeof data.expert === "object") {
+            if (!councilExperts) councilExperts = [];
+            const idx = councilExperts.findIndex((e) => e.label === data.expert.label);
+            if (idx >= 0) {
+              councilExperts = councilExperts.map((e, i) => i === idx ? data.expert : e);
+            } else {
+              councilExperts = [...councilExperts, data.expert];
+            }
+            scheduleFlush();
+          }
         } else if (data.type === "council_expert_states") {
           councilExpertStates = Array.isArray(data.experts) ? data.experts : null;
           scheduleFlush();

@@ -267,7 +267,7 @@ export async function POST(req) {
             writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
-        // 构建请求参数（博查搜索上下文将在流式开始前注入）
+        // 构建请求参数（联网搜索上下文将在流式开始前注入）
         const maxTokens = config?.maxTokens;
         const budgetTokens = config?.budgetTokens;
         const thinkingLevel = config?.thinkingLevel;
@@ -279,15 +279,16 @@ export async function POST(req) {
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
-        // 是否启用博查搜索
+        // 是否启用联网搜索
         const enableWebSearch = config?.webSearch === true;
 
-        // 启用博查搜索时禁用来源括号标注
+        // 启用联网搜索时禁用来源括号标注
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
-        const runClaudeDecision = async ({ prompt: decisionPrompt, historyMessages }) => {
+        const runClaudeDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
             const { systemText, userText } = await buildWebSearchDecisionPrompts({
                 prompt: decisionPrompt,
                 historyMessages,
+                searchRounds,
             });
 
             const response = await client.messages.create({
@@ -353,10 +354,10 @@ export async function POST(req) {
                     };
 
                     let searchErrorSent = false;
-                    const sendSearchError = (message) => {
+                    const sendSearchError = (message, details = {}) => {
                         if (searchErrorSent) return;
                         searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message });
+                        sendEvent({ type: 'search_error', message, ...details });
                     };
 
                     const pushCitations = (items) => {

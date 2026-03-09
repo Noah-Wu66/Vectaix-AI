@@ -300,10 +300,11 @@ export async function POST(req) {
                 .trim();
         };
 
-        const runGeminiDecision = async ({ prompt: decisionPrompt, historyMessages }) => {
+        const runGeminiDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
             const { systemText, userText } = await buildWebSearchDecisionPrompts({
                 prompt: decisionPrompt,
                 historyMessages,
+                searchRounds,
             });
 
             const result = await ai.models.generateContent({
@@ -408,10 +409,10 @@ export async function POST(req) {
                     };
 
                     let searchErrorSent = false;
-                    const sendSearchError = (message) => {
+                    const sendSearchError = (message, details = {}) => {
                         if (searchErrorSent) return;
                         searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message });
+                        sendEvent({ type: 'search_error', message, ...details });
                     };
 
                     const pushCitations = (items) => {
