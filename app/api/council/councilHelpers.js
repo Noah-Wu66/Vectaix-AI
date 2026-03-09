@@ -177,18 +177,9 @@ function buildStoredUserParts(prompt, imagePayloads) {
   return parts;
 }
 
-function buildExpertMarkdownPrompt(label) {
-  return `你现在是 Council 专家团中的 ${label}。请独立分析用户问题，给出你自己的判断，不要迎合其他模型，也不要假设其他模型会怎么说。
-
-要求：
-1. 回答必须能单独成立，先给出明确结论，再写依据、风险、不确定性。
-2. 如果信息有时效性，要明确时间条件；如果信息不足，要直接说明不足点。
-3. 不要输出思维链，不要编造资料，不要假装看过不存在的来源。
-4. 不要在正文里附加裸链接或裸域名括号。`;
-}
-
-async function buildExpertSystemPrompt({ label, enableWebSearch, searchContextText }) {
-  const base = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(buildExpertMarkdownPrompt(label)));
+async function buildExpertSystemPrompt({ enableWebSearch, searchContextText, includeEconomyPrefix = false }) {
+  const basePrompt = includeEconomyPrefix ? buildEconomySystemPrompt() : "";
+  const base = await injectCurrentTimeSystemReminder(basePrompt);
   const webSearchGuide = buildWebSearchGuide(enableWebSearch);
   const searchContextSection = searchContextText ? buildWebSearchContextBlock(searchContextText) : "";
   return `${base}\n\n${FORMATTING_GUARD}${webSearchGuide}${searchContextSection}`;
@@ -508,8 +499,8 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
     });
   }
   const systemPrompt = await buildExpertSystemPrompt({
-    label: expert.label,
     enableWebSearch: true,
+    includeEconomyPrefix: false,
     searchContextText,
   });
   const result = await ai.models.generateContent({
@@ -546,8 +537,8 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
     });
   }
   const systemPrompt = await buildExpertSystemPrompt({
-    label: expert.label,
     enableWebSearch: true,
+    includeEconomyPrefix: true,
     searchContextText,
   });
   const response = await client.messages.create({
@@ -571,8 +562,8 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
 async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContextText }) {
   assertConfigured(RIGHT_CODES_API_KEY, "RIGHT_CODES_API_KEY is not set");
   const systemPrompt = await buildExpertSystemPrompt({
-    label: expert.label,
     enableWebSearch: true,
+    includeEconomyPrefix: true,
     searchContextText,
   });
   const content = [{ type: "input_text", text: prompt }];
