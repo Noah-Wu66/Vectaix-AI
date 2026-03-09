@@ -888,7 +888,7 @@ export async function runWebSearchOrchestration(options) {
     }
 
     const roundContextText = buildArkSearchContext(summary, results, {
-      maxResults: 5,
+      maxResults: ARK_WEB_SEARCH_LIMIT,
       maxSnippetChars: 280,
     });
 
