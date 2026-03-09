@@ -17,7 +17,6 @@ import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
 import ImageLightbox from "./ImageLightbox";
 import ConfirmModal from "./ConfirmModal";
-import CouncilExpertsBlock from "./CouncilExpertsBlock";
 import { getMessageImageSrc, isKeepableImageSrc } from "../lib/messageImage";
 import {
   AIAvatar,
@@ -281,6 +280,7 @@ export default function MessageList({
                     timeline={msg.thinkingTimeline}
                     councilExpertStates={msg.councilExpertStates}
                     councilSummaryState={msg.councilSummaryState}
+                    councilExperts={msg.councilExperts}
                     bodyText={hasBodyOutput ? "1" : ""}
                   />
                 )}
@@ -465,10 +465,6 @@ export default function MessageList({
 
                         {msg.role === "model" && !msg.isStreaming && msg.citations && (
                           <Citations citations={msg.citations} />
-                        )}
-
-                        {msg.role === "model" && !msg.isStreaming && (
-                          <CouncilExpertsBlock experts={msg.councilExperts} />
                         )}
                       </div>
                     )}

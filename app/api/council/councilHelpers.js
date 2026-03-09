@@ -420,16 +420,10 @@ async function collectSearchContext({
       updateStatus?.({
         status: "running",
         phase: "thinking",
-        message: "已完成联网检索，开始生成回答",
+        message: "思考中",
       });
     }
   };
-
-  updateStatus?.({
-    status: "running",
-    phase: "decision",
-    message: "判断是否需要联网",
-  });
 
   if (expert.provider === "gemini") {
     assertConfigured(GEMINI_API_KEY, "GEMINI_API_KEY is not set");
@@ -630,12 +624,6 @@ export async function runCouncilExpert({
   clientAborted,
   updateStatus,
 }) {
-  updateStatus?.({
-    status: "running",
-    phase: "starting",
-    message: "开始分析问题",
-  });
-
   try {
     const { searchContextText, citations } = await collectSearchContext({
       prompt,
@@ -651,7 +639,7 @@ export async function runCouncilExpert({
     updateStatus?.({
       status: "running",
       phase: "thinking",
-      message: searchContextText ? "整理资料并生成回答" : "直接生成回答",
+      message: "思考中",
     });
 
     const finalPrompt = `${prompt}\n\n请基于上面的用户问题完成任务。`;

@@ -221,7 +221,6 @@ export async function POST(req) {
         });
 
         streamHelpers.sendCouncilExpertStates(Array.from(expertStateMap.values()));
-        streamHelpers.sendCouncilSummaryState(summaryState);
 
         const updateExpertState = (expert, patch) => {
           const nextState = buildCouncilExpertState(expert, {
@@ -267,15 +266,30 @@ export async function POST(req) {
 
         await new Promise((resolve) => setTimeout(resolve, 800));
 
+        streamHelpers.sendCouncilSummaryState(summaryState);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         updateSummaryState({
           status: "running",
           phase: "thinking",
-          message: "正在汇总结论",
+          message: "思考中",
         });
+
+        let hasStartedStreaming = false;
         const summary = await runSeedCouncilSummary({
           prompt: promptText,
           experts,
-          onTextDelta: (delta) => streamHelpers.sendText(delta),
+          onTextDelta: (delta) => {
+            if (!hasStartedStreaming) {
+              hasStartedStreaming = true;
+              updateSummaryState({
+                status: "running",
+                phase: "answering",
+                message: "回答中",
+              });
+            }
+            streamHelpers.sendText(delta);
+          },
           signal: req?.signal,
         });
 

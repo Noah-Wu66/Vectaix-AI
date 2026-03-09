@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, ChevronDown, ChevronUp, Lightbulb, Search, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
+import { Citations } from "./MessageListHelpers";
 
 function normalizeTimeline(timeline) {
   if (!Array.isArray(timeline)) return [];
@@ -69,10 +70,12 @@ export default function ThinkingBlock({
   timeline,
   councilExpertStates,
   councilSummaryState,
+  councilExperts,
   bodyText,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
+  const [openExpertKey, setOpenExpertKey] = useState(null);
   const containerRef = useRef(null);
   const autoCollapsedRef = useRef(false);
   const manualExpandedStepIdRef = useRef(null);
@@ -272,14 +275,35 @@ export default function ThinkingBlock({
           {normalizedCouncilExpertStates.map((expert) => {
             const isRunning = expert.status === "running";
             const isError = expert.status === "error";
-            const statusText = isError ? "回答失败" : expert.status === "done" ? "已完成" : isRunning ? "回答中" : "等待中";
+            const isDone = expert.status === "done";
+            const expertKey = expert.key || expert.label;
+            const expertData = Array.isArray(councilExperts)
+              ? councilExperts.find((e) => e.label === expert.label)
+              : null;
+            const hasContent = isDone && expertData && typeof expertData.content === "string" && expertData.content.trim();
+            const isOpen = openExpertKey === expertKey;
+            const statusText = isError
+              ? (expert.message || "回答失败")
+              : isDone
+              ? "已完成"
+              : expert.message || "等待中";
             return (
-              <div key={expert.key || expert.modelId || expert.label} className="w-full max-w-[760px]">
-                <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
+              <div key={expertKey} className="w-full max-w-[760px]">
+                <div
+                  className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"} ${hasContent ? "cursor-pointer hover:text-zinc-700" : ""}`}
+                  onClick={hasContent ? () => setOpenExpertKey(isOpen ? null : expertKey) : undefined}
+                >
                   <ModelGlyph model={expert.modelId} size={14} />
                   <span>{expert.label} · {statusText}</span>
                   {isRunning ? <LoadingDots /> : null}
+                  {hasContent ? (isOpen ? <ChevronUp size={12} className="ml-1 shrink-0" /> : <ChevronDown size={12} className="ml-1 shrink-0" />) : null}
                 </div>
+                {isOpen && expertData && (
+                  <div className="mt-2 mb-1 ml-1 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800">
+                    <Markdown enableHighlight={true}>{expertData.content}</Markdown>
+                    <Citations citations={expertData.citations} />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -287,7 +311,11 @@ export default function ThinkingBlock({
             const s = normalizedCouncilSummaryState;
             const isRunning = s.status === "running";
             const isError = s.status === "error";
-            const statusText = isError ? "汇总失败" : s.status === "done" ? "已汇总" : isRunning ? "汇总中" : "等待中";
+            const statusText = isError
+              ? (s.message || "汇总失败")
+              : s.status === "done"
+              ? "已完成"
+              : s.message || "等待中";
             return (
               <div className="w-full max-w-[760px]">
                 <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
