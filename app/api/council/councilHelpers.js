@@ -186,7 +186,12 @@ async function buildExpertSystemPrompt({ enableWebSearch, searchContextText, inc
 async function buildSeedSystemPrompt() {
   const [firstExpertLabel = "专家1", secondExpertLabel = "专家2", thirdExpertLabel = "专家3"] =
     COUNCIL_EXPERT_CONFIGS.map((expert) => expert.label);
-  return injectCurrentTimeSystemReminder(`你是 Council 的最终汇总模型 Seed。你会收到用户问题、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务是比较三位专家已经写出的正式回答，输出一份最终 Markdown 结论。
+  return injectCurrentTimeSystemReminder(`你是 Council 的最终汇总模型 Seed。你会收到用户文字问题、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务是比较三位专家已经写出的正式回答，输出一份最终 Markdown 结论。
+
+重要输入边界：
+- 你看到的是用户文字问题，不直接看到用户上传的原始图片或其他原始多模态内容。
+- 如果专家回答里涉及图片、图表、截图、文件等内容，你只能依据专家已经写出的描述、结论和引用资料进行汇总，不能假装自己也看过原始材料。
+- 判断某位专家的立场时，必须优先以该专家的最终回答内容为准；参考资料只用于补充证据、解释理由，不能拿参考资料反推一个专家没有明确说过的观点。
 
 必须严格遵守：
 1. 必须严格包含且只包含以下四个一级标题：
@@ -202,10 +207,12 @@ async function buildSeedSystemPrompt() {
 5. 第 3 节表头固定为：
 模型 | 独特发现 | 重要性
 6. 若某节没有内容，仍保留标题和表头，并补一行占位说明。
-7. 在第 1、2 节中，只有当某位专家明确表达过该观点时，才用“✓”；没有明确表达就留空。
-8. Evidence 和 Why They Differ 只能基于专家回答或提供的资料来写，不要脑补。
-9. 不要编造不存在的共识或分歧；若信息不足，要明确写成占位说明。
-10. 不要泄露任何模型思维链，不要输出裸链接。`);
+7. 第 1 节（模型共识）中，只有当某位专家明确表达过该观点时，才用“✓”；没有明确表达就留空。
+8. 第 2 节（模型分歧）中禁止使用“✓”，必须直接写出各模型对该分歧主题的简短立场或结论。
+9. “证据”和“分歧原因”只能基于专家回答或提供的资料来写，不要脑补。
+10. “综合分析”只能总结三位专家已经明确写出的内容、差异及其意义，不能替用户重新发明新答案，不能加入专家都没提过的新事实、新结论或新建议。
+11. 不要编造不存在的共识或分歧；若信息不足，要明确写成占位说明。
+12. 不要泄露任何模型思维链，不要输出裸链接。`);
 }
 
 async function buildGeminiDecisionRunner(ai) {
