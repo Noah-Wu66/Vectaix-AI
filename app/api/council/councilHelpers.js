@@ -739,7 +739,7 @@ export async function runSeedCouncilSummary({ prompt, experts, onTextDelta, sign
       temperature: 1,
       top_p: 0.95,
       thinking: { type: "enabled" },
-      reasoning: { effort: "high" },
+      reasoning: { effort: "medium" },
     }),
     signal,
   });
