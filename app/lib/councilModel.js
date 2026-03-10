@@ -4,7 +4,7 @@ export const COUNCIL_PROVIDER = "council";
 export const COUNCIL_EXPERTS = [
   {
     key: "gpt",
-    modelId: "gpt-5.4",
+    modelId: "gpt-5.2",
     label: "GPT",
     provider: "openai",
     thinkingLevel: "xhigh",
