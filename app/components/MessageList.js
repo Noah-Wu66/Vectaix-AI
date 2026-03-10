@@ -9,7 +9,6 @@ import {
   Edit3,
   Paperclip,
   RotateCcw,
-  Sparkles,
   Trash2,
   Type,
   User,
@@ -267,7 +266,9 @@ export default function MessageList({
           </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-zinc-400">
-            <Sparkles size={40} className="mb-4 text-zinc-300" />
+            <div className="mb-4">
+              <AIAvatar model={model} size={40} />
+            </div>
             <p className="font-medium">开始新对话</p>
           </div>
         )

@@ -1,34 +1,28 @@
+import { Claude, DeepSeek, Doubao, Gemini, OpenAI } from "@lobehub/icons";
 import { isCouncilModel } from "../lib/councilModel";
 import { isSeedModel } from "../lib/seedModel";
 import { CouncilAvatar, CouncilIcon } from "./CouncilIcon";
 
-const LOBE_ICON_BASE_URL = "https://unpkg.com/@lobehub/icons-static-svg@1.82.0/icons";
-
 const PROVIDER_VISUALS = {
   gemini: {
-    glyphSrc: `${LOBE_ICON_BASE_URL}/gemini-color.svg`,
-    avatarSrc: `${LOBE_ICON_BASE_URL}/gemini-color.svg`,
-    avatarClass: "bg-white ring-1 ring-sky-100",
+    Glyph: Gemini.Color,
+    Avatar: Gemini.Avatar,
   },
   claude: {
-    glyphSrc: `${LOBE_ICON_BASE_URL}/claude-color.svg`,
-    avatarSrc: `${LOBE_ICON_BASE_URL}/claude-color.svg`,
-    avatarClass: "bg-orange-50 ring-1 ring-orange-100",
+    Glyph: Claude.Color,
+    Avatar: Claude.Avatar,
   },
   openai: {
-    glyphSrc: `${LOBE_ICON_BASE_URL}/openai.svg`,
-    avatarSrc: `${LOBE_ICON_BASE_URL}/openai.svg`,
-    avatarClass: "bg-white ring-1 ring-zinc-200",
+    Glyph: OpenAI,
+    Avatar: OpenAI.Avatar,
   },
   seed: {
-    glyphSrc: `${LOBE_ICON_BASE_URL}/doubao-color.svg`,
-    avatarSrc: `${LOBE_ICON_BASE_URL}/doubao-color.svg`,
-    avatarClass: "bg-white ring-1 ring-violet-100",
+    Glyph: Doubao.Color,
+    Avatar: Doubao.Avatar,
   },
   deepseek: {
-    glyphSrc: `${LOBE_ICON_BASE_URL}/deepseek-color.svg`,
-    avatarSrc: `${LOBE_ICON_BASE_URL}/deepseek-color.svg`,
-    avatarClass: "bg-indigo-50 ring-1 ring-indigo-100",
+    Glyph: DeepSeek.Color,
+    Avatar: DeepSeek.Avatar,
   },
 };
 
@@ -42,38 +36,16 @@ function resolveProvider(model, provider) {
   return "gemini";
 }
 
-function ProviderImage({ src, size, className = "" }) {
-  return (
-    <img
-      src={src}
-      alt=""
-      width={size}
-      height={size}
-      className={`block shrink-0 object-contain ${className}`}
-      decoding="async"
-      loading="eager"
-      referrerPolicy="no-referrer"
-    />
-  );
-}
-
 function ProviderGlyph({ provider, size }) {
   const visual = PROVIDER_VISUALS[provider] || PROVIDER_VISUALS.gemini;
-  return <ProviderImage src={visual.glyphSrc} size={size} />;
+  const Glyph = visual.Glyph;
+  return <Glyph size={size} />;
 }
 
 function ProviderAvatar({ provider, size = 24 }) {
   const visual = PROVIDER_VISUALS[provider] || PROVIDER_VISUALS.gemini;
-  const innerSize = Math.max(16, Math.round(size * 0.72));
-
-  return (
-    <div
-      className={`flex items-center justify-center overflow-hidden rounded-md ${visual.avatarClass}`}
-      style={{ width: size, height: size, borderRadius: 6 }}
-    >
-      <ProviderImage src={visual.avatarSrc} size={innerSize} />
-    </div>
-  );
+  const Avatar = visual.Avatar;
+  return <Avatar size={size} shape="square" />;
 }
 
 export function ModelGlyph({ model, provider, size = 16 }) {

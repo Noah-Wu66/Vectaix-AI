@@ -1,8 +1,9 @@
 "use client";
 
-import { Menu, Sparkles } from "lucide-react";
+import { Menu } from "lucide-react";
+import { ModelAvatar } from "./ModelVisuals";
 
-export default function ChatHeader({ onToggleSidebar }) {
+export default function ChatHeader({ onToggleSidebar, model }) {
   return (
     <header className="px-4 py-3 border-b border-zinc-200 flex items-center justify-between bg-white z-10">
       <div className="flex items-center gap-3">
@@ -13,7 +14,7 @@ export default function ChatHeader({ onToggleSidebar }) {
           <Menu size={20} />
         </button>
         <div className="flex items-center gap-2">
-          <Sparkles size={18} className="text-zinc-900" />
+          <ModelAvatar model={model} size={20} />
           <h1 className="font-semibold tracking-tight text-zinc-900 text-base md:text-lg whitespace-nowrap">
             Vectaix AI
           </h1>
@@ -22,5 +23,4 @@ export default function ChatHeader({ onToggleSidebar }) {
     </header>
   );
 }
-
 
