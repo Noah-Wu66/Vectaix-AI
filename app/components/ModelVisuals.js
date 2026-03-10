@@ -1,4 +1,8 @@
-import { Claude, DeepSeek, Doubao, Gemini, OpenAI } from "@lobehub/icons";
+import Claude from "@lobehub/icons/es/Claude";
+import DeepSeek from "@lobehub/icons/es/DeepSeek";
+import Doubao from "@lobehub/icons/es/Doubao";
+import Gemini from "@lobehub/icons/es/Gemini";
+import OpenAI from "@lobehub/icons/es/OpenAI";
 import { isCouncilModel } from "../lib/councilModel";
 import { isSeedModel } from "../lib/seedModel";
 import { CouncilAvatar, CouncilIcon } from "./CouncilIcon";

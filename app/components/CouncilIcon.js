@@ -1,9 +1,9 @@
-import { ClaudeCode } from "@lobehub/icons";
+import Claude from "@lobehub/icons/es/Claude";
 
 export function CouncilIcon({ size = 16, className = "" }) {
-  return <ClaudeCode.Color size={size} className={className} />;
+  return <Claude.Color size={size} className={className} />;
 }
 
 export function CouncilAvatar({ size = 24 }) {
-  return <ClaudeCode.Avatar size={size} shape="square" />;
+  return <Claude.Avatar size={size} shape="square" />;
 }
