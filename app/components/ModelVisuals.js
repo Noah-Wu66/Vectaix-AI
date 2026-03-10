@@ -2,30 +2,32 @@ import { isCouncilModel } from "../lib/councilModel";
 import { isSeedModel } from "../lib/seedModel";
 import { CouncilAvatar, CouncilIcon } from "./CouncilIcon";
 
+const LOBE_ICON_BASE_URL = "https://unpkg.com/@lobehub/icons-static-svg@1.82.0/icons";
+
 const PROVIDER_VISUALS = {
   gemini: {
-    glyphSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/gemini-color.png",
-    avatarSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/gemini-color.png",
+    glyphSrc: `${LOBE_ICON_BASE_URL}/gemini-color.svg`,
+    avatarSrc: `${LOBE_ICON_BASE_URL}/gemini-color.svg`,
     avatarClass: "bg-white ring-1 ring-sky-100",
   },
   claude: {
-    glyphSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/claude-color.png",
-    avatarSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/claude-color.png",
+    glyphSrc: `${LOBE_ICON_BASE_URL}/claude-color.svg`,
+    avatarSrc: `${LOBE_ICON_BASE_URL}/claude-color.svg`,
     avatarClass: "bg-orange-50 ring-1 ring-orange-100",
   },
   openai: {
-    glyphSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/openai.png",
-    avatarSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/openai.png",
+    glyphSrc: `${LOBE_ICON_BASE_URL}/openai.svg`,
+    avatarSrc: `${LOBE_ICON_BASE_URL}/openai.svg`,
     avatarClass: "bg-white ring-1 ring-zinc-200",
   },
   seed: {
-    glyphSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/doubao-color.png",
-    avatarSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/doubao-color.png",
+    glyphSrc: `${LOBE_ICON_BASE_URL}/doubao-color.svg`,
+    avatarSrc: `${LOBE_ICON_BASE_URL}/doubao-color.svg`,
     avatarClass: "bg-white ring-1 ring-violet-100",
   },
   deepseek: {
-    glyphSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/deepseek-color.png",
-    avatarSrc: "https://registry.npmmirror.com/@lobehub/icons-static-png/latest/files/light/deepseek-color.png",
+    glyphSrc: `${LOBE_ICON_BASE_URL}/deepseek-color.svg`,
+    avatarSrc: `${LOBE_ICON_BASE_URL}/deepseek-color.svg`,
     avatarClass: "bg-indigo-50 ring-1 ring-indigo-100",
   },
 };
