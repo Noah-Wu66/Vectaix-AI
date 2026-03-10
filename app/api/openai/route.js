@@ -294,6 +294,97 @@ export async function POST(req) {
                 .trim();
         };
 
+        const extractJsonEventsFromSseText = (rawText) => {
+            if (typeof rawText !== 'string' || !rawText.trim()) return [];
+
+            const blocks = rawText.split(/\r?\n\r?\n/);
+            const events = [];
+
+            for (const block of blocks) {
+                const trimmedBlock = block.trim();
+                if (!trimmedBlock) continue;
+
+                const lines = trimmedBlock.split(/\r?\n/);
+                const dataLines = [];
+                for (const line of lines) {
+                    if (!line || line.startsWith(':') || line.startsWith('event:')) continue;
+                    if (line.startsWith('data:')) {
+                        dataLines.push(line.slice(5).replace(/^\s*/, ''));
+                    }
+                }
+
+                if (!dataLines.length) continue;
+
+                const dataStr = dataLines.join('\n').trim();
+                if (!dataStr || dataStr === '[DONE]') continue;
+
+                try {
+                    events.push(JSON.parse(dataStr));
+                } catch {
+                    // ignore invalid SSE chunks
+                }
+            }
+
+            return events;
+        };
+
+        const extractDecisionTextFromSse = (rawText) => {
+            const events = extractJsonEventsFromSseText(rawText);
+            if (!events.length) return '';
+
+            let outputText = '';
+
+            for (const event of events) {
+                if (typeof event?.output_text === 'string' && event.output_text.trim()) {
+                    outputText += event.output_text;
+                    continue;
+                }
+
+                if (event?.response) {
+                    const completedText = extractDecisionOutputFromResponses(event.response);
+                    if (completedText) {
+                        outputText = completedText;
+                    }
+                }
+
+                if (event.type === 'output.text.delta' || event.type === 'response.output_text.delta') {
+                    const deltaText = typeof event?.delta === 'string'
+                        ? event.delta
+                        : (typeof event?.text === 'string'
+                            ? event.text
+                            : (typeof event?.data?.text === 'string' ? event.data.text : ''));
+                    if (deltaText) outputText += deltaText;
+                    continue;
+                }
+
+                if (Array.isArray(event?.choices)) {
+                    const choice = event.choices[0] || null;
+                    const delta = choice?.delta;
+                    const text = typeof delta?.content === 'string'
+                        ? delta.content
+                        : normalizeDecisionText(delta?.content);
+                    if (text) outputText += text;
+                }
+            }
+
+            return outputText.trim();
+        };
+
+        const readDecisionResponseText = async (response) => {
+            const rawText = await response.text();
+            const trimmed = typeof rawText === 'string' ? rawText.trim() : '';
+            if (!trimmed) return '';
+
+            try {
+                const payload = JSON.parse(trimmed);
+                return extractDecisionOutputFromResponses(payload);
+            } catch {
+                const sseText = extractDecisionTextFromSse(trimmed);
+                if (sseText) return sseText;
+                throw new Error(`联网判断返回格式无法解析：${trimmed.slice(0, 120)}`);
+            }
+        };
+
         const runOpenAIDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
             const { systemText, userText } = await buildWebSearchDecisionPrompts({
                 prompt: decisionPrompt,
@@ -334,8 +425,7 @@ export async function POST(req) {
                 throw new Error(extractUpstreamErrorMessage(response.status, errorText));
             }
 
-            const payload = await response.json();
-            const text = extractDecisionOutputFromResponses(payload);
+            const text = await readDecisionResponseText(response);
             if (!text) {
                 throw new Error('联网判断未返回有效内容');
             }
@@ -641,3 +731,4 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
+
