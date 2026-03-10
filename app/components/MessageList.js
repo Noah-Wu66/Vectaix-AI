@@ -239,7 +239,7 @@ export default function MessageList({
         onClose={() => setDeleteConfirm({ open: false, index: null, role: null })}
         onConfirm={handleConfirmDelete}
         title="删除消息"
-        message={`确定要删除这条${deleteConfirm.role === "user" ? "你的" : "AI"}消息吗？此操作无法撤销。`}
+        message={isCouncilConversation ? "确定要从这一轮开始删除吗？此操作会删除这一轮及其后所有轮次，无法撤销。" : `确定要删除这条${deleteConfirm.role === "user" ? "你的" : "AI"}消息吗？此操作无法撤销。`}
         confirmText="删除"
         danger
       />
@@ -584,7 +584,7 @@ export default function MessageList({
                           </div>
                         )}
 
-                        {!isCouncilConversation && msg.role === "user" ? (
+                        {msg.role === "user" ? (
                           <>
                             <button
                               onClick={() => handleDeleteClick(i, "user")}
@@ -601,7 +601,7 @@ export default function MessageList({
                               <Edit3 size={14} />
                             </button>
                           </>
-                        ) : !isCouncilConversation && msg.role === "model" ? (
+                        ) : msg.role === "model" ? (
                           <>
                             <button
                               onClick={() => handleDeleteClick(i, "model")}

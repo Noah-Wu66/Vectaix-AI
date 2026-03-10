@@ -1,6 +1,6 @@
 import { upload } from "@vercel/blob/client";
 import { buildChatConfig, runChat, unlockCompletionSound } from "./chatClient";
-import { isCouncilModel } from "./councilModel";
+import { COUNCIL_MAX_ROUNDS, countCompletedCouncilRounds, isCouncilModel } from "./councilModel";
 import { isDataImageUrl, isHttpUrl } from "./messageImage";
 import { SEED_MODEL_ID } from "./seedModel";
 
@@ -54,6 +54,24 @@ export function createChatAppActions({
     return undefined;
   };
 
+  const buildRuntimeConfig = ({ imageUrls = [] } = {}) => {
+    if (isCouncilConversation) {
+      return buildChatConfig({
+        mediaResolution,
+        imageUrls,
+      });
+    }
+    return buildChatConfig({
+      thinkingLevel: getEffectiveThinkingLevel(model),
+      mediaResolution,
+      systemPrompts,
+      activePromptId,
+      imageUrls,
+      maxTokens,
+      webSearch,
+    });
+  };
+
   const stopStreaming = () => {
     chatAbortRef.current?.abort();
     chatAbortRef.current = null;
@@ -96,18 +114,36 @@ export function createChatAppActions({
     } catch { }
   };
 
+  const getCouncilRoundStartIndex = (index) => {
+    if (!Array.isArray(messages) || index < 0 || index >= messages.length) return -1;
+    const current = messages[index];
+    if (current?.role === "user") return index;
+    if (current?.role === "model" && index > 0 && messages[index - 1]?.role === "user") {
+      return index - 1;
+    }
+    return -1;
+  };
+
   const deleteModelMessage = async (index) => {
-    if (isCouncilConversation) return;
-    const nextMessages = messages.filter((_, i) => i !== index);
+    const nextMessages = isCouncilConversation
+      ? (() => {
+          const roundStart = getCouncilRoundStartIndex(index);
+          return roundStart >= 0 ? messages.slice(0, roundStart) : messages;
+        })()
+      : messages.filter((_, i) => i !== index);
     setMessages(nextMessages);
     await syncConversationMessages(nextMessages);
   };
 
   const deleteUserMessage = async (index) => {
-    if (isCouncilConversation) return;
-    const nextMessages = messages.filter(
-      (_, i) => i !== index && i !== index + 1,
-    );
+    const nextMessages = isCouncilConversation
+      ? (() => {
+          const roundStart = getCouncilRoundStartIndex(index);
+          return roundStart >= 0 ? messages.slice(0, roundStart) : messages;
+        })()
+      : messages.filter(
+          (_, i) => i !== index && i !== index + 1,
+        );
     setMessages(nextMessages);
     await syncConversationMessages(nextMessages);
   };
@@ -117,12 +153,17 @@ export function createChatAppActions({
     chatRequestLockRef.current = true;
     const isCouncil = isCouncilConversation;
 
+    if (isCouncil && countCompletedCouncilRounds(messages) >= COUNCIL_MAX_ROUNDS) {
+      toast.warning(`Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，请新建对话继续。`);
+      chatRequestLockRef.current = false;
+      return;
+    }
+
     if (currentConversationId) {
       onConversationActivity?.(currentConversationId);
     }
 
     unlockCompletionSound();
-
     userInterruptedRef.current = false;
 
     const userMsgParts = [];
@@ -193,20 +234,7 @@ export function createChatAppActions({
         });
       }
 
-      const config = isCouncil
-        ? buildChatConfig({
-            mediaResolution,
-            imageUrls,
-          })
-        : buildChatConfig({
-            thinkingLevel: getEffectiveThinkingLevel(model),
-            mediaResolution,
-            systemPrompts,
-            activePromptId,
-            imageUrls,
-            maxTokens,
-            webSearch: webSearch,
-          });
+      const config = buildRuntimeConfig({ imageUrls });
 
       await runChat({
         prompt: text,
@@ -244,11 +272,11 @@ export function createChatAppActions({
   };
 
   const regenerateModelMessage = async (index) => {
-    if (isCouncilConversation) return;
     if (loading || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
     unlockCompletionSound();
-    const userMsgIndex = index - 1;
+
+    const userMsgIndex = isCouncilConversation ? getCouncilRoundStartIndex(index) : index - 1;
     if (userMsgIndex < 0 || messages[userMsgIndex]?.role !== "user") {
       chatRequestLockRef.current = false;
       return;
@@ -258,21 +286,16 @@ export function createChatAppActions({
 
     const userMsg = messages[userMsgIndex];
     const messagesBeforeRegenerate = messages.slice();
-    const historyWithUser = messages.slice(0, index);
+    const historyWithUser = isCouncilConversation
+      ? messages.slice(0, userMsgIndex + 1)
+      : messages.slice(0, index);
     setMessages(historyWithUser);
 
-    const config = buildChatConfig({
-      thinkingLevel: getEffectiveThinkingLevel(model),
-      mediaResolution,
-      systemPrompts,
-      activePromptId,
-      maxTokens,
-      webSearch: webSearch,
-    });
+    const config = buildRuntimeConfig();
 
     try {
       await runChat({
-        prompt: userMsg.content,
+        prompt: userMsg.content || "",
         historyMessages: historyWithUser.slice(0, -1),
         conversationId: currentConversationId,
         model,
@@ -300,7 +323,6 @@ export function createChatAppActions({
   };
 
   const startEdit = (index, msg) => {
-    if (isCouncilConversation) return;
     if (loading) return;
     setEditingMsgIndex(index);
     setEditingContent(msg?.content);
@@ -316,7 +338,6 @@ export function createChatAppActions({
   };
 
   const submitEditAndRegenerate = async (index) => {
-    if (isCouncilConversation) return;
     if (loading || editingMsgIndex === null || chatRequestLockRef.current) return;
     chatRequestLockRef.current = true;
     unlockCompletionSound();
@@ -396,27 +417,20 @@ export function createChatAppActions({
 
       if (parts.length > 0) updatedMsg.parts = parts;
       else delete updatedMsg.parts;
-
     } catch (e) {
       chatRequestLockRef.current = false;
       setLoading(false);
-      const errMsg = e?.message;
+      const errMsg = e?.message || "未知错误";
       const friendlyMsg = errMsg.includes("Failed to fetch") ? "网络连接失败，请检查网络后重试" : `图片上传失败：${errMsg}`;
       toast.error(friendlyMsg);
       return;
     }
+
     nextMessages.push(updatedMsg);
     setMessages(nextMessages);
     cancelEdit();
 
-    const config = buildChatConfig({
-      thinkingLevel: getEffectiveThinkingLevel(model),
-      mediaResolution,
-      systemPrompts,
-      activePromptId,
-      maxTokens,
-      webSearch: webSearch,
-    });
+    const config = buildRuntimeConfig();
 
     try {
       await runChat({

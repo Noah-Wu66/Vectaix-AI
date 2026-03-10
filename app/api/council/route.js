@@ -4,14 +4,16 @@ import Conversation from "@/models/Conversation";
 import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { getClientIP, rateLimit } from "@/lib/rateLimit";
-import { generateMessageId } from "@/app/api/chat/utils";
-import { COUNCIL_MODEL_ID } from "@/app/lib/councilModel";
+import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
+import { COUNCIL_MAX_ROUNDS, COUNCIL_MODEL_ID, countCompletedCouncilRounds } from "@/app/lib/councilModel";
 import { getModelRoutes, resolveOpenAIProviderConfig, resolveOpusProviderConfig } from "@/lib/modelRoutes";
 import {
   buildCouncilExpertState,
   buildCouncilFinalMessage,
+  buildCouncilHistoryMemo,
   buildCouncilSummaryState,
   buildCouncilUserInput,
+  buildCouncilUserInputFromMessage,
   COUNCIL_EXPERT_CONFIGS,
   createCouncilStreamHelpers,
   runCouncilExpert,
@@ -23,6 +25,10 @@ export const dynamic = "force-dynamic";
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
+const MAX_COUNCIL_EXPERTS = 3;
+const MAX_EXPERT_MODEL_CHARS = 100;
+const MAX_EXPERT_LABEL_CHARS = 120;
+const MAX_EXPERT_CONTENT_CHARS = 20000;
 
 function buildTitle(prompt) {
   const text = typeof prompt === "string" ? prompt.trim() : "";
@@ -40,6 +46,52 @@ function createStreamErrorEvent(message) {
   return JSON.stringify({
     type: "stream_error",
     message: message || "Unknown error",
+  });
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function sanitizeCouncilExperts(value, fieldPath) {
+  if (!Array.isArray(value)) return [];
+  if (value.length > MAX_COUNCIL_EXPERTS) {
+    throw new Error(`${fieldPath} too many`);
+  }
+  const experts = [];
+  for (const [index, expert] of value.entries()) {
+    if (!isPlainObject(expert)) continue;
+    const modelId = typeof expert.modelId === "string" ? expert.modelId.trim() : "";
+    const label = typeof expert.label === "string" ? expert.label.trim() : "";
+    const content = typeof expert.content === "string" ? expert.content : "";
+    if (!modelId || modelId.length > MAX_EXPERT_MODEL_CHARS) {
+      throw new Error(`${fieldPath}[${index}].modelId invalid`);
+    }
+    if (!label || label.length > MAX_EXPERT_LABEL_CHARS) {
+      throw new Error(`${fieldPath}[${index}].label invalid`);
+    }
+    if (!content || content.length > MAX_EXPERT_CONTENT_CHARS) {
+      throw new Error(`${fieldPath}[${index}].content invalid`);
+    }
+    const nextExpert = { modelId, label, content };
+    if (Array.isArray(expert.citations) && expert.citations.length > 0) {
+      nextExpert.citations = expert.citations;
+    }
+    experts.push(nextExpert);
+  }
+  return experts;
+}
+
+function sanitizeCouncilRegenerateMessages(messages) {
+  const sanitized = sanitizeStoredMessagesStrict(messages);
+  return sanitized.map((message, index) => {
+    const original = messages[index];
+    const nextMessage = { ...message };
+    const experts = sanitizeCouncilExperts(original?.councilExperts, `messages[${index}].councilExperts`);
+    if (experts.length > 0) {
+      nextMessage.councilExperts = experts;
+    }
+    return nextMessage;
   });
 }
 
@@ -64,6 +116,8 @@ export async function POST(req) {
     userMessageId,
     modelMessageId,
     history,
+    mode,
+    messages,
   } = body || {};
 
   if (model !== COUNCIL_MODEL_ID) {
@@ -72,14 +126,16 @@ export async function POST(req) {
   if (!Array.isArray(history)) {
     return Response.json({ error: "history must be an array" }, { status: 400 });
   }
-  if (history.length > 0) {
-    return Response.json({ error: "Council 只支持单轮新对话" }, { status: 400 });
-  }
 
-  const promptText = typeof prompt === "string" ? prompt : "";
-  const imageConfigs = Array.isArray(config?.images) ? config.images : [];
-  if (!promptText.trim() && imageConfigs.length === 0) {
-    return Response.json({ error: "Prompt is required" }, { status: 400 });
+  const isRegenerateMode = mode === "regenerate";
+  if (mode && !isRegenerateMode) {
+    return Response.json({ error: "Council 模式不支持该操作" }, { status: 400 });
+  }
+  if (isRegenerateMode && !Array.isArray(messages)) {
+    return Response.json({ error: "messages must be an array" }, { status: 400 });
+  }
+  if (isRegenerateMode && !conversationId) {
+    return Response.json({ error: "Council 重开必须提供 conversationId" }, { status: 400 });
   }
 
   const auth = await getAuthPayload();
@@ -122,22 +178,29 @@ export async function POST(req) {
     return Response.json({ error: error?.message || "模型线路配置错误" }, { status: 500 });
   }
 
-  let councilInput;
-  try {
-    councilInput = await buildCouncilUserInput({
-      prompt: promptText,
-      images: imageConfigs,
-    });
-  } catch (error) {
-    return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
-  }
-
-  if (!Array.isArray(councilInput.userParts) || councilInput.userParts.length === 0) {
-    return Response.json({ error: "Council 输入不能为空" }, { status: 400 });
-  }
-
+  let promptText = typeof prompt === "string" ? prompt : "";
+  let councilInput = null;
   let currentConversation = null;
   let createdConversationForRequest = false;
+
+  if (!isRegenerateMode && conversationId == null) {
+    const imageConfigs = Array.isArray(config?.images) ? config.images : [];
+    if (!promptText.trim() && imageConfigs.length === 0) {
+      return Response.json({ error: "Prompt is required" }, { status: 400 });
+    }
+    try {
+      councilInput = await buildCouncilUserInput({
+        prompt: promptText,
+        images: imageConfigs,
+      });
+    } catch (error) {
+      return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
+    }
+    if (!Array.isArray(councilInput.userParts) || councilInput.userParts.length === 0) {
+      return Response.json({ error: "Council 输入不能为空" }, { status: 400 });
+    }
+  }
+
   if (conversationId != null) {
     if (!mongoose.isValidObjectId(conversationId)) {
       return Response.json({ error: "Invalid id" }, { status: 400 });
@@ -152,10 +215,9 @@ export async function POST(req) {
     if (currentConversation.model !== COUNCIL_MODEL_ID) {
       return Response.json({ error: "Council 对话不存在" }, { status: 400 });
     }
-    if (Array.isArray(currentConversation.messages) && currentConversation.messages.length > 0) {
-      return Response.json({ error: "Council 已结束，请新建对话" }, { status: 409 });
-    }
-  } else {
+  }
+
+  if (!currentConversation) {
     const createdConversation = await Conversation.create({
       userId: auth.userId,
       title: buildTitle(promptText),
@@ -172,22 +234,90 @@ export async function POST(req) {
   const previousUpdatedAt = currentConversation.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
   const resolvedUserMessageId = normalizeMessageId(userMessageId);
   const resolvedModelMessageId = normalizeMessageId(modelMessageId);
+  let historyMemo = "";
 
-  const storedUserMessage = {
-    id: resolvedUserMessageId,
-    role: "user",
-    content: promptText,
-    type: "parts",
-    parts: councilInput.userParts,
-  };
-
-  await Conversation.findOneAndUpdate(
-    { _id: currentConversationId, userId: auth.userId },
-    {
-      $set: { updatedAt: new Date() },
-      $push: { messages: storedUserMessage },
+  if (isRegenerateMode) {
+    let sanitizedMessages;
+    try {
+      sanitizedMessages = sanitizeCouncilRegenerateMessages(messages);
+    } catch (error) {
+      return Response.json({ error: error?.message || "Council 快照无效" }, { status: 400 });
     }
-  );
+    if (sanitizedMessages.length === 0) {
+      return Response.json({ error: "Council 快照不能为空" }, { status: 400 });
+    }
+
+    const lastMessage = sanitizedMessages[sanitizedMessages.length - 1];
+    if (lastMessage?.role !== "user") {
+      return Response.json({ error: "Council 重开快照必须以用户消息结尾" }, { status: 400 });
+    }
+
+    try {
+      councilInput = await buildCouncilUserInputFromMessage(lastMessage);
+    } catch (error) {
+      return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
+    }
+    if (!Array.isArray(councilInput.userParts) || councilInput.userParts.length === 0) {
+      return Response.json({ error: "Council 输入不能为空" }, { status: 400 });
+    }
+
+    promptText = councilInput.prompt || "";
+    historyMemo = buildCouncilHistoryMemo(sanitizedMessages.slice(0, -1));
+
+    await Conversation.findOneAndUpdate(
+      { _id: currentConversationId, userId: auth.userId },
+      {
+        $set: {
+          messages: sanitizedMessages,
+          updatedAt: new Date(),
+        },
+      }
+    );
+  } else {
+    const completedRounds = countCompletedCouncilRounds(previousMessages);
+    if (completedRounds >= COUNCIL_MAX_ROUNDS) {
+      return Response.json(
+        { error: `Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，请新建对话继续。` },
+        { status: 400 }
+      );
+    }
+
+    if (!councilInput) {
+      const imageConfigs = Array.isArray(config?.images) ? config.images : [];
+      if (!promptText.trim() && imageConfigs.length === 0) {
+        return Response.json({ error: "Prompt is required" }, { status: 400 });
+      }
+      try {
+        councilInput = await buildCouncilUserInput({
+          prompt: promptText,
+          images: imageConfigs,
+        });
+      } catch (error) {
+        return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
+      }
+      if (!Array.isArray(councilInput.userParts) || councilInput.userParts.length === 0) {
+        return Response.json({ error: "Council 输入不能为空" }, { status: 400 });
+      }
+    }
+
+    historyMemo = buildCouncilHistoryMemo(previousMessages);
+
+    const storedUserMessage = {
+      id: resolvedUserMessageId,
+      role: "user",
+      content: promptText,
+      type: "parts",
+      parts: councilInput.userParts,
+    };
+
+    await Conversation.findOneAndUpdate(
+      { _id: currentConversationId, userId: auth.userId },
+      {
+        $set: { updatedAt: new Date() },
+        $push: { messages: storedUserMessage },
+      }
+    );
+  }
 
   let clientAborted = false;
   const onAbort = () => {
@@ -203,7 +333,7 @@ export async function POST(req) {
     async start(controller) {
       const streamHelpers = createCouncilStreamHelpers(controller);
       const restoreConversationSnapshot = async () => {
-        if (createdConversationForRequest || previousMessages.length === 0) {
+        if (createdConversationForRequest) {
           await Conversation.deleteOne({ _id: currentConversationId, userId: auth.userId });
           return;
         }
@@ -263,6 +393,7 @@ export async function POST(req) {
           COUNCIL_EXPERT_CONFIGS.map((expert) =>
             runCouncilExpert({
               prompt: promptText,
+              historyMemo,
               imagePayloads: councilInput.imagePayloads,
               expert,
               conversationId: currentConversationId,
@@ -297,6 +428,7 @@ export async function POST(req) {
 
         let hasStartedStreaming = false;
         const summary = await runSeedCouncilSummary({
+          historyMemo,
           prompt: promptText,
           experts,
           onTextDelta: (delta) => {

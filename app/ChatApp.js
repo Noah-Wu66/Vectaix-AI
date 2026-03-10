@@ -65,8 +65,6 @@ export default function ChatApp() {
   const lastTextModelRef = useRef(GEMINI_FLASH_MODEL);
   const isStreamingRef = useRef(false);
   const isStreaming = messages.some((m) => m.isStreaming);
-  const isCouncilConversationLocked =
-    isCouncilModel(model) && messages.some((m) => m.role === "model" && !m.isStreaming);
   isStreamingRef.current = isStreaming;
   const SCROLL_BOTTOM_THRESHOLD = 80;
   const lastSettingsErrorRef = useRef(null);
@@ -707,7 +705,6 @@ export default function ChatApp() {
             onSend: actions.handleSendFromComposer,
             onStop: actions.stopStreaming,
             prefill: composerPrefill,
-            isConversationLocked: isCouncilConversationLocked,
           }}
         />
       )}

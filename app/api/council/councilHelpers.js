@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   buildWebSearchContextBlock,
   fetchImageAsBase64,
+  getStoredPartsFromMessage,
   injectCurrentTimeSystemReminder,
 } from "@/app/api/chat/utils";
 import {
@@ -27,6 +28,10 @@ const EXPERT_MAX_OUTPUT_TOKENS = 4000;
 const SEED_MAX_OUTPUT_TOKENS = 8000;
 const MAX_RAW_MARKDOWN_CHARS = 20000;
 const MAX_FINDING_TEXT_CHARS = 1000;
+const HISTORY_USER_SUMMARY_CHARS = 500;
+const HISTORY_MODEL_SUMMARY_CHARS = 1200;
+const HISTORY_MEMO_MAX_ROUNDS = 6;
+const HISTORY_MEMO_MAX_CHARS = 8000;
 
 export const COUNCIL_EXPERT_CONFIGS = COUNCIL_EXPERTS.map((expert) => ({ ...expert }));
 
@@ -68,6 +73,105 @@ function normalizeCitations(value) {
 
 function mergeCitations(...lists) {
   return normalizeCitations(lists.flat());
+}
+
+function extractTextFromStoredParts(parts) {
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .map((part) => (typeof part?.text === "string" ? part.text.trim() : ""))
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+}
+
+function hasImageParts(parts) {
+  return Array.isArray(parts) && parts.some((part) => typeof part?.inlineData?.url === "string" && part.inlineData.url);
+}
+
+function extractCouncilAnalysisSection(content) {
+  const text = normalizeString(content, MAX_RAW_MARKDOWN_CHARS);
+  if (!text) return "";
+  const match = text.match(/(?:^|\n)#{1,6}\s*综合分析\s*\n([\s\S]*?)(?=\n#{1,6}\s+\S|$)/);
+  if (!match?.[1]) return "";
+  return match[1].trim();
+}
+
+function summarizeCouncilUserMessage(message) {
+  const parts = getStoredPartsFromMessage(message) || [];
+  const text = extractTextFromStoredParts(parts);
+  return normalizeString(text, HISTORY_USER_SUMMARY_CHARS);
+}
+
+function summarizeCouncilModelMessage(message) {
+  const analysis = extractCouncilAnalysisSection(message?.content);
+  if (analysis) {
+    return normalizeString(analysis, HISTORY_MODEL_SUMMARY_CHARS);
+  }
+  return normalizeString(message?.content, HISTORY_MODEL_SUMMARY_CHARS);
+}
+
+function formatHistoryRoundMemo(roundIndex, userMessage, modelMessage) {
+  const userParts = getStoredPartsFromMessage(userMessage) || [];
+  const userSummary = summarizeCouncilUserMessage(userMessage) || "（该轮用户未提供可提取的文字问题）";
+  const modelSummary = summarizeCouncilModelMessage(modelMessage) || "（该轮未能提取有效结论摘要）";
+  const lines = [
+    `第 ${roundIndex} 轮`,
+    `用户问题：${userSummary}`,
+    `Council 结论：${modelSummary}`,
+  ];
+  if (hasImageParts(userParts)) {
+    lines.push("说明：该轮曾包含图片，后续轮次不会自动继续使用原图。");
+  }
+  return lines.join("\n");
+}
+
+function extractCompletedCouncilRounds(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+  const rounds = [];
+  for (let i = 0; i < messages.length; i += 1) {
+    const userMessage = messages[i];
+    const modelMessage = messages[i + 1];
+    if (userMessage?.role !== "user") continue;
+    if (modelMessage?.role !== "model") continue;
+    rounds.push({ userMessage, modelMessage });
+    i += 1;
+  }
+  return rounds;
+}
+
+function trimHistoryMemoSections(sections) {
+  if (!Array.isArray(sections) || sections.length === 0) return "";
+  let nextSections = sections.slice(-HISTORY_MEMO_MAX_ROUNDS);
+  while (nextSections.length > 0) {
+    const joined = nextSections.join("\n\n");
+    if (joined.length <= HISTORY_MEMO_MAX_CHARS) {
+      return joined;
+    }
+    nextSections = nextSections.slice(1);
+  }
+  return "";
+}
+
+function buildCouncilTurnPrompt({ historyMemo, prompt }) {
+  const sections = [];
+  if (historyMemo) {
+    sections.push(
+      [
+        "# 历史对话纪要",
+        "以下内容是此前 Council 对话的结论纪要，只能作为背景参考，不能当作已经再次核验过的新证据。",
+        "如果纪要里提到之前出现过图片，也不代表你当前仍然看得到那些旧图；只有本轮重新附带的图片才是你现在真正可见的内容。",
+        historyMemo,
+      ].join("\n")
+    );
+  }
+  sections.push(
+    [
+      "# 当前用户问题",
+      prompt || "（用户仅上传了图片，未提供文字问题）",
+      "请优先回答当前这一轮问题，并在需要时结合上面的历史纪要保持上下文连续。",
+    ].join("\n")
+  );
+  return sections.join("\n\n");
 }
 
 export function buildCouncilExpertState(expert, patch = {}) {
@@ -189,6 +293,7 @@ async function buildSeedSystemPrompt() {
   return injectCurrentTimeSystemReminder(`你是 Council 的最终汇总模型 Seed。你会收到用户文字问题、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务是比较三位专家已经写出的正式回答，输出一份最终 Markdown 结论。
 
 重要输入边界：
+- 你可能还会收到“历史对话纪要”。它只是此前 Council 已得出的背景结论，不代表这些内容在本轮已经被重新核验。
 - 你看到的是用户文字问题，不直接看到用户上传的原始图片或其他原始多模态内容。
 - 如果专家回答里涉及图片、图表、截图、文件等内容，你只能依据专家已经写出的描述、结论和引用资料进行汇总，不能假装自己也看过原始材料。
 - 判断某位专家的立场时，必须优先以该专家的最终回答内容为准；参考资料只用于补充证据、解释理由，不能拿参考资料反推一个专家没有明确说过的观点。
@@ -614,6 +719,7 @@ function normalizeExpertOutput(rawText, expert, citations) {
 
 export async function runCouncilExpert({
   prompt,
+  historyMemo,
   imagePayloads,
   expert,
   conversationId,
@@ -623,8 +729,9 @@ export async function runCouncilExpert({
   providerRoutes,
 }) {
   try {
+    const finalPrompt = buildCouncilTurnPrompt({ historyMemo, prompt });
     const { searchContextText, citations } = await collectSearchContext({
-      prompt,
+      prompt: finalPrompt,
       expert,
       conversationId,
       clientAborted,
@@ -641,7 +748,6 @@ export async function runCouncilExpert({
       message: "思考中",
     });
 
-    const finalPrompt = `${prompt}\n\n请基于上面的用户问题完成任务。`;
     let rawText = "";
 
     if (expert.provider === "gemini") {
@@ -691,8 +797,9 @@ export async function runCouncilExpert({
   }
 }
 
-function buildSeedPayload({ prompt, experts }) {
+function buildSeedPayload({ historyMemo, prompt, experts }) {
   const sections = [
+    ...(historyMemo ? ["# 历史对话纪要", historyMemo] : []),
     `# 用户问题\n${prompt}`,
     "# 专家原始回答",
   ];
@@ -718,7 +825,7 @@ function buildSeedPayload({ prompt, experts }) {
   return sections.join("\n\n");
 }
 
-export async function runSeedCouncilSummary({ prompt, experts, onTextDelta, signal }) {
+export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTextDelta, signal }) {
   assertConfigured(ARK_API_KEY, "ARK_API_KEY 未配置");
   const instructions = await buildSeedSystemPrompt();
   const response = await fetch(`${SEED_API_BASE_URL}/responses`, {
@@ -736,7 +843,7 @@ export async function runSeedCouncilSummary({ prompt, experts, onTextDelta, sign
           content: [
             {
               type: "input_text",
-              text: buildSeedPayload({ prompt, experts }),
+              text: buildSeedPayload({ historyMemo, prompt, experts }),
             },
           ],
         },
@@ -852,6 +959,37 @@ export async function buildCouncilUserInput({ prompt, images }) {
     imagePayloads,
     userParts: buildStoredUserParts(prompt, imagePayloads),
   };
+}
+
+export async function buildCouncilUserInputFromMessage(message) {
+  const parts = getStoredPartsFromMessage(message) || [];
+  const prompt = extractTextFromStoredParts(parts);
+  const images = parts
+    .filter((part) => typeof part?.inlineData?.url === "string" && part.inlineData.url)
+    .map((part) => ({
+      url: part.inlineData.url,
+      mimeType: part.inlineData.mimeType,
+    }));
+  const imagePayloads = await loadImagePayloads(images);
+  return {
+    prompt,
+    imagePayloads,
+    userParts: buildStoredUserParts(prompt, imagePayloads),
+  };
+}
+
+export function buildCouncilHistoryMemo(messages) {
+  const rounds = extractCompletedCouncilRounds(messages);
+  if (rounds.length === 0) return "";
+  const sections = rounds.map(({ userMessage, modelMessage }, index) =>
+    formatHistoryRoundMemo(index + 1, userMessage, modelMessage)
+  );
+  const trimmed = trimHistoryMemoSections(sections);
+  if (!trimmed) return "";
+  return [
+    "以下是此前 Council 已完成轮次的对话纪要，请只把它当作背景上下文，不要把它当成已经再次核验的新证据。",
+    trimmed,
+  ].join("\n\n");
 }
 
 export function buildCouncilFinalMessage({
