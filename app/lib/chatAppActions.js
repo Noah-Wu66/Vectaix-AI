@@ -19,7 +19,6 @@ export function createChatAppActions({
   systemPrompts,
   activePromptId,
   maxTokens,
-  budgetTokens,
   webSearch,
   historyLimit,
   currentConversationId,
@@ -206,7 +205,6 @@ export function createChatAppActions({
             activePromptId,
             imageUrls,
             maxTokens,
-            budgetTokens,
             webSearch: webSearch,
           });
 
@@ -269,7 +267,6 @@ export function createChatAppActions({
       systemPrompts,
       activePromptId,
       maxTokens,
-      budgetTokens,
       webSearch: webSearch,
     });
 
@@ -418,7 +415,6 @@ export function createChatAppActions({
       systemPrompts,
       activePromptId,
       maxTokens,
-      budgetTokens,
       webSearch: webSearch,
     });
 

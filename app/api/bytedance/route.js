@@ -175,11 +175,12 @@ function buildSeedRequestBody({
     if (normalizedThinkingLevel === 'minimal') {
         requestBody.thinking = { type: 'disabled' };
     } else {
+        if (!VALID_SEED_REASONING_LEVELS.has(normalizedThinkingLevel)) {
+            throw new Error('thinkingLevel invalid');
+        }
         requestBody.thinking = { type: 'enabled' };
         requestBody.reasoning = {
-            effort: VALID_SEED_REASONING_LEVELS.has(normalizedThinkingLevel)
-                ? normalizedThinkingLevel
-                : 'medium',
+            effort: normalizedThinkingLevel,
         };
     }
 
@@ -335,6 +336,9 @@ export async function POST(req) {
 
         let seedInput = [];
         const limit = Number.parseInt(historyLimit, 10);
+        if (!Number.isFinite(limit) || limit < 0) {
+            return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
+        }
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
 
@@ -430,9 +434,15 @@ export async function POST(req) {
         }
 
         const maxTokens = Number.parseInt(config?.maxTokens, 10);
+        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
+            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
+        }
         const thinkingLevel = typeof config?.thinkingLevel === 'string'
-            ? config.thinkingLevel
-            : 'medium';
+            ? config.thinkingLevel.trim().toLowerCase()
+            : '';
+        if (thinkingLevel !== 'minimal' && !VALID_SEED_REASONING_LEVELS.has(thinkingLevel)) {
+            return Response.json({ error: 'thinkingLevel invalid' }, { status: 400 });
+        }
         const enableWebSearch = config?.webSearch === true;
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(
             typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''

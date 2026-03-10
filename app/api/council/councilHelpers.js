@@ -11,7 +11,9 @@ import {
   runWebSearchOrchestration,
 } from "@/app/api/chat/webSearchOrchestrator";
 import { buildEconomySystemPrompt } from "@/app/lib/economyModels";
+import { CLAUDE_OPUS_MODEL } from "@/app/lib/claudeModel";
 import { COUNCIL_EXPERTS } from "@/app/lib/councilModel";
+import { GEMINI_FLASH_MODEL } from "@/app/lib/geminiModel";
 import { SEED_MODEL_ID } from "@/app/lib/seedModel";
 
 const RIGHT_CODES_OPENAI_BASE_URL = process.env.RIGHT_CODES_OPENAI_BASE_URL || "https://www.right.codes/codex/v1";
@@ -21,7 +23,7 @@ const AIGOCODE_API_KEY = process.env.AIGOCODE_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ARK_API_KEY = process.env.ARK_API_KEY;
 const SEED_API_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
-const GEMINI_DECISION_MODEL = "gemini-3-flash-preview";
+const GEMINI_DECISION_MODEL = GEMINI_FLASH_MODEL;
 const GEMINI_DECISION_THINKING_LEVEL = "MINIMAL";
 const FORMATTING_GUARD =
   "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
@@ -446,7 +448,7 @@ async function collectSearchContext({
       apiKey: AIGOCODE_API_KEY,
       baseURL: AIGOCODE_CLAUDE_BASE_URL,
     });
-    const decisionRunner = buildClaudeDecisionRunner(client, "claude-opus-4-6");
+    const decisionRunner = buildClaudeDecisionRunner(client, CLAUDE_OPUS_MODEL);
     const { searchContextText } = await runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
@@ -542,7 +544,7 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
     searchContextText,
   });
   const response = await client.messages.create({
-    model: "claude-opus-4-6",
+    model: CLAUDE_OPUS_MODEL,
     max_tokens: EXPERT_MAX_OUTPUT_TOKENS,
     system: [
       {

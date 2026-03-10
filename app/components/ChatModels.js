@@ -1,6 +1,9 @@
 import { OPENAI_PRIMARY_MODEL } from "../lib/openaiModel";
 import { SEED_MODEL_ID } from "../lib/seedModel";
 import { COUNCIL_MODEL_ID } from "../lib/councilModel";
+import { CLAUDE_OPUS_MODEL, CLAUDE_SONNET_MODEL } from "../lib/claudeModel";
+import { GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL } from "../lib/geminiModel";
+import { DEEPSEEK_REASONER_MODEL } from "../lib/deepseekModel";
 
 export const CHAT_MODELS = [
   {
@@ -11,28 +14,28 @@ export const CHAT_MODELS = [
     contextWindow: 0,
   },
   {
-    id: "gemini-3-flash-preview",
+    id: GEMINI_FLASH_MODEL,
     name: "Flash",
     shortName: "Flash",
     provider: "gemini",
     contextWindow: 1000000,
   },
   {
-    id: "gemini-3.1-pro-preview",
+    id: GEMINI_PRO_MODEL,
     name: "Pro",
     shortName: "Pro",
     provider: "gemini",
     contextWindow: 1000000,
   },
   {
-    id: "claude-sonnet-4-6-20260219",
+    id: CLAUDE_SONNET_MODEL,
     name: "Sonnet",
     shortName: "Sonnet",
     provider: "claude",
     contextWindow: 200000,
   },
   {
-    id: "claude-opus-4-6-20260205",
+    id: CLAUDE_OPUS_MODEL,
     name: "Opus",
     shortName: "Opus",
     provider: "claude",
@@ -53,7 +56,7 @@ export const CHAT_MODELS = [
     contextWindow: 256000,
   },
   {
-    id: "deepseek-reasoner",
+    id: DEEPSEEK_REASONER_MODEL,
     name: "DeepSeek",
     shortName: "DeepSeek",
     provider: "deepseek",

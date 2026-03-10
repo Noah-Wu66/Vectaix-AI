@@ -75,13 +75,11 @@ export function buildChatConfig({
   activePromptId,
   imageUrls,
   maxTokens,
-  budgetTokens,
   webSearch,
 } = {}) {
   const cfg = {};
   cfg.thinkingLevel = thinkingLevel;
   cfg.maxTokens = maxTokens;
-  cfg.budgetTokens = budgetTokens;
   cfg.webSearch = webSearch === true;
 
   const promptList = Array.isArray(systemPrompts) ? systemPrompts : [];

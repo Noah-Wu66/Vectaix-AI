@@ -146,7 +146,10 @@ export async function POST(req) {
         }
 
         let openaiInput = [];
-        const limit = Number.parseInt(historyLimit);
+        const limit = Number.parseInt(historyLimit, 10);
+        if (!Number.isFinite(limit) || limit < 0) {
+            return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
+        }
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
 
@@ -233,13 +236,20 @@ export async function POST(req) {
         }
 
         // 构建 Responses API 请求
-        const maxTokens = config?.maxTokens;
-        const thinkingLevel = config?.thinkingLevel;
+        const maxTokens = Number.parseInt(config?.maxTokens, 10);
+        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
+            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
+        }
+        const thinkingLevel = typeof config?.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
         const baseInput = Array.isArray(openaiInput) ? openaiInput : [];
 
+        const allowedEfforts = MODEL_REASONING_EFFORTS[model] || DEFAULT_REASONING_EFFORTS;
+        if (!allowedEfforts.has(thinkingLevel)) {
+            return Response.json({ error: 'thinkingLevel invalid' }, { status: 400 });
+        }
         const baseRequestBody = {
             model: apiModel,
             stream: true,
@@ -247,15 +257,9 @@ export async function POST(req) {
             instructions: baseSystemPrompt,
             input: baseInput,
             reasoning: {
-                effort: "high"
+                effort: thinkingLevel
             }
         };
-
-        // Map UI thinkingLevel to Responses API reasoning.effort
-        const allowedEfforts = MODEL_REASONING_EFFORTS[model] || DEFAULT_REASONING_EFFORTS;
-        if (allowedEfforts.has(thinkingLevel)) {
-            baseRequestBody.reasoning.effort = thinkingLevel;
-        }
 
         // 是否启用联网搜索
         const enableWebSearch = config?.webSearch === true;

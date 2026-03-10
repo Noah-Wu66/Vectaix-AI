@@ -15,14 +15,13 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL } from '@/app/lib/geminiModel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_FLASH_MODEL = 'gemini-3-flash-preview';
-const GEMINI_PRO_MODEL = 'gemini-3.1-pro-preview';
 const GEMINI_DECISION_MODEL = GEMINI_FLASH_MODEL;
 const GEMINI_DECISION_THINKING_LEVEL = 'MINIMAL';
 const MAX_REQUEST_BYTES = 2_000_000;
@@ -72,15 +71,13 @@ function resolveGeminiApiModel(model) {
         : normalizedModel;
 
     if (
-        modelWithoutProvider === 'gemini-3.1-pro-preview'
-        || modelWithoutProvider === GEMINI_PRO_MODEL
+        modelWithoutProvider === GEMINI_PRO_MODEL
     ) {
         return GEMINI_PRO_MODEL;
     }
 
     if (
-        modelWithoutProvider === 'gemini-3-flash-preview'
-        || modelWithoutProvider === GEMINI_FLASH_MODEL
+        modelWithoutProvider === GEMINI_FLASH_MODEL
     ) {
         return GEMINI_FLASH_MODEL;
     }
@@ -185,7 +182,10 @@ export async function POST(req) {
         }
 
         let contents = [];
-        const limit = Number.parseInt(historyLimit);
+        const limit = Number.parseInt(historyLimit, 10);
+        if (!Number.isFinite(limit) || limit < 0) {
+            return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
+        }
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
 
@@ -257,34 +257,34 @@ export async function POST(req) {
             : {};
         const safeGenerationConfig = { ...generationConfig };
         delete safeGenerationConfig.temperature;
+        const maxTokens = Number.parseInt(config?.maxTokens, 10);
+        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
+            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
+        }
+
+        const rawThinkingLevel = typeof config?.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
+        const thinkingLevel = rawThinkingLevel.toUpperCase();
+        const flashAllowedLevels = new Set(['MINIMAL', 'LOW', 'MEDIUM', 'HIGH']);
+        const proAllowedLevels = new Set(['LOW', 'MEDIUM', 'HIGH']);
+        const isAllowedThinkingLevel = apiModel === GEMINI_FLASH_MODEL
+            ? flashAllowedLevels.has(thinkingLevel)
+            : proAllowedLevels.has(thinkingLevel);
+        if (!isAllowedThinkingLevel) {
+            return Response.json({ error: 'thinkingLevel invalid' }, { status: 400 });
+        }
+
         const baseConfig = {
             systemInstruction: {
                 parts: [{ text: baseSystemText }]
             },
             ...safeGenerationConfig,
             temperature: 1.0,
-        };
-
-        if (config?.maxTokens) {
-            baseConfig.maxOutputTokens = config.maxTokens;
-        }
-
-        if (config?.thinkingLevel) {
-            const rawThinkingLevel = typeof config.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
-            const thinkingLevel = rawThinkingLevel.toUpperCase();
-            const flashAllowedLevels = new Set(['MINIMAL', 'LOW', 'MEDIUM', 'HIGH']);
-            const proAllowedLevels = new Set(['LOW', 'MEDIUM', 'HIGH']);
-            const isAllowed = apiModel === GEMINI_FLASH_MODEL
-                ? flashAllowedLevels.has(thinkingLevel)
-                : proAllowedLevels.has(thinkingLevel);
-
-            if (isAllowed) {
-                baseConfig.thinkingConfig = {
-                    thinkingLevel,
-                    includeThoughts: true
-                };
+            maxOutputTokens: maxTokens,
+            thinkingConfig: {
+                thinkingLevel,
+                includeThoughts: true
             }
-        }
+        };
 
         const enableWebSearch = config?.webSearch === true;
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);

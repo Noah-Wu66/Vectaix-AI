@@ -9,6 +9,9 @@ import {
   UI_THEME_MODE_KEY,
   UI_WEB_SEARCH_KEY,
 } from "./storageKeys";
+import { CLAUDE_OPUS_MODEL, CLAUDE_SONNET_MODEL } from "./claudeModel";
+import { DEEPSEEK_REASONER_MODEL } from "./deepseekModel";
+import { GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL } from "./geminiModel";
 import { OPENAI_PRIMARY_MODEL } from "./openaiModel";
 import {
   LEGACY_PREFIXED_SEED_MODEL_ID,
@@ -17,19 +20,18 @@ import {
   normalizeSeedModelId,
 } from "./seedModel";
 
-const DEFAULT_MODEL = "deepseek-chat";
+const DEFAULT_MODEL = DEEPSEEK_REASONER_MODEL;
 const MAX_TOKENS_64K = 64000;
 const MAX_TOKENS_128K = 128000;
 const DEFAULT_THINKING_LEVELS = {
-  "gemini-3-flash-preview": "HIGH",
-  "gemini-3.1-pro-preview": "HIGH",
-  "claude-sonnet-4-6-20260219": "max",
-  "claude-opus-4-6-20260205": "max",
+  [GEMINI_FLASH_MODEL]: "HIGH",
+  [GEMINI_PRO_MODEL]: "HIGH",
+  [CLAUDE_SONNET_MODEL]: "max",
+  [CLAUDE_OPUS_MODEL]: "max",
   [OPENAI_PRIMARY_MODEL]: "xhigh",
   [SEED_MODEL_ID]: "high",
-  "deepseek-reasoner": "medium",
+  [DEEPSEEK_REASONER_MODEL]: "medium",
 };
-const DEFAULT_BUDGET_TOKENS = 32000;
 const DEFAULT_COMPLETION_SOUND_VOLUME = 60;
 
 function isPlainObject(value) {
@@ -88,9 +90,13 @@ function normalizeModelKeyedObject(value) {
   return next;
 }
 
+function normalizeStoredModelId(model) {
+  return normalizeSeedModelId(model);
+}
+
 function getDefaultMaxTokensForModel(model) {
   if (typeof model !== "string" || !model) return MAX_TOKENS_64K;
-  if (model.startsWith("gpt-") || model.startsWith("claude-opus-4-6")) {
+  if (model.startsWith("gpt-") || model.startsWith(CLAUDE_OPUS_MODEL)) {
     return MAX_TOKENS_128K;
   }
   return MAX_TOKENS_64K;
@@ -111,7 +117,6 @@ export function useUserSettings() {
   const thinkingLevels = DEFAULT_THINKING_LEVELS;
   const historyLimit = 0;
   const maxTokens = getDefaultMaxTokensForModel(model);
-  const budgetTokens = DEFAULT_BUDGET_TOKENS;
 
   useEffect(() => {
     const localTheme = readLocalSetting(UI_THEME_MODE_KEY);
@@ -122,7 +127,7 @@ export function useUserSettings() {
     const localCompletionSoundVolume = readLocalSetting(UI_COMPLETION_SOUND_VOLUME_KEY);
 
     const normalizedModel = typeof localModel === "string" && localModel
-      ? normalizeSeedModelId(localModel)
+      ? normalizeStoredModelId(localModel)
       : null;
     const initialModel = typeof normalizedModel === "string" && normalizedModel
       ? normalizedModel
@@ -152,7 +157,7 @@ export function useUserSettings() {
   }, []);
 
   const setModel = useCallback((nextModel) => {
-    const normalized = normalizeSeedModelId(nextModel);
+    const normalized = normalizeStoredModelId(nextModel);
     _setModel(normalized);
     writeLocalSetting(UI_MODEL_KEY, normalized);
   }, []);
@@ -370,7 +375,6 @@ export function useUserSettings() {
     fontSize,
     setFontSize,
     maxTokens,
-    budgetTokens,
     webSearch,
     setWebSearch,
     completionSoundVolume,

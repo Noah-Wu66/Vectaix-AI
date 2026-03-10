@@ -22,6 +22,20 @@ export function normalizeCopiedText(text) {
     .replace(/\n{3,}/g, "\n\n");
 }
 
+function getMessageText(msg) {
+  if (!msg) return "";
+  if (typeof msg.content === "string" && msg.content.trim()) {
+    return msg.content;
+  }
+  if (Array.isArray(msg.parts)) {
+    return msg.parts
+      .map((part) => (typeof part?.text === "string" ? part.text.trim() : ""))
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  return "";
+}
+
 function stripThinkingBlocks(text) {
   if (typeof text !== "string" || !text) return "";
   return text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
@@ -29,7 +43,7 @@ function stripThinkingBlocks(text) {
 
 export function buildCopyText(msg) {
   if (!msg) return "";
-  const raw = typeof msg.content === "string" ? msg.content : "";
+  const raw = getMessageText(msg);
   const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
   return normalizeCopiedText(cleaned);
 }
@@ -57,7 +71,7 @@ function stripMarkdown(text) {
 
 export function buildPlainText(msg) {
   if (!msg) return "";
-  const raw = typeof msg.content === "string" ? msg.content : "";
+  const raw = getMessageText(msg);
   const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
   return normalizeCopiedText(stripMarkdown(cleaned));
 }

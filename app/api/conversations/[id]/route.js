@@ -4,7 +4,7 @@ import { getAuthPayload } from '@/lib/auth';
 import mongoose from 'mongoose';
 
 const ALLOWED_UPDATE_KEYS = new Set(['title', 'messages', 'settings', 'pinned']);
-const ALLOWED_SETTINGS_KEYS = new Set(['thinkingLevel', 'historyLimit', 'maxTokens', 'budgetTokens', 'activePromptId', 'webSearch']);
+const ALLOWED_SETTINGS_KEYS = new Set(['activePromptId', 'webSearch']);
 const ALLOWED_MESSAGE_TYPES = new Set(['text', 'parts', 'error']);
 const ALLOWED_ROLES = new Set(['user', 'model']);
 
@@ -205,13 +205,6 @@ function sanitizeSettings(settings) {
     const updates = {};
     for (const [settingKey, settingValue] of Object.entries(settings)) {
         if (!ALLOWED_SETTINGS_KEYS.has(settingKey)) continue;
-        if (settingKey === 'thinkingLevel') {
-            if (typeof settingValue !== 'string' || settingValue.length > 20) {
-                throw new Error('settings.thinkingLevel invalid');
-            }
-            updates[`settings.${settingKey}`] = settingValue;
-            continue;
-        }
         if (settingKey === 'activePromptId') {
             if (typeof settingValue !== 'string' || settingValue.length > 128) {
                 throw new Error('settings.activePromptId invalid');
@@ -226,10 +219,6 @@ function sanitizeSettings(settings) {
             updates[`settings.${settingKey}`] = settingValue;
             continue;
         }
-        if (!Number.isFinite(settingValue) || settingValue < 0 || settingValue > 200000) {
-            throw new Error(`settings.${settingKey} invalid`);
-        }
-        updates[`settings.${settingKey}`] = settingValue;
     }
     return updates;
 }

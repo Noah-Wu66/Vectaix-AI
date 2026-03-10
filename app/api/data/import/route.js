@@ -33,10 +33,6 @@ const IMPORT_RATE_LIMIT = { limit: 5, windowMs: 10 * 60 * 1000 };
 const ALLOWED_MESSAGE_TYPES = new Set(['text', 'parts', 'error']);
 const ALLOWED_ROLES = new Set(['user', 'model']);
 const ALLOWED_SETTINGS_KEYS = new Set([
-  'thinkingLevel',
-  'historyLimit',
-  'maxTokens',
-  'budgetTokens',
   'activePromptId',
   'webSearch',
 ]);
@@ -216,14 +212,6 @@ function sanitizeConversationSettings(settings, idx) {
   for (const [settingKey, settingValue] of Object.entries(settings)) {
     if (!ALLOWED_SETTINGS_KEYS.has(settingKey)) continue;
 
-    if (settingKey === 'thinkingLevel') {
-      if (typeof settingValue !== 'string' || settingValue.length > 20) {
-        throw new Error(`conversations[${idx}].settings.thinkingLevel invalid`);
-      }
-      out.thinkingLevel = settingValue;
-      continue;
-    }
-
     if (settingKey === 'activePromptId') {
       if (typeof settingValue !== 'string' || settingValue.length > 128) {
         throw new Error(`conversations[${idx}].settings.activePromptId invalid`);
@@ -239,11 +227,6 @@ function sanitizeConversationSettings(settings, idx) {
       out.webSearch = settingValue;
       continue;
     }
-
-    if (!Number.isFinite(settingValue) || settingValue < 0 || settingValue > 200000) {
-      throw new Error(`conversations[${idx}].settings.${settingKey} invalid`);
-    }
-    out[settingKey] = settingValue;
   }
 
   return Object.keys(out).length > 0 ? out : undefined;

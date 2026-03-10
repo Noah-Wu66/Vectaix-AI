@@ -13,12 +13,13 @@ import {
     getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
 import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL } from '@/app/lib/deepseekModel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
-const DEEPSEEK_DECISION_MODEL = 'deepseek-chat';
+const DEEPSEEK_DECISION_MODEL = DEEPSEEK_CHAT_MODEL;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
 
@@ -139,7 +140,7 @@ export async function POST(req) {
             return Response.json({ error: 'DEEPSEEK_API_KEY is not set' }, { status: 500 });
         }
         // 使用 deepseek-reasoner 作为 API 模型（内置思考模式）
-        const apiModel = model === 'deepseek-reasoner' ? 'deepseek-reasoner' : 'deepseek-chat';
+        const apiModel = model === DEEPSEEK_REASONER_MODEL ? DEEPSEEK_REASONER_MODEL : DEEPSEEK_CHAT_MODEL;
 
         let currentConversationId = conversationId;
 
@@ -156,7 +157,10 @@ export async function POST(req) {
         }
 
         let deepseekMessages = [];
-        const limit = Number.parseInt(historyLimit);
+        const limit = Number.parseInt(historyLimit, 10);
+        if (!Number.isFinite(limit) || limit < 0) {
+            return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
+        }
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
 
@@ -243,7 +247,10 @@ export async function POST(req) {
             writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
-        const maxTokens = config?.maxTokens;
+        const maxTokens = Number.parseInt(config?.maxTokens, 10);
+        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
+            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
+        }
 
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(
             typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
@@ -394,7 +401,7 @@ export async function POST(req) {
                         model: apiModel,
                         messages: finalMessages,
                         stream: true,
-                        max_tokens: Math.min(maxTokens || 65536, 65536),
+                        max_tokens: Math.min(maxTokens, 65536),
                     };
 
                     const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {

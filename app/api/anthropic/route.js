@@ -4,6 +4,7 @@ import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
+import { CLAUDE_OPUS_MODEL, CLAUDE_SONNET_MODEL } from '@/app/lib/claudeModel';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
@@ -141,10 +142,10 @@ export async function POST(req) {
         if (!apiKey) {
             return Response.json({ error: 'AIGOCODE_API_KEY is not set' }, { status: 500 });
         }
-        const apiModel = model.startsWith('claude-opus-4-6')
-            ? 'claude-opus-4-6'
-            : model.startsWith('claude-sonnet-4-6')
-                ? 'claude-sonnet-4-6'
+        const apiModel = model.startsWith(CLAUDE_OPUS_MODEL)
+            ? CLAUDE_OPUS_MODEL
+            : model.startsWith(CLAUDE_SONNET_MODEL)
+                ? CLAUDE_SONNET_MODEL
                 : model;
         const client = new Anthropic({
             apiKey,
@@ -165,7 +166,10 @@ export async function POST(req) {
         }
 
         let claudeMessages = [];
-        const limit = Number.parseInt(historyLimit);
+        const limit = Number.parseInt(historyLimit, 10);
+        if (!Number.isFinite(limit) || limit < 0) {
+            return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
+        }
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
 
@@ -268,13 +272,22 @@ export async function POST(req) {
         }
 
         // 构建请求参数（联网搜索上下文将在流式开始前注入）
-        const maxTokens = config?.maxTokens;
-        const budgetTokens = config?.budgetTokens;
-        const thinkingLevel = config?.thinkingLevel;
+        const maxTokens = Number.parseInt(config?.maxTokens, 10);
+        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
+            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
+        }
+        const thinkingLevel = typeof config?.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
         const isClaudeAdaptiveThinkingModel = typeof model === "string"
-            && (model.startsWith("claude-opus-4-6") || model.startsWith("claude-sonnet-4-6"));
-        const maxTokenCap = typeof model === "string" && model.startsWith("claude-opus-4-6") ? 128000 : 64000;
-        const normalizedMaxTokens = Math.min(Number(maxTokens) || maxTokenCap, maxTokenCap);
+            && (model.startsWith(CLAUDE_OPUS_MODEL) || model.startsWith(CLAUDE_SONNET_MODEL));
+        if (!isClaudeAdaptiveThinkingModel) {
+            return Response.json({ error: 'unsupported Claude model' }, { status: 400 });
+        }
+        const maxTokenCap = typeof model === "string" && model.startsWith(CLAUDE_OPUS_MODEL) ? 128000 : 64000;
+        const normalizedMaxTokens = Math.min(maxTokens, maxTokenCap);
+        const allowedThinkingLevels = new Set(["low", "medium", "high", "max"]);
+        if (!allowedThinkingLevels.has(thinkingLevel)) {
+            return Response.json({ error: 'thinkingLevel invalid' }, { status: 400 });
+        }
         const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
@@ -413,23 +426,10 @@ export async function POST(req) {
                         ],
                         messages: claudeMessages,
                         stream: true,
-                        ...(isClaudeAdaptiveThinkingModel
-                            ? {
-                                thinking: { type: "adaptive" },
-                                output_config: {
-                                    effort: (() => {
-                                        const allowed = new Set(["low", "medium", "high", "max"]);
-                                        if (typeof thinkingLevel === "string" && allowed.has(thinkingLevel)) {
-                                            return thinkingLevel;
-                                        }
-                                        return "high";
-                                    })()
-                                }
-                            }
-                            : {
-                                thinking: { type: "enabled", budget_tokens: budgetTokens }
-                            }
-                        )
+                        thinking: { type: "adaptive" },
+                        output_config: {
+                            effort: thinkingLevel
+                        }
                     };
 
                     const stream = await client.messages.stream(requestParams);

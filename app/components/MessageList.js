@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  ChevronDown,
   Copy,
+  Download,
   Edit3,
   Paperclip,
   RotateCcw,
@@ -17,7 +19,9 @@ import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
 import ImageLightbox from "./ImageLightbox";
 import ConfirmModal from "./ConfirmModal";
+import { useToast } from "./ToastProvider";
 import { getMessageImageSrc, isKeepableImageSrc } from "../lib/messageImage";
+import { exportMessageContent } from "../lib/messageExport";
 import {
   AIAvatar,
   ResponsiveAIAvatar,
@@ -59,14 +63,42 @@ export default function MessageList({
 }) {
   const editTextareaRef = useRef(null);
   const editFileInputRef = useRef(null);
+  const exportMenuRef = useRef(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, index: null, role: null });
+  const [openExportMenuIndex, setOpenExportMenuIndex] = useState(null);
   const prevMessagesRef = useRef([]);
   const isCouncilConversation = isCouncilModel(model);
+  const toast = useToast();
 
   useEffect(() => {
     prevMessagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!exportMenuRef.current?.contains(event.target)) {
+        setOpenExportMenuIndex(null);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpenExportMenuIndex(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    setOpenExportMenuIndex(null);
   }, [messages]);
 
   const isNewMessage = (msg, index) => {
@@ -176,6 +208,23 @@ export default function MessageList({
 
     e.preventDefault();
     e.clipboardData?.setData("text/plain", normalizeCopiedText(selText));
+  };
+
+  const handleExportMessage = async (format, msg) => {
+    const labelMap = {
+      markdown: "Markdown",
+      pdf: "PDF",
+      docx: "Docx",
+    };
+
+    try {
+      await exportMessageContent(format, buildCopyText(msg));
+      toast.success(`已导出 ${labelMap[format] || "文件"}`);
+    } catch (error) {
+      toast.error(error?.message || "导出失败");
+    } finally {
+      setOpenExportMenuIndex(null);
+    }
   };
 
   return (
@@ -491,6 +540,47 @@ export default function MessageList({
                           >
                             <Type size={14} />
                           </button>
+                        )}
+
+                        {msg.role === "model" && (
+                          <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
+                            <button
+                              type="button"
+                              onClick={() => setOpenExportMenuIndex((prev) => (prev === i ? null : i))}
+                              className={`inline-flex items-center gap-1 p-1.5 rounded-lg transition-colors ${openExportMenuIndex === i
+                                ? "text-zinc-700 bg-zinc-100"
+                                : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
+                                }`}
+                              title="导出"
+                            >
+                              <Download size={14} />
+                              <ChevronDown size={12} className={`transition-transform ${openExportMenuIndex === i ? "rotate-180" : ""}`} />
+                            </button>
+
+                            {openExportMenuIndex === i && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                                className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg sm:left-full sm:right-auto sm:top-1/2 sm:mt-0 sm:ml-2 sm:-translate-y-1/2"
+                              >
+                                {[
+                                  { key: "markdown", label: "导出 Markdown" },
+                                  { key: "pdf", label: "导出 PDF" },
+                                  { key: "docx", label: "导出 Docx" },
+                                ].map((item) => (
+                                  <button
+                                    key={item.key}
+                                    type="button"
+                                    onClick={() => handleExportMessage(item.key, msg)}
+                                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-100"
+                                  >
+                                    {item.label}
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </div>
                         )}
 
                         {!isCouncilConversation && msg.role === "user" ? (

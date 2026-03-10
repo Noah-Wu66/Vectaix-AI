@@ -2,6 +2,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createChatAppActions } from "./lib/chatAppActions";
+import { CLAUDE_SONNET_MODEL } from "./lib/claudeModel";
+import { DEEPSEEK_REASONER_MODEL } from "./lib/deepseekModel";
+import { GEMINI_FLASH_MODEL } from "./lib/geminiModel";
 import { useThemeMode } from "./lib/useThemeMode";
 import { useUserSettings } from "./lib/useUserSettings";
 import { OPENAI_PRIMARY_MODEL } from "./lib/openaiModel";
@@ -33,7 +36,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, setModel, thinkingLevels, historyLimit, maxTokens, budgetTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
+  const { model, setModel, thinkingLevels, historyLimit, maxTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
   useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -59,7 +62,7 @@ export default function ChatApp() {
   const syncSettingsTimeoutRef = useRef(null);
   const pendingSettingsRef = useRef({});
   const pendingConversationIdRef = useRef(null);
-  const lastTextModelRef = useRef("gemini-3-flash-preview");
+  const lastTextModelRef = useRef(GEMINI_FLASH_MODEL);
   const isStreamingRef = useRef(false);
   const isStreaming = messages.some((m) => m.isStreaming);
   const isCouncilConversationLocked =
@@ -228,7 +231,6 @@ export default function ChatApp() {
     systemPrompts,
     activePromptId,
     maxTokens,
-    budgetTokens,
     webSearch,
     historyLimit,
     currentConversationId,
@@ -461,15 +463,15 @@ export default function ChatApp() {
         if (conversationProvider === "council" && currentProvider !== "council") {
           targetModel = COUNCIL_MODEL_ID;
         } else if (conversationProvider === "gemini" && currentProvider !== "gemini") {
-          targetModel = "gemini-3-flash-preview";
+          targetModel = GEMINI_FLASH_MODEL;
         } else if (conversationProvider === "claude" && currentProvider !== "claude") {
-          targetModel = "claude-sonnet-4-6-20260219";
+          targetModel = CLAUDE_SONNET_MODEL;
         } else if (conversationProvider === "openai" && currentProvider !== "openai") {
           targetModel = OPENAI_PRIMARY_MODEL;
         } else if (conversationProvider === "seed" && currentProvider !== "seed") {
           targetModel = SEED_MODEL_ID;
         } else if (conversationProvider === "deepseek" && currentProvider !== "deepseek") {
-          targetModel = "deepseek-reasoner";
+          targetModel = DEEPSEEK_REASONER_MODEL;
         } else if (conversationProvider === currentProvider) {
           // provider 相同，保持当前模型不变
           targetModel = model;
