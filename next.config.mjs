@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ["@lobehub/icons"],
   experimental: {
     serverComponentsExternalPackages: ["@google/genai", "@anthropic-ai/sdk"],
   },
