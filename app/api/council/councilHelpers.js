@@ -16,10 +16,6 @@ import { COUNCIL_EXPERTS } from "@/app/lib/councilModel";
 import { GEMINI_FLASH_MODEL } from "@/app/lib/geminiModel";
 import { SEED_MODEL_ID } from "@/app/lib/seedModel";
 
-const RIGHT_CODES_OPENAI_BASE_URL = process.env.RIGHT_CODES_OPENAI_BASE_URL || "https://www.right.codes/codex/v1";
-const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
-const AIGOCODE_CLAUDE_BASE_URL = "https://api.aigocode.com";
-const AIGOCODE_API_KEY = process.env.AIGOCODE_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ARK_API_KEY = process.env.ARK_API_KEY;
 const SEED_API_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
@@ -344,8 +340,7 @@ async function consumeOpenAIStream(response) {
   return fullText.trim();
 }
 
-function buildOpenAIDecisionRunner(modelId) {
-  assertConfigured(RIGHT_CODES_API_KEY, "RIGHT_CODES_API_KEY is not set");
+function buildOpenAIDecisionRunner(modelId, providerConfig) {
   return async ({ prompt, historyMessages, searchRounds }) => {
     const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
     const requestBody = {
@@ -360,11 +355,11 @@ function buildOpenAIDecisionRunner(modelId) {
         },
       ],
     };
-    const response = await fetch(`${RIGHT_CODES_OPENAI_BASE_URL}/responses`, {
+    const response = await fetch(`${providerConfig.baseUrl}/responses`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${RIGHT_CODES_API_KEY}`,
+        Authorization: `Bearer ${providerConfig.apiKey}`,
       },
       body: JSON.stringify(requestBody),
     });
@@ -386,6 +381,7 @@ async function collectSearchContext({
   conversationId,
   clientAborted,
   updateStatus,
+  providerRoutes,
 }) {
   const citations = [];
   const pushCitations = (items) => {
@@ -443,10 +439,9 @@ async function collectSearchContext({
   }
 
   if (expert.provider === "claude") {
-    assertConfigured(AIGOCODE_API_KEY, "AIGOCODE_API_KEY is not set");
     const client = new Anthropic({
-      apiKey: AIGOCODE_API_KEY,
-      baseURL: AIGOCODE_CLAUDE_BASE_URL,
+      apiKey: providerRoutes.opus.apiKey,
+      baseURL: providerRoutes.opus.baseUrl,
     });
     const decisionRunner = buildClaudeDecisionRunner(client, CLAUDE_OPUS_MODEL);
     const { searchContextText } = await runWebSearchOrchestration({
@@ -467,7 +462,7 @@ async function collectSearchContext({
   }
 
   if (expert.provider === "openai") {
-    const decisionRunner = buildOpenAIDecisionRunner(expert.modelId);
+    const decisionRunner = buildOpenAIDecisionRunner(expert.modelId, providerRoutes.openai);
     const { searchContextText } = await runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
@@ -521,11 +516,10 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
   return extractGeminiText(result);
 }
 
-async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContextText }) {
-  assertConfigured(AIGOCODE_API_KEY, "AIGOCODE_API_KEY is not set");
+async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig }) {
   const client = new Anthropic({
-    apiKey: AIGOCODE_API_KEY,
-    baseURL: AIGOCODE_CLAUDE_BASE_URL,
+    apiKey: providerConfig.apiKey,
+    baseURL: providerConfig.baseUrl,
   });
   const content = [{ type: "text", text: prompt }];
   for (const image of imagePayloads) {
@@ -561,8 +555,7 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
   return extractClaudeText(response);
 }
 
-async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContextText }) {
-  assertConfigured(RIGHT_CODES_API_KEY, "RIGHT_CODES_API_KEY is not set");
+async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig }) {
   const systemPrompt = await buildExpertSystemPrompt({
     enableWebSearch: true,
     includeEconomyPrefix: true,
@@ -575,11 +568,11 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
       image_url: image.dataUrl,
     });
   }
-  const response = await fetch(`${RIGHT_CODES_OPENAI_BASE_URL}/responses`, {
+  const response = await fetch(`${providerConfig.baseUrl}/responses`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${RIGHT_CODES_API_KEY}`,
+      Authorization: `Bearer ${providerConfig.apiKey}`,
     },
     body: JSON.stringify({
       model: expert.modelId,
@@ -620,6 +613,7 @@ export async function runCouncilExpert({
   clientAborted,
   updateStatus,
   onDone,
+  providerRoutes,
 }) {
   try {
     const { searchContextText, citations } = await collectSearchContext({
@@ -628,6 +622,7 @@ export async function runCouncilExpert({
       conversationId,
       clientAborted,
       updateStatus,
+      providerRoutes,
     });
     if (clientAborted()) {
       throw new Error("COUNCIL_ABORTED");
@@ -655,6 +650,7 @@ export async function runCouncilExpert({
         imagePayloads,
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
         searchContextText,
+        providerConfig: providerRoutes.opus,
       });
     } else if (expert.provider === "openai") {
       rawText = await requestOpenAIExpert({
@@ -662,6 +658,7 @@ export async function runCouncilExpert({
         imagePayloads,
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
         searchContextText,
+        providerConfig: providerRoutes.openai,
       });
     } else {
       throw new Error(`未知专家 provider：${expert.provider}`);

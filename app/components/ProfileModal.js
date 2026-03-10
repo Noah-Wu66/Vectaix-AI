@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
@@ -14,6 +14,7 @@ import {
   X,
   Camera,
   Volume2,
+  GitBranch,
 } from "lucide-react";
 
 import { upload } from "@vercel/blob/client";
@@ -39,6 +40,7 @@ export default function ProfileModal({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
   const [showDataManager, setShowDataManager] = useState(false);
+  const [showRouteSelector, setShowRouteSelector] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState(null);
@@ -52,6 +54,10 @@ export default function ProfileModal({
   const [importLoading, setImportLoading] = useState(false);
 
   const [avatarLoading, setAvatarLoading] = useState(false);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeSaving, setRouteSaving] = useState(false);
+  const [modelRoutes, setModelRoutes] = useState({ openai: "default", opus: "default" });
+  const [savedModelRoutes, setSavedModelRoutes] = useState({ openai: "default", opus: "default" });
   const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
     ? Number(completionSoundVolume)
     : 60;
@@ -62,6 +68,7 @@ export default function ProfileModal({
   }, [user?.email]);
 
   const avatarFileInputRef = useRef(null);
+  const hasRouteChanges = modelRoutes.openai !== savedModelRoutes.openai || modelRoutes.opus !== savedModelRoutes.opus;
   const parseDownloadFilename = (contentDisposition) => {
     if (!contentDisposition || typeof contentDisposition !== "string") return null;
     const m = contentDisposition.match(/filename="([^"]+)"/i);
@@ -165,6 +172,70 @@ export default function ProfileModal({
     } finally {
       setAvatarLoading(false);
       if (avatarFileInputRef.current) avatarFileInputRef.current.value = "";
+    }
+  };
+
+  useEffect(() => {
+    if (!open || !isAdmin) return;
+
+    let cancelled = false;
+
+    const fetchModelRoutes = async () => {
+      setRouteLoading(true);
+      try {
+        const res = await fetch("/api/admin/model-routes");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "加载线路配置失败");
+
+        if (!cancelled) {
+          const nextRoutes = {
+            openai: data?.routes?.openai === "zenmux" ? "zenmux" : "default",
+            opus: data?.routes?.opus === "zenmux" ? "zenmux" : "default",
+          };
+          setModelRoutes(nextRoutes);
+          setSavedModelRoutes(nextRoutes);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          toast.error(e?.message || "加载线路配置失败");
+        }
+      } finally {
+        if (!cancelled) setRouteLoading(false);
+      }
+    };
+
+    fetchModelRoutes();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isAdmin, toast]);
+
+  const setProviderRoute = (provider, route) => {
+    setModelRoutes((prev) => ({ ...prev, [provider]: route }));
+  };
+
+  const saveModelRoutes = async () => {
+    setRouteSaving(true);
+    try {
+      const res = await fetch("/api/admin/model-routes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(modelRoutes),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "保存线路配置失败");
+
+      const nextRoutes = {
+        openai: data?.routes?.openai === "zenmux" ? "zenmux" : "default",
+        opus: data?.routes?.opus === "zenmux" ? "zenmux" : "default",
+      };
+      setModelRoutes(nextRoutes);
+      setSavedModelRoutes(nextRoutes);
+      toast.success("线路配置已保存，全站立即生效");
+    } catch (e) {
+      toast.error(e?.message || "保存线路配置失败");
+    } finally {
+      setRouteSaving(false);
     }
   };
 
@@ -424,6 +495,96 @@ export default function ProfileModal({
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {/* 线路选择（仅管理员可见） */}
+              {isAdmin && (
+                <>
+                  <button
+                    onClick={() => setShowRouteSelector(!showRouteSelector)}
+                    className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
+                      <GitBranch size={14} /> 线路选择
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className={`text-zinc-400 transition-transform ${showRouteSelector ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showRouteSelector && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
+                          <p className="text-xs text-zinc-500">保存后全站立即生效</p>
+
+                          <div className="space-y-2">
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">OpenAI 线路</label>
+                            <div className="flex gap-2">
+                              {[
+                                { id: "default", label: "Default" },
+                                { id: "zenmux", label: "Zenmux" },
+                              ].map((item) => (
+                                <button
+                                  key={`openai-${item.id}`}
+                                  type="button"
+                                  onClick={() => setProviderRoute("openai", item.id)}
+                                  disabled={routeLoading || routeSaving}
+                                  className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.openai === item.id
+                                    ? "bg-zinc-600 text-white border-zinc-600"
+                                    : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                    } disabled:opacity-50`}
+                                >
+                                  {item.label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-xs text-zinc-400">Default 为当前 Right Codes</p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">Opus 线路</label>
+                            <div className="flex gap-2">
+                              {[
+                                { id: "default", label: "Default" },
+                                { id: "zenmux", label: "Zenmux" },
+                              ].map((item) => (
+                                <button
+                                  key={`opus-${item.id}`}
+                                  type="button"
+                                  onClick={() => setProviderRoute("opus", item.id)}
+                                  disabled={routeLoading || routeSaving}
+                                  className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.opus === item.id
+                                    ? "bg-zinc-600 text-white border-zinc-600"
+                                    : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                    } disabled:opacity-50`}
+                                >
+                                  {item.label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-xs text-zinc-400">Default 为当前 AIGOCODE</p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={saveModelRoutes}
+                            disabled={routeLoading || routeSaving || !hasRouteChanges}
+                            className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                          >
+                            {routeLoading ? "加载中..." : routeSaving ? "保存中..." : "保存线路配置"}
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </>
+              )}
 
               {/* 用户管理（仅管理员可见） */}
               {isAdmin && (

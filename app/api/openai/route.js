@@ -13,14 +13,13 @@ import {
 } from '@/app/api/chat/utils';
 import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import { buildEconomySystemPrompt } from '@/app/lib/economyModels';
+import { getModelRoutes, resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
 
 import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const RIGHT_CODES_OPENAI_BASE_URL = process.env.RIGHT_CODES_OPENAI_BASE_URL || 'https://www.right.codes/codex/v1';
-const RIGHT_CODES_API_KEY = process.env.RIGHT_CODES_API_KEY;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
@@ -123,11 +122,8 @@ export async function POST(req) {
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        const apiBaseUrl = RIGHT_CODES_OPENAI_BASE_URL;
-        const apiKey = RIGHT_CODES_API_KEY;
-        if (!apiKey) {
-            return Response.json({ error: 'RIGHT_CODES_API_KEY is not set' }, { status: 500 });
-        }
+        const modelRoutes = await getModelRoutes();
+        const { baseUrl: apiBaseUrl, apiKey } = resolveOpenAIProviderConfig(modelRoutes);
         const apiModel = model;
 
         let currentConversationId = conversationId;
@@ -731,4 +727,5 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
+
 

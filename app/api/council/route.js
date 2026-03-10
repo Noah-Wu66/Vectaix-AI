@@ -6,6 +6,7 @@ import { getAuthPayload } from "@/lib/auth";
 import { getClientIP, rateLimit } from "@/lib/rateLimit";
 import { generateMessageId } from "@/app/api/chat/utils";
 import { COUNCIL_MODEL_ID } from "@/app/lib/councilModel";
+import { getModelRoutes, resolveOpenAIProviderConfig, resolveOpusProviderConfig } from "@/lib/modelRoutes";
 import {
   buildCouncilExpertState,
   buildCouncilFinalMessage,
@@ -108,6 +109,17 @@ export async function POST(req) {
   const userDoc = await User.findById(auth.userId).select("_id");
   if (!userDoc) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let providerRoutes;
+  try {
+    const modelRoutes = await getModelRoutes();
+    providerRoutes = {
+      openai: resolveOpenAIProviderConfig(modelRoutes),
+      opus: resolveOpusProviderConfig(modelRoutes),
+    };
+  } catch (error) {
+    return Response.json({ error: error?.message || "模型线路配置错误" }, { status: 500 });
   }
 
   let councilInput;
@@ -256,6 +268,7 @@ export async function POST(req) {
               conversationId: currentConversationId,
               clientAborted: () => clientAborted,
               updateStatus: (patch) => updateExpertState(expert, patch),
+              providerRoutes,
               onDone: (result) => {
                 try {
                   streamHelpers.sendCouncilExpertResult(result);

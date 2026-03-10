@@ -17,13 +17,13 @@ import {
 } from '@/app/api/chat/utils';
 import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import { buildEconomySystemPrompt } from '@/app/lib/economyModels';
+import { getModelRoutes, resolveOpusProviderConfig } from '@/lib/modelRoutes';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const AIGOCODE_CLAUDE_BASE_URL = "https://api.aigocode.com";
-const AIGOCODE_API_KEY = process.env.AIGOCODE_API_KEY;
+
 const MAX_REQUEST_BYTES = 2_000_000;
 
 async function storedPartToClaudePart(part) {
@@ -138,10 +138,8 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
 
-        const apiKey = AIGOCODE_API_KEY;
-        if (!apiKey) {
-            return Response.json({ error: 'AIGOCODE_API_KEY is not set' }, { status: 500 });
-        }
+        const modelRoutes = await getModelRoutes();
+        const { baseUrl: anthropicBaseUrl, apiKey } = resolveOpusProviderConfig(modelRoutes);
         const apiModel = model.startsWith(CLAUDE_OPUS_MODEL)
             ? CLAUDE_OPUS_MODEL
             : model.startsWith(CLAUDE_SONNET_MODEL)
@@ -149,7 +147,7 @@ export async function POST(req) {
                 : model;
         const client = new Anthropic({
             apiKey,
-            baseURL: AIGOCODE_CLAUDE_BASE_URL,
+            baseURL: anthropicBaseUrl,
         });
 
         // 创建新会话
@@ -551,3 +549,4 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
+
