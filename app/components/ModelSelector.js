@@ -79,7 +79,7 @@ export default function ModelSelector({ model, onModelChange }) {
               <div className="my-1.5 border-t border-zinc-200" />
               {renderModelGroup("openai", "OpenAI")}
               <div className="my-1.5 border-t border-zinc-200" />
-              {renderModelGroup("seed", "Seed")}
+              {renderModelGroup("seed", "DOUBAO")}
               <div className="my-1.5 border-t border-zinc-200" />
               {renderModelGroup("deepseek", "DeepSeek")}
             </motion.div>

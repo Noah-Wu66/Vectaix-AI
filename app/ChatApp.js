@@ -568,7 +568,7 @@ export default function ChatApp() {
 
     // 如果有对话历史且 provider 不同，提示用户需要新建对话
     if (messages.length > 0 && currentProvider && nextProvider && currentProvider !== nextProvider) {
-      const providerNames = { council: "Council", gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "Seed", deepseek: "DeepSeek" };
+      const providerNames = { council: "Council", gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "DOUBAO", deepseek: "DeepSeek" };
       setConfirmModalConfig({
         title: "切换模型",
         message: `切换到 ${providerNames[nextProvider]} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider]} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,
