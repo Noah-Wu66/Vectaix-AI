@@ -24,7 +24,7 @@ export default function CouncilExpertsBlock({ experts }) {
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-zinc-700"
       >
         <span className="inline-flex items-center gap-2">
-          <CouncilIcon size={16} className="text-amber-500" />
+          <CouncilIcon size={16} />
           专家原始回答
         </span>
         {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}

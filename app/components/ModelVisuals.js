@@ -52,7 +52,7 @@ export function ModelGlyph({ model, provider, size = 16 }) {
   const resolvedProvider = resolveProvider(model, provider);
 
   if (resolvedProvider === "council") {
-    return <CouncilIcon size={size} className="text-amber-500" />;
+    return <CouncilIcon size={size} />;
   }
 
   return <ProviderGlyph provider={resolvedProvider} size={size} />;
