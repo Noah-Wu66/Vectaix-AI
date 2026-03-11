@@ -239,6 +239,8 @@ export default function Composer({
                 activePromptId={activePromptId}
                 historyLimit={historyLimit}
                 contextWindow={contextWindow}
+                model={model}
+                webSearch={webSearch}
               />
             </>
           )}

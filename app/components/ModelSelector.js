@@ -24,7 +24,7 @@ export default function ModelSelector({ model, onModelChange }) {
     if (models.length === 0) return null;
     return (
       <>
-        <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">{title}</div>
+        <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 tracking-wider">{title}</div>
         {models.map((m) => (
           <button
             key={m.id}
