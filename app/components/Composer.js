@@ -44,9 +44,6 @@ export default function Composer({
   const mountedRef = useRef(true);
   const isCouncilSelected = isCouncilModel(model);
   const completedCouncilRounds = isCouncilSelected ? countCompletedCouncilRounds(messages) : 0;
-  const councilRoundsRemaining = isCouncilSelected
-    ? Math.max(0, COUNCIL_MAX_ROUNDS - completedCouncilRounds)
-    : 0;
   const hasReachedCouncilRoundLimit = isCouncilSelected && completedCouncilRounds >= COUNCIL_MAX_ROUNDS;
 
   useEffect(() => {
@@ -321,11 +318,9 @@ export default function Composer({
           </button>
         </div>
 
-        {isCouncilSelected && (
+        {isCouncilSelected && hasReachedCouncilRoundLimit && (
           <div className="text-xs text-zinc-500 px-1">
-            {hasReachedCouncilRoundLimit
-              ? `Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，当前已到上限；如需继续，请新建对话。`
-              : `Council 会记住前面结论继续讨论；当前还可继续 ${councilRoundsRemaining} 轮；修改历史会从该轮起重开后续对话；如果要重新分析旧图片，请重新上传。`}
+            {`Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，当前已到上限；如需继续，请新建对话。`}
           </div>
         )}
       </div>

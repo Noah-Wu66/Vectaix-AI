@@ -250,7 +250,6 @@ h6 {
 /* Enhanced Markdown Table */
 .prose table {
   width: max-content;
-  max-width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
   font-size: 0.9em;
@@ -290,11 +289,16 @@ h6 {
 }
 
 @media (max-width: 768px) {
+  .prose table {
+    max-width: none;
+  }
+
   .prose th,
   .prose td {
     padding: 0.4em 0.6em;
     font-size: 0.9em;
-    min-width: 60px;
+    min-width: 100px;
+    white-space: nowrap;
   }
 }
 

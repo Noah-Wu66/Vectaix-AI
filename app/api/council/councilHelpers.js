@@ -30,8 +30,6 @@ const MAX_RAW_MARKDOWN_CHARS = 20000;
 const MAX_FINDING_TEXT_CHARS = 1000;
 const HISTORY_USER_SUMMARY_CHARS = 500;
 const HISTORY_MODEL_SUMMARY_CHARS = 1200;
-const HISTORY_MEMO_MAX_ROUNDS = 6;
-const HISTORY_MEMO_MAX_CHARS = 8000;
 
 export const COUNCIL_EXPERT_CONFIGS = COUNCIL_EXPERTS.map((expert) => ({ ...expert }));
 
@@ -137,19 +135,6 @@ function extractCompletedCouncilRounds(messages) {
     i += 1;
   }
   return rounds;
-}
-
-function trimHistoryMemoSections(sections) {
-  if (!Array.isArray(sections) || sections.length === 0) return "";
-  let nextSections = sections.slice(-HISTORY_MEMO_MAX_ROUNDS);
-  while (nextSections.length > 0) {
-    const joined = nextSections.join("\n\n");
-    if (joined.length <= HISTORY_MEMO_MAX_CHARS) {
-      return joined;
-    }
-    nextSections = nextSections.slice(1);
-  }
-  return "";
 }
 
 function buildCouncilTurnPrompt({ historyMemo, prompt }) {
@@ -984,11 +969,9 @@ export function buildCouncilHistoryMemo(messages) {
   const sections = rounds.map(({ userMessage, modelMessage }, index) =>
     formatHistoryRoundMemo(index + 1, userMessage, modelMessage)
   );
-  const trimmed = trimHistoryMemoSections(sections);
-  if (!trimmed) return "";
   return [
     "以下是此前 Council 已完成轮次的对话纪要，请只把它当作背景上下文，不要把它当成已经再次核验的新证据。",
-    trimmed,
+    sections.join("\n\n"),
   ].join("\n\n");
 }
 
