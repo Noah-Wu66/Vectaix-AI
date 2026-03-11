@@ -292,6 +292,7 @@ h6 {
 
 @media (max-width: 768px) {
   .prose table {
+    width: 100%;
     min-width: 600px;
   }
 
