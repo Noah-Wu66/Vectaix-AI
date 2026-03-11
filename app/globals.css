@@ -292,15 +292,13 @@ h6 {
 
 @media (max-width: 768px) {
   .prose table {
-    max-width: none;
+    min-width: 600px;
   }
 
   .prose th,
   .prose td {
     padding: 0.4em 0.6em;
     font-size: 0.9em;
-    min-width: 100px;
-    white-space: nowrap;
   }
 }
 
