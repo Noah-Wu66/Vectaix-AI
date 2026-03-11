@@ -18,6 +18,7 @@ import {
   createCouncilStreamHelpers,
   runCouncilExpert,
   runSeedCouncilSummary,
+  runSeedTriage,
 } from "./councilHelpers";
 
 export const runtime = "nodejs";
@@ -436,6 +437,79 @@ export async function POST(req) {
           }
         };
 
+        // ── Seed Triage：预判是否需要启动 Council ──
+        const hasImages = Array.isArray(councilInput.imagePayloads) && councilInput.imagePayloads.length > 0;
+        const skipTriage = isRegenerateMode || hasImages;
+        let triageResult = { needCouncil: true };
+
+        if (!skipTriage) {
+          triageResult = await runSeedTriage({ prompt: promptText, hasImages });
+        }
+
+        if (!triageResult.needCouncil && triageResult.directAnswer) {
+          // ── 简单问题：跳过专家，Seed 直接回答 ──
+          for (const expert of COUNCIL_EXPERT_CONFIGS) {
+            updateExpertState(expert, {
+              status: "skipped",
+              phase: "skipped",
+              message: "已跳过",
+            });
+          }
+
+          streamHelpers.sendCouncilTriage({ skipped: true });
+
+          updateSummaryState({
+            status: "running",
+            phase: "answering",
+            message: "回答中",
+          });
+
+          // 模拟流式输出 directAnswer
+          const answer = triageResult.directAnswer;
+          const CHUNK_SIZE = 4;
+          for (let i = 0; i < answer.length; i += CHUNK_SIZE) {
+            streamHelpers.sendText(answer.slice(i, i + CHUNK_SIZE));
+            if (i + CHUNK_SIZE < answer.length) {
+              await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+          }
+
+          if (clientAborted) {
+            throw new Error("COUNCIL_ABORTED");
+          }
+
+          const finalMessage = buildCouncilFinalMessage({
+            modelMessageId: resolvedModelMessageId,
+            content: answer,
+            experts: [],
+          });
+
+          const persistedConversation = await Conversation.findOneAndUpdate(
+            buildConversationWriteCondition(currentConversationId, auth.userId, writePermitTime),
+            {
+              $set: { updatedAt: Date.now() },
+              $push: { messages: finalMessage },
+            },
+            { new: true }
+          ).select("updatedAt");
+          if (!persistedConversation) {
+            throw new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+          }
+          finalMessagePersisted = true;
+          writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
+
+          streamHelpers.sendCitations(finalMessage.citations);
+          updateSummaryState({
+            status: "done",
+            phase: "done",
+            message: "已完成",
+          });
+          streamHelpers.sendDone();
+          controller.close();
+          return;
+        }
+
+        // ── 复杂问题：走完整 Council 流程 ──
         const experts = await Promise.all(
           COUNCIL_EXPERT_CONFIGS.map((expert) =>
             runCouncilExpert({

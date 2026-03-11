@@ -307,7 +307,7 @@ export default function MessageList({
               )}
               {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState) && (
                 <div className="flex items-center gap-1.5">
-                  <AIAvatar model={model} size={28} />
+                  <AIAvatar model={model} size={28} animate={isCouncilModel(model) && msg.isStreaming} />
                   <span className="text-xs text-zinc-400 font-medium">
                     {CHAT_MODELS.find((m) => m.id === model)?.name}
                   </span>
@@ -633,7 +633,7 @@ export default function MessageList({
       {/* 只在有消息且加载中且没有正在流式输出或搜索的消息时显示加载指示器 */}
       {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => (m.isStreaming && !m.isWaitingFirstChunk) || m.isSearching) && (
         <div className="flex gap-2 sm:gap-3 items-start">
-          <ResponsiveAIAvatar model={model} mobileSize={22} desktopSize={28} />
+          <ResponsiveAIAvatar model={model} mobileSize={22} desktopSize={28} animate={isCouncilModel(model)} />
           <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
             <span
               className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"

@@ -2,15 +2,15 @@ import { useState } from "react";
 import { ExternalLink, Globe, X } from "lucide-react";
 import { ModelAvatar } from "./ModelVisuals";
 
-export function AIAvatar({ model, size = 24 }) {
-  return <ModelAvatar model={model} size={size} />;
+export function AIAvatar({ model, size = 24, animate = false }) {
+  return <ModelAvatar model={model} size={size} animate={animate} />;
 }
 
-export function ResponsiveAIAvatar({ model, mobileSize = 22, desktopSize = 26 }) {
+export function ResponsiveAIAvatar({ model, mobileSize = 22, desktopSize = 26, animate = false }) {
   return (
     <>
-      <span className="sm:hidden"><AIAvatar model={model} size={mobileSize} /></span>
-      <span className="hidden sm:inline"><AIAvatar model={model} size={desktopSize} /></span>
+      <span className="sm:hidden"><AIAvatar model={model} size={mobileSize} animate={animate} /></span>
+      <span className="hidden sm:inline"><AIAvatar model={model} size={desktopSize} animate={animate} /></span>
     </>
   );
 }

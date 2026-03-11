@@ -850,6 +850,18 @@ export async function runChat({
             ? data.summary
             : null;
           scheduleFlush();
+        } else if (data.type === "council_triage") {
+          if (data.skipped) {
+            // Seed 预判为简单问题，将所有专家状态设为 skipped
+            const base = Array.isArray(councilExpertStates) ? councilExpertStates : [];
+            councilExpertStates = base.map((item) => ({
+              ...item,
+              status: "skipped",
+              phase: "skipped",
+              message: "已跳过",
+            }));
+            scheduleFlush();
+          }
         } else if (data.type === "search_context_tokens") {
           const tokens = typeof data.tokens === "number" ? data.tokens : 0;
           if (tokens > 0) searchContextTokens = tokens;

@@ -52,21 +52,21 @@ function ProviderAvatar({ provider, size = 24 }) {
   return <Avatar size={size} shape="square" />;
 }
 
-export function ModelGlyph({ model, provider, size = 16 }) {
+export function ModelGlyph({ model, provider, size = 16, animate = false }) {
   const resolvedProvider = resolveProvider(model, provider);
 
   if (resolvedProvider === "council") {
-    return <CouncilIcon size={size} />;
+    return <CouncilIcon size={size} animate={animate} />;
   }
 
   return <ProviderGlyph provider={resolvedProvider} size={size} />;
 }
 
-export function ModelAvatar({ model, size = 24 }) {
+export function ModelAvatar({ model, size = 24, animate = false }) {
   const provider = resolveProvider(model);
 
   if (provider === "council") {
-    return <CouncilAvatar size={size} />;
+    return <CouncilAvatar size={size} animate={animate} />;
   }
 
   return <ProviderAvatar provider={provider} size={size} />;

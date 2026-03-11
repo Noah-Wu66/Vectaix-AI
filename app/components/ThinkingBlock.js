@@ -278,13 +278,16 @@ export default function ThinkingBlock({
             const isRunning = expert.status === "running";
             const isError = expert.status === "error";
             const isDone = expert.status === "done";
+            const isSkipped = expert.status === "skipped";
             const expertKey = expert.key || expert.label;
             const expertData = Array.isArray(councilExperts)
               ? councilExperts.find((e) => e.label === expert.label)
               : null;
             const hasContent = isDone && expertData && typeof expertData.content === "string" && expertData.content.trim();
             const isOpen = openExpertKey === expertKey;
-            const statusText = isError
+            const statusText = isSkipped
+              ? "已跳过"
+              : isError
               ? (expert.message || "回答失败")
               : isDone
               ? "已完成"
@@ -292,7 +295,7 @@ export default function ThinkingBlock({
             return (
               <div key={expertKey} className="w-full max-w-[760px]">
                 <div
-                  className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"} ${hasContent ? "cursor-pointer hover:text-zinc-700" : ""}`}
+                  className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : isSkipped ? "text-zinc-300" : "text-zinc-500"} ${hasContent ? "cursor-pointer hover:text-zinc-700" : ""}`}
                   onClick={hasContent ? () => setOpenExpertKey(isOpen ? null : expertKey) : undefined}
                 >
                   <ModelGlyph model={expert.modelId} size={14} />

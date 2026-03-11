@@ -275,10 +275,11 @@ h6 {
 }
 
 .prose table {
-  width: max-content;
+  width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
   font-size: 0.9em;
+  table-layout: fixed;
 }
 
 .prose th,
@@ -286,7 +287,8 @@ h6 {
   border: 1px solid var(--border-color);
   padding: 0.5em 0.75em;
   text-align: left;
-  min-width: 80px;
+  word-break: break-word;
+  overflow-wrap: break-word;
   white-space: normal;
 }
 
@@ -294,6 +296,7 @@ h6 {
   .prose table {
     width: 100%;
     min-width: 600px;
+    table-layout: auto;
   }
 
   .prose th,

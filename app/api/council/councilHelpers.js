@@ -26,6 +26,8 @@ const FORMATTING_GUARD =
   "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
 const SEED_MAX_OUTPUT_TOKENS = 8000;
+const TRIAGE_MAX_OUTPUT_TOKENS = 1200;
+const TRIAGE_TIMEOUT_MS = 15_000;
 const MAX_RAW_MARKDOWN_CHARS = 20000;
 const MAX_FINDING_TEXT_CHARS = 1000;
 const HISTORY_USER_SUMMARY_CHARS = 500;
@@ -810,6 +812,83 @@ function buildSeedPayload({ historyMemo, prompt, experts }) {
   return sections.join("\n\n");
 }
 
+export async function runSeedTriage({ prompt, hasImages }) {
+  if (hasImages) return { needCouncil: true };
+  const trimmed = typeof prompt === "string" ? prompt.trim() : "";
+  if (!trimmed) return { needCouncil: true };
+
+  assertConfigured(ARK_API_KEY, "ARK_API_KEY 未配置");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TRIAGE_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${SEED_API_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ARK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: SEED_MODEL_ID,
+        stream: false,
+        max_tokens: TRIAGE_MAX_OUTPUT_TOKENS,
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content: `你是 Council 路由判断器。Council 会并行调用三位专家模型讨论，开销大、速度慢。你的任务是判断用户消息是否真的需要 Council。
+
+不需要 Council 的情况（直接回答）：
+- 打招呼、闲聊、问候（"你好"、"在吗"、"谢谢"等）
+- 简单事实查询（一句话能回答的常识）
+- 简单翻译、格式转换
+- 纯粹的情绪表达或感谢
+- 简短的跟进确认（"明白了"、"好的"、"还有别的吗"）
+- 简单指令（"帮我写个xxx"且 xxx 非常简短直白）
+
+需要 Council 的情况（返回 needCouncil: true）：
+- 复杂的分析、比较、研究
+- 编程、调试、代码审查
+- 有争议或多角度的话题
+- 需要专业知识的深度讨论
+- 长文创作、策划方案
+- 任何你觉得不确定能一个人答好的问题
+
+你必须返回 JSON，不要输出其他内容。
+如果不需要 Council，同时给出直接回答：
+{"needCouncil":false,"directAnswer":"你的回答内容"}
+如果需要 Council：
+{"needCouncil":true}`,
+          },
+          { role: "user", content: trimmed },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return { needCouncil: true };
+
+    const data = await response.json();
+    const text = data?.choices?.[0]?.message?.content?.trim();
+    if (!text) return { needCouncil: true };
+
+    // 尝试从回复中提取 JSON（兼容模型在 JSON 前后加了额外文字的情况）
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { needCouncil: true };
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (parsed.needCouncil === false && typeof parsed.directAnswer === "string" && parsed.directAnswer.trim()) {
+      return { needCouncil: false, directAnswer: parsed.directAnswer.trim() };
+    }
+    return { needCouncil: true };
+  } catch {
+    return { needCouncil: true };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTextDelta, signal }) {
   assertConfigured(ARK_API_KEY, "ARK_API_KEY 未配置");
   const instructions = await buildSeedSystemPrompt();
@@ -980,14 +1059,15 @@ export function buildCouncilFinalMessage({
   content,
   experts,
 }) {
+  const safeExperts = Array.isArray(experts) ? experts : [];
   return {
     id: modelMessageId,
     role: "model",
     content,
     type: "text",
     parts: [{ text: content }],
-    citations: mergeCitations(...experts.map((expert) => expert.citations)),
-    councilExperts: experts.map((expert) => ({
+    citations: safeExperts.length > 0 ? mergeCitations(...safeExperts.map((expert) => expert.citations)) : [],
+    councilExperts: safeExperts.map((expert) => ({
       modelId: expert.modelId,
       label: expert.label,
       content: expert.rawMarkdown,
@@ -1055,6 +1135,11 @@ export function createCouncilStreamHelpers(controller) {
     },
     sendDone() {
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+    },
+    sendCouncilTriage(payload) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ type: "council_triage", ...payload })}\n\n`)
+      );
     },
   };
 }
