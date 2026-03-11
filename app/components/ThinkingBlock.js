@@ -45,7 +45,7 @@ function normalizeCouncilExpertStates(states) {
 function normalizeCouncilSummaryState(state) {
   if (!state || typeof state !== "object") return null;
   return {
-    label: typeof state.label === "string" ? state.label : "Seed 汇总",
+    label: typeof state.label === "string" ? state.label : "Seed 2.0 Pro 汇总",
     status: typeof state.status === "string" ? state.status : "pending",
     phase: typeof state.phase === "string" ? state.phase : "pending",
     message: typeof state.message === "string" ? state.message : "",
@@ -325,7 +325,7 @@ export default function ThinkingBlock({
               <div className="w-full max-w-[760px]">
                 <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
                   <Zap className="thinking-icon-step" />
-                  <span>Seed · {statusText}</span>
+                  <span>{s.label} · {statusText}</span>
                   {isRunning ? <LoadingDots /> : null}
                 </div>
               </div>

@@ -15,7 +15,7 @@ export default function ModelSelector({ model, onModelChange }) {
     gemini: "Gemini",
     claude: "Claude",
     openai: "OpenAI",
-    seed: "DOUBAO",
+    seed: "Seed",
     deepseek: "DeepSeek",
   };
 
@@ -56,7 +56,7 @@ export default function ModelSelector({ model, onModelChange }) {
         {currentModel && (
           <ModelGlyph provider={currentModel.provider} size={14} />
         )}
-        <span className="truncate max-w-[90px]">{currentModelLabel}</span>
+        <span className="hidden truncate max-w-[160px] sm:inline-block">{currentModelLabel}</span>
         <ChevronUp
           size={12}
           className={`transition-transform ${showModelMenu ? "rotate-180" : ""}`}
