@@ -501,8 +501,8 @@ async function collectSearchContext({
         status: "running",
         phase: "searching",
         message: query
-          ? `${round ? `第${round}轮` : ""}联网检索：${query}`
-          : `${round ? `第${round}轮` : ""}联网检索中`,
+          ? `联网检索：${query}`
+          : `联网检索中`,
       });
     }
     if (event.type === "search_result") {

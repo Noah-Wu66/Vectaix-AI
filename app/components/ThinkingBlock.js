@@ -169,12 +169,11 @@ export default function ThinkingBlock({
     const getTitle = () => {
       if (step.kind === "thought") return "思考过程";
       if (step.kind === "search") {
-        const roundLabel = Number.isFinite(step.round) ? `第${step.round}轮` : "";
         const query = step.query ? `「${step.query}」` : "";
         const countLabel = Number.isFinite(step.resultCount) && step.resultCount > 0 ? `（${step.resultCount}条）` : "";
-        if (isRunning) return `${roundLabel ? `${roundLabel} ` : ""}联网搜索中${query}`;
-        if (isError) return `${roundLabel ? `${roundLabel} ` : ""}联网搜索失败${query}`;
-        return `${roundLabel ? `${roundLabel} ` : ""}联网搜索完成${query}${countLabel}`;
+        if (isRunning) return `联网搜索中${query}`;
+        if (isError) return `联网搜索失败${query}`;
+        return `联网搜索完成${query}${countLabel}`;
       }
       if (step.kind === "reader") return isRunning ? "查看网页中" : (isError ? "网页读取失败" : "网页正文已读取");
       return "处理中";
