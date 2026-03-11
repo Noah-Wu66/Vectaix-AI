@@ -29,6 +29,7 @@ const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
 const MODEL_REASONING_EFFORTS = {};
+const REASONING_SUMMARY_MODELS = new Set(['gpt-5.4']);
 
 function extractUpstreamErrorMessage(status, rawText) {
     const text = typeof rawText === 'string' ? rawText.trim() : '';
@@ -259,15 +260,19 @@ export async function POST(req) {
         if (!allowedEfforts.has(thinkingLevel)) {
             return Response.json({ error: 'thinkingLevel invalid' }, { status: 400 });
         }
+        const reasoningConfig = {
+            effort: thinkingLevel
+        };
+        if (REASONING_SUMMARY_MODELS.has(model)) {
+            reasoningConfig.summary = 'auto';
+        }
         const baseRequestBody = {
             model: apiModel,
             stream: true,
             max_output_tokens: maxTokens,
             instructions: baseSystemPrompt,
             input: baseInput,
-            reasoning: {
-                effort: thinkingLevel
-            }
+            reasoning: reasoningConfig
         };
 
         // 是否启用联网搜索
