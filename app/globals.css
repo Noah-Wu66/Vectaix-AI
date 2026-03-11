@@ -248,35 +248,37 @@ h6 {
 }
 
 /* Enhanced Markdown Table */
+.prose .table-scroll-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.prose .table-scroll-wrapper::-webkit-scrollbar {
+  height: 8px;
+}
+
+.prose .table-scroll-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.prose .table-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.prose .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
 .prose table {
   width: max-content;
   border-collapse: collapse;
   margin: 1em 0;
   font-size: 0.9em;
-  display: block;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  /* 添加滚动条样式 */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-}
-
-.prose table::-webkit-scrollbar {
-  height: 8px;
-}
-
-.prose table::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
-}
-
-.prose table::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-}
-
-.prose table::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
 }
 
 .prose th,

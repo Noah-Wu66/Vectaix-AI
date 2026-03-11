@@ -72,6 +72,11 @@ export default function Markdown({
         remarkPlugins={[remarkMath, remarkGfm]}
         rehypePlugins={rehypePlugins}
         components={{
+          table: ({ children, ...props }) => (
+            <div className="table-scroll-wrapper">
+              <table {...props}>{children}</table>
+            </div>
+          ),
           code: ({ node, className, children, inline, ...props }) => {
             // inline prop is passed by react-markdown for inline code
             // For code blocks without language, className is undefined but inline is false
