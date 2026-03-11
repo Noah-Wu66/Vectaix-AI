@@ -20,24 +20,18 @@ function CouncilSvg({ size, animate = false }) {
             82%, 100% { transform: translateY(0) rotate(0deg); }
           }
           @keyframes eyesNormal {
-            0%, 16% { opacity: 1; }
-            20%, 70% { opacity: 0; }
-            76%, 100% { opacity: 1; }
+            0%, 30% { opacity: 1; }
+            36%, 64% { opacity: 0; }
+            70%, 100% { opacity: 1; }
           }
           @keyframes eyesEffort {
-            0%, 16% { opacity: 0; }
-            20%, 46% { opacity: 1; }
-            50%, 100% { opacity: 0; }
-          }
-          @keyframes eyesHappy {
-            0%, 46% { opacity: 0; }
-            50%, 70% { opacity: 1; }
-            76%, 100% { opacity: 0; }
+            0%, 30% { opacity: 0; }
+            36%, 64% { opacity: 1; }
+            70%, 100% { opacity: 0; }
           }
           .council-bot { animation: councilBounce 2s ease-in-out infinite; transform-origin: center center; }
           .eyes-normal { animation: eyesNormal 2s ease-in-out infinite; }
           .eyes-effort { animation: eyesEffort 2s ease-in-out infinite; }
-          .eyes-happy  { animation: eyesHappy  2s ease-in-out infinite; }
         `}</style>
       )}
       <g className={animate ? "council-bot" : undefined}>
@@ -65,12 +59,6 @@ function CouncilSvg({ size, animate = false }) {
             <g className="eyes-effort" style={{ opacity: 0 }}>
               <polyline points="6.2,8.4 7.3,9.5 6.2,10.6" fill="none" stroke="#000" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
               <polyline points="17.8,8.4 16.7,9.5 17.8,10.6" fill="none" stroke="#000" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            </g>
-
-            {/* ∧∧ 开心表情 */}
-            <g className="eyes-happy" style={{ opacity: 0 }}>
-              <polyline points="6,10.3 6.74,8.5 7.5,10.3" fill="none" stroke="#000" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-              <polyline points="16.5,10.3 17.25,8.5 18,10.3" fill="none" stroke="#000" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
             </g>
           </>
         ) : (

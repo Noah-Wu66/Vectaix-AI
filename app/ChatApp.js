@@ -1,17 +1,21 @@
 // ChatApp - 主聊天应用组件
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { createChatAppActions } from "./lib/chatAppActions";
-import { CLAUDE_SONNET_MODEL } from "./lib/claudeModel";
-import { DEEPSEEK_REASONER_MODEL } from "./lib/deepseekModel";
-import { GEMINI_FLASH_MODEL } from "./lib/geminiModel";
-import { useThemeMode } from "./lib/useThemeMode";
-import { useUserSettings } from "./lib/useUserSettings";
-import { OPENAI_PRIMARY_MODEL } from "./lib/openaiModel";
-import { SEED_MODEL_ID, normalizeSeedModelId } from "./lib/seedModel";
-import { COUNCIL_MODEL_ID, isCouncilModel } from "./lib/councilModel";
+import { createChatAppActions } from "@/lib/client/chat/chatAppActions";
+import { useThemeMode } from "@/lib/client/hooks/useThemeMode";
+import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
+import {
+  CHAT_MODELS,
+  CLAUDE_SONNET_MODEL,
+  COUNCIL_MODEL_ID,
+  DEEPSEEK_REASONER_MODEL,
+  GEMINI_FLASH_MODEL,
+  OPENAI_PRIMARY_MODEL,
+  SEED_MODEL_ID,
+  isCouncilModel,
+  normalizeSeedModelId,
+} from "@/lib/shared/models";
 import { useToast } from "./components/ToastProvider";
-import { CHAT_MODELS } from "./components/ChatModels";
 import AuthModal from "./components/AuthModal";
 import ConfirmModal from "./components/ConfirmModal";
 import ChatLayout from "./components/ChatLayout";

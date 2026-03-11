@@ -3,8 +3,7 @@ import DeepSeek from "@lobehub/icons/es/DeepSeek";
 import Doubao from "@lobehub/icons/es/Doubao";
 import Gemini from "@lobehub/icons/es/Gemini";
 import OpenAI from "@lobehub/icons/es/OpenAI";
-import { isCouncilModel } from "../lib/councilModel";
-import { isSeedModel } from "../lib/seedModel";
+import { getModelProvider, isCouncilModel, isSeedModel } from "@/lib/shared/models";
 import { CouncilAvatar, CouncilIcon } from "./CouncilIcon";
 
 const PROVIDER_VISUALS = {
@@ -34,10 +33,7 @@ function resolveProvider(model, provider) {
   if (provider) return provider;
   if (isCouncilModel(model)) return "council";
   if (isSeedModel(model)) return "seed";
-  if (typeof model === "string" && model.startsWith("deepseek-")) return "deepseek";
-  if (typeof model === "string" && model.startsWith("claude-")) return "claude";
-  if (typeof model === "string" && model.startsWith("gpt-")) return "openai";
-  return "gemini";
+  return getModelProvider(model);
 }
 
 function ProviderGlyph({ provider, size }) {

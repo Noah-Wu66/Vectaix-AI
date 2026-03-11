@@ -3,7 +3,7 @@ import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github-dark.css';
 import { headers } from 'next/headers';
 import { ToastProvider } from './components/ToastProvider';
-import { UI_THEME_MODE_KEY } from './lib/storageKeys';
+import { UI_THEME_MODE_KEY } from '@/lib/shared/storageKeys';
 
 export const metadata = {
     title: 'Vectaix AI',

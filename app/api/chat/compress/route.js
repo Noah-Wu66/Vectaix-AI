@@ -3,7 +3,7 @@ import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
-import { GEMINI_FLASH_MODEL } from '@/app/lib/geminiModel';
+import { GEMINI_FLASH_MODEL } from '@/lib/shared/models';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

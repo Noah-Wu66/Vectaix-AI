@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp } from "lucide-react";
-import { CHAT_MODELS } from "./ChatModels";
+import { CHAT_MODELS, MODEL_GROUP_ORDER } from "@/lib/shared/models";
 import { ModelGlyph } from "./ModelVisuals";
 
 export default function ModelSelector({ model, onModelChange }) {
@@ -10,6 +10,14 @@ export default function ModelSelector({ model, onModelChange }) {
   const visibleModels = CHAT_MODELS;
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
   const currentModelLabel = currentModel?.shortName || currentModel?.name || "模型";
+  const groupTitles = {
+    council: "Council",
+    gemini: "Gemini",
+    claude: "Claude",
+    openai: "OpenAI",
+    seed: "DOUBAO",
+    deepseek: "DeepSeek",
+  };
 
   const renderModelGroup = (provider, title) => {
     const models = visibleModels.filter((m) => m.provider === provider);
@@ -71,17 +79,12 @@ export default function ModelSelector({ model, onModelChange }) {
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px]"
             >
-              {renderModelGroup("council", "Council")}
-              <div className="my-1.5 border-t border-zinc-200" />
-              {renderModelGroup("gemini", "Gemini")}
-              <div className="my-1.5 border-t border-zinc-200" />
-              {renderModelGroup("claude", "Claude")}
-              <div className="my-1.5 border-t border-zinc-200" />
-              {renderModelGroup("openai", "OpenAI")}
-              <div className="my-1.5 border-t border-zinc-200" />
-              {renderModelGroup("seed", "DOUBAO")}
-              <div className="my-1.5 border-t border-zinc-200" />
-              {renderModelGroup("deepseek", "DeepSeek")}
+              {MODEL_GROUP_ORDER.map((provider, index) => (
+                <div key={provider}>
+                  {index > 0 && <div className="my-1.5 border-t border-zinc-200" />}
+                  {renderModelGroup(provider, groupTitles[provider] || provider)}
+                </div>
+              ))}
             </motion.div>
           </>
         )}

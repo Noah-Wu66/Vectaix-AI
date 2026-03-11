@@ -12,8 +12,13 @@ import {
     estimateTokens,
     getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL } from '@/app/lib/deepseekModel';
+import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL } from '@/lib/shared/models';
+import {
+    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
+    buildWebSearchGuide,
+    getWebSearchProviderRuntimeOptions,
+} from '@/lib/server/chat/arkWebSearchConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -157,6 +162,7 @@ export async function POST(req) {
         }
 
         let deepseekMessages = [];
+        let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
@@ -185,10 +191,17 @@ export async function POST(req) {
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
+            const historyBeforeCurrentPrompt = Array.isArray(msgs) && msgs[msgs.length - 1]?.role === 'user'
+                ? msgs.slice(0, -1)
+                : msgs;
+            effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
+                ? historyBeforeCurrentPrompt.slice(-limit)
+                : historyBeforeCurrentPrompt;
             deepseekMessages = await buildDeepSeekMessagesFromHistory(effectiveMsgs);
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? safeHistory.slice(-limit) : safeHistory;
+            effectiveHistoryMessages = effectiveHistory;
             deepseekMessages = await buildDeepSeekMessagesFromHistory(effectiveHistory);
         }
 
@@ -291,7 +304,7 @@ export async function POST(req) {
                         { role: 'user', content: userText }
                     ],
                     stream: false,
-                    max_tokens: 200
+                    max_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS
                 })
             });
 
@@ -308,6 +321,8 @@ export async function POST(req) {
 
             return text;
         };
+
+        const deepseekWebSearchRuntime = getWebSearchProviderRuntimeOptions('deepseek');
 
         const encoder = new TextEncoder();
         let clientAborted = false;
@@ -365,15 +380,15 @@ export async function POST(req) {
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
                         prompt,
-                        historyMessages: history,
+                        historyMessages: effectiveHistoryMessages,
                         decisionRunner: runDeepSeekDecision,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
                         isClientAborted: () => clientAborted,
-                        providerLabel: 'DeepSeek',
                         model,
                         conversationId: currentConversationId,
+                        ...deepseekWebSearchRuntime,
                     });
 
                     if (clientAborted) {

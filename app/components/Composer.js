@@ -10,7 +10,11 @@ import { useToast } from "./ToastProvider";
 import ModelSelector from "./ModelSelector";
 import SettingsMenu from "./SettingsMenu";
 import TokenCounter from "./TokenCounter";
-import { COUNCIL_MAX_ROUNDS, countCompletedCouncilRounds, isCouncilModel } from "../lib/councilModel";
+import {
+  COUNCIL_MAX_ROUNDS,
+  countCompletedCouncilRounds,
+  isCouncilModel,
+} from "@/lib/shared/models";
 
 export default function Composer({
   loading,

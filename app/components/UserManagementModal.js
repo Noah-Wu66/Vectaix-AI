@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Copy, Eraser, KeyRound, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
+import { apiJson } from "@/lib/client/apiClient";
 import { useToast } from "./ToastProvider";
 import ConfirmModal from "./ConfirmModal";
 
@@ -34,9 +35,7 @@ export default function UserManagementModal({ open, onClose }) {
     try {
       const params = new URLSearchParams({ page: String(p) });
       if (q) params.set("search", q);
-      const res = await fetch(`/api/admin/users?${params}`);
-      if (!res.ok) throw new Error("加载失败");
-      const data = await res.json();
+      const data = await apiJson(`/api/admin/users?${params}`);
       setUsers(data.users || []);
       setTotal(data.total || 0);
       setPage(data.page || 1);
@@ -76,9 +75,7 @@ export default function UserManagementModal({ open, onClose }) {
     confirmActionRef.current = async () => {
       setActionLoading(user.id);
       try {
-        const res = await fetch(`/api/admin/users/${user.id}`, { method: "PATCH" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "操作失败");
+        const data = await apiJson(`/api/admin/users/${user.id}`, { method: "PATCH" });
         setResetResult({ email: user.email, password: data.newPassword });
         toast.success("密码已重置");
       } catch (e) {
@@ -99,9 +96,7 @@ export default function UserManagementModal({ open, onClose }) {
     confirmActionRef.current = async () => {
       setActionLoading(user.id);
       try {
-        const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "操作失败");
+        await apiJson(`/api/admin/users/${user.id}`, { method: "DELETE" });
         toast.success("用户已删除");
         fetchUsers(page, search.trim());
       } catch (e) {
@@ -122,9 +117,7 @@ export default function UserManagementModal({ open, onClose }) {
     confirmActionRef.current = async () => {
       setActionLoading("clean-all");
       try {
-        const res = await fetch("/api/admin/users", { method: "POST" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "操作失败");
+        const data = await apiJson("/api/admin/users", { method: "POST" });
         toast.success(`已清除 ${data.deletedConversations || 0} 个加密会话、${data.deletedSettings || 0} 份加密设置`);
         fetchUsers(page, search.trim());
       } catch (e) {

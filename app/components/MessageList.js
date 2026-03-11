@@ -19,8 +19,8 @@ import ThinkingBlock from "./ThinkingBlock";
 import ImageLightbox from "./ImageLightbox";
 import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./ToastProvider";
-import { getMessageImageSrc, isKeepableImageSrc } from "../lib/messageImage";
-import { exportMessageContent } from "../lib/messageExport";
+import { exportMessageContent } from "@/lib/client/messageExport";
+import { getMessageImageSrc, isKeepableImageSrc } from "@/lib/shared/messageImage";
 import {
   AIAvatar,
   ResponsiveAIAvatar,
@@ -31,8 +31,7 @@ import {
   Thumb,
   Citations,
 } from "./MessageListHelpers";
-import { CHAT_MODELS } from "./ChatModels";
-import { isCouncilModel } from "../lib/councilModel";
+import { CHAT_MODELS, isCouncilModel } from "@/lib/shared/models";
 
 
 export default function MessageList({

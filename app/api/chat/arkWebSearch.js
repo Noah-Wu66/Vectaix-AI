@@ -3,8 +3,8 @@ import {
   ARK_WEB_SEARCH_LIMIT,
   ARK_WEB_SEARCH_SINGLE_ROUND_TOOL_CALLS,
   createArkWebSearchTool,
-} from '@/app/lib/arkWebSearchConfig';
-import { SEED_MODEL_ID } from '@/app/lib/seedModel';
+} from '@/lib/server/chat/arkWebSearchConfig';
+import { SEED_MODEL_ID } from '@/lib/shared/models';
 
 const ARK_API_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
 const ARK_WEB_SEARCH_TIMEOUT_MS = 30000;

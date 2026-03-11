@@ -11,8 +11,13 @@ import {
     buildWebSearchContextBlock,
     estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildEconomySystemPrompt } from '@/app/lib/economyModels';
+import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import {
+    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
+    buildWebSearchGuide,
+    getWebSearchProviderRuntimeOptions,
+} from '@/lib/server/chat/arkWebSearchConfig';
+import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
 import { getModelRoutes, resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
 
 import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
@@ -142,6 +147,7 @@ export async function POST(req) {
         }
 
         let openaiInput = [];
+        let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
@@ -170,9 +176,16 @@ export async function POST(req) {
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
+            const historyBeforeCurrentPrompt = Array.isArray(msgs) && msgs[msgs.length - 1]?.role === 'user'
+                ? msgs.slice(0, -1)
+                : msgs;
+            effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
+                ? historyBeforeCurrentPrompt.slice(-limit)
+                : historyBeforeCurrentPrompt;
             openaiInput = await buildOpenAIInputFromHistory(effectiveMsgs);
         } else {
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
+            effectiveHistoryMessages = effectiveHistory;
             openaiInput = await buildOpenAIInputFromHistory(effectiveHistory);
         }
 
@@ -391,7 +404,7 @@ export async function POST(req) {
             const requestBody = {
                 model: apiModel,
                 stream: false,
-                max_output_tokens: 200,
+                max_output_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
                 instructions: systemText,
                 input: [
                     {
@@ -475,6 +488,8 @@ export async function POST(req) {
             return '';
         };
 
+        const openaiWebSearchRuntime = getWebSearchProviderRuntimeOptions('openai');
+
         const responseStream = new ReadableStream({
             async start(controller) {
                 let fullText = "";
@@ -518,15 +533,15 @@ export async function POST(req) {
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
                         prompt,
-                        historyMessages: history,
+                        historyMessages: effectiveHistoryMessages,
                         decisionRunner: runOpenAIDecision,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
                         isClientAborted: () => clientAborted,
-                        providerLabel: 'OpenAI',
                         model,
                         conversationId: currentConversationId,
+                        ...openaiWebSearchRuntime,
                     });
 
                     if (clientAborted) {

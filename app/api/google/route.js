@@ -14,8 +14,13 @@ import {
     buildWebSearchContextBlock,
     estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL } from '@/app/lib/geminiModel';
+import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL } from '@/lib/shared/models';
+import {
+    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
+    buildWebSearchGuide,
+    getWebSearchProviderRuntimeOptions,
+} from '@/lib/server/chat/arkWebSearchConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -182,6 +187,7 @@ export async function POST(req) {
         }
 
         let contents = [];
+        let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
@@ -210,9 +216,16 @@ export async function POST(req) {
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
+            const historyBeforeCurrentPrompt = Array.isArray(msgs) && msgs[msgs.length - 1]?.role === 'user'
+                ? msgs.slice(0, -1)
+                : msgs;
+            effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
+                ? historyBeforeCurrentPrompt.slice(-limit)
+                : historyBeforeCurrentPrompt;
             contents = await buildGeminiContentsFromMessages(effectiveMsgs);
         } else {
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
+            effectiveHistoryMessages = effectiveHistory;
             effectiveHistory.forEach(msg => {
                 if (msg.role === 'user' || msg.role === 'model') {
                     const hasImage = Array.isArray(msg.parts) && msg.parts.some((p) => typeof p?.inlineData?.url === 'string' && p.inlineData.url);
@@ -317,7 +330,7 @@ export async function POST(req) {
                     systemInstruction: {
                         parts: [{ text: systemText }]
                     },
-                    maxOutputTokens: 200,
+                    maxOutputTokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
                     temperature: 0.1,
                     thinkingConfig: {
                         thinkingLevel: GEMINI_DECISION_THINKING_LEVEL,
@@ -334,6 +347,8 @@ export async function POST(req) {
             return text;
         };
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
+
+        const geminiWebSearchRuntime = getWebSearchProviderRuntimeOptions('gemini');
 
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
@@ -426,16 +441,15 @@ export async function POST(req) {
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
                         prompt,
-                        historyMessages: history,
+                        historyMessages: effectiveHistoryMessages,
                         decisionRunner: runGeminiDecision,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
                         isClientAborted: () => clientAborted,
-                        providerLabel: 'Gemini',
                         model,
                         conversationId: currentConversationId,
-                        warnOnNoContext: true,
+                        ...geminiWebSearchRuntime,
                     });
 
                     if (clientAborted) {

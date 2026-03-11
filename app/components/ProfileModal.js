@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { upload } from "@vercel/blob/client";
+import { apiJson } from "@/lib/client/apiClient";
 import { useToast } from "./ToastProvider";
 import ConfirmModal from "./ConfirmModal";
 import UserManagementModal from "./UserManagementModal";
@@ -183,9 +184,7 @@ export default function ProfileModal({
     const fetchModelRoutes = async () => {
       setRouteLoading(true);
       try {
-        const res = await fetch("/api/admin/model-routes");
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || "加载线路配置失败");
+        const data = await apiJson("/api/admin/model-routes");
 
         if (!cancelled) {
           const nextRoutes = {
@@ -217,13 +216,10 @@ export default function ProfileModal({
   const saveModelRoutes = async () => {
     setRouteSaving(true);
     try {
-      const res = await fetch("/api/admin/model-routes", {
+      const data = await apiJson("/api/admin/model-routes", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(modelRoutes),
+        body: modelRoutes,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "保存线路配置失败");
 
       const nextRoutes = {
         openai: data?.routes?.openai === "zenmux" ? "zenmux" : "default",
@@ -248,12 +244,10 @@ export default function ProfileModal({
 
     setPwLoading(true);
     try {
-      const res = await fetch("/api/auth/change-password", {
+      const data = await apiJson("/api/auth/change-password", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPassword, newPassword, confirmNewPassword }),
+        body: { oldPassword, newPassword, confirmNewPassword },
       });
-      const data = await res.json();
       if (data.success) {
         toast.success("密码修改成功");
         setOldPassword("");
@@ -263,7 +257,7 @@ export default function ProfileModal({
         toast.error(data.error);
       }
     } catch (err) {
-      toast.error("密码修改失败");
+      toast.error(err?.message || "密码修改失败");
     } finally {
       setPwLoading(false);
     }

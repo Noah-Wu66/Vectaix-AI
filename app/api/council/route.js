@@ -5,7 +5,7 @@ import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { getClientIP, rateLimit } from "@/lib/rateLimit";
 import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
-import { COUNCIL_MAX_ROUNDS, COUNCIL_MODEL_ID, countCompletedCouncilRounds } from "@/app/lib/councilModel";
+import { COUNCIL_MAX_ROUNDS, COUNCIL_MODEL_ID, countCompletedCouncilRounds } from "@/lib/shared/models";
 import { getModelRoutes, resolveOpenAIProviderConfig, resolveOpusProviderConfig } from "@/lib/modelRoutes";
 import {
   buildCouncilExpertState,
@@ -521,6 +521,7 @@ export async function POST(req) {
               clientAborted: () => clientAborted,
               updateStatus: (patch) => updateExpertState(expert, patch),
               providerRoutes,
+              history,
               onDone: (result) => {
                 try {
                   streamHelpers.sendCouncilExpertResult(result);

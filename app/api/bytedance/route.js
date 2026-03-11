@@ -15,8 +15,12 @@ import {
     SEED_REASONING_LEVELS,
     isSeedModel,
     normalizeSeedModelId,
-} from '@/app/lib/seedModel';
-import { ARK_WEB_SEARCH_MAX_TOOL_CALLS, createArkWebSearchTool } from '@/app/lib/arkWebSearchConfig';
+} from '@/lib/shared/models';
+import {
+    ARK_WEB_SEARCH_MAX_TOOL_CALLS,
+    buildWebSearchGuide,
+    createArkWebSearchTool,
+} from '@/lib/server/chat/arkWebSearchConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -448,9 +452,7 @@ export async function POST(req) {
             typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
         );
         const formattingGuard = 'Output formatting rules: Do not use Markdown horizontal rules or standalone lines of \'---\'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.';
-        const webSearchGuard = enableWebSearch
-            ? 'If you use web search, answer naturally and do not append raw source URLs or bare domains in parentheses.'
-            : '';
+        const webSearchGuard = buildWebSearchGuide(enableWebSearch).trim();
         const instructions = [baseSystemPrompt, formattingGuard, webSearchGuard]
             .filter((item) => typeof item === 'string' && item.trim())
             .join('\n\n');

@@ -4,7 +4,7 @@ import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
-import { CLAUDE_OPUS_MODEL, CLAUDE_SONNET_MODEL } from '@/app/lib/claudeModel';
+import { CLAUDE_OPUS_MODEL, CLAUDE_SONNET_MODEL } from '@/lib/shared/models';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
@@ -15,8 +15,13 @@ import {
     buildWebSearchContextBlock,
     estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, buildWebSearchGuide, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildEconomySystemPrompt } from '@/app/lib/economyModels';
+import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
+import {
+    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
+    buildWebSearchGuide,
+    getWebSearchProviderRuntimeOptions,
+} from '@/lib/server/chat/arkWebSearchConfig';
 import { getModelRoutes, resolveOpusProviderConfig } from '@/lib/modelRoutes';
 
 export const runtime = 'nodejs';
@@ -164,6 +169,7 @@ export async function POST(req) {
         }
 
         let claudeMessages = [];
+        let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
@@ -192,10 +198,17 @@ export async function POST(req) {
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
+            const historyBeforeCurrentPrompt = Array.isArray(msgs) && msgs[msgs.length - 1]?.role === 'user'
+                ? msgs.slice(0, -1)
+                : msgs;
+            effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
+                ? historyBeforeCurrentPrompt.slice(-limit)
+                : historyBeforeCurrentPrompt;
             claudeMessages = await buildClaudeMessagesFromHistory(effectiveMsgs);
         } else {
             // 非 regenerate 模式：历史消息也需要正确处理图片
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
+            effectiveHistoryMessages = effectiveHistory;
             claudeMessages = await buildClaudeMessagesFromHistory(effectiveHistory);
         }
 
@@ -304,7 +317,7 @@ export async function POST(req) {
 
             const response = await client.messages.create({
                 model: apiModel,
-                max_tokens: 200,
+                max_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
                 system: systemText,
                 messages: [
                     {
@@ -327,6 +340,8 @@ export async function POST(req) {
 
             return text;
         };
+
+        const claudeWebSearchRuntime = getWebSearchProviderRuntimeOptions('claude');
 
         const encoder = new TextEncoder();
         let clientAborted = false;
@@ -383,17 +398,16 @@ export async function POST(req) {
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
                         prompt,
-                        historyMessages: history,
+                        historyMessages: effectiveHistoryMessages,
                         decisionRunner: runClaudeDecision,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
                         isClientAborted: () => clientAborted,
-                        providerLabel: 'Claude',
                         model,
                         conversationId: currentConversationId,
                         logDecision: true,
-                        warnOnNoContext: true,
+                        ...claudeWebSearchRuntime,
                     });
 
                     if (clientAborted) {

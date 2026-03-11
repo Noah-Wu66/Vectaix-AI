@@ -8,14 +8,20 @@ import {
 } from "@/app/api/chat/utils";
 import {
   buildWebSearchDecisionPrompts,
-  buildWebSearchGuide,
   runWebSearchOrchestration,
 } from "@/app/api/chat/webSearchOrchestrator";
-import { buildEconomySystemPrompt } from "@/app/lib/economyModels";
-import { CLAUDE_OPUS_MODEL } from "@/app/lib/claudeModel";
-import { COUNCIL_EXPERTS } from "@/app/lib/councilModel";
-import { GEMINI_FLASH_MODEL } from "@/app/lib/geminiModel";
-import { SEED_MODEL_ID } from "@/app/lib/seedModel";
+import { buildEconomySystemPrompt } from "@/lib/server/chat/economyModels";
+import {
+  WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
+  buildWebSearchGuide,
+  getWebSearchProviderRuntimeOptions,
+} from "@/lib/server/chat/arkWebSearchConfig";
+import {
+  CLAUDE_OPUS_MODEL,
+  COUNCIL_EXPERTS,
+  GEMINI_FLASH_MODEL,
+  SEED_MODEL_ID,
+} from "@/lib/shared/models";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ARK_API_KEY = process.env.ARK_API_KEY;
@@ -315,7 +321,7 @@ async function buildGeminiDecisionRunner(ai) {
       contents: [{ role: "user", parts: [{ text: userText }] }],
       config: {
         systemInstruction: { parts: [{ text: systemText }] },
-        maxOutputTokens: 200,
+        maxOutputTokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
         temperature: 0.1,
         thinkingConfig: {
           thinkingLevel: GEMINI_DECISION_THINKING_LEVEL,
@@ -336,7 +342,7 @@ function buildClaudeDecisionRunner(client, modelId) {
     const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
     const response = await client.messages.create({
       model: modelId,
-      max_tokens: 200,
+      max_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
       system: systemText,
       messages: [
         {
@@ -445,7 +451,7 @@ function buildOpenAIDecisionRunner(modelId, providerConfig) {
     const requestBody = {
       model: modelId,
       stream: true,
-      max_output_tokens: 200,
+      max_output_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
       instructions: systemText,
       input: [
         {
@@ -481,6 +487,7 @@ async function collectSearchContext({
   clientAborted,
   updateStatus,
   providerRoutes,
+  historyMessages,
 }) {
   const citations = [];
   const pushCitations = (items) => {
@@ -523,16 +530,16 @@ async function collectSearchContext({
     const { searchContextText } = await runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
-      historyMessages: [],
+      historyMessages,
       decisionRunner,
       sendEvent: handleSearchEvent,
       pushCitations,
       sendSearchError,
       isClientAborted: () => clientAborted(),
-      providerLabel: expert.label,
       model: expert.modelId,
       conversationId,
       allowHeuristicFallback: false,
+      ...getWebSearchProviderRuntimeOptions(expert.provider, { providerLabel: expert.label }),
     });
     return { searchContextText, citations: normalizeCitations(citations) };
   }
@@ -546,16 +553,16 @@ async function collectSearchContext({
     const { searchContextText } = await runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
-      historyMessages: [],
+      historyMessages,
       decisionRunner,
       sendEvent: handleSearchEvent,
       pushCitations,
       sendSearchError,
       isClientAborted: () => clientAborted(),
-      providerLabel: expert.label,
       model: expert.modelId,
       conversationId,
       allowHeuristicFallback: false,
+      ...getWebSearchProviderRuntimeOptions(expert.provider, { providerLabel: expert.label }),
     });
     return { searchContextText, citations: normalizeCitations(citations) };
   }
@@ -565,16 +572,16 @@ async function collectSearchContext({
     const { searchContextText } = await runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
-      historyMessages: [],
+      historyMessages,
       decisionRunner,
       sendEvent: handleSearchEvent,
       pushCitations,
       sendSearchError,
       isClientAborted: () => clientAborted(),
-      providerLabel: expert.label,
       model: expert.modelId,
       conversationId,
       allowHeuristicFallback: false,
+      ...getWebSearchProviderRuntimeOptions(expert.provider, { providerLabel: expert.label }),
     });
     return { searchContextText, citations: normalizeCitations(citations) };
   }
@@ -714,6 +721,7 @@ export async function runCouncilExpert({
   updateStatus,
   onDone,
   providerRoutes,
+  history,
 }) {
   try {
     const finalPrompt = buildCouncilTurnPrompt({ historyMemo, prompt });
@@ -724,6 +732,7 @@ export async function runCouncilExpert({
       clientAborted,
       updateStatus,
       providerRoutes,
+      historyMessages: history,
     });
     if (clientAborted()) {
       throw new Error("COUNCIL_ABORTED");
