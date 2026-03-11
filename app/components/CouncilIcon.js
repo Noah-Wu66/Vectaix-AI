@@ -1,4 +1,4 @@
-const COUNCIL_ICON_SRC = "/icons/claudecode-color.svg";
+const COUNCIL_ICON_SRC = "/icons/claudecode-color.png";
 
 function CouncilImage({ size, className = "", rounded = "0px", padding = 0 }) {
   return (

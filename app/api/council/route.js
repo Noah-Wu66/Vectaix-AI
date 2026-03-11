@@ -29,6 +29,7 @@ const MAX_COUNCIL_EXPERTS = 3;
 const MAX_EXPERT_MODEL_CHARS = 100;
 const MAX_EXPERT_LABEL_CHARS = 120;
 const MAX_EXPERT_CONTENT_CHARS = 20000;
+const CONVERSATION_WRITE_CONFLICT_ERROR = "当前对话已被其他请求更新，请重试";
 
 function buildTitle(prompt) {
   const text = typeof prompt === "string" ? prompt.trim() : "";
@@ -51,6 +52,14 @@ function createStreamErrorEvent(message) {
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function buildConversationWriteCondition(conversationId, userId, writePermitTime) {
+  const condition = { _id: conversationId, userId };
+  if (Number.isFinite(writePermitTime)) {
+    condition.updatedAt = { $lte: new Date(writePermitTime) };
+  }
+  return condition;
 }
 
 function sanitizeCouncilExperts(value, fieldPath) {
@@ -235,6 +244,7 @@ export async function POST(req) {
   const resolvedUserMessageId = normalizeMessageId(userMessageId);
   const resolvedModelMessageId = normalizeMessageId(modelMessageId);
   let historyMemo = "";
+  let writePermitTime = previousUpdatedAt?.getTime?.();
 
   if (isRegenerateMode) {
     let sanitizedMessages;
@@ -264,15 +274,21 @@ export async function POST(req) {
     promptText = councilInput.prompt || "";
     historyMemo = buildCouncilHistoryMemo(sanitizedMessages.slice(0, -1));
 
-    await Conversation.findOneAndUpdate(
+    const regenerateTime = Date.now();
+    const updatedConversation = await Conversation.findOneAndUpdate(
       { _id: currentConversationId, userId: auth.userId },
       {
         $set: {
           messages: sanitizedMessages,
-          updatedAt: new Date(),
+          updatedAt: regenerateTime,
         },
-      }
-    );
+      },
+      { new: true }
+    ).select("updatedAt");
+    if (!updatedConversation) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    writePermitTime = updatedConversation.updatedAt?.getTime?.() ?? regenerateTime;
   } else {
     const completedRounds = countCompletedCouncilRounds(previousMessages);
     if (completedRounds >= COUNCIL_MAX_ROUNDS) {
@@ -310,13 +326,19 @@ export async function POST(req) {
       parts: councilInput.userParts,
     };
 
-    await Conversation.findOneAndUpdate(
+    const userMsgTime = Date.now();
+    const updatedConversation = await Conversation.findOneAndUpdate(
       { _id: currentConversationId, userId: auth.userId },
       {
-        $set: { updatedAt: new Date() },
+        $set: { updatedAt: userMsgTime },
         $push: { messages: storedUserMessage },
-      }
-    );
+      },
+      { new: true }
+    ).select("updatedAt");
+    if (!updatedConversation) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    writePermitTime = updatedConversation.updatedAt?.getTime?.() ?? userMsgTime;
   }
 
   let clientAborted = false;
@@ -332,16 +354,41 @@ export async function POST(req) {
   const responseStream = new ReadableStream({
     async start(controller) {
       const streamHelpers = createCouncilStreamHelpers(controller);
-      const restoreConversationSnapshot = async () => {
+      let finalMessagePersisted = false;
+      const rollbackCouncilTurn = async () => {
+        if (finalMessagePersisted) return;
+
+        const writeCondition = buildConversationWriteCondition(
+          currentConversationId,
+          auth.userId,
+          writePermitTime
+        );
+
         if (createdConversationForRequest) {
-          await Conversation.deleteOne({ _id: currentConversationId, userId: auth.userId });
+          await Conversation.deleteOne(writeCondition);
           return;
         }
+
+        if (isRegenerateMode) {
+          await Conversation.findOneAndUpdate(
+            writeCondition,
+            {
+              $set: {
+                messages: previousMessages,
+                updatedAt: previousUpdatedAt,
+              },
+            }
+          );
+          return;
+        }
+
         await Conversation.findOneAndUpdate(
-          { _id: currentConversationId, userId: auth.userId },
+          writeCondition,
           {
+            $pull: {
+              messages: { id: resolvedUserMessageId },
+            },
             $set: {
-              messages: previousMessages,
               updatedAt: previousUpdatedAt,
             },
           }
@@ -455,13 +502,19 @@ export async function POST(req) {
           experts,
         });
 
-        await Conversation.findOneAndUpdate(
-          { _id: currentConversationId, userId: auth.userId },
+        const persistedConversation = await Conversation.findOneAndUpdate(
+          buildConversationWriteCondition(currentConversationId, auth.userId, writePermitTime),
           {
-            $set: { updatedAt: new Date() },
+            $set: { updatedAt: Date.now() },
             $push: { messages: finalMessage },
-          }
-        );
+          },
+          { new: true }
+        ).select("updatedAt");
+        if (!persistedConversation) {
+          throw new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+        }
+        finalMessagePersisted = true;
+        writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
         streamHelpers.sendCouncilExperts(experts);
         streamHelpers.sendCitations(finalMessage.citations);
@@ -483,7 +536,7 @@ export async function POST(req) {
           // ignore stream state send failure
         }
         try {
-          await restoreConversationSnapshot();
+          await rollbackCouncilTurn();
         } catch {
           // ignore rollback failure
         }
