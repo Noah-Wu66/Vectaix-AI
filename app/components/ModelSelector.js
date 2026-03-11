@@ -32,14 +32,14 @@ export default function ModelSelector({ model, onModelChange }) {
               setShowModelMenu(false);
               onModelChange(m.id);
             }}
-            className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2.5 transition-colors ${model === m.id
+            className={`w-full px-3 py-2.5 rounded-lg text-sm md:text-[13px] font-medium flex items-center gap-2.5 transition-colors ${model === m.id
               ? "bg-zinc-600 text-white"
               : "text-zinc-600 hover:bg-zinc-50"
               }`}
             type="button"
           >
             <ModelGlyph provider={m.provider} size={16} />
-            <span>{m.name}</span>
+            <span className="leading-tight md:whitespace-nowrap">{m.name}</span>
           </button>
         ))}
       </>
@@ -77,7 +77,7 @@ export default function ModelSelector({ model, onModelChange }) {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px]"
+              className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px] md:min-w-[220px]"
             >
               {MODEL_GROUP_ORDER.map((provider, index) => (
                 <div key={provider}>
