@@ -11,11 +11,11 @@ export default function ModelSelector({ model, onModelChange }) {
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
   const currentModelLabel = currentModel?.shortName || currentModel?.name || "模型";
   const groupTitles = {
-    council: "Council",
-    gemini: "Gemini",
-    claude: "Claude",
+    council: "Vectaix",
+    gemini: "Google",
+    claude: "Anthropic",
     openai: "OpenAI",
-    seed: "Seed",
+    seed: "ByteDance",
     deepseek: "DeepSeek",
   };
 
