@@ -34,7 +34,7 @@ import {
   Thumb,
   Citations,
 } from "./MessageListHelpers";
-import { CHAT_MODELS, isCouncilModel } from "@/lib/shared/models";
+import { AGENT_MODEL_ID, CHAT_MODELS, isCouncilModel } from "@/lib/shared/models";
 
 
 export default function MessageList({
@@ -269,10 +269,24 @@ export default function MessageList({
           </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-zinc-400">
-            <div className="mb-4">
-              <AIAvatar model={model} size={40} />
-            </div>
-            <p className="font-medium">开始新对话</p>
+            {model === AGENT_MODEL_ID ? (
+              <>
+                <div className="mb-3 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 shadow-sm">
+                  你好，我是 Agent，今天想一起处理什么任务？
+                </div>
+                <div className="mb-4">
+                  <AIAvatar model={model} size={40} animate />
+                </div>
+                <p className="font-medium">把问题、资料或文件交给我</p>
+              </>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <AIAvatar model={model} size={40} />
+                </div>
+                <p className="font-medium">开始新对话</p>
+              </>
+            )}
           </div>
         )
       ) : (
