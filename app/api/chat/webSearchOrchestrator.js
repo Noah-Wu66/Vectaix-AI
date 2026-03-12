@@ -10,10 +10,10 @@ import {
   WEB_SEARCH_PROVIDER,
 } from '@/lib/server/chat/webSearchConfig';
 import {
-  tavilySearch,
+  perplexitySearch,
   buildSearchContext,
   buildSearchEventResults,
-} from '@/app/api/chat/tavilySearch';
+} from '@/app/api/chat/perplexitySearch';
 
 const VALID_FRESHNESS_VALUES = new Set(['oneDay', 'oneWeek', 'oneMonth', 'oneYear', 'noLimit']);
 const EXPLICIT_SEARCH_KEYWORDS = [
@@ -675,7 +675,7 @@ export function normalizeWebSearchDecision(rawDecision) {
 
 function isMissingWebSearchCredential(error) {
   const message = typeof error?.message === 'string' ? error.message : '';
-  return message.includes('TAVILY_API_KEY');
+  return message.includes('PERPLEXITY_API_KEY');
 }
 
 export async function runWebSearchOrchestration(options) {
@@ -841,7 +841,7 @@ export async function runWebSearchOrchestration(options) {
 
     let searchData;
     try {
-      searchData = await tavilySearch(nextQuery, {
+      searchData = await perplexitySearch(nextQuery, {
         count: WEB_SEARCH_LIMIT,
         freshness: finalFreshness,
       });
@@ -854,8 +854,8 @@ export async function runWebSearchOrchestration(options) {
         message: searchError?.message,
         name: searchError?.name,
       });
-      const message = searchError?.message?.includes('TAVILY_API_KEY')
-        ? '未配置 Tavily 联网搜索服务'
+      const message = searchError?.message?.includes('PERPLEXITY_API_KEY')
+        ? '未配置 Perplexity 联网搜索服务'
         : '联网搜索失败，请稍后再试';
       sendSearchError?.(message, { round, query: nextQuery, provider: WEB_SEARCH_PROVIDER, mode: 'search' });
       if (isMissingWebSearchCredential(searchError)) {
