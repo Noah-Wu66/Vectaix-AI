@@ -21,7 +21,7 @@ import {
     WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
-} from '@/lib/server/chat/arkWebSearchConfig';
+} from '@/lib/server/chat/webSearchConfig';
 import { getModelRoutes, resolveOpusProviderConfig } from '@/lib/modelRoutes';
 
 export const runtime = 'nodejs';
@@ -563,4 +563,3 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
-

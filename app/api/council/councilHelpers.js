@@ -15,7 +15,7 @@ import {
   WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
   buildWebSearchGuide,
   getWebSearchProviderRuntimeOptions,
-} from "@/lib/server/chat/arkWebSearchConfig";
+} from "@/lib/server/chat/webSearchConfig";
 import {
   CLAUDE_OPUS_MODEL,
   COUNCIL_EXPERTS,
@@ -313,6 +313,21 @@ async function buildSeedSystemPrompt() {
 12. 不要泄露任何模型思维链，不要输出裸链接。`);
 }
 
+function extractUpstreamErrorMessage(status, rawText) {
+  const text = typeof rawText === "string" ? rawText.trim() : "";
+  if (!text) return `上游请求失败（${status}）`;
+  try {
+    const parsed = JSON.parse(text);
+    const message = parsed?.error?.message || parsed?.message || parsed?.error;
+    if (typeof message === "string" && message.trim()) {
+      return message.trim();
+    }
+  } catch {
+    // ignore
+  }
+  return text.length > 600 ? `${text.slice(0, 600)}...` : text;
+}
+
 async function buildGeminiDecisionRunner(ai) {
   return async ({ prompt, historyMessages, searchRounds }) => {
     const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
@@ -357,21 +372,6 @@ function buildClaudeDecisionRunner(client, modelId) {
     }
     return text;
   };
-}
-
-function extractUpstreamErrorMessage(status, rawText) {
-  const text = typeof rawText === "string" ? rawText.trim() : "";
-  if (!text) return `上游请求失败（${status}）`;
-  try {
-    const parsed = JSON.parse(text);
-    const message = parsed?.error?.message || parsed?.message || parsed?.error;
-    if (typeof message === "string" && message.trim()) {
-      return message.trim();
-    }
-  } catch {
-    // ignore
-  }
-  return text.length > 600 ? `${text.slice(0, 600)}...` : text;
 }
 
 async function consumeOpenAIStream(response) {
@@ -505,7 +505,6 @@ async function collectSearchContext({
     if (!isPlainObject(event)) return;
     if (event.type === "search_start") {
       const query = typeof event.query === "string" ? event.query.trim() : "";
-      const round = Number.isFinite(event.round) ? event.round : null;
       updateStatus?.({
         status: "running",
         phase: "searching",

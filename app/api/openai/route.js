@@ -16,7 +16,7 @@ import {
     WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
-} from '@/lib/server/chat/arkWebSearchConfig';
+} from '@/lib/server/chat/webSearchConfig';
 import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
 import { getModelRoutes, resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
 
@@ -747,5 +747,4 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
-
 

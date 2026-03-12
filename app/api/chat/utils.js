@@ -1,4 +1,4 @@
-import { WEB_SEARCH_CONTEXT_WARNING_TEXT } from '@/lib/server/chat/arkWebSearchConfig';
+import { WEB_SEARCH_CONTEXT_WARNING_TEXT } from '@/lib/server/chat/webSearchConfig';
 
 /**
  * 共用工具函数 - Gemini 和 Claude API 都会使用

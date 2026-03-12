@@ -5,10 +5,13 @@ import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
     fetchImageAsBase64,
+    buildWebSearchContextBlock,
+    estimateTokens,
     injectCurrentTimeSystemReminder,
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
 } from '@/app/api/chat/utils';
+import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import { buildBytedanceInputFromHistory } from '@/app/api/bytedance/bytedanceHelpers';
 import {
     SEED_MODEL_ID,
@@ -17,10 +20,10 @@ import {
     normalizeSeedModelId,
 } from '@/lib/shared/models';
 import {
-    ARK_WEB_SEARCH_MAX_TOOL_CALLS,
+    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
-    createArkWebSearchTool,
-} from '@/lib/server/chat/arkWebSearchConfig';
+    getWebSearchProviderRuntimeOptions,
+} from '@/lib/server/chat/webSearchConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,86 +64,6 @@ function normalizeChunkText(value) {
     return '';
 }
 
-function normalizeSearchQuery(raw) {
-    if (typeof raw === 'string') {
-        return raw.trim();
-    }
-    if (Array.isArray(raw)) {
-        return raw
-            .filter((item) => typeof item === 'string' && item.trim())
-            .join(' ')
-            .trim();
-    }
-    return '';
-}
-
-function extractSearchQueryFromAction(action) {
-    if (!action || typeof action !== 'object') return '';
-    return normalizeSearchQuery(
-        action.query
-        ?? action.keyword
-        ?? action.keywords
-        ?? action.search_query
-    );
-}
-
-function isWebSearchOutputItem(item) {
-    if (!item || typeof item !== 'object') return false;
-    if (typeof item.type === 'string' && item.type.includes('web_search_call')) return true;
-    return typeof item.id === 'string' && item.id.startsWith('ws_');
-}
-
-function normalizeCitation(annotation) {
-    if (!annotation || typeof annotation !== 'object') return null;
-
-    const url = annotation.url
-        ?? annotation.uri
-        ?? annotation?.source?.url
-        ?? annotation?.url_citation?.url
-        ?? annotation?.web_search_result?.url;
-    const title = annotation.title
-        ?? annotation?.source?.title
-        ?? annotation?.url_citation?.title
-        ?? annotation?.web_search_result?.title
-        ?? url;
-    const citedText = annotation.cited_text
-        ?? annotation.quote
-        ?? annotation.text
-        ?? annotation?.url_citation?.text;
-
-    if (!isNonEmptyString(url)) return null;
-
-    const citation = {
-        url,
-        title: isNonEmptyString(title) ? title : url,
-    };
-
-    if (isNonEmptyString(citedText)) {
-        citation.cited_text = citedText;
-    }
-
-    return citation;
-}
-
-function extractCitationsFromContent(content) {
-    const items = Array.isArray(content) ? content : [];
-    return items
-        .flatMap((item) => Array.isArray(item?.annotations) ? item.annotations : [])
-        .map(normalizeCitation)
-        .filter(Boolean);
-}
-
-function extractCitationsFromOutputItem(item) {
-    if (!item || typeof item !== 'object') return [];
-    if (item.type !== 'message') return [];
-    return extractCitationsFromContent(item.content);
-}
-
-function extractCitationsFromResponsePayload(payload) {
-    const outputs = Array.isArray(payload?.output) ? payload.output : [];
-    return outputs.flatMap((item) => extractCitationsFromOutputItem(item));
-}
-
 function pushUniqueCitations(target, items) {
     if (!Array.isArray(target) || !Array.isArray(items)) return;
     for (const item of items) {
@@ -157,7 +80,6 @@ function buildSeedRequestBody({
     instructions,
     maxTokens,
     thinkingLevel,
-    enableWebSearch,
 }) {
     const normalizedThinkingLevel = typeof thinkingLevel === 'string'
         ? thinkingLevel.trim().toLowerCase()
@@ -188,12 +110,21 @@ function buildSeedRequestBody({
         };
     }
 
-    if (enableWebSearch) {
-        requestBody.tools = [createArkWebSearchTool()];
-        requestBody.max_tool_calls = ARK_WEB_SEARCH_MAX_TOOL_CALLS;
+    return requestBody;
+}
+
+function extractSeedResponseText(payload) {
+    if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
+        return payload.output_text.trim();
     }
 
-    return requestBody;
+    const outputs = Array.isArray(payload?.output) ? payload.output : [];
+    return outputs
+        .filter((item) => item?.type === 'message')
+        .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
+        .map((item) => normalizeChunkText(item?.text ?? item))
+        .join('')
+        .trim();
 }
 
 async function requestSeedResponses({ apiKey, requestBody, req }) {
@@ -339,6 +270,7 @@ export async function POST(req) {
         }
 
         let seedInput = [];
+        let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
@@ -373,12 +305,20 @@ export async function POST(req) {
             const effectiveMessages = (limit > 0 && Number.isFinite(limit))
                 ? storedMessagesForRegenerate.slice(-limit)
                 : storedMessagesForRegenerate;
+            const historyBeforeCurrentPrompt = Array.isArray(storedMessagesForRegenerate)
+                && storedMessagesForRegenerate[storedMessagesForRegenerate.length - 1]?.role === 'user'
+                ? storedMessagesForRegenerate.slice(0, -1)
+                : storedMessagesForRegenerate;
+            effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
+                ? historyBeforeCurrentPrompt.slice(-limit)
+                : historyBeforeCurrentPrompt;
             seedInput = await buildBytedanceInputFromHistory(effectiveMessages);
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
             const effectiveHistory = (limit > 0 && Number.isFinite(limit))
                 ? safeHistory.slice(-limit)
                 : safeHistory;
+            effectiveHistoryMessages = effectiveHistory;
             seedInput = await buildBytedanceInputFromHistory(effectiveHistory);
         }
 
@@ -453,18 +393,44 @@ export async function POST(req) {
         );
         const formattingGuard = 'Output formatting rules: Do not use Markdown horizontal rules or standalone lines of \'---\'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.';
         const webSearchGuard = buildWebSearchGuide(enableWebSearch).trim();
-        const instructions = [baseSystemPrompt, formattingGuard, webSearchGuard]
-            .filter((item) => typeof item === 'string' && item.trim())
-            .join('\n\n');
+        const seedWebSearchRuntime = getWebSearchProviderRuntimeOptions('seed');
 
-        const requestBody = buildSeedRequestBody({
-            model: apiModel || SEED_MODEL_ID,
-            input: seedInput,
-            instructions,
-            maxTokens,
-            thinkingLevel,
-            enableWebSearch,
-        });
+        const runSeedDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
+            const { systemText, userText } = await buildWebSearchDecisionPrompts({
+                prompt: decisionPrompt,
+                historyMessages,
+                searchRounds,
+            });
+
+            const decisionRequestBody = {
+                model: apiModel || SEED_MODEL_ID,
+                stream: false,
+                input: [{
+                    role: 'user',
+                    content: [{
+                        type: 'input_text',
+                        text: userText,
+                    }],
+                }],
+                instructions: systemText,
+                max_output_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
+                temperature: 0.1,
+                top_p: 0.95,
+                thinking: { type: 'disabled' },
+            };
+
+            const response = await requestSeedResponses({
+                apiKey,
+                requestBody: decisionRequestBody,
+                req,
+            });
+            const payload = await response.json();
+            const text = extractSeedResponseText(payload);
+            if (!text) {
+                throw new Error('联网判断未返回有效内容');
+            }
+            return text;
+        };
 
         const encoder = new TextEncoder();
         let clientAborted = false;
@@ -484,9 +450,7 @@ export async function POST(req) {
                 let fullText = '';
                 let fullThought = '';
                 const citations = [];
-                let searchInProgress = false;
-                let activeSearchQuery = '';
-                let activeSearchRound = 0;
+                let searchContextTokens = 0;
 
                 try {
                     const sendHeartbeat = () => {
@@ -504,6 +468,55 @@ export async function POST(req) {
                         paddingSent = true;
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}${padding}\n\n`));
                     };
+
+                    let searchErrorSent = false;
+                    const sendSearchError = (message, details = {}) => {
+                        if (searchErrorSent) return;
+                        searchErrorSent = true;
+                        sendEvent({ type: 'search_error', message, ...details });
+                    };
+
+                    const pushCitations = (items) => {
+                        pushUniqueCitations(citations, items);
+                    };
+
+                    const { searchContextText } = await runWebSearchOrchestration({
+                        enableWebSearch,
+                        prompt,
+                        historyMessages: effectiveHistoryMessages,
+                        decisionRunner: runSeedDecision,
+                        sendEvent,
+                        pushCitations,
+                        sendSearchError,
+                        isClientAborted: () => clientAborted,
+                        model,
+                        conversationId: currentConversationId,
+                        ...seedWebSearchRuntime,
+                    });
+
+                    if (clientAborted) {
+                        try { controller.close(); } catch { }
+                        return;
+                    }
+
+                    const searchContextSection = searchContextText
+                        ? buildWebSearchContextBlock(searchContextText)
+                        : '';
+                    if (searchContextSection) {
+                        searchContextTokens = estimateTokens(searchContextSection);
+                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
+                    }
+
+                    const instructions = [baseSystemPrompt, formattingGuard, webSearchGuard, searchContextSection]
+                        .filter((item) => typeof item === 'string' && item.trim())
+                        .join('\n\n');
+                    const requestBody = buildSeedRequestBody({
+                        model: apiModel || SEED_MODEL_ID,
+                        input: seedInput,
+                        instructions,
+                        maxTokens,
+                        thinkingLevel,
+                    });
 
                     const response = await requestSeedResponses({
                         apiKey,
@@ -536,58 +549,6 @@ export async function POST(req) {
                             fullThought += thought;
                             sendEvent({ type: 'thought', content: thought });
                             return;
-                        }
-
-                        if (eventType.includes('web_search_call') && eventType.includes('in_progress')) {
-                            const nextQuery = extractSearchQueryFromAction(event?.item?.action || event?.action);
-                            if (nextQuery) {
-                                activeSearchQuery = nextQuery;
-                            }
-                            if (!searchInProgress) {
-                                searchInProgress = true;
-                                activeSearchRound += 1;
-                                sendEvent({
-                                    type: 'search_start',
-                                    ...(activeSearchRound > 0 ? { round: activeSearchRound } : {}),
-                                    ...(activeSearchQuery ? { query: activeSearchQuery } : {}),
-                                });
-                            }
-                            return;
-                        }
-
-                        if (eventType === 'response.output_item.done') {
-                            const item = event?.item;
-                            pushUniqueCitations(citations, extractCitationsFromOutputItem(item));
-
-                            if (!isWebSearchOutputItem(item)) {
-                                return;
-                            }
-
-                            const nextQuery = extractSearchQueryFromAction(item?.action) || activeSearchQuery;
-                            if (!searchInProgress) {
-                                searchInProgress = true;
-                                activeSearchRound += 1;
-                                sendEvent({
-                                    type: 'search_start',
-                                    ...(activeSearchRound > 0 ? { round: activeSearchRound } : {}),
-                                    ...(nextQuery ? { query: nextQuery } : {}),
-                                });
-                            }
-
-                            sendEvent({
-                                type: 'search_result',
-                                ...(activeSearchRound > 0 ? { round: activeSearchRound } : {}),
-                                ...(nextQuery ? { query: nextQuery } : {}),
-                                results: [],
-                            });
-
-                            searchInProgress = false;
-                            activeSearchQuery = '';
-                            return;
-                        }
-
-                        if (eventType === 'response.completed') {
-                            pushUniqueCitations(citations, extractCitationsFromResponsePayload(event?.response));
                         }
                     };
 
@@ -634,15 +595,6 @@ export async function POST(req) {
                         return;
                     }
 
-                    if (searchInProgress) {
-                        sendEvent({
-                            type: 'search_result',
-                            ...(activeSearchRound > 0 ? { round: activeSearchRound } : {}),
-                            ...(activeSearchQuery ? { query: activeSearchQuery } : {}),
-                            results: [],
-                        });
-                    }
-
                     if (citations.length > 0) {
                         sendEvent({ type: 'citations', citations });
                     }
@@ -660,6 +612,7 @@ export async function POST(req) {
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
+                            searchContextTokens: searchContextTokens || null,
                             type: 'text',
                             parts: [{ text: fullText }],
                         };

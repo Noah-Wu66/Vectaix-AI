@@ -1,19 +1,19 @@
 import { parseJsonFromText } from '@/app/api/chat/jsonUtils';
 import { injectCurrentTimeSystemReminder } from '@/app/api/chat/utils';
 import {
-  ARK_WEB_SEARCH_LIMIT,
-  ARK_WEB_SEARCH_MAX_ROUNDS,
-  ARK_WEB_SEARCH_SINGLE_ROUND_TOOL_CALLS,
+  WEB_SEARCH_LIMIT,
+  WEB_SEARCH_MAX_ROUNDS,
   WEB_SEARCH_DECISION_HISTORY_MESSAGE_LIMIT,
   WEB_SEARCH_DECISION_MESSAGE_CHAR_LIMIT,
   WEB_SEARCH_DECISION_SYSTEM_PROMPT,
   buildWebSearchDecisionUserText,
-} from '@/lib/server/chat/arkWebSearchConfig';
+  WEB_SEARCH_PROVIDER,
+} from '@/lib/server/chat/webSearchConfig';
 import {
-  arkWebSearch,
-  buildArkSearchContext,
-  buildArkSearchEventResults,
-} from '@/app/api/chat/arkWebSearch';
+  tavilySearch,
+  buildSearchContext,
+  buildSearchEventResults,
+} from '@/app/api/chat/tavilySearch';
 
 const VALID_FRESHNESS_VALUES = new Set(['oneDay', 'oneWeek', 'oneMonth', 'oneYear', 'noLimit']);
 const EXPLICIT_SEARCH_KEYWORDS = [
@@ -673,6 +673,11 @@ export function normalizeWebSearchDecision(rawDecision) {
   };
 }
 
+function isMissingWebSearchCredential(error) {
+  const message = typeof error?.message === 'string' ? error.message : '';
+  return message.includes('TAVILY_API_KEY');
+}
+
 export async function runWebSearchOrchestration(options) {
   const {
     enableWebSearch,
@@ -711,7 +716,7 @@ export async function runWebSearchOrchestration(options) {
 
   const searchRounds = [];
 
-  for (let roundIndex = 0; roundIndex < ARK_WEB_SEARCH_MAX_ROUNDS; roundIndex += 1) {
+  for (let roundIndex = 0; roundIndex < WEB_SEARCH_MAX_ROUNDS; roundIndex += 1) {
     let decision;
 
     try {
@@ -832,14 +837,13 @@ export async function runWebSearchOrchestration(options) {
     }
 
     const round = searchRounds.length + 1;
-    sendEvent({ type: 'search_start', query: nextQuery, round });
+    sendEvent({ type: 'search_start', query: nextQuery, round, provider: WEB_SEARCH_PROVIDER, mode: 'search' });
 
     let searchData;
     try {
-      searchData = await arkWebSearch(nextQuery, {
-        count: ARK_WEB_SEARCH_LIMIT,
+      searchData = await tavilySearch(nextQuery, {
+        count: WEB_SEARCH_LIMIT,
         freshness: finalFreshness,
-        maxToolCalls: ARK_WEB_SEARCH_SINGLE_ROUND_TOOL_CALLS,
       });
     } catch (searchError) {
       console.error(`${providerLabel} web search failed`, {
@@ -850,10 +854,13 @@ export async function runWebSearchOrchestration(options) {
         message: searchError?.message,
         name: searchError?.name,
       });
-      const message = searchError?.message?.includes('ARK_API_KEY')
-        ? '未配置火山方舟联网服务'
+      const message = searchError?.message?.includes('TAVILY_API_KEY')
+        ? '未配置 Tavily 联网搜索服务'
         : '联网搜索失败，请稍后再试';
-      sendSearchError?.(message, { round, query: nextQuery });
+      sendSearchError?.(message, { round, query: nextQuery, provider: WEB_SEARCH_PROVIDER, mode: 'search' });
+      if (isMissingWebSearchCredential(searchError)) {
+        break;
+      }
       throw new Error(message);
     }
 
@@ -865,15 +872,17 @@ export async function runWebSearchOrchestration(options) {
       type: 'search_result',
       query: nextQuery,
       round,
-      results: buildArkSearchEventResults(results),
+      provider: WEB_SEARCH_PROVIDER,
+      mode: 'search',
+      results: buildSearchEventResults(results),
     });
 
     if (typeof pushCitations === 'function') {
       pushCitations(citations);
     }
 
-    const roundContextText = buildArkSearchContext(summary, results, {
-      maxResults: ARK_WEB_SEARCH_LIMIT,
+    const roundContextText = buildSearchContext(summary, results, {
+      maxResults: WEB_SEARCH_LIMIT,
       maxSnippetChars: 280,
     });
 

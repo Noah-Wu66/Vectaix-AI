@@ -20,7 +20,7 @@ import {
     WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
-} from '@/lib/server/chat/arkWebSearchConfig';
+} from '@/lib/server/chat/webSearchConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
