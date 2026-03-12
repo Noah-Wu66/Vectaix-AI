@@ -12,7 +12,7 @@ import {
     sanitizeStoredMessagesStrict,
 } from '@/app/api/chat/utils';
 import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { buildBytedanceInputFromHistory } from '@/app/api/bytedance/bytedanceHelpers';
+import { buildBytedanceInputFromHistory, buildSeedMessageInput } from '@/app/api/bytedance/bytedanceHelpers';
 import {
     SEED_MODEL_ID,
     SEED_REASONING_LEVELS,
@@ -338,7 +338,10 @@ export async function POST(req) {
                 }
             }
 
-            seedInput.push({ role: 'user', content: userContent });
+            const userMessageInput = buildSeedMessageInput({ role: 'user', content: userContent });
+            if (userMessageInput) {
+                seedInput.push(userMessageInput);
+            }
         }
 
         if (user && !isRegenerateMode) {
@@ -405,13 +408,13 @@ export async function POST(req) {
             const decisionRequestBody = {
                 model: apiModel || SEED_MODEL_ID,
                 stream: false,
-                input: [{
+                input: [buildSeedMessageInput({
                     role: 'user',
                     content: [{
                         type: 'input_text',
                         text: userText,
                     }],
-                }],
+                })],
                 instructions: systemText,
                 max_output_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
                 temperature: 0.1,

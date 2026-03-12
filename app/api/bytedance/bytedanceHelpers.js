@@ -4,6 +4,19 @@ import {
   getStoredPartsFromMessage,
 } from "@/app/api/chat/utils";
 
+export function buildSeedMessageInput({ role, content }) {
+  if (!isNonEmptyString(role) || !Array.isArray(content) || content.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "message",
+    status: "completed",
+    role,
+    content,
+  };
+}
+
 export async function storedPartToBytedancePart(part, role) {
   if (!part || typeof part !== "object") return null;
 
@@ -45,7 +58,8 @@ export async function buildBytedanceInputFromHistory(messages) {
       if (p) content.push(p);
     }
     if (content.length) {
-      input.push({ role, content });
+      const messageInput = buildSeedMessageInput({ role, content });
+      if (messageInput) input.push(messageInput);
     }
   }
   return input;

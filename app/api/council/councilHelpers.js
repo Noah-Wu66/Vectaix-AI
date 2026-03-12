@@ -10,6 +10,7 @@ import {
   buildWebSearchDecisionPrompts,
   runWebSearchOrchestration,
 } from "@/app/api/chat/webSearchOrchestrator";
+import { buildSeedMessageInput } from "@/app/api/bytedance/bytedanceHelpers";
 import { buildEconomySystemPrompt } from "@/lib/server/chat/economyModels";
 import {
   WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
@@ -910,7 +911,7 @@ export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTe
       model: SEED_MODEL_ID,
       stream: true,
       input: [
-        {
+        buildSeedMessageInput({
           role: "user",
           content: [
             {
@@ -918,7 +919,7 @@ export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTe
               text: buildSeedPayload({ historyMemo, prompt, experts }),
             },
           ],
-        },
+        }),
       ],
       instructions,
       max_output_tokens: SEED_MAX_OUTPUT_TOKENS,
