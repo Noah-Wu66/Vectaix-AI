@@ -5,6 +5,7 @@ import { createChatAppActions } from "@/lib/client/chat/chatAppActions";
 import { useThemeMode } from "@/lib/client/hooks/useThemeMode";
 import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
 import {
+  AGENT_MODEL_ID,
   CHAT_MODELS,
   CLAUDE_SONNET_MODEL,
   COUNCIL_MODEL_ID,
@@ -13,7 +14,7 @@ import {
   OPENAI_PRIMARY_MODEL,
   SEED_MODEL_ID,
   isCouncilModel,
-  normalizeSeedModelId,
+  normalizeModelId,
 } from "@/lib/shared/models";
 import { useToast } from "./components/ToastProvider";
 import AuthModal from "./components/AuthModal";
@@ -450,12 +451,13 @@ export default function ChatApp() {
         setCurrentConversationId(id);
 
         // 获取对话的模型和 provider
-        const conversationModelConfig = CHAT_MODELS.find((m) => m.id === normalizeSeedModelId(data.conversation.model));
+        const conversationModelConfig = CHAT_MODELS.find((m) => m.id === normalizeModelId(data.conversation.model));
         const conversationProvider = conversationModelConfig?.provider;
         const currentProvider = currentModelConfig?.provider;
 
         // 铁律：根据对话的 provider 强制切换模型
         // - Council 对话进入后，如果当前不是 Council，强制切为 Council
+        // - Vectaix 对话进入后，如果当前不是 Vectaix，强制变为 Agent
         // - Gemini 对话进入后，如果当前不是 Gemini 模型，强制变为 Flash
         // - Claude 对话进入后，如果当前不是 Claude 模型，强制变为 Sonnet
         // - OpenAI 对话进入后，如果当前不是 OpenAI 模型，强制变为 GPT
@@ -464,6 +466,8 @@ export default function ChatApp() {
         let targetModel = model; // 默认保持当前模型
         if (conversationProvider === "council" && currentProvider !== "council") {
           targetModel = COUNCIL_MODEL_ID;
+        } else if (conversationProvider === "vectaix" && currentProvider !== "vectaix") {
+          targetModel = AGENT_MODEL_ID;
         } else if (conversationProvider === "gemini" && currentProvider !== "gemini") {
           targetModel = GEMINI_FLASH_MODEL;
         } else if (conversationProvider === "claude" && currentProvider !== "claude") {
@@ -572,7 +576,7 @@ export default function ChatApp() {
 
     // 如果有对话历史且 provider 不同，提示用户需要新建对话
     if (messages.length > 0 && currentProvider && nextProvider && currentProvider !== nextProvider) {
-      const providerNames = { council: "Council", gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "Seed", deepseek: "DeepSeek" };
+      const providerNames = { council: "Council", vectaix: "Vectaix", gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "Seed", deepseek: "DeepSeek" };
       setConfirmModalConfig({
         title: "切换模型",
         message: `切换到 ${providerNames[nextProvider]} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider]} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,

@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { COUNCIL_MODEL_ID } from "@/lib/shared/models";
 import Markdown from "./Markdown";
 import { Citations } from "./MessageListHelpers";
-import { CouncilIcon } from "./CouncilIcon";
+import { ModelGlyph } from "./ModelVisuals";
 
 export default function CouncilExpertsBlock({ experts }) {
   const items = useMemo(
@@ -24,7 +25,7 @@ export default function CouncilExpertsBlock({ experts }) {
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-zinc-700"
       >
         <span className="inline-flex items-center gap-2">
-          <CouncilIcon size={16} />
+          <ModelGlyph model={COUNCIL_MODEL_ID} size={16} />
           专家原始回答
         </span>
         {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}

@@ -17,7 +17,8 @@ import {
     SEED_MODEL_ID,
     SEED_REASONING_LEVELS,
     isSeedModel,
-    normalizeSeedModelId,
+    normalizeModelId,
+    resolveSeedRuntimeModelId,
 } from '@/lib/shared/models';
 import {
     WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
@@ -251,7 +252,8 @@ export async function POST(req) {
             return Response.json({ error: 'ARK_API_KEY 未配置' }, { status: 500 });
         }
 
-        const apiModel = normalizeSeedModelId(model);
+        const conversationModel = normalizeModelId(model);
+        const apiModel = resolveSeedRuntimeModelId(model);
         if (!isSeedModel(apiModel)) {
             return Response.json({ error: '当前接口仅支持官方 Seed 模型' }, { status: 400 });
         }
@@ -262,7 +264,7 @@ export async function POST(req) {
             const newConv = await Conversation.create({
                 userId: user.userId,
                 title,
-                model: apiModel,
+                model: conversationModel,
                 settings,
                 messages: [],
             });

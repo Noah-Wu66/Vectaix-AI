@@ -11,16 +11,25 @@ export default function ModelSelector({ model, onModelChange }) {
   const currentModel = CHAT_MODELS.find((m) => m.id === model);
   const currentModelLabel = currentModel?.shortName || currentModel?.name || "模型";
   const groupTitles = {
-    council: "Vectaix",
+    vectaix: "Vectaix",
     gemini: "Google",
     claude: "Anthropic",
     openai: "OpenAI",
     seed: "ByteDance",
     deepseek: "DeepSeek",
   };
+  const groupProviders = {
+    vectaix: ["council", "vectaix"],
+    gemini: ["gemini"],
+    claude: ["claude"],
+    openai: ["openai"],
+    seed: ["seed"],
+    deepseek: ["deepseek"],
+  };
 
-  const renderModelGroup = (provider, title) => {
-    const models = visibleModels.filter((m) => m.provider === provider);
+  const renderModelGroup = (groupKey, title) => {
+    const providers = groupProviders[groupKey] || [groupKey];
+    const models = visibleModels.filter((m) => providers.includes(m.provider));
     if (models.length === 0) return null;
     return (
       <>
@@ -38,7 +47,7 @@ export default function ModelSelector({ model, onModelChange }) {
               }`}
             type="button"
           >
-            <ModelGlyph provider={m.provider} size={16} />
+            <ModelGlyph model={m.id} provider={m.provider} size={16} />
             <span className="leading-tight md:whitespace-nowrap">{m.name}</span>
           </button>
         ))}
@@ -54,7 +63,7 @@ export default function ModelSelector({ model, onModelChange }) {
         type="button"
       >
         {currentModel && (
-          <ModelGlyph provider={currentModel.provider} size={14} />
+          <ModelGlyph model={currentModel.id} provider={currentModel.provider} size={14} />
         )}
         <span className="hidden truncate max-w-[160px] sm:inline-block">{currentModelLabel}</span>
         <ChevronUp
@@ -79,10 +88,10 @@ export default function ModelSelector({ model, onModelChange }) {
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px] md:min-w-[205px]"
             >
-              {MODEL_GROUP_ORDER.map((provider, index) => (
-                <div key={provider}>
+              {MODEL_GROUP_ORDER.map((groupKey, index) => (
+                <div key={groupKey}>
                   {index > 0 && <div className="my-1.5 border-t border-zinc-200" />}
-                  {renderModelGroup(provider, groupTitles[provider] || provider)}
+                  {renderModelGroup(groupKey, groupTitles[groupKey] || groupKey)}
                 </div>
               ))}
             </motion.div>
