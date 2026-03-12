@@ -315,7 +315,7 @@ export default function MessageList({
 
               <div
                 className={`flex flex-col ${msg.role === "user"
-                  ? "items-end w-full max-w-[92%]"
+                  ? "items-end w-full max-w-full"
                   : "items-start w-full max-w-full"
                   }`}
               >
@@ -461,7 +461,7 @@ export default function MessageList({
                     {(hasParts || (typeof msg.content === 'string' && msg.content.trim().length > 0)) && (
                       <div
                         className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
-                          ? "bg-white border border-zinc-200 text-zinc-800 max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
+                          ? "bg-white border border-zinc-200 text-zinc-800 inline-block max-w-full md:max-w-[900px] lg:max-w-[1000px] max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
                           : "bg-zinc-100 text-zinc-800 inline-block max-w-full md:max-w-[900px] lg:max-w-[1000px]"
                           }`}
                         style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
