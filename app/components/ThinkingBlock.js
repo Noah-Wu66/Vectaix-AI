@@ -203,6 +203,9 @@ export default function ThinkingBlock({
       const isSynthetic = step.synthetic === true;
       const showThinkingTitle = isSynthetic && isThoughtStreaming;
       const showDoneTitle = isSynthetic && !isThoughtStreaming && !hasDetail;
+      if (isSynthetic && !hasDetail) {
+        return null;
+      }
       return (
         <div key={step.id || `thought-${idx}`} className="w-full max-w-[760px]">
           <button
@@ -383,36 +386,37 @@ export default function ThinkingBlock({
                   </div>
                 ) : (
                   /* 简单模式：内嵌一个"思考过程"气泡（第二层） */
-                  <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
-                    <div className="w-full max-w-[760px]">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!safeThought) return;
-                          setExpandedTimelineId((prev) => prev === "__simple__" ? null : "__simple__");
-                        }}
-                        className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors text-zinc-500 ${safeThought ? "cursor-pointer" : "cursor-default"}`}
-                      >
-                        <Lightbulb className="thinking-icon-step" />
-                        <span>{isStreaming ? "思考中" : "思考过程"}</span>
-                        {isStreaming && expandedTimelineId !== "__simple__" ? <LoadingDots /> : null}
-                        {safeThought ? (expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />) : null}
-                      </button>
-                      {expandedTimelineId === "__simple__" && safeThought ? (
-                        <div
-                          className="thinking-content thinking-content-panel bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-[760px] text-zinc-400"
-                          ref={containerRef}
+                  safeThought ? (
+                    <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
+                      <div className="w-full max-w-[760px]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedTimelineId((prev) => prev === "__simple__" ? null : "__simple__");
+                          }}
+                          className="thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors text-zinc-500 cursor-pointer"
                         >
-                          <Markdown
-                            enableHighlight={!isStreaming}
-                            className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
+                          <Lightbulb className="thinking-icon-step" />
+                          <span>{isStreaming ? "思考中" : "思考过程"}</span>
+                          {isStreaming && expandedTimelineId !== "__simple__" ? <LoadingDots /> : null}
+                          {expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
+                        </button>
+                        {expandedTimelineId === "__simple__" ? (
+                          <div
+                            className="thinking-content thinking-content-panel bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-[760px] text-zinc-400"
+                            ref={containerRef}
                           >
-                            {safeThought}
-                          </Markdown>
-                        </div>
-                      ) : null}
+                            <Markdown
+                              enableHighlight={!isStreaming}
+                              className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
+                            >
+                              {safeThought}
+                            </Markdown>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
+                  ) : null
                 )}
               </motion.div>
             )}
