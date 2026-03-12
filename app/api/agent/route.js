@@ -340,7 +340,7 @@ export async function POST(req) {
           });
 
           const fallbackContent = result.status === "waiting_user"
-            ? (latestAgentRun?.approvalReason || "Agent 已暂停，等待你确认后继续执行。")
+            ? (latestAgentRun?.approvalReason || "Vectaix Agent 已暂停，等待你确认后继续执行。")
             : (fullText || "任务已完成。");
 
           await Conversation.findOneAndUpdate(

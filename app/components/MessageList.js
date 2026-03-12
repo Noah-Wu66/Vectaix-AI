@@ -3,13 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
+  Calculator,
   ChevronDown,
   Copy,
   Download,
   Edit3,
+  FileText,
+  Globe,
   Paperclip,
   Play,
   RotateCcw,
+  Sparkles,
   Trash2,
   Type,
   User,
@@ -270,15 +274,63 @@ export default function MessageList({
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-zinc-400">
             {model === AGENT_MODEL_ID ? (
-              <>
-                <div className="mb-3 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 shadow-sm">
-                  你好，我是 Agent，今天想一起处理什么任务？
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-xl px-4"
+              >
+                <div className="relative overflow-hidden rounded-[28px] border border-orange-100 bg-gradient-to-br from-white via-orange-50/70 to-amber-50/80 px-6 py-8 text-center shadow-[0_18px_60px_rgba(217,119,87,0.12)]">
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.18),_transparent_65%)]" />
+
+                  <div className="relative mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-[24px] border border-orange-200 bg-white shadow-[0_16px_40px_rgba(217,119,87,0.18)]">
+                    <AIAvatar model={model} size={50} animate />
+                  </div>
+
+                  <div className="relative mb-3 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/90 px-3 py-1 text-xs font-medium text-orange-700">
+                    <Sparkles size={12} />
+                    <span>Vectaix Agent</span>
+                  </div>
+
+                  <p className="relative text-lg font-semibold text-zinc-800">
+                    你好，我是 Vectaix 的 Agent
+                  </p>
+                  <p className="relative mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">
+                    把问题、资料或文件交给我，我可以帮你整理内容、联网查证、分析附件，并产出更完整的办公结果。
+                  </p>
+
+                  <div className="relative mt-6 grid gap-3 text-left sm:grid-cols-3">
+                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur">
+                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
+                        <FileText size={18} />
+                      </div>
+                      <div className="text-sm font-medium text-zinc-700">读附件</div>
+                      <div className="mt-1 text-xs leading-5 text-zinc-500">
+                        PDF、Word、表格、文本文件都可以一起分析
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur">
+                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                        <Globe size={18} />
+                      </div>
+                      <div className="text-sm font-medium text-zinc-700">查资料</div>
+                      <div className="mt-1 text-xs leading-5 text-zinc-500">
+                        需要最新信息时，可以联网补充和交叉核对
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur">
+                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                        <Calculator size={18} />
+                      </div>
+                      <div className="text-sm font-medium text-zinc-700">做整理</div>
+                      <div className="mt-1 text-xs leading-5 text-zinc-500">
+                        适合汇总表格、提炼重点、输出清晰结论
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="mb-4">
-                  <AIAvatar model={model} size={40} animate />
-                </div>
-                <p className="font-medium">把问题、资料或文件交给我</p>
-              </>
+              </motion.div>
             ) : (
               <>
                 <div className="mb-4">
@@ -547,29 +599,6 @@ export default function MessageList({
                         )}
                       </div>
                     )}
-
-                    {msg.role === "model" && agentRun && (
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600">
-                          {agentRun.status === "waiting_user" ? "等待确认" : agentRun.status === "completed" ? "任务完成" : agentRun.status === "failed" ? "任务失败" : "执行中"}
-                          {agentRun.currentStep ? ` · ${agentRun.currentStep}` : ""}
-                        </span>
-                        {agentRun.approvalReason ? (
-                          <span className="text-xs text-zinc-500">{agentRun.approvalReason}</span>
-                        ) : null}
-                        {agentCanResume ? (
-                          <button
-                            type="button"
-                            onClick={() => onContinueAgentRun?.(i)}
-                            className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
-                          >
-                            <Play size={12} />
-                            继续执行
-                          </button>
-                        ) : null}
-                      </div>
-                    )}
-
                     {/* 消息操作按钮 */}
                     {!msg.isStreaming && (
                       <div
@@ -654,6 +683,16 @@ export default function MessageList({
                           </>
                         ) : msg.role === "model" ? (
                           <>
+                            {agentCanResume ? (
+                              <button
+                                type="button"
+                                onClick={() => onContinueAgentRun?.(i)}
+                                className="p-1.5 text-zinc-400 hover:text-emerald-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                                title="继续执行"
+                              >
+                                <Play size={14} />
+                              </button>
+                            ) : null}
                             <button
                               onClick={() => handleDeleteClick(i, "model")}
                               className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
