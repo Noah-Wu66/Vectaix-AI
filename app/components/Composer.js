@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import {
+  FileText,
   Paperclip,
   Send,
+  Sparkles,
   Square,
   X,
 } from "lucide-react";
@@ -11,10 +13,23 @@ import ModelSelector from "./ModelSelector";
 import SettingsMenu from "./SettingsMenu";
 import TokenCounter from "./TokenCounter";
 import {
+  AGENT_MODEL_ID,
   COUNCIL_MAX_ROUNDS,
   countCompletedCouncilRounds,
+  getModelConfig,
   isCouncilModel,
 } from "@/lib/shared/models";
+import { ATTACHMENT_ACCEPT, getAttachmentLimits, IMAGE_MIME_TYPES } from "@/lib/shared/attachments";
+import { createLocalAttachment, isImageAttachment } from "@/lib/shared/messageAttachments";
+
+function readAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event.target?.result || null);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function Composer({
   loading,
@@ -41,11 +56,14 @@ export default function Composer({
 }) {
   const toast = useToast();
   const [input, setInput] = useState("");
-  const [selectedImages, setSelectedImages] = useState([]);
+  const [selectedAttachments, setSelectedAttachments] = useState([]);
+  const [agentHintVisible, setAgentHintVisible] = useState(false);
   const [isMainInputFocused, setIsMainInputFocused] = useState(false);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const mountedRef = useRef(true);
+  const modelConfig = getModelConfig(model);
+  const supportsDocuments = modelConfig?.supportsDocuments === true;
   const isCouncilSelected = isCouncilModel(model);
   const completedCouncilRounds = isCouncilSelected ? countCompletedCouncilRounds(messages) : 0;
   const hasReachedCouncilRoundLimit = isCouncilSelected && completedCouncilRounds >= COUNCIL_MAX_ROUNDS;
@@ -100,9 +118,24 @@ export default function Composer({
     }
   }, [prefill?.nonce]);
 
-  const MAX_IMAGE_SIZE_MB = 20;
-  const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
-  const SUPPORTED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+  useEffect(() => {
+    if (model?.startsWith("deepseek-") && selectedAttachments.length > 0) {
+      setSelectedAttachments([]);
+      setAgentHintVisible(false);
+    }
+  }, [model, selectedAttachments.length]);
+
+  useEffect(() => {
+    if (supportsDocuments) {
+      setAgentHintVisible(false);
+      return;
+    }
+    const next = selectedAttachments.filter((item) => isImageAttachment(item));
+    if (next.length !== selectedAttachments.length) {
+      setSelectedAttachments(next);
+      setAgentHintVisible(true);
+    }
+  }, [supportsDocuments, selectedAttachments]);
 
   const convertToPng = (file) => {
     return new Promise((resolve) => {
@@ -133,63 +166,76 @@ export default function Composer({
   };
 
   const handleFileSelect = async (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    const remainingSlots = 4 - selectedImages.length;
+    const remainingSlots = 4 - selectedAttachments.length;
     const filesToAdd = files.slice(0, remainingSlots);
+    const nextAttachments = [];
+    const blockedDocuments = [];
+    const invalidFiles = [];
+    const oversizedFiles = [];
 
-    const oversizedFiles = filesToAdd.filter((f) => f.size > MAX_IMAGE_SIZE_BYTES);
-    const validFiles = filesToAdd.filter((f) => f.size <= MAX_IMAGE_SIZE_BYTES);
-
-    if (oversizedFiles.length > 0) {
-      const names = oversizedFiles.map((f) => f.name).join("、");
-      toast.warning(`以下图片超过 ${MAX_IMAGE_SIZE_MB}MB 限制，已跳过：${names}`);
-    }
-
-    for (const file of validFiles) {
-      let processedFile = file;
-      if (!SUPPORTED_TYPES.includes(file.type)) {
-        const converted = await convertToPng(file);
-        if (!converted) continue;
-        processedFile = converted;
+    for (const file of filesToAdd) {
+      const local = createLocalAttachment({ file });
+      if (!local.category) {
+        invalidFiles.push(file.name);
+        continue;
       }
 
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (!mountedRef.current) return;
-        setSelectedImages((prev) => {
-          if (prev.length >= 4) return prev;
-          return [
-            ...prev,
-            {
-              file: processedFile,
-              preview: ev.target.result,
-              name: processedFile.name,
-              id: `${Date.now()}-${Math.random()}`,
-            },
-          ];
-        });
-      };
-      reader.readAsDataURL(processedFile);
+      const limits = getAttachmentLimits(local.category);
+      if (limits?.maxBytes && file.size > limits.maxBytes) {
+        oversizedFiles.push(file.name);
+        continue;
+      }
+
+      if (!supportsDocuments && !isImageAttachment(local)) {
+        blockedDocuments.push(file.name);
+        continue;
+      }
+
+      if (isImageAttachment(local)) {
+        let processedFile = file;
+        if (!IMAGE_MIME_TYPES.includes(file.type)) {
+          const converted = await convertToPng(file);
+          if (!converted) {
+            invalidFiles.push(file.name);
+            continue;
+          }
+          processedFile = converted;
+        }
+        const preview = await readAsDataUrl(processedFile).catch(() => null);
+        nextAttachments.push(createLocalAttachment({ file: processedFile, preview }));
+      } else {
+        nextAttachments.push(local);
+      }
+    }
+
+    if (oversizedFiles.length > 0) {
+      toast.warning(`以下文件超过大小限制，已跳过：${oversizedFiles.join("、")}`);
+    }
+    if (invalidFiles.length > 0) {
+      toast.warning(`以下文件类型不支持或读取失败，已跳过：${invalidFiles.join("、")}`);
+    }
+    if (blockedDocuments.length > 0) {
+      setAgentHintVisible(true);
+      toast.warning("这类文件目前仅 Agent 支持");
+    }
+
+    if (nextAttachments.length > 0 && mountedRef.current) {
+      setSelectedAttachments((prev) => [...prev, ...nextAttachments].slice(0, 4));
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const removeImage = (imageId) => {
-    setSelectedImages((prev) => prev.filter((img) => img.id !== imageId));
+  const removeAttachment = (attachmentId) => {
+    setSelectedAttachments((prev) => prev.filter((item) => item.id !== attachmentId));
   };
 
-  const clearAllImages = () => {
-    setSelectedImages([]);
+  const clearAllAttachments = () => {
+    setSelectedAttachments([]);
   };
-
-  useEffect(() => {
-    if (model?.startsWith("deepseek-") && selectedImages.length > 0) {
-      setSelectedImages([]);
-    }
-  }, [model, selectedImages.length]);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -203,14 +249,20 @@ export default function Composer({
 
   const handleSend = () => {
     const text = input.trim();
-    if ((!text && selectedImages.length === 0) || loading) return;
+    if ((!text && selectedAttachments.length === 0) || loading) return;
     if (hasReachedCouncilRoundLimit) {
       toast.warning(`Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，请新建对话继续。`);
       return;
     }
-    onSend({ text, images: selectedImages });
+    onSend({ text, attachments: selectedAttachments });
     setInput("");
-    clearAllImages();
+    clearAllAttachments();
+    setAgentHintVisible(false);
+  };
+
+  const handleSwitchToAgent = () => {
+    setAgentHintVisible(false);
+    onModelChange(AGENT_MODEL_ID);
   };
 
   return (
@@ -245,33 +297,56 @@ export default function Composer({
             </>
           )}
 
-          {selectedImages.length > 0 && (
+          {selectedAttachments.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
-              {selectedImages.map((img) => (
+              {selectedAttachments.map((item) => (
                 <div
-                  key={img.id}
-                  className="flex items-center gap-1.5 px-2 py-1 bg-zinc-100 rounded-lg border border-zinc-200"
+                  key={item.id}
+                  className="flex items-center gap-1.5 px-2 py-1 bg-zinc-100 rounded-lg border border-zinc-200 max-w-[180px]"
                 >
-                  <span className="text-xs text-zinc-600 truncate max-w-[60px]">
-                    {img.name}
+                  {isImageAttachment(item) ? (
+                    <span className="w-5 h-5 rounded bg-zinc-200 overflow-hidden shrink-0">
+                      {item.preview ? <img src={item.preview} alt="" className="w-full h-full object-cover" /> : null}
+                    </span>
+                  ) : (
+                    <FileText size={14} className="text-zinc-500 shrink-0" />
+                  )}
+                  <span className="text-xs text-zinc-600 truncate">
+                    {item.name}
                   </span>
                   <button
-                    onClick={() => removeImage(img.id)}
-                    className="text-zinc-400 hover:text-red-500"
+                    onClick={() => removeAttachment(item.id)}
+                    className="text-zinc-400 hover:text-red-500 shrink-0"
                     type="button"
                   >
                     <X size={12} />
                   </button>
                 </div>
               ))}
-              {selectedImages.length < 4 && (
+              {selectedAttachments.length < 4 && (
                 <span className="text-xs text-zinc-400">
-                  {4 - selectedImages.length} 张可添加
+                  {4 - selectedAttachments.length} 个可添加
                 </span>
               )}
             </div>
           )}
         </div>
+
+        {agentHintVisible && (
+          <div className="flex items-center justify-between gap-3 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles size={14} className="shrink-0" />
+              <span className="truncate">这类文件目前仅 Agent 支持，切换后再继续上传。</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleSwitchToAgent}
+              className="shrink-0 rounded-full bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 transition-colors"
+            >
+              切换到 Agent
+            </button>
+          </div>
+        )}
 
         <div className="relative flex items-center">
           {!model?.startsWith("deepseek-") && (
@@ -281,14 +356,14 @@ export default function Composer({
                 ref={fileInputRef}
                 onChange={handleFileSelect}
                 className="hidden"
-                accept="image/*"
+                accept={ATTACHMENT_ACCEPT}
                 multiple
               />
 
               <button
                 onClick={() => fileInputRef.current?.click()}
-                disabled={hasReachedCouncilRoundLimit || selectedImages.length >= 4}
-                className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedImages.length > 0
+                disabled={hasReachedCouncilRoundLimit || selectedAttachments.length >= 4}
+                className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedAttachments.length > 0
                   ? "text-zinc-600 bg-zinc-200"
                   : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
                   } disabled:opacity-40 disabled:cursor-not-allowed`}
@@ -315,7 +390,7 @@ export default function Composer({
 
           <button
             onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
-            disabled={!isStreaming && !isWaitingForAI && (hasReachedCouncilRoundLimit || (!input.trim() && selectedImages.length === 0))}
+            disabled={!isStreaming && !isWaitingForAI && (hasReachedCouncilRoundLimit || (!input.trim() && selectedAttachments.length === 0))}
             className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${isStreaming || isWaitingForAI ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
               }`}
             type="button"

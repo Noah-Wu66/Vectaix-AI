@@ -8,6 +8,7 @@ import {
   Download,
   Edit3,
   Paperclip,
+  Play,
   RotateCcw,
   Trash2,
   Type,
@@ -21,7 +22,9 @@ import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./ToastProvider";
 import { exportMessageContent } from "@/lib/client/messageExport";
 import { getMessageImageSrc, isKeepableImageSrc } from "@/lib/shared/messageImage";
+import { getMessageFileAttachments } from "@/lib/shared/messageAttachments";
 import {
+  AttachmentCard,
   AIAvatar,
   ResponsiveAIAvatar,
   buildCopyText,
@@ -56,6 +59,7 @@ export default function MessageList({
   onDeleteModelMessage,
   onDeleteUserMessage,
   onRegenerateModelMessage,
+  onContinueAgentRun,
   onStartEdit,
   userAvatar,
 }) {
@@ -281,6 +285,8 @@ export default function MessageList({
             && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader");
           const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
           const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
+          const agentRun = msg?.agentRun && typeof msg.agentRun === "object" ? msg.agentRun : null;
+          const agentCanResume = agentRun?.canResume === true && typeof agentRun?.runId === "string" && agentRun.runId;
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
           if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState) {
             return null;
@@ -366,15 +372,19 @@ export default function MessageList({
 
                     {(() => {
                       const existing = getMessageImageSrc(msg);
+                      const existingFiles = getMessageFileAttachments(msg);
                       const showSrc =
                         editingImageAction === "new"
                           ? editingImage?.preview
                           : editingImageAction === "keep"
                             ? existing
                             : null;
-                      return showSrc ? (
-                        <div className="w-fit">
-                          <Thumb src={showSrc} onClick={openLightbox} />
+                      return showSrc || existingFiles.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {showSrc ? <Thumb src={showSrc} onClick={openLightbox} /> : null}
+                          {existingFiles.map((file) => (
+                            <AttachmentCard key={file.url || file.name} file={file} compact />
+                          ))}
                         </div>
                       ) : null;
                     })()}
@@ -476,15 +486,21 @@ export default function MessageList({
                                 const url = part?.inlineData?.url;
                                 return typeof url === "string" && url;
                               });
+                              const fileEntries = entries.filter(({ part }) => {
+                                return part?.fileData?.name && part?.fileData?.mimeType;
+                              });
                               const textEntries = entries.filter(({ part }) => {
                                 return part && typeof part.text === "string" && part.text.trim();
                               });
-                              const ordered = isUser ? [...imageEntries, ...textEntries] : entries;
+                              const ordered = isUser ? [...imageEntries, ...fileEntries, ...textEntries] : entries;
 
                               return ordered.map(({ part, idx }) => {
                                 const url = part?.inlineData?.url;
                                 if (typeof url === "string" && url) {
                                   return <Thumb key={idx} src={url} className="w-fit" onClick={openLightbox} />;
+                                }
+                                if (part?.fileData?.name) {
+                                  return <AttachmentCard key={idx} file={part.fileData} compact={msg.role === "user"} />;
                                 }
                                 if (part && typeof part.text === "string" && part.text.trim()) {
                                   return isUser ? (
@@ -515,6 +531,28 @@ export default function MessageList({
                         {msg.role === "model" && !msg.isStreaming && msg.citations && (
                           <Citations citations={msg.citations} />
                         )}
+                      </div>
+                    )}
+
+                    {msg.role === "model" && agentRun && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600">
+                          {agentRun.status === "waiting_user" ? "等待确认" : agentRun.status === "completed" ? "任务完成" : agentRun.status === "failed" ? "任务失败" : "执行中"}
+                          {agentRun.currentStep ? ` · ${agentRun.currentStep}` : ""}
+                        </span>
+                        {agentRun.approvalReason ? (
+                          <span className="text-xs text-zinc-500">{agentRun.approvalReason}</span>
+                        ) : null}
+                        {agentCanResume ? (
+                          <button
+                            type="button"
+                            onClick={() => onContinueAgentRun?.(i)}
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
+                          >
+                            <Play size={12} />
+                            继续执行
+                          </button>
+                        ) : null}
                       </div>
                     )}
 

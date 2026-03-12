@@ -3,6 +3,7 @@ import {
   isNonEmptyString,
   getStoredPartsFromMessage,
 } from "@/app/api/chat/utils";
+import { buildAttachmentTextBlock } from "@/lib/server/files/service";
 
 export function buildSeedMessageInput({ role, content }) {
   if (!isNonEmptyString(role) || !Array.isArray(content) || content.length === 0) {
@@ -17,7 +18,7 @@ export function buildSeedMessageInput({ role, content }) {
   };
 }
 
-export async function storedPartToBytedancePart(part, role) {
+export async function storedPartToBytedancePart(part, role, options = {}) {
   if (!part || typeof part !== "object") return null;
 
   const isAssistant = role === "assistant" || role === "model";
@@ -38,12 +39,24 @@ export async function storedPartToBytedancePart(part, role) {
         image_url: `data:${mimeType};base64,${base64Data}`,
       };
     }
+
+    const fileUrl = part?.fileData?.url;
+    if (isNonEmptyString(fileUrl)) {
+      const fileTextMap = options?.fileTextMap instanceof Map ? options.fileTextMap : new Map();
+      const prepared = fileTextMap.get(fileUrl);
+      if (prepared?.extractedText) {
+        return {
+          type: "input_text",
+          text: buildAttachmentTextBlock(part.fileData, prepared.extractedText),
+        };
+      }
+    }
   }
 
   return null;
 }
 
-export async function buildBytedanceInputFromHistory(messages) {
+export async function buildBytedanceInputFromHistory(messages, options = {}) {
   const input = [];
   for (const msg of messages) {
     if (msg?.role !== "user" && msg?.role !== "model") continue;
@@ -54,7 +67,7 @@ export async function buildBytedanceInputFromHistory(messages) {
     const role = msg.role === "model" ? "assistant" : "user";
     const content = [];
     for (const storedPart of storedParts) {
-      const p = await storedPartToBytedancePart(storedPart, role);
+      const p = await storedPartToBytedancePart(storedPart, role, options);
       if (p) content.push(p);
     }
     if (content.length) {

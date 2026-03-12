@@ -167,6 +167,7 @@ export default function ThinkingBlock({
     const isError = step.status === "error";
 
     const getTitle = () => {
+      if (step.title) return step.title;
       if (step.kind === "thought") return "思考过程";
       if (step.kind === "search") {
         const query = step.query ? `「${step.query}」` : "";

@@ -685,6 +685,7 @@ export default function ChatApp() {
           onDeleteModelMessage={actions.deleteModelMessage}
           onDeleteUserMessage={actions.deleteUserMessage}
           onRegenerateModelMessage={actions.regenerateModelMessage}
+          onContinueAgentRun={actions.continueAgentRun}
           onStartEdit={actions.startEdit}
           userAvatar={avatar}
           onAvatarChange={setAvatar}

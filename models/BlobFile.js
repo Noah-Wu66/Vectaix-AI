@@ -15,10 +15,60 @@ const BlobFileSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    originalName: {
+        type: String,
+        default: null,
+    },
+    mimeType: {
+        type: String,
+        default: null,
+    },
+    size: {
+        type: Number,
+        default: 0,
+    },
+    extension: {
+        type: String,
+        default: null,
+    },
+    category: {
+        type: String,
+        enum: ['image', 'text', 'code', 'document', 'spreadsheet', 'data', null],
+        default: null,
+    },
     kind: {
         type: String,
         enum: ['chat', 'avatar'],
         required: true,
+    },
+    parseStatus: {
+        type: String,
+        enum: ['pending', 'processing', 'ready', 'failed'],
+        default: 'pending',
+    },
+    extractedText: {
+        type: String,
+        default: null,
+    },
+    extractedChars: {
+        type: Number,
+        default: 0,
+    },
+    pageCount: {
+        type: Number,
+        default: null,
+    },
+    sheetCount: {
+        type: Number,
+        default: null,
+    },
+    rowCount: {
+        type: Number,
+        default: null,
+    },
+    errorMessage: {
+        type: String,
+        default: null,
     },
     createdAt: {
         type: Date,

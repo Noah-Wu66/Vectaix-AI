@@ -202,6 +202,24 @@ export function getStoredPartsFromMessage(msg) {
                         };
                     }
                 }
+                if (part?.fileData && typeof part.fileData === 'object') {
+                    const url = part.fileData.url;
+                    const name = part.fileData.name;
+                    const mimeType = part.fileData.mimeType;
+                    const extension = part.fileData.extension;
+                    const category = part.fileData.category;
+                    const size = Number(part.fileData.size);
+                    if (isNonEmptyString(url) && isNonEmptyString(name) && isNonEmptyString(mimeType) && isNonEmptyString(extension) && isNonEmptyString(category) && Number.isFinite(size) && size >= 0) {
+                        out.fileData = {
+                            url,
+                            name,
+                            mimeType,
+                            size,
+                            extension,
+                            category,
+                        };
+                    }
+                }
                 if (isNonEmptyString(part.thoughtSignature)) out.thoughtSignature = part.thoughtSignature;
                 return out;
             })
@@ -309,6 +327,26 @@ export function sanitizeStoredMessagesStrict(messages) {
             if (part?.inlineData?.url) {
                 if (!isAllowedStoredImageUrl(part.inlineData.url)) {
                     throw createValidationError(`messages[${i}].parts[${pi}].image invalid`);
+                }
+            }
+            if (part?.fileData?.url) {
+                if (!isAllowedStoredImageUrl(part.fileData.url)) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].file invalid`);
+                }
+                if (!isNonEmptyString(part.fileData.name) || part.fileData.name.length > 200) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].file name invalid`);
+                }
+                if (!isNonEmptyString(part.fileData.mimeType) || part.fileData.mimeType.length > 128) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].file mimeType invalid`);
+                }
+                if (!isNonEmptyString(part.fileData.extension) || part.fileData.extension.length > 32) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].file extension invalid`);
+                }
+                if (!isNonEmptyString(part.fileData.category) || part.fileData.category.length > 32) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].file category invalid`);
+                }
+                if (!Number.isFinite(Number(part.fileData.size)) || Number(part.fileData.size) < 0) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].file size invalid`);
                 }
             }
         }

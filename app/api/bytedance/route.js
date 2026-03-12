@@ -15,6 +15,7 @@ import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/
 import { buildBytedanceInputFromHistory, buildSeedMessageInput } from '@/app/api/bytedance/bytedanceHelpers';
 import {
     SEED_MODEL_ID,
+    AGENT_MODEL_ID,
     SEED_REASONING_LEVELS,
     isSeedModel,
     normalizeModelId,
@@ -25,6 +26,7 @@ import {
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
+import { buildAttachmentTextBlock, getPreparedAttachmentTextsByUrls } from '@/lib/server/files/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -73,6 +75,19 @@ function pushUniqueCitations(target, items) {
             target.push(item);
         }
     }
+}
+
+function collectFileUrlsFromMessages(messages) {
+    if (!Array.isArray(messages)) return [];
+    const urls = new Set();
+    for (const message of messages) {
+        const parts = Array.isArray(message?.parts) ? message.parts : [];
+        for (const part of parts) {
+            const url = typeof part?.fileData?.url === 'string' ? part.fileData.url : '';
+            if (url) urls.add(url);
+        }
+    }
+    return Array.from(urls);
 }
 
 function buildSeedRequestBody({
@@ -205,7 +220,7 @@ export async function POST(req) {
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
         }
-        if (!prompt || typeof prompt !== 'string') {
+        if (typeof prompt !== 'string') {
             return Response.json({ error: 'Prompt is required' }, { status: 400 });
         }
         if (!Array.isArray(history)) {
@@ -260,7 +275,12 @@ export async function POST(req) {
 
         let currentConversationId = conversationId;
         if (user && !currentConversationId) {
-            const title = prompt.length > 30 ? `${prompt.substring(0, 30)}...` : prompt;
+            const titleSource = isNonEmptyString(prompt)
+                ? prompt
+                : (Array.isArray(config?.attachments) && config.attachments[0]?.name
+                    ? `附件：${config.attachments[0].name}`
+                    : 'New Chat');
+            const title = titleSource.length > 30 ? `${titleSource.substring(0, 30)}...` : titleSource;
             const newConv = await Conversation.create({
                 userId: user.userId,
                 title,
@@ -273,6 +293,7 @@ export async function POST(req) {
 
         let seedInput = [];
         let effectiveHistoryMessages = [];
+        let fileTextMap = new Map();
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
@@ -314,19 +335,31 @@ export async function POST(req) {
             effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
                 ? historyBeforeCurrentPrompt.slice(-limit)
                 : historyBeforeCurrentPrompt;
-            seedInput = await buildBytedanceInputFromHistory(effectiveMessages);
+            if (conversationModel === AGENT_MODEL_ID) {
+                fileTextMap = await getPreparedAttachmentTextsByUrls(collectFileUrlsFromMessages(effectiveMessages), { userId: user.userId });
+            }
+            seedInput = await buildBytedanceInputFromHistory(effectiveMessages, { fileTextMap });
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
             const effectiveHistory = (limit > 0 && Number.isFinite(limit))
                 ? safeHistory.slice(-limit)
                 : safeHistory;
             effectiveHistoryMessages = effectiveHistory;
-            seedInput = await buildBytedanceInputFromHistory(effectiveHistory);
+            if (conversationModel === AGENT_MODEL_ID) {
+                fileTextMap = await getPreparedAttachmentTextsByUrls(collectFileUrlsFromMessages(effectiveHistory), { userId: user.userId });
+            }
+            seedInput = await buildBytedanceInputFromHistory(effectiveHistory, { fileTextMap });
         }
 
         const dbImageEntries = [];
+        const attachmentEntries = Array.isArray(config?.attachments) && conversationModel === AGENT_MODEL_ID
+            ? config.attachments.filter((item) => item && typeof item === 'object' && typeof item.url === 'string' && item.url)
+            : [];
         if (!isRegenerateMode) {
-            const userContent = [{ type: 'input_text', text: prompt }];
+            const userContent = [];
+            if (isNonEmptyString(prompt)) {
+                userContent.push({ type: 'input_text', text: prompt });
+            }
 
             if (config?.images?.length > 0) {
                 for (const img of config.images) {
@@ -338,6 +371,24 @@ export async function POST(req) {
                     });
                     dbImageEntries.push({ url: img.url, mimeType });
                 }
+            }
+
+            if (attachmentEntries.length > 0) {
+                const preparedCurrentFiles = await getPreparedAttachmentTextsByUrls(attachmentEntries.map((item) => item.url), { userId: user.userId });
+                for (const entry of attachmentEntries) {
+                    const prepared = preparedCurrentFiles.get(entry.url);
+                    if (!prepared?.extractedText) {
+                        return Response.json({ error: `附件解析未完成：${entry.name || entry.url}` }, { status: 400 });
+                    }
+                    userContent.push({
+                        type: 'input_text',
+                        text: buildAttachmentTextBlock(entry, prepared.extractedText),
+                    });
+                }
+            }
+
+            if (userContent.length === 0) {
+                return Response.json({ error: '请至少输入内容或上传附件' }, { status: 400 });
             }
 
             const userMessageInput = buildSeedMessageInput({ role: 'user', content: userContent });
@@ -360,12 +411,26 @@ export async function POST(req) {
                     });
                 }
             }
+            if (attachmentEntries.length > 0) {
+                for (const attachment of attachmentEntries) {
+                    storedUserParts.push({
+                        fileData: {
+                            url: attachment.url,
+                            name: attachment.name,
+                            mimeType: attachment.mimeType,
+                            size: attachment.size,
+                            extension: attachment.extension,
+                            category: attachment.category,
+                        },
+                    });
+                }
+            }
 
             const userMsgTime = Date.now();
             const userMessage = {
                 id: userMessageId,
                 role: 'user',
-                content: prompt,
+                content: typeof prompt === 'string' ? prompt : '',
                 type: 'parts',
                 parts: storedUserParts,
             };

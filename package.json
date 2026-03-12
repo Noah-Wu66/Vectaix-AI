@@ -20,6 +20,8 @@
     "lucide-react": "^0.300.0",
     "mongoose": "^8.0.0",
     "next": "14.2.35",
+    "mammoth": "^1.9.1",
+    "pdf-parse": "^1.1.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-markdown": "^9.0.0",
@@ -27,7 +29,9 @@
     "rehype-katex": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.0",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "word-extractor": "^1.0.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",

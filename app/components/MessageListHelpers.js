@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ExternalLink, Globe, X } from "lucide-react";
+import { Download, ExternalLink, FileText, Globe, X } from "lucide-react";
 import { ModelAvatar } from "./ModelVisuals";
+import { formatAttachmentMeta } from "@/lib/shared/messageAttachments";
 
 export function AIAvatar({ model, size = 24, animate = false }) {
   return <ModelAvatar model={model} size={size} animate={animate} />;
@@ -29,7 +30,11 @@ function getMessageText(msg) {
   }
   if (Array.isArray(msg.parts)) {
     return msg.parts
-      .map((part) => (typeof part?.text === "string" ? part.text.trim() : ""))
+      .map((part) => {
+        if (typeof part?.text === "string") return part.text.trim();
+        if (part?.fileData?.name) return `[附件] ${part.fileData.name}`;
+        return "";
+      })
       .filter(Boolean)
       .join("\n\n");
   }
@@ -102,6 +107,35 @@ export function Thumb({ src, className = "", onClick }) {
         decoding="async"
       />
     </button>
+  );
+}
+
+export function AttachmentCard({ file, compact = false }) {
+  if (!file?.name) return null;
+  const canDownload = typeof file.url === "string" && /^https?:\/\//i.test(file.url);
+  const downloadUrl = canDownload
+    ? `/api/files/download?url=${encodeURIComponent(file.url)}&name=${encodeURIComponent(file.name)}`
+    : null;
+
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border border-zinc-200 bg-white/70 px-3 py-2 ${compact ? "min-w-[220px]" : "min-w-[240px]"}`}>
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 shrink-0">
+        <FileText size={18} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium text-zinc-700">{file.name}</div>
+        <div className="truncate text-xs text-zinc-400">{formatAttachmentMeta(file)}</div>
+      </div>
+      {downloadUrl ? (
+        <a
+          href={downloadUrl}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+          title="下载附件"
+        >
+          <Download size={15} />
+        </a>
+      ) : null}
+    </div>
   );
 }
 
