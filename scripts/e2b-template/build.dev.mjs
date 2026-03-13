@@ -1,5 +1,8 @@
+import { Template, defaultBuildLogger } from "e2b";
 import { createVectaixTemplate } from "./template.mjs";
 
-const template = createVectaixTemplate();
-
-await template.build("vectaix-agent-dev");
+await Template.build(createVectaixTemplate(), "vectaix-agent-dev", {
+  cpuCount: 1,
+  memoryMB: 2048,
+  onBuildLogs: defaultBuildLogger(),
+});

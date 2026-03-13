@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Bot,
   ChevronDown,
   Download,
+  RefreshCw,
   Lock,
   Settings,
   Palette,
@@ -42,8 +44,10 @@ export default function ProfileModal({
   const [showAppearance, setShowAppearance] = useState(false);
   const [showDataManager, setShowDataManager] = useState(false);
   const [showRouteSelector, setShowRouteSelector] = useState(false);
+  const [showAgentManager, setShowAgentManager] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showAgentConfirmModal, setShowAgentConfirmModal] = useState(false);
   const [pendingImportFile, setPendingImportFile] = useState(null);
 
   const [oldPassword, setOldPassword] = useState("");
@@ -57,8 +61,16 @@ export default function ProfileModal({
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeSaving, setRouteSaving] = useState(false);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templatePublishing, setTemplatePublishing] = useState(false);
   const [modelRoutes, setModelRoutes] = useState({ openai: "default", opus: "default" });
   const [savedModelRoutes, setSavedModelRoutes] = useState({ openai: "default", opus: "default" });
+  const [templateInfo, setTemplateInfo] = useState({
+    template: "",
+    templateVersion: "",
+    hasApiKey: false,
+    publishedAt: "",
+  });
   const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
     ? Number(completionSoundVolume)
     : 60;
@@ -181,29 +193,42 @@ export default function ProfileModal({
 
     let cancelled = false;
 
-    const fetchModelRoutes = async () => {
+    const fetchAdminConfig = async () => {
       setRouteLoading(true);
+      setTemplateLoading(true);
       try {
-        const data = await apiJson("/api/admin/model-routes");
+        const [routesData, templateData] = await Promise.all([
+          apiJson("/api/admin/model-routes"),
+          apiJson("/api/admin/e2b-template"),
+        ]);
 
         if (!cancelled) {
           const nextRoutes = {
-            openai: data?.routes?.openai === "zenmux" ? "zenmux" : "default",
-            opus: data?.routes?.opus === "zenmux" ? "zenmux" : "default",
+            openai: routesData?.routes?.openai === "zenmux" ? "zenmux" : "default",
+            opus: routesData?.routes?.opus === "zenmux" ? "zenmux" : "default",
           };
           setModelRoutes(nextRoutes);
           setSavedModelRoutes(nextRoutes);
+          setTemplateInfo({
+            template: templateData?.template || "",
+            templateVersion: templateData?.templateVersion || "",
+            hasApiKey: Boolean(templateData?.hasApiKey),
+            publishedAt: templateData?.publishedAt || "",
+          });
         }
       } catch (e) {
         if (!cancelled) {
-          toast.error(e?.message || "加载线路配置失败");
+          toast.error(e?.message || "加载管理员配置失败");
         }
       } finally {
-        if (!cancelled) setRouteLoading(false);
+        if (!cancelled) {
+          setRouteLoading(false);
+          setTemplateLoading(false);
+        }
       }
     };
 
-    fetchModelRoutes();
+    fetchAdminConfig();
     return () => {
       cancelled = true;
     };
@@ -232,6 +257,25 @@ export default function ProfileModal({
       toast.error(e?.message || "保存线路配置失败");
     } finally {
       setRouteSaving(false);
+    }
+  };
+
+  const publishAgentTemplate = async () => {
+    setTemplatePublishing(true);
+    try {
+      const data = await apiJson("/api/admin/e2b-template", { method: "POST" });
+      setTemplateInfo((prev) => ({
+        ...prev,
+        template: data?.template || prev.template,
+        templateVersion: data?.templateVersion || prev.templateVersion,
+        publishedAt: data?.publishedAt || new Date().toISOString(),
+      }));
+      toast.success(`Agent 模板已创建：${data?.template || "已完成"}`);
+    } catch (e) {
+      toast.error(e?.message || "创建 Agent 模板失败");
+    } finally {
+      setTemplatePublishing(false);
+      setShowAgentConfirmModal(false);
     }
   };
 
@@ -494,6 +538,70 @@ export default function ProfileModal({
               {isAdmin && (
                 <>
                   <button
+                    onClick={() => setShowAgentManager(!showAgentManager)}
+                    className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
+                      <Bot size={14} /> Agent 管理
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className={`text-zinc-400 transition-transform ${showAgentManager ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showAgentManager && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
+                          <div className="space-y-1">
+                            <div className="text-xs text-zinc-500">这里管理 Agent 运行依赖的 E2B 沙盒模板。</div>
+                            <div className="text-sm text-zinc-700 break-all">
+                              模板名：
+                              <code className="ml-1 rounded bg-white px-2 py-1 text-xs text-zinc-900 border border-zinc-200">
+                                {templateInfo.template || "未设置"}
+                              </code>
+                            </div>
+                            <div className="text-sm text-zinc-700">
+                              版本标记：
+                              <code className="ml-1 rounded bg-white px-2 py-1 text-xs text-zinc-900 border border-zinc-200">
+                                {templateInfo.templateVersion || "未设置"}
+                              </code>
+                            </div>
+                            <div className="text-xs text-zinc-500">
+                              {templateLoading
+                                ? "正在读取 Agent 配置..."
+                                : templateInfo.hasApiKey
+                                  ? "已检测到 E2B_API_KEY，可以直接在云端创建或更新模板。"
+                                  : "当前没有检测到 E2B_API_KEY，暂时不能创建模板。"}
+                            </div>
+                            {templateInfo.publishedAt && (
+                              <div className="text-xs text-zinc-500">
+                                最近创建时间：{new Date(templateInfo.publishedAt).toLocaleString("zh-CN")}
+                              </div>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowAgentConfirmModal(true)}
+                            disabled={templateLoading || templatePublishing || !templateInfo.hasApiKey}
+                            className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                          >
+                            <RefreshCw size={16} className={templatePublishing ? "animate-spin" : ""} />
+                            {templatePublishing ? "正在创建 Agent 模板..." : "一键创建 / 更新 Agent 模板"}
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <button
                     onClick={() => setShowRouteSelector(!showRouteSelector)}
                     className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
                   >
@@ -670,6 +778,15 @@ export default function ProfileModal({
       confirmText="确定"
       cancelText="取消"
       danger
+    />
+    <ConfirmModal
+      open={showAgentConfirmModal}
+      onClose={() => setShowAgentConfirmModal(false)}
+      onConfirm={publishAgentTemplate}
+      title="创建 Agent 沙盒模板"
+      message="确定要在云端创建或更新 Agent 用的 E2B 模板吗？创建过程可能需要等待几十秒。"
+      confirmText={templatePublishing ? "创建中..." : "开始创建"}
+      cancelText="取消"
     />
     <UserManagementModal
       open={showUserManagement}
