@@ -2,12 +2,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   FileText,
+  Loader2,
   Paperclip,
   Send,
   Sparkles,
   Square,
+  TriangleAlert,
   X,
 } from "lucide-react";
+import { upload } from "@vercel/blob/client";
 import { useToast } from "./ToastProvider";
 import ModelSelector from "./ModelSelector";
 import SettingsMenu from "./SettingsMenu";
@@ -205,9 +208,12 @@ export default function Composer({
           processedFile = converted;
         }
         const preview = await readAsDataUrl(processedFile).catch(() => null);
-        nextAttachments.push(createLocalAttachment({ file: processedFile, preview }));
+        // 图片暂不预上传，保持原有逻辑
+        nextAttachments.push({ ...createLocalAttachment({ file: processedFile, preview }), uploadStatus: "ready" });
       } else {
-        nextAttachments.push(local);
+        // 非图片文件：先加入列表，标记为 uploading，后台异步上传
+        const att = { ...local, uploadStatus: "uploading", blobUrl: null };
+        nextAttachments.push(att);
       }
     }
 
@@ -224,9 +230,44 @@ export default function Composer({
 
     if (nextAttachments.length > 0 && mountedRef.current) {
       setSelectedAttachments((prev) => [...prev, ...nextAttachments].slice(0, 4));
+
+      // 后台异步上传非图片文件
+      for (const att of nextAttachments) {
+        if (att.uploadStatus !== "uploading") continue;
+        uploadAttachmentInBackground(att);
+      }
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const uploadAttachmentInBackground = async (att) => {
+    try {
+      const blob = await upload(att.file.name, att.file, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+        clientPayload: JSON.stringify({
+          kind: "chat",
+          model,
+          originalName: att.file.name,
+          declaredMimeType: att.file.type || att.mimeType,
+        }),
+      });
+      if (!mountedRef.current) return;
+      setSelectedAttachments((prev) =>
+        prev.map((item) =>
+          item.id === att.id ? { ...item, uploadStatus: "ready", blobUrl: blob.url } : item
+        )
+      );
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setSelectedAttachments((prev) =>
+        prev.map((item) =>
+          item.id === att.id ? { ...item, uploadStatus: "error" } : item
+        )
+      );
+      toast.error(`「${att.name}」上传失败：${err?.message || "未知错误"}`);
+    }
   };
 
   const removeAttachment = (attachmentId) => {
@@ -237,24 +278,29 @@ export default function Composer({
     setSelectedAttachments([]);
   };
 
+  const isUploading = selectedAttachments.some((item) => item.uploadStatus === "uploading");
+
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       if (!isMobile) {
         e.preventDefault();
-        if (!loading) handleSend();
+        if (!loading && !isUploading) handleSend();
       }
     }
   };
 
   const handleSend = () => {
     const text = input.trim();
-    if ((!text && selectedAttachments.length === 0) || loading) return;
+    if ((!text && selectedAttachments.length === 0) || loading || isUploading) return;
+    // 过滤掉上传失败的附件
+    const validAttachments = selectedAttachments.filter((item) => item.uploadStatus !== "error");
+    if (!text && validAttachments.length === 0) return;
     if (hasReachedCouncilRoundLimit) {
       toast.warning(`Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，请新建对话继续。`);
       return;
     }
-    onSend({ text, attachments: selectedAttachments });
+    onSend({ text, attachments: validAttachments });
     setInput("");
     clearAllAttachments();
     setAgentHintVisible(false);
@@ -299,30 +345,44 @@ export default function Composer({
 
           {selectedAttachments.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
-              {selectedAttachments.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-1.5 px-2 py-1 bg-zinc-100 rounded-lg border border-zinc-200 max-w-[180px]"
-                >
-                  {isImageAttachment(item) ? (
-                    <span className="w-5 h-5 rounded bg-zinc-200 overflow-hidden shrink-0">
-                      {item.preview ? <img src={item.preview} alt="" className="w-full h-full object-cover" /> : null}
-                    </span>
-                  ) : (
-                    <FileText size={14} className="text-zinc-500 shrink-0" />
-                  )}
-                  <span className="text-xs text-zinc-600 truncate">
-                    {item.name}
-                  </span>
-                  <button
-                    onClick={() => removeAttachment(item.id)}
-                    className="text-zinc-400 hover:text-red-500 shrink-0"
-                    type="button"
+              {selectedAttachments.map((item) => {
+                const isUploadingItem = item.uploadStatus === "uploading";
+                const isErrorItem = item.uploadStatus === "error";
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border max-w-[200px] ${
+                      isErrorItem
+                        ? "bg-red-50 border-red-200"
+                        : isUploadingItem
+                          ? "bg-zinc-50 border-zinc-200"
+                          : "bg-zinc-100 border-zinc-200"
+                    }`}
                   >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
+                    {isImageAttachment(item) ? (
+                      <span className="w-5 h-5 rounded bg-zinc-200 overflow-hidden shrink-0">
+                        {item.preview ? <img src={item.preview} alt="" className="w-full h-full object-cover" /> : null}
+                      </span>
+                    ) : isUploadingItem ? (
+                      <Loader2 size={14} className="text-zinc-400 shrink-0 animate-spin" />
+                    ) : isErrorItem ? (
+                      <TriangleAlert size={14} className="text-red-500 shrink-0" />
+                    ) : (
+                      <FileText size={14} className="text-zinc-500 shrink-0" />
+                    )}
+                    <span className={`text-xs truncate ${isErrorItem ? "text-red-600" : "text-zinc-600"}`}>
+                      {item.name}
+                    </span>
+                    <button
+                      onClick={() => removeAttachment(item.id)}
+                      className="text-zinc-400 hover:text-red-500 shrink-0"
+                      type="button"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                );
+              })}
               {selectedAttachments.length < 4 && (
                 <span className="text-xs text-zinc-400">
                   {4 - selectedAttachments.length} 个可添加
@@ -390,7 +450,7 @@ export default function Composer({
 
           <button
             onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
-            disabled={!isStreaming && !isWaitingForAI && (hasReachedCouncilRoundLimit || (!input.trim() && selectedAttachments.length === 0))}
+            disabled={!isStreaming && !isWaitingForAI && (hasReachedCouncilRoundLimit || isUploading || (!input.trim() && selectedAttachments.length === 0))}
             className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${isStreaming || isWaitingForAI ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
               }`}
             type="button"
