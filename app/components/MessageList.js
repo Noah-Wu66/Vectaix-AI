@@ -232,29 +232,6 @@ export default function MessageList({
     }
   };
 
-  const getAgentStatusLabel = (agentRun, executionState) => {
-    if (executionState === "awaiting_approval") return "等待审批";
-    if (executionState === "waiting_continue") return "等待继续";
-    if (agentRun?.status === "failed") return "执行失败";
-    if (agentRun?.status === "cancelled") return "已取消";
-    if (agentRun?.status === "completed") return "已完成";
-    return "执行中";
-  };
-
-  const buildAgentLinearStatusText = (agentRun, executionState, totalSteps) => {
-    if (!agentRun) return "";
-    const lines = [getAgentStatusLabel(agentRun, executionState)];
-    if (agentRun?.currentStep) lines.push(`当前阶段：${agentRun.currentStep}`);
-    if (Number.isFinite(agentRun?.currentCursor)) {
-      lines.push(`步骤 ${agentRun.currentCursor}/${totalSteps}`);
-    }
-
-    const summary = lines.join("  \n");
-    const notice = agentRun?.failureReason || agentRun?.lastError || agentRun?.approvalReason;
-    if (!notice) return summary;
-    return `${summary}\n\n${notice}`;
-  };
-
   return (
     <div
       ref={listRef}
@@ -325,14 +302,8 @@ export default function MessageList({
             && agentRun?.status !== "failed"
             && agentRun?.status !== "cancelled"
             && agentRun?.status !== "completed";
-          const agentAllSteps = Array.isArray(agentRun?.steps) ? agentRun.steps.filter(Boolean) : [];
-          const agentTotalSteps = Math.max(agentAllSteps.length, AGENT_MIN_TOTAL_STEPS);
-          const agentLinearStatusText = !hasBodyOutput
-            ? buildAgentLinearStatusText(agentRun, agentExecutionState, agentTotalSteps)
-            : "";
-          const hasAgentLinearStatus = Boolean(agentLinearStatusText);
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
-          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && !hasAgentLinearStatus) {
+          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState) {
             return null;
           }
           return (
@@ -354,7 +325,7 @@ export default function MessageList({
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
-              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || hasAgentLinearStatus) && (
+              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState) && (
                 <div className="flex items-center gap-1.5">
                   <AIAvatar
                     model={model}
@@ -388,7 +359,7 @@ export default function MessageList({
                   />
                 )}
 
-                {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && !hasAgentLinearStatus && (
+                {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && (
                   <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
                     <span
                       className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
@@ -516,7 +487,7 @@ export default function MessageList({
                   </div>
                 ) : (
                   <>
-                    {(hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0) || hasAgentLinearStatus) && (
+                    {(hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
                       <div
                         className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 inline-block max-w-full md:max-w-[900px] lg:max-w-[1000px] max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
@@ -572,9 +543,7 @@ export default function MessageList({
                           msg.role === "user" ? (
                             <Markdown enableHighlight={false}>{msg.content}</Markdown>
                           ) : (
-                            <Markdown enableHighlight={!msg.isStreaming}>
-                              {typeof msg.content === "string" && msg.content.trim().length > 0 ? msg.content : agentLinearStatusText}
-                            </Markdown>
+                            <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
                           )
                         )}
 
