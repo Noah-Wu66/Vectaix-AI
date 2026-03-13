@@ -201,44 +201,13 @@ export default function ThinkingBlock({
     const capsuleClass = `thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`;
 
     if (step.kind === "thought") {
-      const isSynthetic = step.synthetic === true;
-      const showThinkingTitle = isSynthetic && isThoughtStreaming;
-      const showDoneTitle = isSynthetic && !isThoughtStreaming && !hasDetail;
-      if (isSynthetic && !hasDetail) {
-        return null;
-      }
       return (
         <div key={step.id || `thought-${idx}`} className="w-full max-w-[760px]">
-          <button
-            type="button"
-            onClick={() => {
-              if (!hasDetail) return;
-              setExpandedTimelineId((prev) => {
-                if (prev === step.id) {
-                  manualExpandedStepIdRef.current = null;
-                  return null;
-                }
-                manualExpandedStepIdRef.current = step.id;
-                return step.id;
-              });
-            }}
-            className={`${capsuleClass} ${hasDetail ? "cursor-pointer" : "cursor-default"}`}
-          >
+          <div className={`${capsuleClass} cursor-default`}>
             {icon}
-            <span>{showThinkingTitle ? "思考中" : (showDoneTitle ? "已思考" : titleText)}</span>
-            {showThoughtDots ? <LoadingDots /> : null}
-            {hasDetail ? (isExpanded ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />) : null}
-          </button>
-          {hasDetail && isExpanded ? (
-            <div className="thinking-content thinking-content-panel bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-[760px] text-zinc-400" ref={containerRef}>
-              <Markdown
-                enableHighlight={step.status !== "streaming"}
-                className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
-              >
-                {step.content}
-              </Markdown>
-            </div>
-          ) : null}
+            <span>{isThoughtStreaming ? "思考中" : "已思考"}</span>
+            {isThoughtStreaming ? <LoadingDots /> : null}
+          </div>
         </div>
       );
     }
