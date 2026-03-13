@@ -88,7 +88,7 @@ export default function ThinkingBlock({
   const normalizedCouncilExpertStates = normalizeCouncilExpertStates(councilExpertStates);
   const normalizedCouncilSummaryState = normalizeCouncilSummaryState(councilSummaryState);
   const hasCouncilMode = normalizedCouncilExpertStates.length > 0 || normalizedCouncilSummaryState !== null;
-  const hasTimeline = timelineItems.some((step) => step.kind === "search" || step.kind === "reader");
+  const hasTimeline = timelineItems.some((step) => step.kind === "search" || step.kind === "reader" || step.kind === "thought");
 
   // 滚动到容器底部（仅简单模式的思考内容）
   useEffect(() => {
