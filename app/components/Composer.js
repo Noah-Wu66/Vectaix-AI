@@ -1,13 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import {
+  AlertTriangle,
   FileText,
   Loader2,
   Paperclip,
   Send,
   Sparkles,
   Square,
-  TriangleAlert,
   X,
 } from "lucide-react";
 import { upload } from "@vercel/blob/client";
@@ -366,7 +366,7 @@ export default function Composer({
                     ) : isUploadingItem ? (
                       <Loader2 size={14} className="text-zinc-400 shrink-0 animate-spin" />
                     ) : isErrorItem ? (
-                      <TriangleAlert size={14} className="text-red-500 shrink-0" />
+                      <AlertTriangle size={14} className="text-red-500 shrink-0" />
                     ) : (
                       <FileText size={14} className="text-zinc-500 shrink-0" />
                     )}
