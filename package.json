@@ -17,6 +17,7 @@
     "antd": "^5.29.3",
     "bcryptjs": "^2.4.3",
     "framer-motion": "^11.0.0",
+    "glob": "^11.1.0",
     "jose": "^5.2.0",
     "lucide-react": "^0.300.0",
     "mongoose": "^8.0.0",

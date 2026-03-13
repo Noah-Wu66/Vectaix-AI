@@ -3,8 +3,8 @@ import {
   getConfiguredE2BTemplateRef,
   getConfiguredE2BTemplateVersion,
   hasE2BApiKey,
-  publishConfiguredE2BTemplate,
-} from "@/lib/server/sandbox/e2bTemplate";
+} from "@/lib/server/sandbox/e2bConfig";
+import { publishConfiguredE2BTemplate } from "@/lib/server/sandbox/e2bTemplate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
