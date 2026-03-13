@@ -38,7 +38,7 @@ const LeaseSchema = new mongoose.Schema(
 
 const SandboxCommandSchema = new mongoose.Schema(
   {
-    pid: { type: Number, default: null },
+    cmdId: { type: String, default: "" },
     command: { type: String, default: "" },
     status: { type: String, default: "" },
     startedAt: { type: Date, default: null },
@@ -51,9 +51,10 @@ const SandboxCommandSchema = new mongoose.Schema(
 
 const SandboxSessionSchema = new mongoose.Schema(
   {
+    provider: { type: String, default: "" },
+    runtime: { type: String, default: "" },
     sandboxId: { type: String, default: "" },
-    template: { type: String, default: "" },
-    templateVersion: { type: String, default: "" },
+    snapshotId: { type: String, default: "" },
     status: { type: String, default: "" },
     workdir: { type: String, default: "" },
     lastConnectedAt: { type: Date, default: null },

@@ -4,7 +4,7 @@ import BlobFile from '@/models/BlobFile';
 import AgentRun from '@/models/AgentRun';
 import Conversation from '@/models/Conversation';
 import { AGENT_STALE_RUN_MS, buildAgentMessageMeta } from '@/lib/server/agent/runHelpers';
-import { pauseSandboxSession } from '@/lib/server/sandbox/e2b';
+import { pauseSandboxSession } from '@/lib/server/sandbox/vercelSandbox';
 
 export const runtime = 'nodejs';
 
@@ -84,7 +84,23 @@ export async function GET(request) {
         );
         const refreshedRuns = await AgentRun.find({ _id: { $in: runIds } });
         for (const run of refreshedRuns) {
-          await pauseSandboxSession(run.sandboxSession).catch(() => {});
+          const pausedSession = await pauseSandboxSession(run.sandboxSession, { preserveState: true }).catch(() => run.sandboxSession || null);
+          if (pausedSession && typeof pausedSession === 'object') {
+            run.sandboxSession = {
+              ...(run.sandboxSession?.toObject ? run.sandboxSession.toObject() : run.sandboxSession || {}),
+              ...pausedSession,
+              canResume: true,
+            };
+            await AgentRun.updateOne(
+              { _id: run._id },
+              {
+                $set: {
+                  sandboxSession: run.sandboxSession,
+                  updatedAt: new Date(),
+                },
+              }
+            );
+          }
           const conversation = await Conversation.findById(run.conversationId).select('messages');
           if (!conversation) continue;
           const nextMessages = Array.isArray(conversation.messages)

@@ -61,15 +61,15 @@ export default function ProfileModal({
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeSaving, setRouteSaving] = useState(false);
-  const [templateLoading, setTemplateLoading] = useState(false);
-  const [templatePublishing, setTemplatePublishing] = useState(false);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentResetting, setAgentResetting] = useState(false);
   const [modelRoutes, setModelRoutes] = useState({ openai: "default", opus: "default" });
   const [savedModelRoutes, setSavedModelRoutes] = useState({ openai: "default", opus: "default" });
-  const [templateInfo, setTemplateInfo] = useState({
-    template: "",
-    templateVersion: "",
-    hasApiKey: false,
-    publishedAt: "",
+  const [agentSandboxInfo, setAgentSandboxInfo] = useState({
+    provider: "",
+    agentRuntime: "",
+    parserRuntime: "",
+    currentSession: null,
   });
   const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
     ? Number(completionSoundVolume)
@@ -195,11 +195,11 @@ export default function ProfileModal({
 
     const fetchAdminConfig = async () => {
       setRouteLoading(true);
-      setTemplateLoading(true);
+      setAgentLoading(true);
       try {
-        const [routesData, templateData] = await Promise.all([
+        const [routesData, agentData] = await Promise.all([
           apiJson("/api/admin/model-routes"),
-          apiJson("/api/admin/e2b-template"),
+          apiJson("/api/admin/agent-sandbox"),
         ]);
 
         if (!cancelled) {
@@ -209,11 +209,11 @@ export default function ProfileModal({
           };
           setModelRoutes(nextRoutes);
           setSavedModelRoutes(nextRoutes);
-          setTemplateInfo({
-            template: templateData?.template || "",
-            templateVersion: templateData?.templateVersion || "",
-            hasApiKey: Boolean(templateData?.hasApiKey),
-            publishedAt: templateData?.publishedAt || "",
+          setAgentSandboxInfo({
+            provider: agentData?.provider || "Vercel Sandbox",
+            agentRuntime: agentData?.agentRuntime || "",
+            parserRuntime: agentData?.parserRuntime || "",
+            currentSession: agentData?.currentSession || null,
           });
         }
       } catch (e) {
@@ -223,7 +223,7 @@ export default function ProfileModal({
       } finally {
         if (!cancelled) {
           setRouteLoading(false);
-          setTemplateLoading(false);
+          setAgentLoading(false);
         }
       }
     };
@@ -260,21 +260,19 @@ export default function ProfileModal({
     }
   };
 
-  const publishAgentTemplate = async () => {
-    setTemplatePublishing(true);
+  const resetCurrentAgentSession = async () => {
+    setAgentResetting(true);
     try {
-      const data = await apiJson("/api/admin/e2b-template", { method: "POST" });
-      setTemplateInfo((prev) => ({
+      const data = await apiJson("/api/admin/agent-sandbox", { method: "POST" });
+      setAgentSandboxInfo((prev) => ({
         ...prev,
-        template: data?.template || prev.template,
-        templateVersion: data?.templateVersion || prev.templateVersion,
-        publishedAt: data?.publishedAt || new Date().toISOString(),
+        currentSession: data?.currentSession || null,
       }));
-      toast.success(`Agent 模板已创建：${data?.template || "已完成"}`);
+      toast.success(data?.message || "当前 Agent 会话已重置");
     } catch (e) {
-      toast.error(e?.message || "创建 Agent 模板失败");
+      toast.error(e?.message || "重置 Agent 会话失败");
     } finally {
-      setTemplatePublishing(false);
+      setAgentResetting(false);
       setShowAgentConfirmModal(false);
     }
   };
@@ -560,29 +558,35 @@ export default function ProfileModal({
                       >
                         <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
                           <div className="space-y-1">
-                            <div className="text-xs text-zinc-500">这里管理 Agent 运行依赖的 E2B 沙盒模板。</div>
+                            <div className="text-xs text-zinc-500">这里管理 Agent 运行使用的 Vercel Sandbox 会话。</div>
                             <div className="text-sm text-zinc-700 break-all">
-                              模板名：
+                              当前提供方：
                               <code className="ml-1 rounded bg-white px-2 py-1 text-xs text-zinc-900 border border-zinc-200">
-                                {templateInfo.template || "未设置"}
+                                {agentSandboxInfo.provider || "Vercel Sandbox"}
                               </code>
                             </div>
                             <div className="text-sm text-zinc-700">
-                              版本标记：
+                              Agent 运行时：
                               <code className="ml-1 rounded bg-white px-2 py-1 text-xs text-zinc-900 border border-zinc-200">
-                                {templateInfo.templateVersion || "未设置"}
+                                {agentSandboxInfo.agentRuntime || "未设置"}
+                              </code>
+                            </div>
+                            <div className="text-sm text-zinc-700">
+                              文档解析运行时：
+                              <code className="ml-1 rounded bg-white px-2 py-1 text-xs text-zinc-900 border border-zinc-200">
+                                {agentSandboxInfo.parserRuntime || "未设置"}
                               </code>
                             </div>
                             <div className="text-xs text-zinc-500">
-                              {templateLoading
+                              {agentLoading
                                 ? "正在读取 Agent 配置..."
-                                : templateInfo.hasApiKey
-                                  ? "已检测到 E2B_API_KEY，可以直接在云端创建或更新模板。"
-                                  : "当前没有检测到 E2B_API_KEY，暂时不能创建模板。"}
+                                : agentSandboxInfo.currentSession
+                                  ? `当前会话状态：${agentSandboxInfo.currentSession.status || "running"}`
+                                  : "当前账号没有活动中的 Agent 会话。"}
                             </div>
-                            {templateInfo.publishedAt && (
+                            {agentSandboxInfo.currentSession?.lastConnectedAt && (
                               <div className="text-xs text-zinc-500">
-                                最近创建时间：{new Date(templateInfo.publishedAt).toLocaleString("zh-CN")}
+                                最近连接时间：{new Date(agentSandboxInfo.currentSession.lastConnectedAt).toLocaleString("zh-CN")}
                               </div>
                             )}
                           </div>
@@ -590,11 +594,11 @@ export default function ProfileModal({
                           <button
                             type="button"
                             onClick={() => setShowAgentConfirmModal(true)}
-                            disabled={templateLoading || templatePublishing || !templateInfo.hasApiKey}
+                            disabled={agentLoading || agentResetting || !agentSandboxInfo.currentSession}
                             className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
                           >
-                            <RefreshCw size={16} className={templatePublishing ? "animate-spin" : ""} />
-                            {templatePublishing ? "正在创建 Agent 模板..." : "一键创建 / 更新 Agent 模板"}
+                            <RefreshCw size={16} className={agentResetting ? "animate-spin" : ""} />
+                            {agentResetting ? "正在重置 Agent 会话..." : "重置当前 Agent 会话"}
                           </button>
                         </div>
                       </motion.div>
@@ -782,10 +786,10 @@ export default function ProfileModal({
     <ConfirmModal
       open={showAgentConfirmModal}
       onClose={() => setShowAgentConfirmModal(false)}
-      onConfirm={publishAgentTemplate}
-      title="创建 Agent 沙盒模板"
-      message="确定要在云端创建或更新 Agent 用的 E2B 模板吗？创建过程可能需要等待几十秒。"
-      confirmText={templatePublishing ? "创建中..." : "开始创建"}
+      onConfirm={resetCurrentAgentSession}
+      title="重置当前 Agent 会话"
+      message="确定要重置当前账号最近一次 Agent 会话吗？重置后，下次执行会自动创建新的 Vercel Sandbox。"
+      confirmText={agentResetting ? "重置中..." : "开始重置"}
       cancelText="取消"
     />
     <UserManagementModal

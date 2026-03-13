@@ -7,7 +7,7 @@ import {
   buildAgentMessageMeta,
   generateResumeToken,
 } from "@/lib/server/agent/runHelpers";
-import { killSandboxSession, pauseSandboxSession } from "@/lib/server/sandbox/e2b";
+import { killSandboxSession, pauseSandboxSession } from "@/lib/server/sandbox/vercelSandbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

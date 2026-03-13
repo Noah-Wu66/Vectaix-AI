@@ -100,11 +100,7 @@ const BlobFileSchema = new mongoose.Schema({
     },
     parseProvider: {
         type: String,
-        enum: ['e2b', null],
-        default: null,
-    },
-    parseTemplateVersion: {
-        type: String,
+        enum: ['vercel-sandbox', null],
         default: null,
     },
     parseJob: {
