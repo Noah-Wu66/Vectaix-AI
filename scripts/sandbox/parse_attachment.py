@@ -156,7 +156,7 @@ def parse_doc(file_path: Path, **_kwargs):
             errors="ignore",
         )
     except FileNotFoundError as exc:
-        raise RuntimeError("沙盒模板缺少 antiword，无法解析 DOC 文件") from exc
+        raise RuntimeError("当前沙箱不支持旧版 DOC 文件，请先转成 DOCX 再上传") from exc
     text = completed.stdout or ""
     return {
         "text": clip_text(text),
