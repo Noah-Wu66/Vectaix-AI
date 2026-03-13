@@ -40,6 +40,7 @@ import {
 } from "./MessageListHelpers";
 import { AGENT_MODEL_ID, CHAT_MODELS, isCouncilModel } from "@/lib/shared/models";
 
+const AGENT_MIN_TOTAL_STEPS = 9;
 
 export default function MessageList({
   messages,
@@ -64,6 +65,9 @@ export default function MessageList({
   onDeleteUserMessage,
   onRegenerateModelMessage,
   onContinueAgentRun,
+  onApproveAgentRun,
+  onRejectAgentRun,
+  onCancelAgentRun,
   onStartEdit,
   userAvatar,
 }) {
@@ -353,6 +357,13 @@ export default function MessageList({
           const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
           const agentRun = msg?.agentRun && typeof msg.agentRun === "object" ? msg.agentRun : null;
           const agentCanResume = agentRun?.canResume === true && typeof agentRun?.runId === "string" && agentRun.runId;
+          const agentExecutionState = typeof agentRun?.executionState === "string" ? agentRun.executionState : agentRun?.status;
+          const agentNeedsApproval = agentExecutionState === "awaiting_approval";
+          const agentFailed = agentRun?.status === "failed";
+          const agentCancelled = agentRun?.status === "cancelled";
+          const agentAllSteps = Array.isArray(agentRun?.steps) ? agentRun.steps.filter(Boolean) : [];
+          const agentStepList = agentAllSteps.slice(0, 6);
+          const agentTotalSteps = Math.max(agentAllSteps.length, AGENT_MIN_TOTAL_STEPS);
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
           if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState) {
             return null;
@@ -404,6 +415,105 @@ export default function MessageList({
                     councilExperts={msg.councilExperts}
                     bodyText={hasBodyOutput ? "1" : ""}
                   />
+                )}
+
+                {msg.role === "model" && agentRun && (
+                  <div className="mb-2 w-full max-w-[760px] rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3 text-sm text-zinc-600 shadow-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600">
+                        {agentExecutionState === "awaiting_approval" ? "等待审批" :
+                          agentExecutionState === "waiting_continue" ? "等待继续" :
+                          agentRun?.status === "failed" ? "执行失败" :
+                          agentRun?.status === "cancelled" ? "已取消" :
+                          agentRun?.status === "completed" ? "已完成" : "执行中"}
+                      </span>
+                      {agentRun?.currentStep ? (
+                        <span className="text-xs text-zinc-500">当前阶段：{agentRun.currentStep}</span>
+                      ) : null}
+                      {Number.isFinite(agentRun?.currentCursor) ? (
+                        <span className="text-xs text-zinc-400">步骤 {agentRun.currentCursor}/{agentTotalSteps}</span>
+                      ) : null}
+                    </div>
+
+                    {agentRun?.approvalReason ? (
+                      <div className="mt-2 text-xs leading-5 text-zinc-500">{agentRun.approvalReason}</div>
+                    ) : null}
+
+                    {agentRun?.failureReason || agentRun?.lastError ? (
+                      <div className="mt-2 text-xs leading-5 text-red-500">{agentRun.failureReason || agentRun.lastError}</div>
+                    ) : null}
+
+                    {agentStepList.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {agentStepList.map((step, stepIndex) => (
+                          <span
+                            key={`${step.type || "step"}_${stepIndex}`}
+                            className={`rounded-full px-2 py-1 text-[11px] ${step.status === "done"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : step.status === "running"
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-zinc-100 text-zinc-500"
+                              }`}
+                          >
+                            {step.title || step.type || "步骤"}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {(agentNeedsApproval || agentCanResume || agentFailed || (!agentCancelled && agentRun?.status !== "completed")) ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {agentNeedsApproval ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => onApproveAgentRun?.(i)}
+                              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
+                            >
+                              批准继续
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onRejectAgentRun?.(i)}
+                              className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
+                            >
+                              拒绝
+                            </button>
+                          </>
+                        ) : null}
+
+                        {agentCanResume ? (
+                          <button
+                            type="button"
+                            onClick={() => onContinueAgentRun?.(i)}
+                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
+                          >
+                            继续执行
+                          </button>
+                        ) : null}
+
+                        {agentFailed ? (
+                          <button
+                            type="button"
+                            onClick={() => onContinueAgentRun?.(i)}
+                            className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
+                          >
+                            重试
+                          </button>
+                        ) : null}
+
+                        {!agentCancelled && agentRun?.status !== "completed" ? (
+                          <button
+                            type="button"
+                            onClick={() => onCancelAgentRun?.(i)}
+                            className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
+                          >
+                            取消任务
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 )}
 
                 {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && (

@@ -26,6 +26,16 @@ const ApprovalRequestSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const LeaseSchema = new mongoose.Schema(
+  {
+    owner: { type: String, default: "" },
+    token: { type: String, default: "" },
+    acquiredAt: { type: Date, default: null },
+    expiresAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const AgentRunSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -47,19 +57,81 @@ const AgentRunSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  runVersion: {
+    type: Number,
+    default: 2,
+  },
   status: {
     type: String,
     required: true,
     default: "running",
     index: true,
   },
+  executionState: {
+    type: String,
+    default: "planning",
+    index: true,
+  },
   currentStep: {
     type: String,
     default: "",
   },
+  currentCursor: {
+    type: Number,
+    default: 0,
+  },
   steps: {
     type: [AgentStepSchema],
     default: [],
+  },
+  stepResults: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: [],
+  },
+  planSnapshot: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
+  contextSnapshot: {
+    type: mongoose.Schema.Types.Mixed,
+    default: () => ({
+      memorySummaries: [],
+      preparedAttachments: [],
+      attachmentContext: "",
+      searchContextText: "",
+      searchDecisions: [],
+      computeContext: "",
+      draftAnswer: "",
+    }),
+  },
+  artifacts: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: [],
+  },
+  citations: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: [],
+  },
+  attemptCount: {
+    type: Number,
+    default: 0,
+  },
+  lastHeartbeatAt: {
+    type: Date,
+    default: Date.now,
+    index: true,
+  },
+  lease: {
+    type: LeaseSchema,
+    default: null,
+  },
+  resumeToken: {
+    type: String,
+    default: "",
+  },
+  failureReason: {
+    type: String,
+    default: "",
   },
   approvalRequest: {
     type: ApprovalRequestSchema,
@@ -97,5 +169,6 @@ const AgentRunSchema = new mongoose.Schema({
 
 AgentRunSchema.index({ conversationId: 1, status: 1, updatedAt: -1 });
 AgentRunSchema.index({ userId: 1, updatedAt: -1 });
+AgentRunSchema.index({ status: 1, executionState: 1, lastHeartbeatAt: 1 });
 
 export default mongoose.models.AgentRun || mongoose.model("AgentRun", AgentRunSchema);

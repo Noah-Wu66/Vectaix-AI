@@ -53,6 +53,9 @@ export default function ChatLayout({
   onDeleteUserMessage,
   onRegenerateModelMessage,
   onContinueAgentRun,
+  onApproveAgentRun,
+  onRejectAgentRun,
+  onCancelAgentRun,
   onStartEdit,
   composerProps,
   userAvatar,
@@ -88,6 +91,9 @@ export default function ChatLayout({
           onDeleteUserMessage={onDeleteUserMessage}
           onRegenerateModelMessage={onRegenerateModelMessage}
           onContinueAgentRun={onContinueAgentRun}
+          onApproveAgentRun={onApproveAgentRun}
+          onRejectAgentRun={onRejectAgentRun}
+          onCancelAgentRun={onCancelAgentRun}
           onStartEdit={onStartEdit}
           userAvatar={userAvatar}
         />

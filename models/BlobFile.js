@@ -38,7 +38,7 @@ const BlobFileSchema = new mongoose.Schema({
     },
     kind: {
         type: String,
-        enum: ['chat', 'avatar'],
+        enum: ['chat', 'avatar', 'agent-artifact'],
         required: true,
     },
     parseStatus: {

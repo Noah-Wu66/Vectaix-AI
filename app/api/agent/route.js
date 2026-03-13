@@ -5,11 +5,12 @@ import { getAuthPayload } from "@/lib/auth";
 import { rateLimit, getClientIP } from "@/lib/rateLimit";
 import { AGENT_MODEL_ID } from "@/lib/shared/models";
 import { isNonEmptyString, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
-import { runAgentRuntime } from "@/lib/server/agent/runtime";
+import { runAgentRuntimeV2 } from "@/lib/server/agent/runtimeV2";
+import { buildAgentMessageMeta } from "@/lib/server/agent/runHelpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const CHAT_RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
@@ -94,6 +95,76 @@ function pushOrReplaceTimelineStep(timeline, nextStep) {
   return next;
 }
 
+function buildStoredAgentMessageContent(status, fullText, latestAgentRun) {
+  if (status === "awaiting_approval") {
+    return latestAgentRun?.approvalReason || "Vectaix Agent 已暂停，等待你的确认。";
+  }
+  if (status === "waiting_continue") {
+    return fullText || "任务处理中，系统将继续下一轮执行。";
+  }
+  if (status === "cancelled") {
+    return "任务已取消。";
+  }
+  if (status === "failed") {
+    return latestAgentRun?.failureReason || latestAgentRun?.lastError || "任务执行失败。";
+  }
+  return fullText || "任务已完成。";
+}
+
+function buildStoredAgentMessage({
+  messageId,
+  content,
+  citations,
+  timeline,
+  latestAgentRun,
+}) {
+  return {
+    id: messageId,
+    role: "model",
+    content,
+    type: "text",
+    parts: [{ text: content }],
+    citations: citations.length > 0 ? citations : null,
+    thinkingTimeline: timeline,
+    agentRun: latestAgentRun || undefined,
+  };
+}
+
+async function upsertAgentMessage({
+  conversationId,
+  userId,
+  messageId,
+  runId,
+  message,
+  append,
+}) {
+  const conv = await Conversation.findOne({ _id: conversationId, userId }).select("messages");
+  if (!conv) return null;
+  const nextMessages = Array.isArray(conv.messages)
+    ? conv.messages.map((item) => (item?.toObject ? item.toObject() : item))
+    : [];
+
+  const targetIndex = nextMessages.findIndex((item) =>
+    (messageId && item?.id === messageId) || (runId && item?.agentRun?.runId === runId)
+  );
+
+  if (append || targetIndex < 0) {
+    nextMessages.push(message);
+  } else {
+    nextMessages[targetIndex] = {
+      ...nextMessages[targetIndex],
+      ...message,
+      id: nextMessages[targetIndex]?.id || message.id,
+    };
+  }
+
+  return Conversation.findOneAndUpdate(
+    { _id: conversationId, userId },
+    { $set: { messages: nextMessages, updatedAt: Date.now() } },
+    { new: true }
+  );
+}
+
 export async function POST(req) {
   try {
     const contentLength = req.headers.get("content-length");
@@ -171,7 +242,9 @@ export async function POST(req) {
     }
 
     let currentConversationId = conversationId;
-    const isResume = resume === true && isNonEmptyString(runId);
+    const isContinueMode = (mode === "continue" || resume === true) && isNonEmptyString(runId);
+    const isApproveMode = (mode === "approve" || approvalDecision === "approved" || approvalDecision === true) && isNonEmptyString(runId);
+    const isResume = isContinueMode || isApproveMode;
     const isRegenerateMode = mode === "regenerate" && currentConversationId && Array.isArray(messages);
     let storedMessagesForRegenerate = null;
 
@@ -228,7 +301,7 @@ export async function POST(req) {
 
       storedMessagesForRegenerate = sanitized;
       const lastUserMessage = storedMessagesForRegenerate[storedMessagesForRegenerate.length - 1];
-      currentPrompt = typeof lastUserMessage?.content === "string" ? lastUserMessage.content : currentPrompt;
+          currentPrompt = typeof lastUserMessage?.content === "string" ? lastUserMessage.content : currentPrompt;
       currentAttachments = extractAttachmentsFromMessage(lastUserMessage);
       currentImages = extractImagesFromMessage(lastUserMessage);
       effectiveHistoryMessages = (limit > 0 ? storedMessagesForRegenerate.slice(0, -1).slice(-limit) : storedMessagesForRegenerate.slice(0, -1));
@@ -322,7 +395,7 @@ export async function POST(req) {
         };
 
         try {
-          const result = await runAgentRuntime({
+          const result = await runAgentRuntimeV2({
             apiKey,
             req,
             userId: auth.userId,
@@ -335,40 +408,31 @@ export async function POST(req) {
             images: currentImages,
             runId,
             resume: isResume,
-            approvalDecision,
+            approvalDecision: isApproveMode ? "approved" : approvalDecision,
             sendEvent,
           });
 
-          const fallbackContent = result.status === "waiting_user"
-            ? (latestAgentRun?.approvalReason || "Vectaix Agent 已暂停，等待你确认后继续执行。")
-            : (fullText || "任务已完成。");
+          const finalAgentRun = latestAgentRun || buildAgentMessageMeta(result.run, {
+            status: result.status,
+            executionState: result.run?.executionState,
+            canResume: result.status === "waiting_continue",
+          });
+          const storedContent = buildStoredAgentMessageContent(result.status, fullText, finalAgentRun);
 
-          await Conversation.findOneAndUpdate(
-            { _id: currentConversationId, userId: auth.userId },
-            {
-              $push: {
-                messages: {
-                  id: modelMessageId,
-                  role: "model",
-                  content: fallbackContent,
-                  type: "text",
-                  parts: [{ text: fallbackContent }],
-                  citations: citations.length > 0 ? citations : null,
-                  thinkingTimeline: timeline,
-                  agentRun: latestAgentRun ? {
-                    runId: latestAgentRun.runId,
-                    status: latestAgentRun.status,
-                    currentStep: latestAgentRun.currentStep,
-                    canResume: latestAgentRun.canResume === true,
-                    lastError: latestAgentRun.lastError || "",
-                    approvalReason: latestAgentRun.approvalReason || "",
-                    approvalStatus: latestAgentRun.approvalStatus || "",
-                  } : undefined,
-                },
-              },
-              updatedAt: Date.now(),
-            }
-          );
+          await upsertAgentMessage({
+            conversationId: currentConversationId,
+            userId: auth.userId,
+            messageId: modelMessageId,
+            runId: result.run?._id?.toString?.() || finalAgentRun?.runId,
+            append: !isResume,
+            message: buildStoredAgentMessage({
+              messageId: modelMessageId,
+              content: storedContent,
+              citations,
+              timeline,
+              latestAgentRun: finalAgentRun,
+            }),
+          });
 
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();

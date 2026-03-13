@@ -64,6 +64,7 @@ export default function ChatApp() {
   const scrollRafRef = useRef(0);
   const chatAbortRef = useRef(null);
   const chatRequestLockRef = useRef(false);
+  const autoResumeRunIdRef = useRef(null);
   const syncSettingsTimeoutRef = useRef(null);
   const pendingSettingsRef = useRef({});
   const pendingConversationIdRef = useRef(null);
@@ -272,6 +273,26 @@ export default function ChatApp() {
     }
     wasStreamingRef.current = isStreaming;
   }, [isStreaming]);
+
+  useEffect(() => {
+    if (loading || model !== AGENT_MODEL_ID || !currentConversationId) return;
+    const index = messages.findIndex((msg) =>
+      msg?.role === "model" &&
+      msg?.agentRun?.status === "waiting_continue" &&
+      msg?.agentRun?.canResume === true &&
+      typeof msg?.agentRun?.runId === "string" &&
+      msg.agentRun.runId
+    );
+    if (index < 0) return;
+    const runId = messages[index]?.agentRun?.runId;
+    if (!runId || autoResumeRunIdRef.current === runId) return;
+    autoResumeRunIdRef.current = runId;
+    actions.continueAgentRun(index).finally(() => {
+      if (autoResumeRunIdRef.current === runId) {
+        autoResumeRunIdRef.current = null;
+      }
+    });
+  }, [actions, currentConversationId, loading, messages, model]);
 
   useEffect(() => {
     if (userInterruptedRef.current) return;
@@ -686,6 +707,9 @@ export default function ChatApp() {
           onDeleteUserMessage={actions.deleteUserMessage}
           onRegenerateModelMessage={actions.regenerateModelMessage}
           onContinueAgentRun={actions.continueAgentRun}
+          onApproveAgentRun={actions.approveAgentRun}
+          onRejectAgentRun={actions.rejectAgentRun}
+          onCancelAgentRun={actions.cancelAgentRun}
           onStartEdit={actions.startEdit}
           userAvatar={avatar}
           onAvatarChange={setAvatar}
