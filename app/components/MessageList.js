@@ -3,17 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Calculator,
   ChevronDown,
   Copy,
   Download,
   Edit3,
-  FileText,
-  Globe,
   Paperclip,
-  Play,
   RotateCcw,
-  Sparkles,
   Trash2,
   Type,
   User,
@@ -237,6 +232,29 @@ export default function MessageList({
     }
   };
 
+  const getAgentStatusLabel = (agentRun, executionState) => {
+    if (executionState === "awaiting_approval") return "等待审批";
+    if (executionState === "waiting_continue") return "等待继续";
+    if (agentRun?.status === "failed") return "执行失败";
+    if (agentRun?.status === "cancelled") return "已取消";
+    if (agentRun?.status === "completed") return "已完成";
+    return "执行中";
+  };
+
+  const buildAgentLinearStatusText = (agentRun, executionState, totalSteps) => {
+    if (!agentRun) return "";
+    const lines = [getAgentStatusLabel(agentRun, executionState)];
+    if (agentRun?.currentStep) lines.push(`当前阶段：${agentRun.currentStep}`);
+    if (Number.isFinite(agentRun?.currentCursor)) {
+      lines.push(`步骤 ${agentRun.currentCursor}/${totalSteps}`);
+    }
+
+    const summary = lines.join("  \n");
+    const notice = agentRun?.failureReason || agentRun?.lastError || agentRun?.approvalReason;
+    if (!notice) return summary;
+    return `${summary}\n\n${notice}`;
+  };
+
   return (
     <div
       ref={listRef}
@@ -277,72 +295,12 @@ export default function MessageList({
           </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-zinc-400">
-            {model === AGENT_MODEL_ID ? (
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full max-w-xl px-4"
-              >
-                <div className="relative overflow-hidden rounded-[28px] border border-orange-100 bg-gradient-to-br from-white via-orange-50/70 to-amber-50/80 px-6 py-8 text-center shadow-[0_18px_60px_rgba(217,119,87,0.12)]">
-                  <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,_rgba(251,191,36,0.18),_transparent_65%)]" />
-
-                  <div className="relative mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-[24px] border border-orange-200 bg-white shadow-[0_16px_40px_rgba(217,119,87,0.18)]">
-                    <AIAvatar model={model} size={50} animate />
-                  </div>
-
-                  <div className="relative mb-3 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white/90 px-3 py-1 text-xs font-medium text-orange-700">
-                    <Sparkles size={12} />
-                    <span>Vectaix Agent</span>
-                  </div>
-
-                  <p className="relative text-lg font-semibold text-zinc-800">
-                    你好，我是 Vectaix 的 Agent
-                  </p>
-                  <p className="relative mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">
-                    把问题、资料或文件交给我，我可以帮你整理内容、联网查证、分析附件，并产出更完整的办公结果。
-                  </p>
-
-                  <div className="relative mt-6 grid gap-3 text-left sm:grid-cols-3">
-                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur">
-                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
-                        <FileText size={18} />
-                      </div>
-                      <div className="text-sm font-medium text-zinc-700">读附件</div>
-                      <div className="mt-1 text-xs leading-5 text-zinc-500">
-                        PDF、Word、表格、文本文件都可以一起分析
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur">
-                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-                        <Globe size={18} />
-                      </div>
-                      <div className="text-sm font-medium text-zinc-700">查资料</div>
-                      <div className="mt-1 text-xs leading-5 text-zinc-500">
-                        需要最新信息时，可以联网补充和交叉核对
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm backdrop-blur">
-                      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
-                        <Calculator size={18} />
-                      </div>
-                      <div className="text-sm font-medium text-zinc-700">做整理</div>
-                      <div className="mt-1 text-xs leading-5 text-zinc-500">
-                        适合汇总表格、提炼重点、输出清晰结论
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <>
-                <div className="mb-4">
-                  <AIAvatar model={model} size={40} />
-                </div>
-                <p className="font-medium">开始新对话</p>
-              </>
-            )}
+            <>
+              <div className="mb-4">
+                <AIAvatar model={model} size={40} animate={model === AGENT_MODEL_ID} />
+              </div>
+              <p className="font-medium">开始新对话</p>
+            </>
           </div>
         )
       ) : (
@@ -361,11 +319,20 @@ export default function MessageList({
           const agentNeedsApproval = agentExecutionState === "awaiting_approval";
           const agentFailed = agentRun?.status === "failed";
           const agentCancelled = agentRun?.status === "cancelled";
+          const agentIsRunning = Boolean(agentRun)
+            && !agentNeedsApproval
+            && agentExecutionState !== "waiting_continue"
+            && agentRun?.status !== "failed"
+            && agentRun?.status !== "cancelled"
+            && agentRun?.status !== "completed";
           const agentAllSteps = Array.isArray(agentRun?.steps) ? agentRun.steps.filter(Boolean) : [];
-          const agentStepList = agentAllSteps.slice(0, 6);
           const agentTotalSteps = Math.max(agentAllSteps.length, AGENT_MIN_TOTAL_STEPS);
+          const agentLinearStatusText = !hasBodyOutput
+            ? buildAgentLinearStatusText(agentRun, agentExecutionState, agentTotalSteps)
+            : "";
+          const hasAgentLinearStatus = Boolean(agentLinearStatusText);
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
-          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState) {
+          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && !hasAgentLinearStatus) {
             return null;
           }
           return (
@@ -387,9 +354,13 @@ export default function MessageList({
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
-              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState) && (
+              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || hasAgentLinearStatus) && (
                 <div className="flex items-center gap-1.5">
-                  <AIAvatar model={model} size={28} animate={isCouncilModel(model) && msg.isStreaming} />
+                  <AIAvatar
+                    model={model}
+                    size={28}
+                    animate={(isCouncilModel(model) && msg.isStreaming) || (model === AGENT_MODEL_ID && agentIsRunning)}
+                  />
                   <span className="text-xs text-zinc-400 font-medium">
                     {CHAT_MODELS.find((m) => m.id === model)?.name}
                   </span>
@@ -417,106 +388,7 @@ export default function MessageList({
                   />
                 )}
 
-                {msg.role === "model" && agentRun && (
-                  <div className="mb-2 w-full max-w-[760px] rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3 text-sm text-zinc-600 shadow-sm">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600">
-                        {agentExecutionState === "awaiting_approval" ? "等待审批" :
-                          agentExecutionState === "waiting_continue" ? "等待继续" :
-                          agentRun?.status === "failed" ? "执行失败" :
-                          agentRun?.status === "cancelled" ? "已取消" :
-                          agentRun?.status === "completed" ? "已完成" : "执行中"}
-                      </span>
-                      {agentRun?.currentStep ? (
-                        <span className="text-xs text-zinc-500">当前阶段：{agentRun.currentStep}</span>
-                      ) : null}
-                      {Number.isFinite(agentRun?.currentCursor) ? (
-                        <span className="text-xs text-zinc-400">步骤 {agentRun.currentCursor}/{agentTotalSteps}</span>
-                      ) : null}
-                    </div>
-
-                    {agentRun?.approvalReason ? (
-                      <div className="mt-2 text-xs leading-5 text-zinc-500">{agentRun.approvalReason}</div>
-                    ) : null}
-
-                    {agentRun?.failureReason || agentRun?.lastError ? (
-                      <div className="mt-2 text-xs leading-5 text-red-500">{agentRun.failureReason || agentRun.lastError}</div>
-                    ) : null}
-
-                    {agentStepList.length > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {agentStepList.map((step, stepIndex) => (
-                          <span
-                            key={`${step.type || "step"}_${stepIndex}`}
-                            className={`rounded-full px-2 py-1 text-[11px] ${step.status === "done"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : step.status === "running"
-                                ? "bg-amber-50 text-amber-700"
-                                : "bg-zinc-100 text-zinc-500"
-                              }`}
-                          >
-                            {step.title || step.type || "步骤"}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {(agentNeedsApproval || agentCanResume || agentFailed || (!agentCancelled && agentRun?.status !== "completed")) ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {agentNeedsApproval ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => onApproveAgentRun?.(i)}
-                              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
-                            >
-                              批准继续
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onRejectAgentRun?.(i)}
-                              className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
-                            >
-                              拒绝
-                            </button>
-                          </>
-                        ) : null}
-
-                        {agentCanResume ? (
-                          <button
-                            type="button"
-                            onClick={() => onContinueAgentRun?.(i)}
-                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
-                          >
-                            继续执行
-                          </button>
-                        ) : null}
-
-                        {agentFailed ? (
-                          <button
-                            type="button"
-                            onClick={() => onContinueAgentRun?.(i)}
-                            className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
-                          >
-                            重试
-                          </button>
-                        ) : null}
-
-                        {!agentCancelled && agentRun?.status !== "completed" ? (
-                          <button
-                            type="button"
-                            onClick={() => onCancelAgentRun?.(i)}
-                            className="rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
-                          >
-                            取消任务
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
-                {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && (
+                {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && !hasAgentLinearStatus && (
                   <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
                     <span
                       className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
@@ -644,7 +516,7 @@ export default function MessageList({
                   </div>
                 ) : (
                   <>
-                    {(hasParts || (typeof msg.content === 'string' && msg.content.trim().length > 0)) && (
+                    {(hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0) || hasAgentLinearStatus) && (
                       <div
                         className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 inline-block max-w-full md:max-w-[900px] lg:max-w-[1000px] max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
@@ -700,7 +572,9 @@ export default function MessageList({
                           msg.role === "user" ? (
                             <Markdown enableHighlight={false}>{msg.content}</Markdown>
                           ) : (
-                            <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
+                            <Markdown enableHighlight={!msg.isStreaming}>
+                              {typeof msg.content === "string" && msg.content.trim().length > 0 ? msg.content : agentLinearStatusText}
+                            </Markdown>
                           )
                         )}
 
@@ -712,18 +586,20 @@ export default function MessageList({
                     {/* 消息操作按钮 */}
                     {!msg.isStreaming && (
                       <div
-                        className={`flex gap-1 mt-1 ${msg.role === "user" ? "flex-row-reverse" : ""
+                        className={`flex flex-wrap gap-1 mt-1 ${msg.role === "user" ? "flex-row-reverse" : ""
                           }`}
                       >
-                        <button
-                          onClick={() => onCopy(buildCopyText(msg))}
-                          className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-                          title="复制"
-                        >
-                          <Copy size={14} />
-                        </button>
+                        {(hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
+                          <button
+                            onClick={() => onCopy(buildCopyText(msg))}
+                            className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                            title="复制"
+                          >
+                            <Copy size={14} />
+                          </button>
+                        )}
 
-                        {msg.role === "model" && (
+                        {msg.role === "model" && (hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
                           <button
                             onClick={() => onCopy(buildPlainText(msg))}
                             className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
@@ -733,7 +609,7 @@ export default function MessageList({
                           </button>
                         )}
 
-                        {msg.role === "model" && (
+                        {msg.role === "model" && (hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
                           <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
                             <button
                               type="button"
@@ -793,14 +669,49 @@ export default function MessageList({
                           </>
                         ) : msg.role === "model" ? (
                           <>
+                            {agentNeedsApproval ? (
+                              <button
+                                type="button"
+                                onClick={() => onApproveAgentRun?.(i)}
+                                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
+                              >
+                                批准继续
+                              </button>
+                            ) : null}
+                            {agentNeedsApproval ? (
+                              <button
+                                type="button"
+                                onClick={() => onRejectAgentRun?.(i)}
+                                className="rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
+                              >
+                                拒绝
+                              </button>
+                            ) : null}
                             {agentCanResume ? (
                               <button
                                 type="button"
                                 onClick={() => onContinueAgentRun?.(i)}
-                                className="p-1.5 text-zinc-400 hover:text-emerald-600 hover:bg-zinc-100 rounded-lg transition-colors"
-                                title="继续执行"
+                                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
                               >
-                                <Play size={14} />
+                                继续执行
+                              </button>
+                            ) : null}
+                            {agentFailed ? (
+                              <button
+                                type="button"
+                                onClick={() => onContinueAgentRun?.(i)}
+                                className="rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
+                              >
+                                重试
+                              </button>
+                            ) : null}
+                            {!agentCancelled && agentRun?.status !== "completed" ? (
+                              <button
+                                type="button"
+                                onClick={() => onCancelAgentRun?.(i)}
+                                className="rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
+                              >
+                                取消任务
                               </button>
                             ) : null}
                             <button
@@ -833,7 +744,12 @@ export default function MessageList({
       {/* 只在有消息且加载中且没有正在流式输出或搜索的消息时显示加载指示器 */}
       {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => (m.isStreaming && !m.isWaitingFirstChunk) || m.isSearching) && (
         <div className="flex gap-2 sm:gap-3 items-start">
-          <ResponsiveAIAvatar model={model} mobileSize={22} desktopSize={28} animate={isCouncilModel(model)} />
+          <ResponsiveAIAvatar
+            model={model}
+            mobileSize={22}
+            desktopSize={28}
+            animate={isCouncilModel(model) || model === AGENT_MODEL_ID}
+          />
           <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
             <span
               className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
