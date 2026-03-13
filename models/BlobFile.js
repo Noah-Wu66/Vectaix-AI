@@ -86,8 +86,45 @@ const BlobFileSchema = new mongoose.Schema({
         type: Number,
         default: null,
     },
+    cellCount: {
+        type: Number,
+        default: null,
+    },
+    maxCols: {
+        type: Number,
+        default: null,
+    },
     errorMessage: {
         type: String,
+        default: null,
+    },
+    parseProvider: {
+        type: String,
+        enum: ['e2b', null],
+        default: null,
+    },
+    parseTemplateVersion: {
+        type: String,
+        default: null,
+    },
+    parseJob: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+    },
+    sandboxPath: {
+        type: String,
+        default: null,
+    },
+    parseArtifacts: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: [],
+    },
+    parseStartedAt: {
+        type: Date,
+        default: null,
+    },
+    parseFinishedAt: {
+        type: Date,
         default: null,
     },
     createdAt: {

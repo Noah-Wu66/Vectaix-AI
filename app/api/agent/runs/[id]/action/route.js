@@ -7,6 +7,7 @@ import {
   buildAgentMessageMeta,
   generateResumeToken,
 } from "@/lib/server/agent/runHelpers";
+import { killSandboxSession, pauseSandboxSession } from "@/lib/server/sandbox/e2b";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,11 +108,13 @@ export async function POST(req, { params }) {
       decidedAt: new Date(),
     };
     content = "你已拒绝继续执行，本次任务已结束。";
+    await pauseSandboxSession(run.sandboxSession).catch(() => {});
   } else if (action === "cancel") {
     patch.status = "cancelled";
     patch.executionState = AGENT_EXECUTION_STATES.cancelled;
     patch.failureReason = "用户取消任务";
     content = "任务已取消。";
+    await killSandboxSession(run.sandboxSession).catch(() => {});
   }
 
   const nextRun = await AgentRun.findByIdAndUpdate(run._id, { $set: patch }, { new: true });

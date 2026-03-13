@@ -36,6 +36,35 @@ const LeaseSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const SandboxCommandSchema = new mongoose.Schema(
+  {
+    pid: { type: Number, default: null },
+    command: { type: String, default: "" },
+    status: { type: String, default: "" },
+    startedAt: { type: Date, default: null },
+    stdoutPath: { type: String, default: "" },
+    stderrPath: { type: String, default: "" },
+    exitCodePath: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
+const SandboxSessionSchema = new mongoose.Schema(
+  {
+    sandboxId: { type: String, default: "" },
+    template: { type: String, default: "" },
+    templateVersion: { type: String, default: "" },
+    status: { type: String, default: "" },
+    workdir: { type: String, default: "" },
+    lastConnectedAt: { type: Date, default: null },
+    requiresApproval: { type: Boolean, default: false },
+    canResume: { type: Boolean, default: false },
+    latestCommand: { type: mongoose.Schema.Types.Mixed, default: null },
+    pendingCommand: { type: SandboxCommandSchema, default: null },
+  },
+  { _id: false }
+);
+
 const AgentRunSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -151,6 +180,10 @@ const AgentRunSchema = new mongoose.Schema({
   },
   metadata: {
     type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
+  sandboxSession: {
+    type: SandboxSessionSchema,
     default: null,
   },
   startedAt: {

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.53.0",
+    "e2b": "^2.8.4",
     "@google/genai": "^1.0.0",
     "@lobehub/icons": "^1.97.2",
     "@vercel/blob": "^0.19.0",

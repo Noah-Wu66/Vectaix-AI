@@ -4,6 +4,7 @@ import BlobFile from '@/models/BlobFile';
 import AgentRun from '@/models/AgentRun';
 import Conversation from '@/models/Conversation';
 import { AGENT_STALE_RUN_MS, buildAgentMessageMeta } from '@/lib/server/agent/runHelpers';
+import { pauseSandboxSession } from '@/lib/server/sandbox/e2b';
 
 export const runtime = 'nodejs';
 
@@ -75,6 +76,7 @@ export async function GET(request) {
               status: 'waiting_continue',
               executionState: 'waiting_continue',
               currentStep: '等待继续执行',
+              'sandboxSession.canResume': true,
               updatedAt: new Date(),
               lease: null,
             },
@@ -82,6 +84,7 @@ export async function GET(request) {
         );
         const refreshedRuns = await AgentRun.find({ _id: { $in: runIds } });
         for (const run of refreshedRuns) {
+          await pauseSandboxSession(run.sandboxSession).catch(() => {});
           const conversation = await Conversation.findById(run.conversationId).select('messages');
           if (!conversation) continue;
           const nextMessages = Array.isArray(conversation.messages)

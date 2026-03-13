@@ -21,6 +21,8 @@ export async function POST(req) {
 
   const url = typeof body?.url === "string" ? body.url.trim() : "";
   const model = typeof body?.model === "string" ? body.model.trim() : "";
+  const conversationId = typeof body?.conversationId === "string" ? body.conversationId.trim() : "";
+  const runId = typeof body?.runId === "string" ? body.runId.trim() : "";
   if (!url) {
     return Response.json({ error: "缺少文件地址" }, { status: 400 });
   }
@@ -33,8 +35,13 @@ export async function POST(req) {
     const prepared = await prepareDocumentAttachment({
       userId: auth.userId,
       url,
+      conversationId: conversationId || null,
+      runId: runId || null,
     });
-    return Response.json({ file: prepared.file });
+    return Response.json({
+      file: prepared.prepared.file,
+      sandboxSession: prepared.sandboxSession || null,
+    });
   } catch (error) {
     return Response.json({ error: error?.message || "文件解析失败" }, { status: 400 });
   }
