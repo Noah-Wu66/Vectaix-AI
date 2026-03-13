@@ -44,10 +44,10 @@ export async function storedPartToBytedancePart(part, role, options = {}) {
     if (isNonEmptyString(fileUrl)) {
       const fileTextMap = options?.fileTextMap instanceof Map ? options.fileTextMap : new Map();
       const prepared = fileTextMap.get(fileUrl);
-      if (prepared?.extractedText) {
+      if (prepared?.structuredText || prepared?.extractedText) {
         return {
           type: "input_text",
-          text: buildAttachmentTextBlock(part.fileData, prepared.extractedText),
+          text: buildAttachmentTextBlock(prepared.file || part.fileData, prepared.structuredText || prepared.extractedText),
         };
       }
     }

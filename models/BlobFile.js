@@ -50,6 +50,26 @@ const BlobFileSchema = new mongoose.Schema({
         type: String,
         default: null,
     },
+    structuredText: {
+        type: String,
+        default: null,
+    },
+    formatSummary: {
+        type: String,
+        default: null,
+    },
+    visualAssets: {
+        type: [mongoose.Schema.Types.Mixed],
+        default: [],
+    },
+    visualAssetCount: {
+        type: Number,
+        default: 0,
+    },
+    parseVersion: {
+        type: Number,
+        default: 1,
+    },
     extractedChars: {
         type: Number,
         default: 0,

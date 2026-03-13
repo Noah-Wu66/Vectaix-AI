@@ -26,6 +26,8 @@ function extractAttachmentsFromMessage(message) {
       size: Number(part.fileData.size) || 0,
       extension: part.fileData.extension,
       category: part.fileData.category,
+      formatSummary: typeof part.fileData.formatSummary === "string" ? part.fileData.formatSummary : "",
+      visualAssetCount: Number(part.fileData.visualAssetCount) || 0,
     }));
 }
 
@@ -61,6 +63,8 @@ function buildUserMessageParts({ prompt, images, attachments }) {
         size: Number(item.size) || 0,
         extension: item.extension,
         category: item.category,
+        formatSummary: typeof item.formatSummary === "string" ? item.formatSummary : "",
+        visualAssetCount: Number(item.visualAssetCount) || 0,
       },
     });
   }

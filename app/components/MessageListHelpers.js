@@ -125,6 +125,9 @@ export function AttachmentCard({ file, compact = false }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-zinc-700">{file.name}</div>
         <div className="truncate text-xs text-zinc-400">{formatAttachmentMeta(file)}</div>
+        {typeof file.formatSummary === "string" && file.formatSummary.trim() ? (
+          <div className="truncate text-xs text-zinc-400/90">{file.formatSummary}</div>
+        ) : null}
       </div>
       {downloadUrl ? (
         <a
