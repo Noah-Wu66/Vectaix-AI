@@ -206,6 +206,7 @@ export async function POST(req) {
       prompt,
       model,
       config,
+      history,
       historyLimit,
       conversationId,
       mode,
