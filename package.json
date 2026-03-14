@@ -18,7 +18,7 @@
     "bcryptjs": "^2.4.3",
     "framer-motion": "^11.0.0",
     "jose": "^5.2.0",
-    "lucide-react": "^0.300.0",
+    "lucide-react": "^0.577.0",
     "mongoose": "^8.0.0",
     "next": "16.1.1",
     "mammoth": "^1.9.1",
