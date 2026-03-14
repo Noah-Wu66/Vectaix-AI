@@ -287,12 +287,23 @@ export default function ChatApp() {
     const runId = messages[index]?.agentRun?.runId;
     if (!runId || autoResumeRunIdRef.current === runId) return;
     autoResumeRunIdRef.current = runId;
+    // 立即清除 canResume，避免选项按钮闪现后又消失
+    setMessages((prev) => {
+      const next = prev.slice();
+      if (next[index]?.agentRun) {
+        next[index] = {
+          ...next[index],
+          agentRun: { ...next[index].agentRun, canResume: false, status: "running" },
+        };
+      }
+      return next;
+    });
     actions.continueAgentRun(index).finally(() => {
       if (autoResumeRunIdRef.current === runId) {
         autoResumeRunIdRef.current = null;
       }
     });
-  }, [actions, currentConversationId, loading, messages, model]);
+  }, [actions, currentConversationId, loading, messages, model, setMessages]);
 
   useEffect(() => {
     if (userInterruptedRef.current) return;

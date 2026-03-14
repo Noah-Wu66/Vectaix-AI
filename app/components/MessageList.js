@@ -287,7 +287,7 @@ export default function MessageList({
             (typeof msg.content === "string" && msg.content.trim().length > 0)
             || (hasParts && msg.parts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
           const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline)
-            && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse");
+            && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool");
           const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
           const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
           const agentRun = msg?.agentRun && typeof msg.agentRun === "object" ? msg.agentRun : null;

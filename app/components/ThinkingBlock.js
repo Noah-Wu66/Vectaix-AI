@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, ChevronDown, ChevronUp, FileUp, FileScan, Lightbulb, Search, Zap } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, FileUp, FileScan, Lightbulb, Search, Terminal, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
 import { Citations } from "./MessageListHelpers";
@@ -203,7 +203,9 @@ export default function ThinkingBlock({
           ? <FileUp className="thinking-icon-step" />
           : step.kind === "parse"
             ? <FileScan className="thinking-icon-step" />
-            : <Lightbulb className="thinking-icon-step" />;
+            : step.kind === "tool"
+              ? <Terminal className="thinking-icon-step" />
+              : <Lightbulb className="thinking-icon-step" />;
 
     const capsuleClass = `thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`;
 
@@ -250,6 +252,19 @@ export default function ThinkingBlock({
           <div className={capsuleClass}>
             {icon}
             <span>{detail || titleText}</span>
+            {isRunning ? <LoadingDots /> : null}
+          </div>
+        </div>
+      );
+    }
+
+    if (step.kind === "tool") {
+      const label = step.title || "沙箱执行";
+      return (
+        <div key={step.id || `tool-${idx}`} className="w-full max-w-[760px]">
+          <div className={capsuleClass}>
+            {icon}
+            <span>{label}</span>
             {isRunning ? <LoadingDots /> : null}
           </div>
         </div>
