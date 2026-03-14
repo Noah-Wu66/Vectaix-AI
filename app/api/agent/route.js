@@ -155,10 +155,18 @@ async function upsertAgentMessage({
   if (append || targetIndex < 0) {
     nextMessages.push(message);
   } else {
+    const prevMessage = nextMessages[targetIndex] || {};
+    const prevTimeline = Array.isArray(prevMessage?.thinkingTimeline) ? prevMessage.thinkingTimeline : [];
+    const nextTimeline = Array.isArray(message?.thinkingTimeline) ? message.thinkingTimeline : [];
+    const mergedTimeline = nextTimeline.reduce(
+      (acc, step) => pushOrReplaceTimelineStep(acc, step),
+      prevTimeline.slice()
+    );
     nextMessages[targetIndex] = {
-      ...nextMessages[targetIndex],
+      ...prevMessage,
       ...message,
-      id: nextMessages[targetIndex]?.id || message.id,
+      id: prevMessage?.id || message.id,
+      thinkingTimeline: mergedTimeline,
     };
   }
 
