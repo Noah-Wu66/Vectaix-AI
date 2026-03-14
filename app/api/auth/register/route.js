@@ -105,7 +105,7 @@ export async function POST(req) {
 
         // Auto Login: Create Session
         const token = await signAuthToken({ userId: user._id, email: user.email });
-        setAuthCookie(token);
+        await setAuthCookie(token);
 
         return Response.json({
             success: true,

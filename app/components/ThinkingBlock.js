@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, ChevronDown, ChevronUp, FileUp, FileScan, Lightbulb, Search, Terminal, Zap } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, FileUp, FileScan, Lightbulb, Search, Terminal } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
 import { Citations } from "./MessageListHelpers";
-import { getCouncilExpertDisplayLabel } from "@/lib/shared/models";
+import { getCouncilExpertDisplayLabel, SEED_MODEL_ID } from "@/lib/shared/models";
 
 function normalizeTimeline(timeline) {
   if (!Array.isArray(timeline)) return [];
@@ -62,7 +62,8 @@ function normalizeCouncilExpertStates(states) {
 function normalizeCouncilSummaryState(state) {
   if (!state || typeof state !== "object") return null;
   return {
-    label: typeof state.label === "string" ? state.label : "Seed 2.0 Pro",
+    modelId: typeof state.modelId === "string" ? state.modelId : SEED_MODEL_ID,
+    label: typeof state.label === "string" ? state.label : "Seed",
     status: typeof state.status === "string" ? state.status : "pending",
     phase: typeof state.phase === "string" ? state.phase : "pending",
     message: typeof state.message === "string" ? state.message : "",
@@ -367,7 +368,7 @@ export default function ThinkingBlock({
             return (
               <div className="w-full max-w-[760px]">
                 <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
-                  <Zap className="thinking-icon-step" />
+                  <ModelGlyph model={s.modelId} size={14} />
                   <span>{s.label} · {statusText}</span>
                   {isRunning ? <LoadingDots /> : null}
                 </div>

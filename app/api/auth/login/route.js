@@ -59,7 +59,7 @@ export async function POST(req) {
         }
 
         const token = await signAuthToken({ userId: user._id, email: user.email });
-        setAuthCookie(token);
+        await setAuthCookie(token);
 
         return Response.json({
             success: true,

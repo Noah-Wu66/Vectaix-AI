@@ -17,6 +17,6 @@ export async function GET() {
 }
 
 export async function DELETE() {
-    clearAuthCookie();
+    await clearAuthCookie();
     return Response.json({ success: true });
 }

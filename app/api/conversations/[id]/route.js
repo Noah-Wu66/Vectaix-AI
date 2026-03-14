@@ -14,34 +14,42 @@ async function requireConversationUser() {
   return getAuthPayload();
 }
 
-export async function GET(req, { params }) {
-  if (!isValidConversationId(params.id)) {
+async function getRouteId(context) {
+  const { id } = await context.params;
+  return id;
+}
+
+export async function GET(req, context) {
+  const id = await getRouteId(context);
+  if (!isValidConversationId(id)) {
     return Response.json({ error: "Invalid id" }, { status: 400 });
   }
 
   const user = await requireConversationUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const conversation = await getConversationForUser(params.id, user.userId);
+  const conversation = await getConversationForUser(id, user.userId);
   if (!conversation) return Response.json({ error: "Not found" }, { status: 404 });
 
   return Response.json({ conversation });
 }
 
-export async function DELETE(req, { params }) {
-  if (!isValidConversationId(params.id)) {
+export async function DELETE(req, context) {
+  const id = await getRouteId(context);
+  if (!isValidConversationId(id)) {
     return Response.json({ error: "Invalid id" }, { status: 400 });
   }
 
   const user = await requireConversationUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  await deleteConversationForUser(params.id, user.userId);
+  await deleteConversationForUser(id, user.userId);
   return Response.json({ success: true });
 }
 
-export async function PUT(req, { params }) {
-  if (!isValidConversationId(params.id)) {
+export async function PUT(req, context) {
+  const id = await getRouteId(context);
+  if (!isValidConversationId(id)) {
     return Response.json({ error: "Invalid id" }, { status: 400 });
   }
 
@@ -61,7 +69,7 @@ export async function PUT(req, { params }) {
   }
 
   try {
-    const conversation = await updateConversationForUser(params.id, user.userId, body);
+    const conversation = await updateConversationForUser(id, user.userId, body);
     return Response.json({ conversation: conversation?.toObject?.() || conversation });
   } catch (error) {
     return Response.json({ error: error?.message || "更新失败" }, { status: 400 });

@@ -27,8 +27,8 @@ export const viewport = {
     userScalable: false, // Prevent zooming on inputs in iOS
 };
 
-export default function RootLayout({ children }) {
-    const nonce = headers().get('x-csp-nonce');
+export default async function RootLayout({ children }) {
+    const nonce = (await headers()).get('x-csp-nonce');
     // Script to prevent theme flash by setting the theme class before React hydration
     const themeScript = `
  (function() {

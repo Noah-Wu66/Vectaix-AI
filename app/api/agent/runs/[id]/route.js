@@ -6,14 +6,15 @@ import { buildAgentMessageMeta } from "@/lib/server/agent/runHelpers";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req, { params }) {
+export async function GET(req, context) {
   await dbConnect();
   const auth = await getAuthPayload();
   if (!auth) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const run = await AgentRun.findOne({ _id: params.id, userId: auth.userId });
+  const { id } = await context.params;
+  const run = await AgentRun.findOne({ _id: id, userId: auth.userId });
   if (!run) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }

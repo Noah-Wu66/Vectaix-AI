@@ -56,7 +56,7 @@ async function syncConversationAgentRun({ conversationId, userId, runId, agentRu
   );
 }
 
-export async function POST(req, { params }) {
+export async function POST(req, context) {
   await dbConnect();
   const auth = await getAuthPayload();
   if (!auth) {
@@ -75,7 +75,8 @@ export async function POST(req, { params }) {
     return Response.json({ error: "action invalid" }, { status: 400 });
   }
 
-  const run = await AgentRun.findOne({ _id: params.id, userId: auth.userId });
+  const { id } = await context.params;
+  const run = await AgentRun.findOne({ _id: id, userId: auth.userId });
   if (!run) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }

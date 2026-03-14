@@ -1,6 +1,6 @@
 # Vectaix AI
 
-一个部署在 Vercel 上的多模型 AI 聊天应用，前端、后端接口、定时任务都在同一个 `Next.js 14 App Router` 项目里。
+一个部署在 Vercel 上的多模型 AI 聊天应用，前端、后端接口、定时任务都在同一个 `Next.js 16 App Router` 项目里。
 
 这不是单纯的聊天壳子，而是已经做成产品形态的一套 AI Web 应用，包含多模型切换、Agent 执行流、Council 多专家会审、文件上传解析、用户系统、管理员后台、数据导入导出等完整能力。
 
@@ -120,7 +120,7 @@ public/
 scripts/
   sandbox/parse_attachment.py
 
-middleware.js               CSP、安全头、Nonce
+proxy.js                    CSP、安全头、Nonce
 vercel.json                 Vercel cron 配置
 ```
 

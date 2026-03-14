@@ -21,6 +21,7 @@ import {
   CLAUDE_OPUS_MODEL,
   COUNCIL_EXPERTS,
   GEMINI_FLASH_MODEL,
+  getCouncilExpertDisplayLabel,
   SEED_MODEL_ID,
 } from "@/lib/shared/models";
 
@@ -181,7 +182,8 @@ export function buildCouncilExpertState(expert, patch = {}) {
 
 export function buildCouncilSummaryState(patch = {}) {
   return {
-    label: "Seed 2.0 Pro",
+    modelId: SEED_MODEL_ID,
+    label: "Seed",
     status: typeof patch.status === "string" ? patch.status : "pending",
     phase: typeof patch.phase === "string" ? patch.phase : "pending",
     message: typeof patch.message === "string" ? patch.message : "",
@@ -283,7 +285,7 @@ async function buildExpertSystemPrompt({ enableWebSearch, searchContextText, inc
 
 async function buildSeedSystemPrompt() {
   const [firstExpertLabel = "专家1", secondExpertLabel = "专家2", thirdExpertLabel = "专家3"] =
-    COUNCIL_EXPERT_CONFIGS.map((expert) => expert.label);
+    COUNCIL_EXPERT_CONFIGS.map((expert) => getCouncilExpertDisplayLabel(expert));
   return injectCurrentTimeSystemReminder(`你是 Council 的最终汇总模型 Seed。你会收到用户文字问题、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务是比较三位专家已经写出的正式回答，输出一份最终 Markdown 结论。
 
 重要输入边界：
@@ -311,7 +313,8 @@ async function buildSeedSystemPrompt() {
 9. “证据”和“分歧原因”只能基于专家回答或提供的资料来写，不要脑补。
 10. “综合分析”只能总结三位专家已经明确写出的内容、差异及其意义，不能替用户重新发明新答案，不能加入专家都没提过的新事实、新结论或新建议。
 11. 不要编造不存在的共识或分歧；若信息不足，要明确写成占位说明。
-12. 不要泄露任何模型思维链，不要输出裸链接。`);
+12. 不要泄露任何模型思维链，不要输出裸链接。
+13. 所有正文和表格里的模型名统一只写短名：${firstExpertLabel}、${secondExpertLabel}、${thirdExpertLabel}，不要写完整版本号。`);
 }
 
 function extractUpstreamErrorMessage(status, rawText) {

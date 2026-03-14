@@ -25,13 +25,13 @@ function hasEncryptedData(obj) {
 }
 
 // 清除用户的加密数据
-export async function POST(req, { params }) {
+export async function POST(req, context) {
     const admin = await requireAdmin();
     if (!admin) {
         return Response.json({ error: '无权限' }, { status: 403 });
     }
 
-    const { id } = params;
+    const { id } = await context.params;
     if (!mongoose.isValidObjectId(id)) {
         return Response.json({ error: '无效的用户 ID' }, { status: 400 });
     }
@@ -83,13 +83,13 @@ export async function POST(req, { params }) {
 }
 
 // 重置用户密码
-export async function PATCH(req, { params }) {
+export async function PATCH(req, context) {
     const admin = await requireAdmin();
     if (!admin) {
         return Response.json({ error: '无权限' }, { status: 403 });
     }
 
-    const { id } = params;
+    const { id } = await context.params;
     if (!mongoose.isValidObjectId(id)) {
         return Response.json({ error: '无效的用户 ID' }, { status: 400 });
     }
@@ -110,13 +110,13 @@ export async function PATCH(req, { params }) {
 }
 
 // 删除用户及其所有数据
-export async function DELETE(req, { params }) {
+export async function DELETE(req, context) {
     const admin = await requireAdmin();
     if (!admin) {
         return Response.json({ error: '无权限' }, { status: 403 });
     }
 
-    const { id } = params;
+    const { id } = await context.params;
     if (!mongoose.isValidObjectId(id)) {
         return Response.json({ error: '无效的用户 ID' }, { status: 400 });
     }

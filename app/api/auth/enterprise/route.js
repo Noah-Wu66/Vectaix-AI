@@ -23,7 +23,7 @@ export async function GET() {
       return Response.json({ error: '服务端未配置 OA_SSO_SECRET' }, { status: 500 });
     }
 
-    const oaToken = cookies().get(OA_COOKIE_NAME)?.value;
+    const oaToken = (await cookies()).get(OA_COOKIE_NAME)?.value;
     if (!oaToken) {
       return Response.json({ error: '未检测到企业登录状态' }, { status: 401 });
     }
@@ -46,7 +46,7 @@ export async function GET() {
     }
 
     const token = await signAuthToken({ userId: user._id, email: user.email });
-    setAuthCookie(token);
+    await setAuthCookie(token);
 
     return Response.json({
       success: true,

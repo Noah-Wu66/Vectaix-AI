@@ -28,7 +28,7 @@ function buildCsp(nonce) {
   return directives.join("; ");
 }
 
-export function middleware(request) {
+export function proxy(request) {
   const nonce = generateNonce();
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-csp-nonce", nonce);
