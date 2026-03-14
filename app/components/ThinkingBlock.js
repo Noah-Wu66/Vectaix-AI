@@ -193,7 +193,7 @@ export default function ThinkingBlock({
         return `联网搜索完成${query}${countLabel}`;
       }
       if (step.kind === "reader") return isRunning ? "查看网页中" : (isError ? "网页读取失败" : "网页正文已读取");
-      if (step.kind === "sandbox") return isRunning ? "正在连接沙盒" : (isError ? "沙盒连接失败" : "沙盒已就绪");
+      if (step.kind === "sandbox") return isRunning ? "正在准备运行环境" : (isError ? "运行环境准备失败" : "运行环境已准备完成");
       if (step.kind === "upload") return isRunning ? "正在上传文件" : (isError ? "文件上传失败" : "文件已上传");
       if (step.kind === "parse") return isRunning ? "正在解析文件" : (isError ? "文件解析失败" : "文件已解析");
       return "处理中";
@@ -203,7 +203,7 @@ export default function ThinkingBlock({
       if (step.kind === "thought") return Boolean(step.content);
       if (step.kind === "search") return Boolean(step.query || Number.isFinite(step.resultCount) || (isError && step.message));
       if (step.kind === "reader") return Boolean((step.title || step.url) || (isError && step.message));
-      if (step.kind === "sandbox") return Boolean(step.content || step.message || step.title);
+      if (step.kind === "sandbox") return Boolean(isError && (step.message || step.title));
       if (step.kind === "upload" || step.kind === "parse") return false;
       return false;
     })();
@@ -266,7 +266,7 @@ export default function ThinkingBlock({
     }
 
     if (step.kind === "sandbox") {
-      const detail = step.content || step.message || step.title || "";
+      const detail = isError ? (step.message || step.title || "") : "";
       return (
         <div key={step.id || `sandbox-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
