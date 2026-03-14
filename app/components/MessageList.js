@@ -75,6 +75,7 @@ export default function MessageList({
   const [openExportMenuIndex, setOpenExportMenuIndex] = useState(null);
   const prevMessagesRef = useRef([]);
   const isCouncilConversation = isCouncilModel(model);
+  const isAgentConversation = model === AGENT_MODEL_ID;
   const toast = useToast();
 
   useEffect(() => {
@@ -294,7 +295,6 @@ export default function MessageList({
           const agentCanResume = agentRun?.canResume === true && typeof agentRun?.runId === "string" && agentRun.runId;
           const agentExecutionState = typeof agentRun?.executionState === "string" ? agentRun.executionState : agentRun?.status;
           const agentNeedsApproval = agentExecutionState === "awaiting_approval";
-          const agentFailed = agentRun?.status === "failed";
           const agentCancelled = agentRun?.status === "cancelled";
           const agentIsRunning = Boolean(agentRun)
             && !agentNeedsApproval
@@ -377,7 +377,7 @@ export default function MessageList({
                 )}
 
                 {/* 编辑模式 */}
-                {editingMsgIndex === i && msg.role === "user" ? (
+                {editingMsgIndex === i && msg.role === "user" && !isAgentConversation ? (
                   <div className="w-full space-y-2">
                     {!model?.startsWith("deepseek-") && (
                       <input
@@ -628,13 +628,15 @@ export default function MessageList({
                             >
                               <Trash2 size={14} />
                             </button>
-                            <button
-                              onClick={() => onStartEdit(i, msg)}
-                              className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-                              title="编辑并重新生成"
-                            >
-                              <Edit3 size={14} />
-                            </button>
+                            {!isAgentConversation ? (
+                              <button
+                                onClick={() => onStartEdit(i, msg)}
+                                className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
+                                title="编辑并重新生成"
+                              >
+                                <Edit3 size={14} />
+                              </button>
+                            ) : null}
                           </>
                         ) : msg.role === "model" ? (
                           <>
@@ -665,15 +667,6 @@ export default function MessageList({
                                 继续执行
                               </button>
                             ) : null}
-                            {agentFailed ? (
-                              <button
-                                type="button"
-                                onClick={() => onContinueAgentRun?.(i)}
-                                className="rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
-                              >
-                                重试
-                              </button>
-                            ) : null}
                             {!agentCancelled && agentRun?.status !== "completed" ? (
                               <button
                                 type="button"
@@ -690,14 +683,16 @@ export default function MessageList({
                             >
                               <Trash2 size={14} />
                             </button>
-                            <button
-                              onClick={() => onRegenerateModelMessage(i)}
-                              disabled={loading}
-                              className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
-                              title="重新生成"
-                            >
-                              <RotateCcw size={14} />
-                            </button>
+                            {!isAgentConversation ? (
+                              <button
+                                onClick={() => onRegenerateModelMessage(i)}
+                                disabled={loading}
+                                className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
+                                title="重新生成"
+                              >
+                                <RotateCcw size={14} />
+                              </button>
+                            ) : null}
                           </>
                         ) : null}
                       </div>

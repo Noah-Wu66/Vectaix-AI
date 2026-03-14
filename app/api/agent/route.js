@@ -4,7 +4,7 @@ import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { rateLimit, getClientIP } from "@/lib/rateLimit";
 import { AGENT_MODEL_ID } from "@/lib/shared/models";
-import { isNonEmptyString, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
+import { isNonEmptyString } from "@/app/api/chat/utils";
 import { runAgentRuntimeV2 } from "@/lib/server/agent/runtimeV2";
 import { buildAgentMessageMeta } from "@/lib/server/agent/runHelpers";
 
@@ -14,32 +14,6 @@ export const maxDuration = 300;
 
 const CHAT_RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
-
-function extractAttachmentsFromMessage(message) {
-  const parts = Array.isArray(message?.parts) ? message.parts : [];
-  return parts
-    .filter((part) => part?.fileData?.url && part?.fileData?.name)
-    .map((part) => ({
-      url: part.fileData.url,
-      name: part.fileData.name,
-      mimeType: part.fileData.mimeType,
-      size: Number(part.fileData.size) || 0,
-      extension: part.fileData.extension,
-      category: part.fileData.category,
-      formatSummary: typeof part.fileData.formatSummary === "string" ? part.fileData.formatSummary : "",
-      visualAssetCount: Number(part.fileData.visualAssetCount) || 0,
-    }));
-}
-
-function extractImagesFromMessage(message) {
-  const parts = Array.isArray(message?.parts) ? message.parts : [];
-  return parts
-    .filter((part) => part?.inlineData?.url && part?.inlineData?.mimeType)
-    .map((part) => ({
-      url: part.inlineData.url,
-      mimeType: part.inlineData.mimeType,
-    }));
-}
 
 function buildUserMessageParts({ prompt, images, attachments }) {
   const parts = [];
@@ -69,6 +43,40 @@ function buildUserMessageParts({ prompt, images, attachments }) {
     });
   }
   return parts;
+}
+
+function buildHistoryMessage(message) {
+  if (!message || typeof message !== "object") return null;
+  if (message.role !== "user" && message.role !== "model") return null;
+  const parts = Array.isArray(message.parts)
+    ? message.parts.map((part) => (part?.toObject ? part.toObject() : part)).filter(Boolean)
+    : [];
+  const content = typeof message.content === "string" ? message.content : "";
+  return {
+    role: message.role,
+    content,
+    parts,
+  };
+}
+
+async function loadConversationHistory({
+  conversationId,
+  userId,
+  historyLimit,
+  excludeRunId = "",
+}) {
+  const conv = await Conversation.findOne({ _id: conversationId, userId }).select("messages");
+  if (!conv) return [];
+
+  const normalized = Array.isArray(conv.messages)
+    ? conv.messages
+      .map((item) => (item?.toObject ? item.toObject() : item))
+      .filter((item) => item?.agentRun?.runId !== excludeRunId)
+      .map(buildHistoryMessage)
+      .filter(Boolean)
+    : [];
+
+  return historyLimit > 0 ? normalized.slice(-historyLimit) : normalized;
 }
 
 function createTimelineStepFromAgentEvent(step) {
@@ -148,11 +156,14 @@ async function upsertAgentMessage({
     ? conv.messages.map((item) => (item?.toObject ? item.toObject() : item))
     : [];
 
-  const targetIndex = nextMessages.findIndex((item) =>
-    (messageId && item?.id === messageId) || (runId && item?.agentRun?.runId === runId)
-  );
+  const targetIndex = runId
+    ? nextMessages.findIndex((item) => item?.agentRun?.runId === runId)
+    : -1;
 
   if (append || targetIndex < 0) {
+    if (!append) {
+      return conv;
+    }
     nextMessages.push(message);
   } else {
     const prevMessage = nextMessages[targetIndex] || {};
@@ -165,7 +176,7 @@ async function upsertAgentMessage({
     nextMessages[targetIndex] = {
       ...prevMessage,
       ...message,
-      id: prevMessage?.id || message.id,
+      id: prevMessage?.id || messageId || message.id,
       thinkingTimeline: mergedTimeline,
     };
   }
@@ -195,11 +206,9 @@ export async function POST(req) {
       prompt,
       model,
       config,
-      history,
       historyLimit,
       conversationId,
       mode,
-      messages,
       settings,
       userMessageId,
       modelMessageId,
@@ -257,8 +266,9 @@ export async function POST(req) {
     const isContinueMode = (mode === "continue" || resume === true) && isNonEmptyString(runId);
     const isApproveMode = (mode === "approve" || approvalDecision === "approved" || approvalDecision === true) && isNonEmptyString(runId);
     const isResume = isContinueMode || isApproveMode;
-    const isRegenerateMode = mode === "regenerate" && currentConversationId && Array.isArray(messages);
-    let storedMessagesForRegenerate = null;
+    if (mode === "regenerate") {
+      return Response.json({ error: "Agent 模式不支持重新生成或编辑并重新生成" }, { status: 400 });
+    }
 
     if (!currentConversationId && !isResume) {
       const titleSource = isNonEmptyString(prompt)
@@ -293,63 +303,45 @@ export async function POST(req) {
         }))
       : [];
 
-    if (isRegenerateMode) {
-      let sanitized;
-      try {
-        sanitized = sanitizeStoredMessagesStrict(messages);
-      } catch (error) {
-        return Response.json({ error: error?.message || "messages invalid" }, { status: 400 });
-      }
-
-      const conv = await Conversation.findOneAndUpdate(
-        { _id: currentConversationId, userId: auth.userId },
-        { $set: { messages: sanitized, updatedAt: Date.now() } },
-        { new: true }
-      ).select("messages");
-
-      if (!conv) {
-        return Response.json({ error: "Not found" }, { status: 404 });
-      }
-
-      storedMessagesForRegenerate = sanitized;
-      const lastUserMessage = storedMessagesForRegenerate[storedMessagesForRegenerate.length - 1];
-          currentPrompt = typeof lastUserMessage?.content === "string" ? lastUserMessage.content : currentPrompt;
-      currentAttachments = extractAttachmentsFromMessage(lastUserMessage);
-      currentImages = extractImagesFromMessage(lastUserMessage);
-      effectiveHistoryMessages = (limit > 0 ? storedMessagesForRegenerate.slice(0, -1).slice(-limit) : storedMessagesForRegenerate.slice(0, -1));
-    } else {
-      const safeHistory = Array.isArray(history) ? history : [];
-      effectiveHistoryMessages = limit > 0 ? safeHistory.slice(-limit) : safeHistory;
-    }
-
     if (!isResume) {
+      effectiveHistoryMessages = await loadConversationHistory({
+        conversationId: currentConversationId,
+        userId: auth.userId,
+        historyLimit: limit,
+      });
+
       const userMessageParts = buildUserMessageParts({
         prompt: currentPrompt,
         images: currentImages,
         attachments: currentAttachments,
       });
 
-      if (!isRegenerateMode && userMessageParts.length === 0) {
+      if (userMessageParts.length === 0) {
         return Response.json({ error: "请至少输入内容或上传附件" }, { status: 400 });
       }
 
-      if (!isRegenerateMode) {
-        await Conversation.findOneAndUpdate(
-          { _id: currentConversationId, userId: auth.userId },
-          {
-            $push: {
-              messages: {
-                id: userMessageId,
-                role: "user",
-                content: currentPrompt,
-                type: "parts",
-                parts: userMessageParts,
-              },
+      await Conversation.findOneAndUpdate(
+        { _id: currentConversationId, userId: auth.userId },
+        {
+          $push: {
+            messages: {
+              id: userMessageId,
+              role: "user",
+              content: currentPrompt,
+              type: "parts",
+              parts: userMessageParts,
             },
-            updatedAt: Date.now(),
-          }
-        );
-      }
+          },
+          updatedAt: Date.now(),
+        }
+      );
+    } else {
+      effectiveHistoryMessages = await loadConversationHistory({
+        conversationId: currentConversationId,
+        userId: auth.userId,
+        historyLimit: limit,
+        excludeRunId: runId || "",
+      });
     }
 
     const encoder = new TextEncoder();

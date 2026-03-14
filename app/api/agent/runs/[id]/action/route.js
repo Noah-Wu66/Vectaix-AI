@@ -7,7 +7,7 @@ import {
   buildAgentMessageMeta,
   generateResumeToken,
 } from "@/lib/server/agent/runHelpers";
-import { killSandboxSession, pauseSandboxSession } from "@/lib/server/sandbox/vercelSandbox";
+import { killSandboxSession } from "@/lib/server/sandbox/vercelSandbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,12 +107,14 @@ export async function POST(req, { params }) {
       status: "rejected",
       decidedAt: new Date(),
     };
+    patch.sandboxSession = null;
     content = "你已拒绝继续执行，本次任务已结束。";
-    await pauseSandboxSession(run.sandboxSession).catch(() => {});
+    await killSandboxSession(run.sandboxSession).catch(() => {});
   } else if (action === "cancel") {
     patch.status = "cancelled";
     patch.executionState = AGENT_EXECUTION_STATES.cancelled;
     patch.failureReason = "用户取消任务";
+    patch.sandboxSession = null;
     content = "任务已取消。";
     await killSandboxSession(run.sandboxSession).catch(() => {});
   }
