@@ -6,7 +6,7 @@ import { getAuthPayload } from "@/lib/auth";
 import { getClientIP, rateLimit } from "@/lib/rateLimit";
 import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
 import { COUNCIL_MAX_ROUNDS, COUNCIL_MODEL_ID, countCompletedCouncilRounds } from "@/lib/shared/models";
-import { getModelRoutes, resolveOpenAIProviderConfig, resolveOpusProviderConfig } from "@/lib/modelRoutes";
+import { resolveCouncilProviderRoutes } from "@/lib/modelRoutes";
 import {
   buildCouncilExpertState,
   buildCouncilFinalMessage,
@@ -179,11 +179,7 @@ export async function POST(req) {
 
   let providerRoutes;
   try {
-    const modelRoutes = await getModelRoutes();
-    providerRoutes = {
-      openai: resolveOpenAIProviderConfig(modelRoutes),
-      opus: resolveOpusProviderConfig(modelRoutes),
-    };
+    providerRoutes = resolveCouncilProviderRoutes();
   } catch (error) {
     return Response.json({ error: error?.message || "模型线路配置错误" }, { status: 500 });
   }

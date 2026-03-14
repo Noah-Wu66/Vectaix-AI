@@ -633,7 +633,7 @@ export default function ProfileModal({
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">OpenAI 线路</label>
                             <div className="flex gap-2">
                               {[
-                                { id: "default", label: "Default" },
+                                { id: "default", label: "Right Code" },
                                 { id: "zenmux", label: "Zenmux" },
                               ].map((item) => (
                                 <button
@@ -650,14 +650,13 @@ export default function ProfileModal({
                                 </button>
                               ))}
                             </div>
-                            <p className="text-xs text-zinc-400">Default 为当前 Right Codes</p>
                           </div>
 
                           <div className="space-y-2">
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">Opus 线路</label>
                             <div className="flex gap-2">
                               {[
-                                { id: "default", label: "Default" },
+                                { id: "default", label: "AiGo Code" },
                                 { id: "zenmux", label: "Zenmux" },
                               ].map((item) => (
                                 <button
@@ -674,7 +673,6 @@ export default function ProfileModal({
                                 </button>
                               ))}
                             </div>
-                            <p className="text-xs text-zinc-400">Default 为当前 AIGOCODE</p>
                           </div>
 
                           <button

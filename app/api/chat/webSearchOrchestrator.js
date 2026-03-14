@@ -74,6 +74,26 @@ const NON_SEARCH_REPLY_KEYWORDS = [
   '收到',
 ];
 const FOLLOW_UP_SEARCH_KEYWORDS = ['价格', '官网', '文档', '教程', '资料', '来源', '新闻', '消息', '更新', '进展', '最新', '最近'];
+const BALANCED_SEARCH_HINT_KEYWORDS = [
+  '版本',
+  '更新',
+  '变更',
+  '发布',
+  '上线',
+  '兼容',
+  '支持吗',
+  '支持不支持',
+  '能不能用',
+  '收费',
+  '定价',
+  '套餐',
+  '文档',
+  '教程',
+  '资料',
+  '来源',
+  'api',
+  'sdk',
+];
 const CONTEXT_REFERENCE_KEYWORDS = ['上面那段话', '上面的内容', '上文', '这段话', '这一段', '这句话', '这段内容', '刚才那段', '刚刚那段', '上一条', '上一段', '上一个回答', '上面的回答', '刚才的回答'];
 const REWRITE_TASK_KEYWORDS = ['润色', '翻译', '总结', '概括', '改写', '重写', '续写', '扩写', '精简'];
 const GENERIC_SEARCH_QUERY_TERMS = [
@@ -477,6 +497,18 @@ function isLikelySearchFollowUp(text) {
   return false;
 }
 
+function isLikelyKnowledgeGapOrFreshnessQuery(text) {
+  if (typeof text !== 'string') return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  const lower = trimmed.toLowerCase();
+  if (includesAnyKeyword(trimmed, BALANCED_SEARCH_HINT_KEYWORDS)) return true;
+  if (/\b(api|sdk|docs?|documentation|pricing|changelog|release notes?)\b/.test(lower)) return true;
+  if (/(v\d+|版本|兼容|支持).*(吗|么|？|\?)/u.test(trimmed)) return true;
+  return false;
+}
+
 function getRecentTopicHint(historyMessages) {
   const recentMessages = getRecentDecisionMessages(historyMessages);
 
@@ -508,8 +540,9 @@ function buildHeuristicWebSearchDecision({ prompt, historyMessages }) {
     || includesAnyKeyword(lowerPrompt, EXPLICIT_SEARCH_KEYWORDS_EN);
   const isFollowUp = isLikelySearchFollowUp(currentPrompt)
     || (currentPrompt.length <= 12 && includesAnyKeyword(currentPrompt, FOLLOW_UP_SEARCH_KEYWORDS));
+  const hasBalancedHint = isLikelyKnowledgeGapOrFreshnessQuery(currentPrompt);
 
-  if (!hasExplicitIntent && !isFollowUp) {
+  if (!hasExplicitIntent && !isFollowUp && !hasBalancedHint) {
     return null;
   }
 
