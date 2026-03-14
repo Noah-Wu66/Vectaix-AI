@@ -596,7 +596,7 @@ export async function POST(req) {
         updateSummaryState({
           status: "done",
           phase: "done",
-          message: "已完成汇总",
+          message: "已完成",
         });
         streamHelpers.sendDone();
         controller.close();

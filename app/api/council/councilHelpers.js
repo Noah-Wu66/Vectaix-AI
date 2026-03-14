@@ -181,7 +181,7 @@ export function buildCouncilExpertState(expert, patch = {}) {
 
 export function buildCouncilSummaryState(patch = {}) {
   return {
-    label: "Seed 2.0 Pro 汇总",
+    label: "Seed 2.0 Pro",
     status: typeof patch.status === "string" ? patch.status : "pending",
     phase: typeof patch.phase === "string" ? patch.phase : "pending",
     message: typeof patch.message === "string" ? patch.message : "",

@@ -62,7 +62,7 @@ function normalizeCouncilExpertStates(states) {
 function normalizeCouncilSummaryState(state) {
   if (!state || typeof state !== "object") return null;
   return {
-    label: typeof state.label === "string" ? state.label : "Seed 2.0 Pro 汇总",
+    label: typeof state.label === "string" ? state.label : "Seed 2.0 Pro",
     status: typeof state.status === "string" ? state.status : "pending",
     phase: typeof state.phase === "string" ? state.phase : "pending",
     message: typeof state.message === "string" ? state.message : "",
