@@ -9,7 +9,7 @@ import { Citations } from "./MessageListHelpers";
 
 function normalizeTimeline(timeline) {
   if (!Array.isArray(timeline)) return [];
-  return timeline
+  const normalized = timeline
     .filter((step) => step && typeof step === "object")
     .map((step) => ({
       id: step.id,
@@ -24,7 +24,23 @@ function normalizeTimeline(timeline) {
       resultCount: Number.isFinite(step.resultCount) ? step.resultCount : null,
       synthetic: step.synthetic === true,
     }))
-    .filter((step) => step.kind === "thought" || step.kind === "search" || step.kind === "reader" || step.kind === "upload" || step.kind === "parse");
+    .filter((step) => step.kind === "thought" || step.kind === "search" || step.kind === "reader" || step.kind === "sandbox" || step.kind === "tool" || step.kind === "upload" || step.kind === "parse");
+
+  return normalized.reduce((acc, step) => {
+    const last = acc[acc.length - 1];
+    if (last?.kind === "thought" && step.kind === "thought") {
+      acc[acc.length - 1] = {
+        ...last,
+        id: step.id || last.id,
+        status: step.status === "streaming" ? "streaming" : last.status,
+        content: [last.content, step.content].filter(Boolean).join("\n\n"),
+        synthetic: last.synthetic && step.synthetic,
+      };
+      return acc;
+    }
+    acc.push(step);
+    return acc;
+  }, []);
 }
 
 function normalizeCouncilExpertStates(states) {
