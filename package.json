@@ -23,8 +23,8 @@
     "next": "16.1.1",
     "mammoth": "^1.9.1",
     "pdf-parse": "^1.1.1",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
     "react-markdown": "^9.0.0",
     "rehype-highlight": "^7.0.0",
     "rehype-katex": "^7.0.0",
@@ -40,6 +40,10 @@
     "eslint-config-next": "16.1.1",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0"
+  },
+  "overrides": {
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
   },
   "engines": {
     "node": "24.x"
