@@ -33,7 +33,7 @@ import {
   Thumb,
   Citations,
 } from "./MessageListHelpers";
-import { AGENT_MODEL_ID, CHAT_MODELS, isCouncilModel } from "@/lib/shared/models";
+import { AGENT_MODEL_ID, CHAT_MODELS, getModelConfig, isCouncilModel } from "@/lib/shared/models";
 
 const AGENT_MIN_TOTAL_STEPS = 9;
 
@@ -76,6 +76,7 @@ export default function MessageList({
   const prevMessagesRef = useRef([]);
   const isCouncilConversation = isCouncilModel(model);
   const isAgentConversation = model === AGENT_MODEL_ID;
+  const canEditImages = getModelConfig(model)?.supportsImages === true;
   const toast = useToast();
 
   useEffect(() => {
@@ -139,6 +140,7 @@ export default function MessageList({
   };
 
   const handleEditFileSelect = (e) => {
+    if (!canEditImages) return;
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -161,6 +163,8 @@ export default function MessageList({
     }
     return false;
   };
+
+  const isEditingImageUploading = editingImageAction === "new" && editingImage?.uploadStatus === "uploading";
 
   const scrollEditIntoView = () => {
     const el = editTextareaRef.current;
@@ -379,7 +383,7 @@ export default function MessageList({
                 {/* 编辑模式 */}
                 {editingMsgIndex === i && msg.role === "user" && !isAgentConversation ? (
                   <div className="w-full space-y-2">
-                    {!model?.startsWith("deepseek-") && (
+                    {canEditImages && (
                       <input
                         type="file"
                         ref={editFileInputRef}
@@ -408,6 +412,13 @@ export default function MessageList({
                       ) : null;
                     })()}
 
+                    {editingImageAction === "new" && editingImage?.uploadStatus === "uploading" ? (
+                      <div className="text-xs text-zinc-500">图片上传中，上传完成后才能提交。</div>
+                    ) : null}
+                    {editingImageAction === "new" && editingImage?.uploadStatus === "error" ? (
+                      <div className="text-xs text-red-500">图片上传失败，请重新选择。</div>
+                    ) : null}
+
                     <textarea
                       ref={editTextareaRef}
                       value={editingContent}
@@ -420,7 +431,7 @@ export default function MessageList({
                           const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
                           if (!isMobile) {
                             e.preventDefault();
-                            if (!loading && (editingContent.trim() || hasEditingImage())) {
+                            if (!loading && !isEditingImageUploading && (editingContent.trim() || hasEditingImage())) {
                               onSubmitEdit(i);
                             }
                           }
@@ -429,7 +440,7 @@ export default function MessageList({
                       className="w-full bg-white border border-zinc-300 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400 resize-none min-h-[80px]"
                     />
                     <div className="flex gap-2 justify-end">
-                      {!model?.startsWith("deepseek-") && (
+                      {canEditImages && (
                         <button
                           type="button"
                           onClick={() => editFileInputRef.current?.click()}
@@ -478,7 +489,7 @@ export default function MessageList({
                       </button>
                       <button
                         onClick={() => onSubmitEdit(i)}
-                        disabled={loading || (!editingContent.trim() && !hasEditingImage())}
+                        disabled={loading || isEditingImageUploading || (!editingContent.trim() && !hasEditingImage())}
                         className="px-3 py-1.5 text-xs text-white bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 rounded-lg transition-colors"
                       >
                         提交并重新生成

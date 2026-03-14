@@ -6,6 +6,7 @@ import { BookOpen, ChevronDown, ChevronUp, FileUp, FileScan, Lightbulb, Search, 
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
 import { Citations } from "./MessageListHelpers";
+import { getCouncilExpertDisplayLabel } from "@/lib/shared/models";
 
 function normalizeTimeline(timeline) {
   if (!Array.isArray(timeline)) return [];
@@ -324,6 +325,7 @@ export default function ThinkingBlock({
             const expertData = Array.isArray(councilExperts)
               ? councilExperts.find((e) => e.label === expert.label)
               : null;
+            const displayLabel = getCouncilExpertDisplayLabel(expert);
             const hasContent = isDone && expertData && typeof expertData.content === "string" && expertData.content.trim();
             const isOpen = openExpertKey === expertKey;
             const statusText = isSkipped
@@ -340,7 +342,7 @@ export default function ThinkingBlock({
                   onClick={hasContent ? () => setOpenExpertKey(isOpen ? null : expertKey) : undefined}
                 >
                   <ModelGlyph model={expert.modelId} size={14} />
-                  <span>{expert.label} · {statusText}</span>
+                  <span>{displayLabel} · {statusText}</span>
                   {isRunning ? <LoadingDots /> : null}
                   {hasContent ? (isOpen ? <ChevronUp size={12} className="ml-1 shrink-0" /> : <ChevronDown size={12} className="ml-1 shrink-0" />) : null}
                 </div>

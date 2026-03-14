@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { COUNCIL_MODEL_ID } from "@/lib/shared/models";
+import { COUNCIL_MODEL_ID, getCouncilExpertDisplayLabel } from "@/lib/shared/models";
 import Markdown from "./Markdown";
 import { Citations } from "./MessageListHelpers";
 import { ModelGlyph } from "./ModelVisuals";
@@ -35,17 +35,18 @@ export default function CouncilExpertsBlock({ experts }) {
         <div className="border-t border-zinc-200 px-3 py-3">
           <div className="space-y-2">
             {items.map((expert) => {
-              const label = typeof expert.label === "string" ? expert.label : "专家";
+              const rawLabel = typeof expert.label === "string" ? expert.label : "专家";
+              const label = getCouncilExpertDisplayLabel(expert);
               const content = typeof expert.content === "string" ? expert.content : "";
-              const isOpen = openLabels[label] === true;
+              const isOpen = openLabels[rawLabel] === true;
               return (
-                <div key={label} className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+                <div key={rawLabel} className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
                   <button
                     type="button"
                     onClick={() =>
                       setOpenLabels((prev) => ({
                         ...prev,
-                        [label]: !prev[label],
+                        [rawLabel]: !prev[rawLabel],
                       }))
                     }
                     className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-zinc-700"

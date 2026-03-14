@@ -48,7 +48,7 @@ export default function ModelSelector({ model, onModelChange }) {
             type="button"
           >
             <ModelGlyph model={m.id} provider={m.provider} size={16} />
-            <span className="leading-tight md:whitespace-nowrap">{m.name}</span>
+            <span className="leading-tight whitespace-nowrap">{m.name}</span>
           </button>
         ))}
       </>
@@ -86,7 +86,7 @@ export default function ModelSelector({ model, onModelChange }) {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 min-w-[160px] md:min-w-[205px]"
+              className="absolute bottom-full left-0 mb-2 w-[min(88vw,320px)] bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50 sm:min-w-[280px] md:min-w-[320px]"
             >
               {MODEL_GROUP_ORDER.map((groupKey, index) => (
                 <div key={groupKey}>

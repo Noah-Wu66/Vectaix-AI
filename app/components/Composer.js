@@ -22,7 +22,12 @@ import {
   getModelConfig,
   isCouncilModel,
 } from "@/lib/shared/models";
-import { ATTACHMENT_ACCEPT, getAttachmentLimits, IMAGE_MIME_TYPES } from "@/lib/shared/attachments";
+import {
+  getAttachmentAcceptForModel,
+  getAttachmentLimits,
+  IMAGE_MIME_TYPES,
+  MAX_CHAT_ATTACHMENTS,
+} from "@/lib/shared/attachments";
 import { createLocalAttachment, isImageAttachment } from "@/lib/shared/messageAttachments";
 
 function readAsDataUrl(file) {
@@ -66,7 +71,10 @@ export default function Composer({
   const textareaRef = useRef(null);
   const mountedRef = useRef(true);
   const modelConfig = getModelConfig(model);
+  const supportsImages = modelConfig?.supportsImages === true;
   const supportsDocuments = modelConfig?.supportsDocuments === true;
+  const supportsFilePicker = supportsImages || supportsDocuments;
+  const attachmentAccept = getAttachmentAcceptForModel({ supportsDocuments, supportsImages });
   const isCouncilSelected = isCouncilModel(model);
   const completedCouncilRounds = isCouncilSelected ? countCompletedCouncilRounds(messages) : 0;
   const hasReachedCouncilRoundLimit = isCouncilSelected && completedCouncilRounds >= COUNCIL_MAX_ROUNDS;
@@ -122,13 +130,13 @@ export default function Composer({
   }, [prefill?.nonce]);
 
   useEffect(() => {
-    if (model?.startsWith("deepseek-") && selectedAttachments.length > 0) {
-      setSelectedAttachments([]);
+    if (!supportsFilePicker) {
+      if (selectedAttachments.length > 0) {
+        setSelectedAttachments([]);
+      }
       setAgentHintVisible(false);
+      return;
     }
-  }, [model, selectedAttachments.length]);
-
-  useEffect(() => {
     if (supportsDocuments) {
       setAgentHintVisible(false);
       return;
@@ -138,7 +146,7 @@ export default function Composer({
       setSelectedAttachments(next);
       setAgentHintVisible(true);
     }
-  }, [supportsDocuments, selectedAttachments]);
+  }, [selectedAttachments, supportsDocuments, supportsFilePicker]);
 
   const convertToPng = (file) => {
     return new Promise((resolve) => {
@@ -169,15 +177,20 @@ export default function Composer({
   };
 
   const handleFileSelect = async (e) => {
+    if (!supportsFilePicker) return;
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
-    const remainingSlots = 4 - selectedAttachments.length;
+    const remainingSlots = MAX_CHAT_ATTACHMENTS - selectedAttachments.length;
     const filesToAdd = files.slice(0, remainingSlots);
     const nextAttachments = [];
     const blockedDocuments = [];
     const invalidFiles = [];
     const oversizedFiles = [];
+
+    if (files.length > remainingSlots) {
+      toast.warning(`一次最多添加 ${MAX_CHAT_ATTACHMENTS} 个文件，超出的已跳过`);
+    }
 
     for (const file of filesToAdd) {
       const local = createLocalAttachment({ file });
@@ -208,10 +221,12 @@ export default function Composer({
           processedFile = converted;
         }
         const preview = await readAsDataUrl(processedFile).catch(() => null);
-        // 图片暂不预上传，保持原有逻辑
-        nextAttachments.push({ ...createLocalAttachment({ file: processedFile, preview }), uploadStatus: "ready" });
+        nextAttachments.push({
+          ...createLocalAttachment({ file: processedFile, preview }),
+          uploadStatus: "uploading",
+          blobUrl: null,
+        });
       } else {
-        // 非图片文件：先加入列表，标记为 uploading，后台异步上传
         const att = { ...local, uploadStatus: "uploading", blobUrl: null };
         nextAttachments.push(att);
       }
@@ -229,11 +244,9 @@ export default function Composer({
     }
 
     if (nextAttachments.length > 0 && mountedRef.current) {
-      setSelectedAttachments((prev) => [...prev, ...nextAttachments].slice(0, 4));
+      setSelectedAttachments((prev) => [...prev, ...nextAttachments].slice(0, MAX_CHAT_ATTACHMENTS));
 
-      // 后台异步上传非图片文件
       for (const att of nextAttachments) {
-        if (att.uploadStatus !== "uploading") continue;
         uploadAttachmentInBackground(att);
       }
     }
@@ -293,8 +306,7 @@ export default function Composer({
   const handleSend = () => {
     const text = input.trim();
     if ((!text && selectedAttachments.length === 0) || loading || isUploading) return;
-    // 过滤掉上传失败的附件
-    const validAttachments = selectedAttachments.filter((item) => item.uploadStatus !== "error");
+    const validAttachments = selectedAttachments.filter((item) => item.uploadStatus === "ready");
     if (!text && validAttachments.length === 0) return;
     if (hasReachedCouncilRoundLimit) {
       toast.warning(`Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，请新建对话继续。`);
@@ -370,6 +382,9 @@ export default function Composer({
                     ) : (
                       <FileText size={14} className="text-zinc-500 shrink-0" />
                     )}
+                    {isImageAttachment(item) && isUploadingItem ? (
+                      <Loader2 size={12} className="text-zinc-400 shrink-0 animate-spin" />
+                    ) : null}
                     <span className={`text-xs truncate ${isErrorItem ? "text-red-600" : "text-zinc-600"}`}>
                       {item.name}
                     </span>
@@ -383,9 +398,9 @@ export default function Composer({
                   </div>
                 );
               })}
-              {selectedAttachments.length < 4 && (
+              {selectedAttachments.length < MAX_CHAT_ATTACHMENTS && (
                 <span className="text-xs text-zinc-400">
-                  {4 - selectedAttachments.length} 个可添加
+                  {MAX_CHAT_ATTACHMENTS - selectedAttachments.length} 个可添加
                 </span>
               )}
             </div>
@@ -409,20 +424,20 @@ export default function Composer({
         )}
 
         <div className="relative flex items-center">
-          {!model?.startsWith("deepseek-") && (
+          {supportsFilePicker && (
             <>
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileSelect}
                 className="hidden"
-                accept={ATTACHMENT_ACCEPT}
+                accept={attachmentAccept}
                 multiple
               />
 
               <button
                 onClick={() => fileInputRef.current?.click()}
-                disabled={hasReachedCouncilRoundLimit || selectedAttachments.length >= 4}
+                disabled={hasReachedCouncilRoundLimit || selectedAttachments.length >= MAX_CHAT_ATTACHMENTS}
                 className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedAttachments.length > 0
                   ? "text-zinc-600 bg-zinc-200"
                   : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
@@ -443,7 +458,7 @@ export default function Composer({
             onBlur={() => setIsMainInputFocused(false)}
             readOnly={hasReachedCouncilRoundLimit}
             placeholder={hasReachedCouncilRoundLimit ? `已达到 ${COUNCIL_MAX_ROUNDS} 轮上限，请新建对话...` : "输入消息..."}
-            className={`flex-1 bg-zinc-50 border border-zinc-200 rounded-xl ${model?.startsWith("deepseek-") ? "pl-4" : "pl-11"} pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors`}
+            className={`flex-1 bg-zinc-50 border border-zinc-200 rounded-xl ${supportsFilePicker ? "pl-11" : "pl-4"} pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors`}
             rows={1}
             style={{ minHeight: "48px" }}
           />

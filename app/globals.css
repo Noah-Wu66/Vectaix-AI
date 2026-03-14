@@ -254,6 +254,10 @@ h6 {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  margin: 1em 0;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: #fff;
 }
 
 .prose .table-scroll-wrapper::-webkit-scrollbar {
@@ -277,7 +281,7 @@ h6 {
 .prose table {
   width: 100%;
   border-collapse: collapse;
-  margin: 1em 0;
+  margin: 0;
   font-size: 0.9em;
   table-layout: fixed;
 }
@@ -285,24 +289,36 @@ h6 {
 .prose th,
 .prose td {
   border: 1px solid var(--border-color);
-  padding: 0.5em 0.75em;
+  padding: 0.65em 0.85em;
   text-align: left;
   word-break: break-word;
   overflow-wrap: break-word;
   white-space: normal;
+  vertical-align: top;
 }
 
 @media (max-width: 768px) {
+  .prose .table-scroll-wrapper {
+    margin-left: -0.25rem;
+    margin-right: -0.25rem;
+    width: calc(100% + 0.5rem);
+    border-radius: 12px;
+  }
+
   .prose table {
-    width: 100%;
-    min-width: 600px;
+    width: max-content;
+    min-width: 100%;
+    min-width: max(100%, 720px);
     table-layout: auto;
   }
 
   .prose th,
   .prose td {
-    padding: 0.4em 0.6em;
-    font-size: 0.9em;
+    min-width: 120px;
+    padding: 0.7em 0.85em;
+    font-size: 0.92em;
+    word-break: normal;
+    overflow-wrap: anywhere;
   }
 }
 
