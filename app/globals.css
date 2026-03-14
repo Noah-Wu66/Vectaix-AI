@@ -484,8 +484,36 @@ h6 {
   background: #1e1e1e;
 }
 
+.dark-mode .prose .table-scroll-wrapper {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.dark-mode .prose .table-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.dark-mode .prose .table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.dark-mode .prose table {
+  background: transparent;
+}
+
 .dark-mode .prose th {
   background: var(--bg-tertiary);
+}
+
+.dark-mode .prose th,
+.dark-mode .prose td {
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.dark-mode .prose tr {
+  background: transparent;
 }
 
 .dark-mode .prose tr:nth-child(even) {
