@@ -10,6 +10,7 @@ export const metadata = {
     description: 'Experience the next generation of AI with Gemini 3 Pro, Flash, and Image models.',
     manifest: '/manifest.webmanifest',
     icons: {
+        shortcut: '/favicon.ico',
         icon: '/icon',
         apple: '/apple-icon',
     },

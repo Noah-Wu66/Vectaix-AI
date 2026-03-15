@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, ChevronDown, ChevronUp, FileUp, FileScan, Lightbulb, Search, Terminal } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Search, Terminal, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
 import { Citations } from "./MessageListHelpers";
