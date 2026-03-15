@@ -91,6 +91,7 @@ export default function ThinkingBlock({
   councilSummaryState,
   councilExperts,
   bodyText,
+  showThoughtDetails = true,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
@@ -232,13 +233,47 @@ export default function ThinkingBlock({
     const capsuleClass = `thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`;
 
     if (step.kind === "thought") {
+      const canExpandThought = showThoughtDetails && hasDetail;
+      const isThoughtOpen = canExpandThought && isExpanded;
       return (
         <div key={step.id || `thought-${idx}`} className="w-full max-w-[760px]">
-          <div className={`${capsuleClass} cursor-default`}>
-            {icon}
-            <span>{isThoughtStreaming ? "思考中" : "已思考"}</span>
-            {isThoughtStreaming ? <LoadingDots /> : null}
-          </div>
+          {canExpandThought ? (
+            <button
+              type="button"
+              onClick={() => {
+                setExpandedTimelineId((prev) => {
+                  const nextId = prev === step.id ? null : step.id;
+                  manualExpandedStepIdRef.current = nextId;
+                  return nextId;
+                });
+              }}
+              className={`${capsuleClass} cursor-pointer hover:text-zinc-700`}
+            >
+              {icon}
+              <span>{isThoughtStreaming ? "思考中" : "思考过程"}</span>
+              {showThoughtDots ? <LoadingDots /> : null}
+              {isThoughtOpen ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
+            </button>
+          ) : (
+            <div className={`${capsuleClass} cursor-default`}>
+              {icon}
+              <span>{isThoughtStreaming ? "思考中" : "已思考"}</span>
+              {showThoughtDots ? <LoadingDots /> : null}
+            </div>
+          )}
+          {isThoughtOpen ? (
+            <div
+              className="thinking-content thinking-content-panel mt-2 bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-[760px] text-zinc-400"
+              ref={containerRef}
+            >
+              <Markdown
+                enableHighlight={!isThoughtStreaming}
+                className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
+              >
+                {step.content}
+              </Markdown>
+            </div>
+          ) : null}
         </div>
       );
     }
