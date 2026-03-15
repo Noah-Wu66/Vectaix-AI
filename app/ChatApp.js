@@ -650,6 +650,115 @@ export default function ChatApp() {
     } catch { }
   };
 
+  const buildDuplicateTitle = (title) => {
+    const sourceTitle = typeof title === "string" && title.trim() ? title.trim() : "新对话";
+    const baseTitle = `${sourceTitle}（副本）`;
+    const existingTitles = new Set(
+      conversations
+        .map((conv) => (typeof conv?.title === "string" ? conv.title.trim() : ""))
+        .filter(Boolean)
+    );
+    if (!existingTitles.has(baseTitle)) return baseTitle;
+
+    let index = 2;
+    while (existingTitles.has(`${sourceTitle}（副本 ${index}）`)) {
+      index += 1;
+    }
+    return `${sourceTitle}（副本 ${index}）`;
+  };
+
+  const duplicateConversation = async (id) => {
+    try {
+      const sourceRes = await fetch(`/api/conversations/${id}`);
+      if (sourceRes.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+
+      let sourceData = null;
+      try {
+        sourceData = await sourceRes.json();
+      } catch {
+        sourceData = null;
+      }
+
+      if (!sourceRes.ok) {
+        throw new Error(sourceData?.error || "读取话题失败");
+      }
+
+      const sourceConversation = sourceData?.conversation;
+      if (!sourceConversation) {
+        throw new Error("未找到要复制的话题");
+      }
+
+      if (sourceConversation.model === AGENT_MODEL_ID || isCouncilModel(sourceConversation.model)) {
+        return;
+      }
+
+      const createRes = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: buildDuplicateTitle(sourceConversation.title),
+          model: sourceConversation.model,
+          messages: Array.isArray(sourceConversation.messages) ? sourceConversation.messages : [],
+          settings: sourceConversation.settings && typeof sourceConversation.settings === "object"
+            ? sourceConversation.settings
+            : undefined,
+          pinned: false,
+        }),
+      });
+
+      if (createRes.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+
+      let createData = null;
+      try {
+        createData = await createRes.json();
+      } catch {
+        createData = null;
+      }
+
+      if (!createRes.ok) {
+        throw new Error(createData?.error || "复制话题失败");
+      }
+
+      const duplicatedConversation = createData?.conversation;
+      if (!duplicatedConversation?._id) {
+        throw new Error("复制结果异常");
+      }
+
+      setCurrentConversationId(duplicatedConversation._id);
+      setMessages(Array.isArray(duplicatedConversation.messages) ? duplicatedConversation.messages : []);
+
+      if (typeof duplicatedConversation.model === "string" && duplicatedConversation.model) {
+        setModel(duplicatedConversation.model);
+        lastTextModelRef.current = duplicatedConversation.model;
+      }
+
+      const nextSettings = duplicatedConversation.settings && typeof duplicatedConversation.settings === "object"
+        ? duplicatedConversation.settings
+        : {};
+      if (typeof nextSettings.webSearch === "boolean") {
+        setWebSearch(nextSettings.webSearch);
+      }
+      if (nextSettings.activePromptId !== undefined) {
+        const promptExists = systemPrompts.some(
+          (prompt) => String(prompt?._id) === String(nextSettings.activePromptId)
+        );
+        setActivePromptId(promptExists ? nextSettings.activePromptId : null);
+      }
+
+      await fetchConversations();
+      toast.success("已复制话题");
+      if (window.innerWidth < 768) setSidebarOpen(false);
+    } catch (error) {
+      toast.error(error?.message || "复制话题失败");
+    }
+  };
+
   const updateThemeMode = (mode) => {
     setThemeMode(mode);
   };
@@ -680,6 +789,7 @@ export default function ChatApp() {
           onDeleteConversation={deleteConversation}
           onRenameConversation={renameConversation}
           onTogglePinConversation={togglePinConversation}
+          onDuplicateConversation={duplicateConversation}
           onOpenProfile={() => setShowProfileModal(true)}
           onLogout={handleLogout}
           onCloseSidebar={() => setSidebarOpen(false)}

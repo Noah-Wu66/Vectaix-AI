@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Search, Terminal, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
-import { Citations } from "./MessageListHelpers";
+import { Citations, LoadingSweepText } from "./MessageListHelpers";
 import { getCouncilExpertDisplayLabel, SEED_MODEL_ID } from "@/lib/shared/models";
 
 function normalizeTimeline(timeline) {
@@ -70,14 +70,8 @@ function normalizeCouncilSummaryState(state) {
   };
 }
 
-function LoadingDots() {
-  return (
-    <span className="thinking-dots">
-      <span className="thinking-dot bg-zinc-500 animate-dot-bounce" style={{ animationDelay: "0ms" }} />
-      <span className="thinking-dot bg-zinc-500 animate-dot-bounce" style={{ animationDelay: "150ms" }} />
-      <span className="thinking-dot bg-zinc-500 animate-dot-bounce" style={{ animationDelay: "300ms" }} />
-    </span>
-  );
+function LoadingStateText() {
+  return <LoadingSweepText text="进行中" className="text-[0.78em] font-semibold tracking-[0.18em]" />;
 }
 
 export default function ThinkingBlock({
@@ -247,14 +241,14 @@ export default function ThinkingBlock({
             >
               {icon}
               <span>{isThoughtStreaming ? "思考中" : "思考过程"}</span>
-              {showThoughtDots ? <LoadingDots /> : null}
+              {showThoughtDots ? <LoadingStateText /> : null}
               {isThoughtOpen ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
             </button>
           ) : (
             <div className={`${capsuleClass} cursor-default`}>
               {icon}
               <span>{isThoughtStreaming ? "思考中" : "已思考"}</span>
-              {showThoughtDots ? <LoadingDots /> : null}
+              {showThoughtDots ? <LoadingStateText /> : null}
             </div>
           )}
           {isThoughtOpen ? (
@@ -280,7 +274,7 @@ export default function ThinkingBlock({
           <div className={capsuleClass}>
             {icon}
             <span>{titleText}</span>
-            {isRunning ? <LoadingDots /> : null}
+            {isRunning ? <LoadingStateText /> : null}
           </div>
         </div>
       );
@@ -293,7 +287,7 @@ export default function ThinkingBlock({
           <div className={capsuleClass}>
             {icon}
             <span>{detail || titleText}</span>
-            {isRunning ? <LoadingDots /> : null}
+            {isRunning ? <LoadingStateText /> : null}
           </div>
         </div>
       );
@@ -306,7 +300,7 @@ export default function ThinkingBlock({
           <div className={capsuleClass}>
             {icon}
             <span>{detail || titleText}</span>
-            {isRunning ? <LoadingDots /> : null}
+            {isRunning ? <LoadingStateText /> : null}
           </div>
         </div>
       );
@@ -319,7 +313,7 @@ export default function ThinkingBlock({
           <div className={capsuleClass}>
             {icon}
             <span>{label}</span>
-            {isRunning ? <LoadingDots /> : null}
+            {isRunning ? <LoadingStateText /> : null}
           </div>
         </div>
       );
@@ -363,7 +357,7 @@ export default function ThinkingBlock({
                 >
                   <ModelGlyph model={expert.modelId} size={14} />
                   <span>{displayLabel} · {statusText}</span>
-                  {isRunning ? <LoadingDots /> : null}
+                  {isRunning ? <LoadingStateText /> : null}
                   {hasContent ? (isOpen ? <ChevronUp size={12} className="ml-1 shrink-0" /> : <ChevronDown size={12} className="ml-1 shrink-0" />) : null}
                 </div>
                 {isOpen && expertData && (
@@ -389,7 +383,7 @@ export default function ThinkingBlock({
                 <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
                   <ModelGlyph model={s.modelId} size={14} />
                   <span>{s.label} · {statusText}</span>
-                  {isRunning ? <LoadingDots /> : null}
+                  {isRunning ? <LoadingStateText /> : null}
                 </div>
               </div>
             );
@@ -458,7 +452,7 @@ export default function ThinkingBlock({
                         >
                           <Lightbulb className="thinking-icon-step" />
                           <span>{isStreaming ? "思考中" : "思考过程"}</span>
-                          {isStreaming && expandedTimelineId !== "__simple__" ? <LoadingDots /> : null}
+                          {isStreaming && expandedTimelineId !== "__simple__" ? <LoadingStateText /> : null}
                           {expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
                         </button>
                         {expandedTimelineId === "__simple__" ? (

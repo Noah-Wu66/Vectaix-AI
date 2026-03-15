@@ -4,7 +4,22 @@ import { ModelAvatar } from "./ModelVisuals";
 import { formatAttachmentMeta } from "@/lib/shared/messageAttachments";
 
 export function AIAvatar({ model, size = 24, animate = false }) {
-  return <ModelAvatar model={model} size={size} animate={animate} />;
+  return (
+    <span
+      className="inline-flex items-center justify-center overflow-hidden rounded-md"
+      style={{ width: size, height: size }}
+    >
+      <ModelAvatar model={model} size={size} animate={animate} />
+    </span>
+  );
+}
+
+export function LoadingSweepText({ text = "加载中", className = "" }) {
+  return (
+    <span className={`loading-sweep ${className}`.trim()} data-text={text} aria-label={text}>
+      {text}
+    </span>
+  );
 }
 
 export function ResponsiveAIAvatar({ model, mobileSize = 22, desktopSize = 26, animate = false }) {

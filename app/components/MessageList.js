@@ -32,6 +32,7 @@ import {
   isSelectionFullyInsideElement,
   Thumb,
   Citations,
+  LoadingSweepText,
 } from "./MessageListHelpers";
 import { AGENT_MODEL_ID, CHAT_MODELS, getModelConfig, isCouncilModel } from "@/lib/shared/models";
 
@@ -165,6 +166,13 @@ export default function MessageList({
 
   const isEditingImageUploading = editingImageAction === "new" && editingImage?.uploadStatus === "uploading";
 
+  const resizeEditTextarea = () => {
+    const el = editTextareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight, 24)}px`;
+  };
+
   const scrollEditIntoView = () => {
     const el = editTextareaRef.current;
     const container = listRef?.current;
@@ -183,6 +191,7 @@ export default function MessageList({
   useEffect(() => {
     if (editingMsgIndex === null || editingMsgIndex === undefined) return;
     const el = editTextareaRef.current;
+    resizeEditTextarea();
     // 用 preventScroll 阻止浏览器为 focus 自己滚动（移动端键盘弹出时最容易乱跳）
     if (el && typeof el.focus === "function") {
       try {
@@ -196,6 +205,11 @@ export default function MessageList({
     const t = setTimeout(scrollEditIntoView, 80);
     return () => clearTimeout(t);
   }, [editingMsgIndex]);
+
+  useEffect(() => {
+    if (editingMsgIndex === null || editingMsgIndex === undefined) return;
+    resizeEditTextarea();
+  }, [editingContent, editingMsgIndex]);
 
   // 键盘弹出会触发 visualViewport resize；编辑中跟随一次，避免“必须按键才回正”
   useEffect(() => {
@@ -259,20 +273,8 @@ export default function MessageList({
           // 加载历史会话时的居中加载动画
           <div className="h-full flex flex-col items-center justify-center">
             <div className="flex items-center gap-1.5 px-4 py-3 bg-zinc-100 rounded-2xl">
-              <span
-                className="loading-dot w-2 h-2 bg-zinc-400 rounded-full animate-dot-bounce"
-                style={{ animationDelay: "0ms" }}
-              />
-              <span
-                className="loading-dot w-2 h-2 bg-zinc-400 rounded-full animate-dot-bounce"
-                style={{ animationDelay: "150ms" }}
-              />
-              <span
-                className="loading-dot w-2 h-2 bg-zinc-400 rounded-full animate-dot-bounce"
-                style={{ animationDelay: "300ms" }}
-              />
+              <LoadingSweepText text="加载中" className="text-base" />
             </div>
-            <p className="mt-3 text-sm text-zinc-400">加载中...</p>
           </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-zinc-400">
@@ -364,24 +366,13 @@ export default function MessageList({
 
                 {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && (
                   <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
-                    <span
-                      className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
-                      style={{ animationDelay: "0ms" }}
-                    />
-                    <span
-                      className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
-                      style={{ animationDelay: "150ms" }}
-                    />
-                    <span
-                      className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
-                      style={{ animationDelay: "300ms" }}
-                    />
+                    <LoadingSweepText text="生成中" className="text-sm sm:text-[15px]" />
                   </div>
                 )}
 
                 {/* 编辑模式 */}
                 {editingMsgIndex === i && msg.role === "user" && !isAgentConversation ? (
-                  <div className="w-full space-y-2">
+                  <div className="w-full flex flex-col items-end gap-2">
                     {canEditImages && (
                       <input
                         type="file"
@@ -402,7 +393,7 @@ export default function MessageList({
                             ? existing
                             : null;
                       return showSrc || existingFiles.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex w-full max-w-full flex-wrap justify-end gap-2 md:max-w-[900px] lg:max-w-[1000px]">
                           {showSrc ? <Thumb src={showSrc} onClick={openLightbox} /> : null}
                           {existingFiles.map((file) => (
                             <AttachmentCard key={file.url || file.name} file={file} compact />
@@ -412,33 +403,40 @@ export default function MessageList({
                     })()}
 
                     {editingImageAction === "new" && editingImage?.uploadStatus === "uploading" ? (
-                      <div className="text-xs text-zinc-500">图片上传中，上传完成后才能提交。</div>
+                      <div className="w-full max-w-full text-right text-xs text-zinc-500 md:max-w-[900px] lg:max-w-[1000px]">图片上传中，上传完成后才能提交。</div>
                     ) : null}
                     {editingImageAction === "new" && editingImage?.uploadStatus === "error" ? (
-                      <div className="text-xs text-red-500">图片上传失败，请重新选择。</div>
+                      <div className="w-full max-w-full text-right text-xs text-red-500 md:max-w-[900px] lg:max-w-[1000px]">图片上传失败，请重新选择。</div>
                     ) : null}
 
-                    <textarea
-                      ref={editTextareaRef}
-                      value={editingContent}
-                      onChange={(e) => onEditingContentChange(e.target.value)}
-                      onFocus={scrollEditIntoView}
-                      onKeyDown={(e) => {
-                        // 桌面端：Enter 发送，Shift+Enter 换行
-                        // 移动端：不拦截 Enter，避免 iOS 输入法换行按钮误触发送
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                          if (!isMobile) {
-                            e.preventDefault();
-                            if (!loading && !isEditingImageUploading && (editingContent.trim() || hasEditingImage())) {
-                              onSubmitEdit(i);
+                    <div
+                      className="msg-bubble inline-block w-full max-w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-zinc-800 md:max-w-[900px] lg:max-w-[1000px]"
+                      style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
+                    >
+                      <textarea
+                        ref={editTextareaRef}
+                        value={editingContent}
+                        onChange={(e) => onEditingContentChange(e.target.value)}
+                        onFocus={scrollEditIntoView}
+                        onInput={resizeEditTextarea}
+                        onKeyDown={(e) => {
+                          // 桌面端：Enter 发送，Shift+Enter 换行
+                          // 移动端：不拦截 Enter，避免 iOS 输入法换行按钮误触发送
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                            if (!isMobile) {
+                              e.preventDefault();
+                              if (!loading && !isEditingImageUploading && (editingContent.trim() || hasEditingImage())) {
+                                onSubmitEdit(i);
+                              }
                             }
                           }
-                        }
-                      }}
-                      className="w-full bg-white border border-zinc-300 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400 resize-none min-h-[80px]"
-                    />
-                    <div className="flex gap-2 justify-end">
+                        }}
+                        className="block w-full max-h-[45vh] resize-none overflow-y-auto bg-transparent p-0 text-sm leading-6 text-zinc-800 outline-none mobile-scroll custom-scrollbar"
+                        style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
+                      />
+                    </div>
+                    <div className="flex w-full max-w-full flex-wrap justify-end gap-2 md:max-w-[900px] lg:max-w-[1000px]">
                       {canEditImages && (
                         <button
                           type="button"
@@ -588,47 +586,6 @@ export default function MessageList({
                           </button>
                         )}
 
-                        {msg.role === "model" && (hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
-                          <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
-                            <button
-                              type="button"
-                              onClick={() => setOpenExportMenuIndex((prev) => (prev === i ? null : i))}
-                              className={`inline-flex items-center gap-1 p-1.5 rounded-lg transition-colors ${openExportMenuIndex === i
-                                ? "text-zinc-700 bg-zinc-100"
-                                : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
-                                }`}
-                              title="导出"
-                            >
-                              <Download size={14} />
-                              <ChevronDown size={12} className={`transition-transform ${openExportMenuIndex === i ? "rotate-180" : ""}`} />
-                            </button>
-
-                            {openExportMenuIndex === i && (
-                              <motion.div
-                                initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 6, scale: 0.96 }}
-                                className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg sm:left-full sm:right-auto sm:top-1/2 sm:mt-0 sm:ml-2 sm:-translate-y-1/2"
-                              >
-                                {[
-                                  { key: "markdown", label: "导出 Markdown" },
-                                  { key: "pdf", label: "导出 PDF" },
-                                  { key: "docx", label: "导出 Docx" },
-                                ].map((item) => (
-                                  <button
-                                    key={item.key}
-                                    type="button"
-                                    onClick={() => handleExportMessage(item.key, msg)}
-                                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-100"
-                                  >
-                                    {item.label}
-                                  </button>
-                                ))}
-                              </motion.div>
-                            )}
-                          </div>
-                        )}
-
                         {msg.role === "user" ? (
                           <>
                             <button
@@ -694,6 +651,46 @@ export default function MessageList({
                                 <RotateCcw size={14} />
                               </button>
                             ) : null}
+                            {(hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
+                              <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenExportMenuIndex((prev) => (prev === i ? null : i))}
+                                  className={`inline-flex items-center gap-1 p-1.5 rounded-lg transition-colors ${openExportMenuIndex === i
+                                    ? "text-zinc-700 bg-zinc-100"
+                                    : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
+                                    }`}
+                                  title="导出"
+                                >
+                                  <Download size={14} />
+                                  <ChevronDown size={12} className={`transition-transform ${openExportMenuIndex === i ? "rotate-180" : ""}`} />
+                                </button>
+
+                                {openExportMenuIndex === i && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                                    className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg sm:left-full sm:right-auto sm:top-1/2 sm:mt-0 sm:ml-2 sm:-translate-y-1/2"
+                                  >
+                                    {[
+                                      { key: "markdown", label: "导出 Markdown" },
+                                      { key: "pdf", label: "导出 PDF" },
+                                      { key: "docx", label: "导出 Docx" },
+                                    ].map((item) => (
+                                      <button
+                                        key={item.key}
+                                        type="button"
+                                        onClick={() => handleExportMessage(item.key, msg)}
+                                        className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-100"
+                                      >
+                                        {item.label}
+                                      </button>
+                                    ))}
+                                  </motion.div>
+                                )}
+                              </div>
+                            )}
                           </>
                         ) : null}
                       </div>
@@ -716,18 +713,7 @@ export default function MessageList({
             animate={isCouncilModel(model) || model === AGENT_MODEL_ID}
           />
           <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
-            <span
-              className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
-              style={{ animationDelay: "0ms" }}
-            />
-            <span
-              className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
-              style={{ animationDelay: "150ms" }}
-            />
-            <span
-              className="loading-dot w-1.5 h-1.5 sm:w-2 sm:h-2 bg-zinc-400 rounded-full animate-dot-bounce"
-              style={{ animationDelay: "300ms" }}
-            />
+            <LoadingSweepText text="生成中" className="text-sm sm:text-[15px]" />
           </div>
         </div>
       )}
