@@ -227,13 +227,11 @@ vercel.json                 Vercel cron 配置
 - `PUT /api/conversations/[id]`
 - `DELETE /api/conversations/[id]`
 - `POST /api/upload`
-- `POST /api/files/prepare`
 - `GET /api/files/download`
 - `GET /api/images/download`
 
 ### Agent 控制
 
-- `GET /api/agent/runs/[id]`
 - `POST /api/agent/runs/[id]/action`
 
 其中动作支持：

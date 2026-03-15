@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Search, Terminal, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Search, Terminal, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
 import { Citations } from "./MessageListHelpers";
@@ -25,7 +25,7 @@ function normalizeTimeline(timeline) {
       resultCount: Number.isFinite(step.resultCount) ? step.resultCount : null,
       synthetic: step.synthetic === true,
     }))
-    .filter((step) => step.kind === "thought" || step.kind === "search" || step.kind === "reader" || step.kind === "sandbox" || step.kind === "tool" || step.kind === "upload" || step.kind === "parse");
+    .filter((step) => step.kind === "thought" || step.kind === "search" || step.kind === "sandbox" || step.kind === "tool" || step.kind === "upload" || step.kind === "parse");
 
   return normalized.reduce((acc, step) => {
     const last = acc[acc.length - 1];
@@ -107,7 +107,7 @@ export default function ThinkingBlock({
   const normalizedCouncilExpertStates = normalizeCouncilExpertStates(councilExpertStates);
   const normalizedCouncilSummaryState = normalizeCouncilSummaryState(councilSummaryState);
   const hasCouncilMode = normalizedCouncilExpertStates.length > 0 || normalizedCouncilSummaryState !== null;
-  const hasTimeline = timelineItems.some((step) => step.kind === "search" || step.kind === "reader" || step.kind === "thought" || step.kind === "upload" || step.kind === "parse");
+  const hasTimeline = timelineItems.some((step) => step.kind === "search" || step.kind === "thought" || step.kind === "upload" || step.kind === "parse");
 
   // 滚动到容器底部（仅简单模式的思考内容）
   useEffect(() => {
@@ -195,7 +195,6 @@ export default function ThinkingBlock({
         if (isError) return `联网搜索失败${query}`;
         return `联网搜索完成${query}${countLabel}`;
       }
-      if (step.kind === "reader") return isRunning ? "查看网页中" : (isError ? "网页读取失败" : "网页正文已读取");
       if (step.kind === "sandbox") return isRunning ? "正在准备运行环境" : (isError ? "运行环境准备失败" : "运行环境已准备完成");
       if (step.kind === "upload") return isRunning ? "正在上传文件" : (isError ? "文件上传失败" : "文件已上传");
       if (step.kind === "parse") return isRunning ? "正在解析文件" : (isError ? "文件解析失败" : "文件已解析");
@@ -205,7 +204,6 @@ export default function ThinkingBlock({
     const hasDetail = (() => {
       if (step.kind === "thought") return Boolean(step.content);
       if (step.kind === "search") return Boolean(step.query || Number.isFinite(step.resultCount) || (isError && step.message));
-      if (step.kind === "reader") return Boolean((step.title || step.url) || (isError && step.message));
       if (step.kind === "sandbox") return Boolean(isError && (step.message || step.title));
       if (step.kind === "upload" || step.kind === "parse") return false;
       return false;
@@ -216,12 +214,10 @@ export default function ThinkingBlock({
 
     const titleText = getTitle();
 
-    const icon = step.kind === "reader"
-      ? <BookOpen className="thinking-icon-step" />
-      : step.kind === "search"
-        ? <Search className="thinking-icon-step" />
-        : step.kind === "sandbox"
-          ? <Terminal className="thinking-icon-step" />
+    const icon = step.kind === "search"
+      ? <Search className="thinking-icon-step" />
+      : step.kind === "sandbox"
+        ? <Terminal className="thinking-icon-step" />
         : step.kind === "upload"
           ? <FileUp className="thinking-icon-step" />
           : step.kind === "parse"
@@ -281,18 +277,6 @@ export default function ThinkingBlock({
     if (step.kind === "search") {
       return (
         <div key={step.id || `search-${idx}`} className="w-full max-w-[760px]">
-          <div className={capsuleClass}>
-            {icon}
-            <span>{titleText}</span>
-            {isRunning ? <LoadingDots /> : null}
-          </div>
-        </div>
-      );
-    }
-
-    if (step.kind === "reader") {
-      return (
-        <div key={step.id || `reader-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
             <span>{titleText}</span>

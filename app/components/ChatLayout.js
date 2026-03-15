@@ -55,7 +55,6 @@ export default function ChatLayout({
   onContinueAgentRun,
   onApproveAgentRun,
   onRejectAgentRun,
-  onCancelAgentRun,
   onStartEdit,
   composerProps,
   userAvatar,
@@ -93,7 +92,6 @@ export default function ChatLayout({
           onContinueAgentRun={onContinueAgentRun}
           onApproveAgentRun={onApproveAgentRun}
           onRejectAgentRun={onRejectAgentRun}
-          onCancelAgentRun={onCancelAgentRun}
           onStartEdit={onStartEdit}
           userAvatar={userAvatar}
         />

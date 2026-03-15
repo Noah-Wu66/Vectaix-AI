@@ -62,7 +62,6 @@ export default function MessageList({
   onContinueAgentRun,
   onApproveAgentRun,
   onRejectAgentRun,
-  onCancelAgentRun,
   onStartEdit,
   userAvatar,
 }) {
@@ -292,14 +291,13 @@ export default function MessageList({
             (typeof msg.content === "string" && msg.content.trim().length > 0)
             || (hasParts && msg.parts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
           const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline)
-            && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool");
+            && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool");
           const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
           const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
           const agentRun = msg?.agentRun && typeof msg.agentRun === "object" ? msg.agentRun : null;
           const agentCanResume = agentRun?.canResume === true && typeof agentRun?.runId === "string" && agentRun.runId;
           const agentExecutionState = typeof agentRun?.executionState === "string" ? agentRun.executionState : agentRun?.status;
           const agentNeedsApproval = agentExecutionState === "awaiting_approval";
-          const agentCancelled = agentRun?.status === "cancelled";
           const agentIsRunning = Boolean(agentRun)
             && !agentNeedsApproval
             && agentExecutionState !== "waiting_continue"
@@ -677,15 +675,6 @@ export default function MessageList({
                                 className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
                               >
                                 继续执行
-                              </button>
-                            ) : null}
-                            {!agentCancelled && agentRun?.status !== "completed" ? (
-                              <button
-                                type="button"
-                                onClick={() => onCancelAgentRun?.(i)}
-                                className="rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
-                              >
-                                取消任务
                               </button>
                             ) : null}
                             <button

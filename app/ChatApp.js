@@ -709,7 +709,6 @@ export default function ChatApp() {
           onContinueAgentRun={actions.continueAgentRun}
           onApproveAgentRun={actions.approveAgentRun}
           onRejectAgentRun={actions.rejectAgentRun}
-          onCancelAgentRun={actions.cancelAgentRun}
           onStartEdit={actions.startEdit}
           userAvatar={avatar}
           onAvatarChange={setAvatar}
