@@ -716,6 +716,8 @@ h6 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 1.8em;
+  text-align: center;
   --loading-sweep-spacing: 0.22em;
   --loading-sweep-line-height: 1;
   transform: translateY(-1px);

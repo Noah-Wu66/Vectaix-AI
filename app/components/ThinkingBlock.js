@@ -80,9 +80,9 @@ function StepStatusText({ text, active = false }) {
 function SplitStatusText({ prefix = "", status = "", suffix = "", active = false }) {
   return (
     <span className="inline-flex max-w-full items-center">
-      {prefix ? <span>{prefix}</span> : null}
+      {prefix ? <span className="mr-1.5 shrink-0">{prefix}</span> : null}
       {status ? <StepStatusText text={status} active={active} /> : null}
-      {suffix ? <span>{suffix}</span> : null}
+      {suffix ? <span className={status ? "ml-0.5" : ""}>{suffix}</span> : null}
     </span>
   );
 }
