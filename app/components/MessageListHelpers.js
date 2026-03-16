@@ -14,9 +14,9 @@ export function AIAvatar({ model, size = 24, animate = false }) {
   );
 }
 
-export function LoadingSweepText({ text = "加载中", className = "" }) {
+export function LoadingSweepText({ text = "加载中", className = "", ariaText }) {
   return (
-    <span className={`loading-sweep ${className}`.trim()} data-text={text} aria-label={text}>
+    <span className={`loading-sweep ${className}`.trim()} data-text={text} aria-label={ariaText || text}>
       {text}
     </span>
   );

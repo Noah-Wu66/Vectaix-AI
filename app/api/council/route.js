@@ -30,6 +30,7 @@ const MAX_COUNCIL_EXPERTS = 3;
 const MAX_EXPERT_MODEL_CHARS = 100;
 const MAX_EXPERT_LABEL_CHARS = 120;
 const MAX_EXPERT_CONTENT_CHARS = 20000;
+const COUNCIL_TOTAL_TIMEOUT_MS = 300_000;
 const CONVERSATION_WRITE_CONFLICT_ERROR = "当前对话已被其他请求更新，请重试";
 
 function buildTitle(prompt) {
@@ -352,6 +353,13 @@ export async function POST(req) {
     async start(controller) {
       const streamHelpers = createCouncilStreamHelpers(controller);
       let finalMessagePersisted = false;
+      const totalTimeoutController = new AbortController();
+      const totalTimeoutId = setTimeout(() => {
+        totalTimeoutController.abort("API_TIMEOUT");
+      }, COUNCIL_TOTAL_TIMEOUT_MS);
+      const councilSignal = req?.signal
+        ? AbortSignal.any([req.signal, totalTimeoutController.signal])
+        : totalTimeoutController.signal;
       const rollbackCouncilTurn = async () => {
         if (finalMessagePersisted) return;
 
@@ -439,7 +447,7 @@ export async function POST(req) {
         let triageResult = { needCouncil: true };
 
         if (!skipTriage) {
-          triageResult = await runSeedTriage({ prompt: promptText, hasImages });
+          triageResult = await runSeedTriage({ prompt: promptText, hasImages, signal: councilSignal });
         }
 
         if (!triageResult.needCouncil && triageResult.directAnswer) {
@@ -518,6 +526,7 @@ export async function POST(req) {
               updateStatus: (patch) => updateExpertState(expert, patch),
               providerRoutes,
               history,
+              signal: councilSignal,
               onDone: (result) => {
                 try {
                   streamHelpers.sendCouncilExpertResult(result);
@@ -560,7 +569,7 @@ export async function POST(req) {
             }
             streamHelpers.sendText(delta);
           },
-          signal: req?.signal,
+          signal: councilSignal,
         });
 
         if (clientAborted) {
@@ -601,7 +610,11 @@ export async function POST(req) {
           streamHelpers.sendCouncilSummaryState(buildCouncilSummaryState({
             status: "error",
             phase: "error",
-            message: error?.message === "COUNCIL_ABORTED" ? "已停止" : (error?.message || "执行失败"),
+            message: error?.message === "COUNCIL_ABORTED"
+              ? "已停止"
+              : error?.message === "API_TIMEOUT"
+              ? "执行超时"
+              : (error?.message || "执行失败"),
           }));
         } catch {
           // ignore stream state send failure
@@ -630,6 +643,7 @@ export async function POST(req) {
           controller.error(error);
         }
       } finally {
+        clearTimeout(totalTimeoutId);
         try {
           req?.signal?.removeEventListener?.("abort", onAbort);
         } catch {

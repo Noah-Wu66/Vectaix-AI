@@ -77,6 +77,16 @@ function StepStatusText({ text, active = false }) {
   return <span>{text}</span>;
 }
 
+function SplitStatusText({ prefix = "", status = "", suffix = "", active = false }) {
+  return (
+    <span className="inline-flex max-w-full items-center">
+      {prefix ? <span>{prefix}</span> : null}
+      {status ? <StepStatusText text={status} active={active} /> : null}
+      {suffix ? <span>{suffix}</span> : null}
+    </span>
+  );
+}
+
 export default function ThinkingBlock({
   thought,
   isStreaming,
@@ -209,8 +219,6 @@ export default function ThinkingBlock({
     const isManualExpanded = manualExpandedStepIdRef.current === step.id;
     const showThoughtDots = isThoughtStreaming && (!hasDetail || (isExpanded && !isManualExpanded));
 
-    const titleText = getTitle();
-
     const icon = step.kind === "search"
       ? <Search className="thinking-icon-step" />
       : step.kind === "sandbox"
@@ -270,11 +278,17 @@ export default function ThinkingBlock({
     }
 
     if (step.kind === "search") {
+      const querySuffix = step.query ? `「${step.query}」` : "";
+      const countSuffix = Number.isFinite(step.resultCount) && step.resultCount > 0 ? `（${step.resultCount}条）` : "";
       return (
         <div key={step.id || `search-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
-            <StepStatusText text={titleText} active={isRunning} />
+            {isRunning ? (
+              <SplitStatusText status="联网搜索中" suffix={querySuffix} active />
+            ) : (
+              <span>{isError ? `联网搜索失败${querySuffix}` : `联网搜索完成${querySuffix}${countSuffix}`}</span>
+            )}
           </div>
         </div>
       );
@@ -282,6 +296,7 @@ export default function ThinkingBlock({
 
     if (step.kind === "sandbox") {
       const detail = isError ? (step.message || step.title || "") : "";
+      const titleText = getTitle();
       return (
         <div key={step.id || `sandbox-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
@@ -294,6 +309,7 @@ export default function ThinkingBlock({
 
     if (step.kind === "upload" || step.kind === "parse") {
       const detail = step.message || step.title || "";
+      const titleText = getTitle();
       return (
         <div key={step.id || `${step.kind}-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
@@ -346,7 +362,6 @@ export default function ThinkingBlock({
               : isDone
               ? "已完成"
               : expert.message || "等待中";
-            const expertLabel = `${displayLabel} · ${statusText}`;
             return (
               <div key={expertKey} className="w-full max-w-[760px]">
                 <div
@@ -354,7 +369,7 @@ export default function ThinkingBlock({
                   onClick={hasContent ? () => setOpenExpertKey(isOpen ? null : expertKey) : undefined}
                 >
                   <ModelGlyph model={expert.modelId} size={14} />
-                  <StepStatusText text={expertLabel} active={isRunning} />
+                  <SplitStatusText prefix={`${displayLabel} · `} status={statusText} active={isRunning} />
                   {hasContent ? (isOpen ? <ChevronUp size={12} className="ml-1 shrink-0" /> : <ChevronDown size={12} className="ml-1 shrink-0" />) : null}
                 </div>
                 {isOpen && expertData && (
@@ -375,12 +390,11 @@ export default function ThinkingBlock({
               : s.status === "done"
               ? "已完成"
               : s.message || "等待中";
-            const summaryLabel = `${s.label} · ${statusText}`;
             return (
               <div className="w-full max-w-[760px]">
                 <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
                   <ModelGlyph model={s.modelId} size={14} />
-                  <StepStatusText text={summaryLabel} active={isRunning} />
+                  <SplitStatusText prefix={`${s.label} · `} status={statusText} active={isRunning} />
                 </div>
               </div>
             );

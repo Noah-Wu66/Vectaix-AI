@@ -35,7 +35,6 @@ const FORMATTING_GUARD =
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
 const SEED_MAX_OUTPUT_TOKENS = 8000;
 const TRIAGE_MAX_OUTPUT_TOKENS = 1200;
-const TRIAGE_TIMEOUT_MS = 15_000;
 const MAX_RAW_MARKDOWN_CHARS = 20000;
 const MAX_FINDING_TEXT_CHARS = 1000;
 const HISTORY_USER_SUMMARY_CHARS = 500;
@@ -56,6 +55,38 @@ function isPlainObject(value) {
 function normalizeString(value, maxChars = MAX_FINDING_TEXT_CHARS) {
   if (typeof value !== "string") return "";
   return value.trim().slice(0, maxChars);
+}
+
+function buildAbortError(signal) {
+  const reason = signal?.reason;
+  if (reason instanceof Error) return reason;
+  return new Error(typeof reason === "string" && reason ? reason : "COUNCIL_ABORTED");
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    throw buildAbortError(signal);
+  }
+}
+
+async function raceWithSignal(task, signal) {
+  if (!signal) return task;
+  throwIfAborted(signal);
+
+  let onAbort = null;
+  try {
+    return await Promise.race([
+      task,
+      new Promise((_, reject) => {
+        onAbort = () => reject(buildAbortError(signal));
+        signal.addEventListener?.("abort", onAbort, { once: true });
+      }),
+    ]);
+  } finally {
+    if (onAbort) {
+      signal.removeEventListener?.("abort", onAbort);
+    }
+  }
 }
 
 function normalizeCitations(value) {
@@ -492,6 +523,7 @@ async function collectSearchContext({
   updateStatus,
   providerRoutes,
   historyMessages,
+  signal,
 }) {
   const citations = [];
   const pushCitations = (items) => {
@@ -530,7 +562,7 @@ async function collectSearchContext({
     assertConfigured(GEMINI_API_KEY, "GEMINI_API_KEY is not set");
     const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
     const decisionRunner = await buildGeminiDecisionRunner(ai);
-    const { searchContextText } = await runWebSearchOrchestration({
+    const { searchContextText } = await raceWithSignal(runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
       historyMessages,
@@ -542,8 +574,10 @@ async function collectSearchContext({
       model: expert.modelId,
       conversationId,
       allowHeuristicFallback: false,
+      signal,
+      searchTimeoutMs: null,
       ...getWebSearchProviderRuntimeOptions(expert.provider, { providerLabel: expert.label }),
-    });
+    }), signal);
     return { searchContextText, citations: normalizeCitations(citations) };
   }
 
@@ -553,7 +587,7 @@ async function collectSearchContext({
       baseURL: providerRoutes.opus.baseUrl,
     });
     const decisionRunner = buildClaudeDecisionRunner(client, CLAUDE_OPUS_MODEL);
-    const { searchContextText } = await runWebSearchOrchestration({
+    const { searchContextText } = await raceWithSignal(runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
       historyMessages,
@@ -565,14 +599,16 @@ async function collectSearchContext({
       model: expert.modelId,
       conversationId,
       allowHeuristicFallback: false,
+      signal,
+      searchTimeoutMs: null,
       ...getWebSearchProviderRuntimeOptions(expert.provider, { providerLabel: expert.label }),
-    });
+    }), signal);
     return { searchContextText, citations: normalizeCitations(citations) };
   }
 
   if (expert.provider === "openai") {
     const decisionRunner = buildOpenAIDecisionRunner(expert.modelId, providerRoutes.openai);
-    const { searchContextText } = await runWebSearchOrchestration({
+    const { searchContextText } = await raceWithSignal(runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
       historyMessages,
@@ -584,15 +620,17 @@ async function collectSearchContext({
       model: expert.modelId,
       conversationId,
       allowHeuristicFallback: false,
+      signal,
+      searchTimeoutMs: null,
       ...getWebSearchProviderRuntimeOptions(expert.provider, { providerLabel: expert.label }),
-    });
+    }), signal);
     return { searchContextText, citations: normalizeCitations(citations) };
   }
 
   throw new Error(`未知专家 provider：${expert.provider}`);
 }
 
-async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContextText }) {
+async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContextText, signal }) {
   assertConfigured(GEMINI_API_KEY, "GEMINI_API_KEY is not set");
   const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
   const parts = [{ text: prompt }];
@@ -609,7 +647,7 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
     includeEconomyPrefix: false,
     searchContextText,
   });
-  const result = await ai.models.generateContent({
+  const result = await raceWithSignal(ai.models.generateContent({
     model: expert.modelId,
     contents: [{ role: "user", parts }],
     config: {
@@ -621,11 +659,11 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
         includeThoughts: false,
       },
     },
-  });
+  }), signal);
   return extractGeminiText(result);
 }
 
-async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig }) {
+async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
   const client = new Anthropic({
     apiKey: providerConfig.apiKey,
     baseURL: providerConfig.baseUrl,
@@ -646,7 +684,7 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
     includeEconomyPrefix: true,
     searchContextText,
   });
-  const response = await client.messages.create({
+  const response = await raceWithSignal(client.messages.create({
     model: CLAUDE_OPUS_MODEL,
     max_tokens: EXPERT_MAX_OUTPUT_TOKENS,
     system: [
@@ -660,11 +698,11 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
     output_config: {
       effort: expert.thinkingLevel,
     },
-  });
+  }), signal);
   return extractClaudeText(response);
 }
 
-async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig }) {
+async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
   const systemPrompt = await buildExpertSystemPrompt({
     enableWebSearch: true,
     includeEconomyPrefix: true,
@@ -693,6 +731,7 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
         effort: expert.thinkingLevel,
       },
     }),
+    signal,
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -725,21 +764,22 @@ export async function runCouncilExpert({
   onDone,
   providerRoutes,
   history,
+  signal,
 }) {
   try {
     const finalPrompt = buildCouncilTurnPrompt({ historyMemo, prompt });
     const { searchContextText, citations } = await collectSearchContext({
-      prompt: finalPrompt,
+      prompt,
       expert,
       conversationId,
       clientAborted,
       updateStatus,
       providerRoutes,
       historyMessages: history,
+      signal,
     });
-    if (clientAborted()) {
-      throw new Error("COUNCIL_ABORTED");
-    }
+    throwIfAborted(signal);
+    if (clientAborted()) throw new Error("COUNCIL_ABORTED");
 
     updateStatus?.({
       status: "running",
@@ -755,6 +795,7 @@ export async function runCouncilExpert({
         imagePayloads,
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
         searchContextText,
+        signal,
       });
     } else if (expert.provider === "claude") {
       rawText = await requestClaudeExpert({
@@ -763,6 +804,7 @@ export async function runCouncilExpert({
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
         searchContextText,
         providerConfig: providerRoutes.opus,
+        signal,
       });
     } else if (expert.provider === "openai") {
       rawText = await requestOpenAIExpert({
@@ -771,6 +813,7 @@ export async function runCouncilExpert({
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
         searchContextText,
         providerConfig: providerRoutes.openai,
+        signal,
       });
     } else {
       throw new Error(`未知专家 provider：${expert.provider}`);
@@ -824,15 +867,13 @@ function buildSeedPayload({ historyMemo, prompt, experts }) {
   return sections.join("\n\n");
 }
 
-export async function runSeedTriage({ prompt, hasImages }) {
+export async function runSeedTriage({ prompt, hasImages, signal }) {
   if (hasImages) return { needCouncil: true };
   const trimmed = typeof prompt === "string" ? prompt.trim() : "";
   if (!trimmed) return { needCouncil: true };
 
   assertConfigured(ARK_API_KEY, "ARK_API_KEY 未配置");
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TRIAGE_TIMEOUT_MS);
+  throwIfAborted(signal);
 
   try {
     const response = await fetch(`${SEED_API_BASE_URL}/chat/completions`, {
@@ -876,7 +917,7 @@ export async function runSeedTriage({ prompt, hasImages }) {
           { role: "user", content: trimmed },
         ],
       }),
-      signal: controller.signal,
+      signal,
     });
 
     if (!response.ok) return { needCouncil: true };
@@ -894,10 +935,11 @@ export async function runSeedTriage({ prompt, hasImages }) {
       return { needCouncil: false, directAnswer: parsed.directAnswer.trim() };
     }
     return { needCouncil: true };
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) {
+      throw buildAbortError(signal);
+    }
     return { needCouncil: true };
-  } finally {
-    clearTimeout(timer);
   }
 }
 

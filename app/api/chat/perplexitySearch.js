@@ -307,22 +307,38 @@ function buildPerplexityHeaders() {
   };
 }
 
-async function requestPerplexity(body, { timeoutMs = PERPLEXITY_TIMEOUT_MS } = {}) {
+function buildRequestSignal({ timeoutMs = PERPLEXITY_TIMEOUT_MS, signal } = {}) {
+  const hasFiniteTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0;
+  if (signal && hasFiniteTimeout) {
+    return AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
+  }
+  if (signal) return signal;
+  if (hasFiniteTimeout) return AbortSignal.timeout(timeoutMs);
+  return undefined;
+}
+
+async function requestPerplexity(body, { timeoutMs = PERPLEXITY_TIMEOUT_MS, signal } = {}) {
   const headers = buildPerplexityHeaders();
   let response = null;
   let lastError = null;
 
   for (let attempt = 0; attempt < PERPLEXITY_MAX_RETRIES; attempt += 1) {
+    if (signal?.aborted) {
+      throw signal.reason instanceof Error ? signal.reason : new Error(typeof signal?.reason === "string" ? signal.reason : "Request aborted");
+    }
     try {
       response = await fetch(PERPLEXITY_SEARCH_API_URL, {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: buildRequestSignal({ timeoutMs, signal }),
       });
       lastError = null;
     } catch (error) {
       lastError = error;
+      if (signal?.aborted) {
+        throw signal.reason instanceof Error ? signal.reason : new Error(typeof signal?.reason === "string" ? signal.reason : "Request aborted");
+      }
       if (attempt >= PERPLEXITY_MAX_RETRIES - 1) {
         throw error;
       }
@@ -432,7 +448,10 @@ export function buildSearchEventResults(results, maxItems = 0) {
 
 export async function perplexitySearch(query, options = {}) {
   const requestBody = buildPerplexitySearchRequestBody(query, options);
-  const raw = await requestPerplexity(requestBody);
+  const raw = await requestPerplexity(requestBody, {
+    timeoutMs: options.timeoutMs,
+    signal: options.signal,
+  });
   const results = dedupeByUrl(
     flattenRawResults(raw?.results)
       .map(normalizePerplexityResult)

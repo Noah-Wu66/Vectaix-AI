@@ -284,7 +284,11 @@ function cleanupQueryText(text) {
   if (typeof text !== 'string') return '';
 
   let query = text.replace(/\s+/g, ' ').trim();
+  query = query.replace(/^#{1,6}\s*/u, '').trim();
+  query = query.replace(/^(当前用户问题|用户问题|当前问题|问题|搜索词|关键词|查询词)\s*[:：-]?\s*/u, '').trim();
   query = stripLeadingChatter(query);
+  query = query.replace(/^#{1,6}\s*/u, '').trim();
+  query = query.replace(/^(当前用户问题|用户问题|当前问题|问题|搜索词|关键词|查询词)\s*[:：-]?\s*/u, '').trim();
   query = query.replace(/[？?。！!]+$/u, '').trim();
   query = query.replace(/^(关于|有关)/u, '').trim();
   query = query.replace(/^(那|那它|那这个|那这个东西|这个|这个东西|那边)\s*/u, '').trim();
@@ -485,6 +489,28 @@ function inferFreshnessFromQuery(text) {
   }
 
   return 'noLimit';
+}
+
+async function raceWithAbortSignal(task, signal) {
+  if (!signal) return task;
+  if (signal.aborted) {
+    throw signal.reason instanceof Error ? signal.reason : new Error(typeof signal.reason === 'string' ? signal.reason : 'Request aborted');
+  }
+
+  let onAbort = null;
+  try {
+    return await Promise.race([
+      task,
+      new Promise((_, reject) => {
+        onAbort = () => reject(signal.reason instanceof Error ? signal.reason : new Error(typeof signal.reason === 'string' ? signal.reason : 'Request aborted'));
+        signal.addEventListener?.('abort', onAbort, { once: true });
+      }),
+    ]);
+  } finally {
+    if (onAbort) {
+      signal.removeEventListener?.('abort', onAbort);
+    }
+  }
 }
 
 function isLikelySearchFollowUp(text) {
@@ -711,6 +737,14 @@ function isMissingWebSearchCredential(error) {
   return message.includes('PERPLEXITY_API_KEY');
 }
 
+function isTimeoutAbortSignal(signal) {
+  if (!signal?.aborted) return false;
+  if (signal.reason instanceof Error) {
+    return signal.reason.message === 'API_TIMEOUT';
+  }
+  return signal.reason === 'API_TIMEOUT';
+}
+
 export async function runWebSearchOrchestration(options) {
   const {
     enableWebSearch,
@@ -726,9 +760,14 @@ export async function runWebSearchOrchestration(options) {
     conversationId,
     warnOnNoContext = false,
     allowHeuristicFallback = true,
+    signal,
+    searchTimeoutMs,
   } = options || {};
 
-  const aborted = () => typeof isClientAborted === 'function' && isClientAborted() === true;
+  const aborted = () => (
+    (typeof isClientAborted === 'function' && isClientAborted() === true)
+    || signal?.aborted === true
+  );
   if (!enableWebSearch || aborted()) {
     return { searchContextText: '' };
   }
@@ -753,21 +792,27 @@ export async function runWebSearchOrchestration(options) {
     let decision;
 
     try {
-      const rawDecision = await decisionRunner({
-        prompt: currentPrompt,
-        historyMessages,
-        providerLabel,
-        model,
-        conversationId,
-        searchRounds,
-        accumulatedSearchContextText: buildAccumulatedSearchContext(searchRounds),
-      });
+      const rawDecision = await raceWithAbortSignal(
+        decisionRunner({
+          prompt: currentPrompt,
+          historyMessages,
+          providerLabel,
+          model,
+          conversationId,
+          searchRounds,
+          accumulatedSearchContextText: buildAccumulatedSearchContext(searchRounds),
+        }),
+        signal
+      );
 
       decision = normalizeWebSearchDecision(rawDecision);
       if (!decision) {
         throw new Error('搜索判断模型未返回合法 JSON');
       }
     } catch (decisionError) {
+      if (isTimeoutAbortSignal(signal)) {
+        throw signal.reason instanceof Error ? signal.reason : new Error('API_TIMEOUT');
+      }
       if (aborted()) {
         return {
           searchContextText: buildAccumulatedSearchContext(searchRounds),
@@ -852,7 +897,7 @@ export async function runWebSearchOrchestration(options) {
     }
 
     if (duplicateQuery) {
-      console.warn(`${providerLabel} web search skipped duplicate query`, {
+      console.info(`${providerLabel} web search skipped duplicate query`, {
         round: roundIndex + 1,
         query: nextQuery,
         freshness: finalFreshness,
@@ -877,6 +922,8 @@ export async function runWebSearchOrchestration(options) {
       searchData = await perplexitySearch(nextQuery, {
         count: WEB_SEARCH_LIMIT,
         freshness: finalFreshness,
+        signal,
+        timeoutMs: searchTimeoutMs,
       });
     } catch (searchError) {
       console.error(`${providerLabel} web search failed`, {

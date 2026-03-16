@@ -10,7 +10,6 @@ import { buildAgentMessageMeta } from "@/lib/server/agent/runHelpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
 
 const CHAT_RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;

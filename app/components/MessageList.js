@@ -366,7 +366,7 @@ export default function MessageList({
 
                 {msg.role === "model" && msg.isStreaming && !msg.isWaitingFirstChunk && !msg.isSearching && !msg.thought && !msg.content && !hasParts && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && (
                   <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
-                    <LoadingSweepText text="等待响应" className="text-sm sm:text-[15px]" />
+                    <LoadingSweepText text="..." ariaText="等待响应" className="loading-sweep-dots text-sm sm:text-[15px]" />
                   </div>
                 )}
 
@@ -713,7 +713,7 @@ export default function MessageList({
             animate={isCouncilModel(model) || model === AGENT_MODEL_ID}
           />
           <div className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
-            <LoadingSweepText text="等待响应" className="text-sm sm:text-[15px]" />
+            <LoadingSweepText text="..." ariaText="等待响应" className="loading-sweep-dots text-sm sm:text-[15px]" />
           </div>
         </div>
       )}

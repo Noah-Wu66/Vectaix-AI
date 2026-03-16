@@ -712,6 +712,11 @@ h6 {
   --loading-sweep-line-height: 1.35;
 }
 
+.loading-sweep-dots {
+  --loading-sweep-spacing: 0.22em;
+  --loading-sweep-line-height: 1;
+}
+
 .loading-sweep::after {
   content: attr(data-text);
   position: absolute;
