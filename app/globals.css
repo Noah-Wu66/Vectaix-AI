@@ -697,11 +697,19 @@ h6 {
 .loading-sweep {
   position: relative;
   display: inline-block;
-  color: #71717a;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  line-height: 1;
+  color: var(--loading-sweep-color, #71717a);
+  font-weight: var(--loading-sweep-weight, 700);
+  letter-spacing: var(--loading-sweep-spacing, 0.16em);
+  line-height: var(--loading-sweep-line-height, 1);
   white-space: nowrap;
+}
+
+.loading-sweep-step {
+  --loading-sweep-color: currentColor;
+  --loading-sweep-color-dark: currentColor;
+  --loading-sweep-weight: 500;
+  --loading-sweep-spacing: 0;
+  --loading-sweep-line-height: 1.35;
 }
 
 .loading-sweep::after {
@@ -727,7 +735,7 @@ h6 {
 }
 
 .dark-mode .loading-sweep {
-  color: #a1a1aa;
+  color: var(--loading-sweep-color-dark, #a1a1aa);
 }
 
 .dark-mode .loading-sweep::after {

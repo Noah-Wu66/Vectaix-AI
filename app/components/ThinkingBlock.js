@@ -70,8 +70,11 @@ function normalizeCouncilSummaryState(state) {
   };
 }
 
-function LoadingStateText() {
-  return <LoadingSweepText text="进行中" className="text-[0.78em] font-semibold tracking-[0.18em]" />;
+function StepStatusText({ text, active = false }) {
+  if (active) {
+    return <LoadingSweepText text={text} className="loading-sweep-step" />;
+  }
+  return <span>{text}</span>;
 }
 
 export default function ThinkingBlock({
@@ -240,15 +243,13 @@ export default function ThinkingBlock({
               className={`${capsuleClass} cursor-pointer hover:text-zinc-700`}
             >
               {icon}
-              <span>{isThoughtStreaming ? "思考中" : "思考过程"}</span>
-              {showThoughtDots ? <LoadingStateText /> : null}
+              <StepStatusText text={isThoughtStreaming ? "思考中" : "思考过程"} active={showThoughtDots} />
               {isThoughtOpen ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
             </button>
           ) : (
             <div className={`${capsuleClass} cursor-default`}>
               {icon}
-              <span>{isThoughtStreaming ? "思考中" : "已思考"}</span>
-              {showThoughtDots ? <LoadingStateText /> : null}
+              <StepStatusText text={isThoughtStreaming ? "思考中" : "已思考"} active={showThoughtDots} />
             </div>
           )}
           {isThoughtOpen ? (
@@ -273,8 +274,7 @@ export default function ThinkingBlock({
         <div key={step.id || `search-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
-            <span>{titleText}</span>
-            {isRunning ? <LoadingStateText /> : null}
+            <StepStatusText text={titleText} active={isRunning} />
           </div>
         </div>
       );
@@ -286,8 +286,7 @@ export default function ThinkingBlock({
         <div key={step.id || `sandbox-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
-            <span>{detail || titleText}</span>
-            {isRunning ? <LoadingStateText /> : null}
+            <StepStatusText text={detail || titleText} active={isRunning} />
           </div>
         </div>
       );
@@ -299,8 +298,7 @@ export default function ThinkingBlock({
         <div key={step.id || `${step.kind}-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
-            <span>{detail || titleText}</span>
-            {isRunning ? <LoadingStateText /> : null}
+            <StepStatusText text={detail || titleText} active={isRunning} />
           </div>
         </div>
       );
@@ -312,8 +310,7 @@ export default function ThinkingBlock({
         <div key={step.id || `tool-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
-            <span>{label}</span>
-            {isRunning ? <LoadingStateText /> : null}
+            <StepStatusText text={label} active={isRunning} />
           </div>
         </div>
       );
@@ -349,6 +346,7 @@ export default function ThinkingBlock({
               : isDone
               ? "已完成"
               : expert.message || "等待中";
+            const expertLabel = `${displayLabel} · ${statusText}`;
             return (
               <div key={expertKey} className="w-full max-w-[760px]">
                 <div
@@ -356,8 +354,7 @@ export default function ThinkingBlock({
                   onClick={hasContent ? () => setOpenExpertKey(isOpen ? null : expertKey) : undefined}
                 >
                   <ModelGlyph model={expert.modelId} size={14} />
-                  <span>{displayLabel} · {statusText}</span>
-                  {isRunning ? <LoadingStateText /> : null}
+                  <StepStatusText text={expertLabel} active={isRunning} />
                   {hasContent ? (isOpen ? <ChevronUp size={12} className="ml-1 shrink-0" /> : <ChevronDown size={12} className="ml-1 shrink-0" />) : null}
                 </div>
                 {isOpen && expertData && (
@@ -378,12 +375,12 @@ export default function ThinkingBlock({
               : s.status === "done"
               ? "已完成"
               : s.message || "等待中";
+            const summaryLabel = `${s.label} · ${statusText}`;
             return (
               <div className="w-full max-w-[760px]">
                 <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
                   <ModelGlyph model={s.modelId} size={14} />
-                  <span>{s.label} · {statusText}</span>
-                  {isRunning ? <LoadingStateText /> : null}
+                  <StepStatusText text={summaryLabel} active={isRunning} />
                 </div>
               </div>
             );
@@ -451,8 +448,7 @@ export default function ThinkingBlock({
                           className="thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors text-zinc-500 cursor-pointer"
                         >
                           <Lightbulb className="thinking-icon-step" />
-                          <span>{isStreaming ? "思考中" : "思考过程"}</span>
-                          {isStreaming && expandedTimelineId !== "__simple__" ? <LoadingStateText /> : null}
+                          <StepStatusText text={isStreaming ? "思考中" : "思考过程"} active={isStreaming && expandedTimelineId !== "__simple__"} />
                           {expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
                         </button>
                         {expandedTimelineId === "__simple__" ? (
