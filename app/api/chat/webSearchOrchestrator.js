@@ -93,6 +93,50 @@ const BALANCED_SEARCH_HINT_KEYWORDS = [
   '来源',
   'api',
   'sdk',
+  '状态',
+  '现状',
+  '规则',
+  '政策',
+  '规定',
+  '通知',
+  '可用',
+  '能用',
+  '还能用',
+  '是否可用',
+  '是否还能',
+  '现在还能',
+  '在售',
+  '缺货',
+  '恢复',
+  '维护',
+  '故障',
+  '什么时候出',
+  '出来了吗',
+  '发布了吗',
+  '公布了吗',
+  '更新了吗',
+  '上线了吗',
+];
+const AGGRESSIVE_FRESHNESS_HINT_KEYWORDS = [
+  '刚出',
+  '刚刚发布',
+  '刚发布',
+  '刚上线',
+  '刚更新',
+  '刚公布',
+  '出来了',
+  '出了吗',
+  '出没出',
+  '公布了吗',
+  '发布了吗',
+  '更新了吗',
+  '上线了吗',
+  '现在还能用吗',
+  '现在还有吗',
+  '还在吗',
+  '还有效吗',
+  '还可用吗',
+  '什么时候出',
 ];
 const CONTEXT_REFERENCE_KEYWORDS = ['上面那段话', '上面的内容', '上文', '这段话', '这一段', '这句话', '这段内容', '刚才那段', '刚刚那段', '上一条', '上一段', '上一个回答', '上面的回答', '刚才的回答'];
 const REWRITE_TASK_KEYWORDS = ['润色', '翻译', '总结', '概括', '改写', '重写', '续写', '扩写', '精简'];
@@ -468,13 +512,15 @@ function inferFreshnessFromQuery(text) {
 
   if (
     includesAnyKeyword(source, ['今天', '今日', '刚刚', '刚才', '现在', '实时', '目前', '股价', '汇率', '天气', '航班', '比分', '开奖', '热搜'])
-    || /\b(today|now|live|real-time|realtime)\b/.test(lower)
+    || includesAnyKeyword(source, AGGRESSIVE_FRESHNESS_HINT_KEYWORDS)
+    || /\b(today|now|live|real-time|realtime|just released|out yet|released yet)\b/.test(lower)
   ) {
     return 'oneDay';
   }
 
   if (
     includesAnyKeyword(source, ['最新', '最近', '新闻', '公告', '动态', '进展', '近况', '更新', '发布'])
+    || (/20\d{2}|今年|本月|本周/u.test(source) && includesAnyKeyword(source, ['发布', '更新', '公告', '规则', '政策', '价格', '状态', '现状', '消息', '进展']))
     || /\b(latest|recent|news|update|updates|announcement|announcements)\b/.test(lower)
   ) {
     return 'oneWeek';
@@ -519,7 +565,30 @@ function isLikelySearchFollowUp(text) {
   if (!trimmed) return false;
 
   if (/^(那|那它|那这个|那这个东西|这个|这个东西|那边|然后)(.+)?呢[？?]?$/u.test(trimmed)) return true;
-  if (/^(那|这个)?(价格|官网|文档|教程|资料|来源|新闻|消息|更新|进展|最新|最近)(呢)?[？?]?$/u.test(trimmed)) return true;
+  if (/^(那|这个)?(价格|官网|文档|教程|资料|来源|新闻|消息|更新|进展|最新|最近|状态|现状|规则|政策|规定|通知)(呢)?[？?]?$/u.test(trimmed)) return true;
+  return false;
+}
+
+function isLikelyAggressiveFreshnessQuery(text) {
+  if (typeof text !== 'string') return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  const lower = trimmed.toLowerCase();
+  if (includesAnyKeyword(trimmed, AGGRESSIVE_FRESHNESS_HINT_KEYWORDS)) return true;
+  if (
+    includesAnyKeyword(trimmed, ['现在', '目前', '当前'])
+    && includesAnyKeyword(trimmed, ['怎么样', '如何', '还能', '可用', '能用', '在售', '有效', '开放', '支持', '行不行', '可以吗'])
+  ) {
+    return true;
+  }
+  if (
+    /20\d{2}|今年|本月|本周|这几天/u.test(trimmed)
+    && includesAnyKeyword(trimmed, ['发布', '更新', '公告', '规则', '政策', '消息', '动态', '价格', '状态', '现状'])
+  ) {
+    return true;
+  }
+  if (/\b(just released|newly released|out yet|released yet|announced yet)\b/.test(lower)) return true;
   return false;
 }
 
@@ -530,6 +599,7 @@ function isLikelyKnowledgeGapOrFreshnessQuery(text) {
 
   const lower = trimmed.toLowerCase();
   if (includesAnyKeyword(trimmed, BALANCED_SEARCH_HINT_KEYWORDS)) return true;
+  if (isLikelyAggressiveFreshnessQuery(trimmed)) return true;
   if (/\b(api|sdk|docs?|documentation|pricing|changelog|release notes?)\b/.test(lower)) return true;
   if (/(v\d+|版本|兼容|支持).*(吗|么|？|\?)/u.test(trimmed)) return true;
   return false;
@@ -567,8 +637,9 @@ function buildHeuristicWebSearchDecision({ prompt, historyMessages }) {
   const isFollowUp = isLikelySearchFollowUp(currentPrompt)
     || (currentPrompt.length <= 12 && includesAnyKeyword(currentPrompt, FOLLOW_UP_SEARCH_KEYWORDS));
   const hasBalancedHint = isLikelyKnowledgeGapOrFreshnessQuery(currentPrompt);
+  const hasAggressiveHint = isLikelyAggressiveFreshnessQuery(currentPrompt);
 
-  if (!hasExplicitIntent && !isFollowUp && !hasBalancedHint) {
+  if (!hasExplicitIntent && !isFollowUp && !hasBalancedHint && !hasAggressiveHint) {
     return null;
   }
 

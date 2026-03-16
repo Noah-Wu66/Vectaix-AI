@@ -176,9 +176,8 @@ export default function Composer({
     });
   };
 
-  const handleFileSelect = async (e) => {
+  const processFiles = async (files) => {
     if (!supportsFilePicker) return;
-    const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
     const remainingSlots = MAX_CHAT_ATTACHMENTS - selectedAttachments.length;
@@ -252,6 +251,25 @@ export default function Composer({
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files || []);
+    await processFiles(files);
+  };
+
+  const handlePaste = async (e) => {
+    if (!supportsImages) return;
+    const clipboardItems = Array.from(e.clipboardData?.items || []);
+    if (!clipboardItems.length) return;
+
+    const imageFiles = clipboardItems
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter(Boolean);
+
+    if (!imageFiles.length) return;
+    await processFiles(imageFiles);
   };
 
   const uploadAttachmentInBackground = async (att) => {
@@ -454,6 +472,7 @@ export default function Composer({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             onFocus={() => setIsMainInputFocused(true)}
             onBlur={() => setIsMainInputFocused(false)}
             readOnly={hasReachedCouncilRoundLimit}
