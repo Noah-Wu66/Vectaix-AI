@@ -74,6 +74,7 @@ const NON_SEARCH_REPLY_KEYWORDS = [
   '收到',
 ];
 const FOLLOW_UP_SEARCH_KEYWORDS = ['价格', '官网', '文档', '教程', '资料', '来源', '新闻', '消息', '更新', '进展', '最新', '最近'];
+const FOLLOW_UP_SEARCH_KEYWORDS_EN = ['price', 'pricing', 'official site', 'official docs', 'docs', 'documentation', 'guide', 'guides', 'reference', 'references', 'news', 'update', 'updates', 'latest', 'recent', 'status', 'availability', 'release', 'release date'];
 const BALANCED_SEARCH_HINT_KEYWORDS = [
   '版本',
   '更新',
@@ -207,11 +208,48 @@ const TOPIC_CUT_KEYWORDS = [
   '是什么',
   '是啥',
   '怎么样',
+  'official site',
+  'official website',
+  'official docs',
+  'documentation',
+  'docs',
+  'guide',
+  'guides',
+  'reference',
+  'references',
+  'news',
+  'update',
+  'updates',
+  'latest',
+  'recent',
+  'price',
+  'pricing',
+  'weather',
+  'flight',
+  'score',
+  'lottery',
+  'release date',
 ];
 const MAX_FINAL_QUERY_LENGTH = 48;
 const MULTI_CLAUSE_QUERY_PATTERN = /[，,；;。]|顺便|另外|然后|再帮我|顺带|以及|并且|同时|\b(and also|also|then|by the way)\b/u;
 const ENGLISH_LEADING_POLITE_PATTERN = /^(please|can you|could you|would you|help me|show me|tell me|look up|search for|find)\b[\s,:-]*/i;
 const ENGLISH_SEARCH_VERB_PATTERN = /^(look up|search for|search|google|find)\b[\s,:-]*/i;
+const LATIN_LETTER_PATTERN = /[A-Za-z]/;
+const MIXED_LANGUAGE_INTENT_TOKEN_MAP = Object.freeze({
+  '官网': 'official site',
+  '官方文档': 'official docs',
+  '文档': 'docs',
+  '教程': 'guide',
+  '资料': 'reference',
+  '价格': 'pricing',
+  '天气': 'weather',
+  '航班': 'flight',
+  '比分': 'score',
+  '开奖': 'lottery',
+  '发布时间': 'release date',
+  '最新消息': 'news',
+  '最新': 'latest',
+});
 
 function findKeywordIndex(text, keywords) {
   if (typeof text !== 'string' || !text) return -1;
@@ -395,6 +433,17 @@ function extractTopicFromText(text) {
   return topic.slice(0, MAX_FINAL_QUERY_LENGTH);
 }
 
+function shouldUseMixedLanguageQuery(...values) {
+  const text = values
+    .filter((value) => typeof value === 'string' && value.trim())
+    .join(' ')
+    .trim();
+
+  if (!text) return false;
+  if (!LATIN_LETTER_PATTERN.test(text)) return false;
+  return true;
+}
+
 function pushUniqueToken(tokens, token) {
   if (!token || tokens.includes(token)) return;
   tokens.push(token);
@@ -454,7 +503,7 @@ function extractIntentTokens(text) {
   return tokens.slice(0, 3);
 }
 
-function buildQueryFromTopic({ topic, intentTokens, freshness }) {
+function buildQueryFromTopic({ topic, intentTokens, freshness, preferMixedLanguage = false }) {
   const parts = [];
   const tokens = Array.isArray(intentTokens) ? intentTokens : [];
 
@@ -463,6 +512,11 @@ function buildQueryFromTopic({ topic, intentTokens, freshness }) {
     if (!token) continue;
     if (parts.includes(token)) continue;
     parts.push(token);
+    if (!preferMixedLanguage) continue;
+
+    const englishToken = MIXED_LANGUAGE_INTENT_TOKEN_MAP[token];
+    if (!englishToken || parts.includes(englishToken)) continue;
+    parts.push(englishToken);
   }
 
   const shouldAppendFreshness = freshness === 'oneWeek'
@@ -470,6 +524,9 @@ function buildQueryFromTopic({ topic, intentTokens, freshness }) {
 
   if (shouldAppendFreshness && !parts.includes('最新')) {
     parts.push('最新');
+    if (preferMixedLanguage && !parts.includes('latest')) {
+      parts.push('latest');
+    }
   }
 
   return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, MAX_FINAL_QUERY_LENGTH);
@@ -493,7 +550,8 @@ function finalizeSearchQuery({ prompt, historyMessages, rawQuery, freshness }) {
     || extractTopicFromText(rawQuery)
     || getRecentTopicHint(historyMessages);
   const intentTokens = extractIntentTokens(`${rawQuery || ''}\n${prompt || ''}`);
-  const rebuiltQuery = buildQueryFromTopic({ topic, intentTokens, freshness });
+  const preferMixedLanguage = shouldUseMixedLanguageQuery(topic, rawQuery, prompt);
+  const rebuiltQuery = buildQueryFromTopic({ topic, intentTokens, freshness, preferMixedLanguage });
 
   if (rebuiltQuery && isCompactSearchQuery(rebuiltQuery)) {
     return rebuiltQuery;
@@ -566,6 +624,8 @@ function isLikelySearchFollowUp(text) {
 
   if (/^(那|那它|那这个|那这个东西|这个|这个东西|那边|然后)(.+)?呢[？?]?$/u.test(trimmed)) return true;
   if (/^(那|这个)?(价格|官网|文档|教程|资料|来源|新闻|消息|更新|进展|最新|最近|状态|现状|规则|政策|规定|通知)(呢)?[？?]?$/u.test(trimmed)) return true;
+  if (/^(what about|how about)\s+(pricing|price|official site|official docs|docs|documentation|guide|guides|reference|references|news|updates?|latest|recent|status|availability|release|release date)\b[?？]?$/i.test(trimmed)) return true;
+  if (/^(pricing|price|official site|official docs|docs|documentation|guide|guides|reference|references|news|updates?|latest|recent|status|availability|release|release date)(\s+then)?[?？]?$/i.test(trimmed)) return true;
   return false;
 }
 
@@ -635,7 +695,8 @@ function buildHeuristicWebSearchDecision({ prompt, historyMessages }) {
   const hasExplicitIntent = includesAnyKeyword(currentPrompt, EXPLICIT_SEARCH_KEYWORDS)
     || includesAnyKeyword(lowerPrompt, EXPLICIT_SEARCH_KEYWORDS_EN);
   const isFollowUp = isLikelySearchFollowUp(currentPrompt)
-    || (currentPrompt.length <= 12 && includesAnyKeyword(currentPrompt, FOLLOW_UP_SEARCH_KEYWORDS));
+    || (currentPrompt.length <= 12 && includesAnyKeyword(currentPrompt, FOLLOW_UP_SEARCH_KEYWORDS))
+    || (currentPrompt.length <= 32 && includesAnyKeyword(lowerPrompt, FOLLOW_UP_SEARCH_KEYWORDS_EN));
   const hasBalancedHint = isLikelyKnowledgeGapOrFreshnessQuery(currentPrompt);
   const hasAggressiveHint = isLikelyAggressiveFreshnessQuery(currentPrompt);
 

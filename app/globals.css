@@ -713,8 +713,12 @@ h6 {
 }
 
 .loading-sweep-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   --loading-sweep-spacing: 0.22em;
   --loading-sweep-line-height: 1;
+  transform: translateY(-1px);
 }
 
 .loading-sweep::after {
