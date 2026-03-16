@@ -30,7 +30,6 @@ const MAX_COUNCIL_EXPERTS = 3;
 const MAX_EXPERT_MODEL_CHARS = 100;
 const MAX_EXPERT_LABEL_CHARS = 120;
 const MAX_EXPERT_CONTENT_CHARS = 20000;
-const COUNCIL_TOTAL_TIMEOUT_MS = 300_000;
 const CONVERSATION_WRITE_CONFLICT_ERROR = "当前对话已被其他请求更新，请重试";
 
 function buildTitle(prompt) {
@@ -353,13 +352,7 @@ export async function POST(req) {
     async start(controller) {
       const streamHelpers = createCouncilStreamHelpers(controller);
       let finalMessagePersisted = false;
-      const totalTimeoutController = new AbortController();
-      const totalTimeoutId = setTimeout(() => {
-        totalTimeoutController.abort("API_TIMEOUT");
-      }, COUNCIL_TOTAL_TIMEOUT_MS);
-      const councilSignal = req?.signal
-        ? AbortSignal.any([req.signal, totalTimeoutController.signal])
-        : totalTimeoutController.signal;
+      const councilSignal = req?.signal;
       const rollbackCouncilTurn = async () => {
         if (finalMessagePersisted) return;
 
@@ -643,7 +636,6 @@ export async function POST(req) {
           controller.error(error);
         }
       } finally {
-        clearTimeout(totalTimeoutId);
         try {
           req?.signal?.removeEventListener?.("abort", onAbort);
         } catch {

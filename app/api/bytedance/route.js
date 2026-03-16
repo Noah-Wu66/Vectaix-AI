@@ -32,7 +32,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SEED_API_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
-const SEED_API_TIMEOUT_MS = 1_800_000;
+const SEED_API_TIMEOUT_MS = 30_000;
 const SEED_MAX_RETRIES = 2;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
