@@ -5,10 +5,10 @@ import { ChevronUp } from "lucide-react";
 import { CHAT_MODELS, MODEL_GROUP_ORDER } from "@/lib/shared/models";
 import { ModelGlyph } from "./ModelVisuals";
 
-export default function ModelSelector({ model, onModelChange }) {
+export default function ModelSelector({ model, onModelChange, ready = true }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const visibleModels = CHAT_MODELS;
-  const currentModel = CHAT_MODELS.find((m) => m.id === model);
+  const currentModel = ready ? CHAT_MODELS.find((m) => m.id === model) : null;
   const currentModelLabel = currentModel?.shortName || currentModel?.name || "模型";
   const groupTitles = {
     vectaix: "Vectaix",
@@ -38,6 +38,7 @@ export default function ModelSelector({ model, onModelChange }) {
           <button
             key={m.id}
             onClick={() => {
+              if (!ready) return;
               setShowModelMenu(false);
               onModelChange(m.id);
             }}
@@ -58,22 +59,30 @@ export default function ModelSelector({ model, onModelChange }) {
   return (
     <div className="relative">
       <button
-        onClick={() => setShowModelMenu(!showModelMenu)}
+        onClick={() => {
+          if (!ready) return;
+          setShowModelMenu(!showModelMenu);
+        }}
         className="px-3 py-1.5 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors flex items-center gap-1.5 text-sm"
         type="button"
+        disabled={!ready}
       >
-        {currentModel && (
-          <ModelGlyph model={currentModel.id} provider={currentModel.provider} size={14} />
-        )}
+        <span className="inline-flex h-3.5 w-3.5 items-center justify-center shrink-0">
+          {currentModel ? (
+            <ModelGlyph model={currentModel.id} provider={currentModel.provider} size={14} />
+          ) : (
+            <span className="block h-3.5 w-3.5 rounded-sm bg-zinc-200" aria-hidden />
+          )}
+        </span>
         <span className="hidden truncate max-w-[160px] sm:inline-block">{currentModelLabel}</span>
         <ChevronUp
           size={12}
-          className={`transition-transform ${showModelMenu ? "rotate-180" : ""}`}
+          className={`transition-transform ${showModelMenu ? "rotate-180" : ""} ${ready ? "" : "opacity-40"}`}
         />
       </button>
 
       <AnimatePresence>
-        {showModelMenu && (
+        {ready && showModelMenu && (
           <>
             <motion.div
               initial={{ opacity: 0 }}

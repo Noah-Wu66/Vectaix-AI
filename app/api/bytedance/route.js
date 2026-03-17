@@ -32,7 +32,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const SEED_API_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
-const SEED_API_TIMEOUT_MS = 30_000;
 const SEED_MAX_RETRIES = 2;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
@@ -40,14 +39,6 @@ const VALID_SEED_REASONING_LEVELS = new Set(SEED_REASONING_LEVELS);
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function createUpstreamSignal(req) {
-    const timeoutSignal = AbortSignal.timeout(SEED_API_TIMEOUT_MS);
-    if (req?.signal) {
-        return AbortSignal.any([req.signal, timeoutSignal]);
-    }
-    return timeoutSignal;
 }
 
 function normalizeChunkText(value) {
@@ -155,7 +146,7 @@ async function requestSeedResponses({ apiKey, requestBody, req }) {
                     'Authorization': `Bearer ${apiKey}`,
                 },
                 body: JSON.stringify(requestBody),
-                signal: createUpstreamSignal(req),
+                signal: req?.signal,
             });
 
             if (response.ok) {

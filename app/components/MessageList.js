@@ -50,6 +50,7 @@ export default function MessageList({
   editingImage,
   fontSizeClass,
   model,
+  modelReady = true,
   onEditingContentChange,
   onEditingImageSelect,
   onEditingImageRemove,
@@ -280,7 +281,11 @@ export default function MessageList({
           <div className="h-full flex flex-col items-center justify-center text-zinc-400">
             <>
               <div className="mb-4">
-                <AIAvatar model={model} size={40} animate={model === AGENT_MODEL_ID} />
+                {modelReady ? (
+                  <AIAvatar model={model} size={40} animate={model === AGENT_MODEL_ID} />
+                ) : (
+                  <div className="h-10 w-10 rounded-md bg-zinc-100" aria-hidden />
+                )}
               </div>
               <p className="font-medium">开始新对话</p>
             </>

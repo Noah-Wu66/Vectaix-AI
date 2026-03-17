@@ -41,7 +41,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, setModel, thinkingLevels, historyLimit, maxTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
+  const { model, isSettingsReady, setModel, thinkingLevels, historyLimit, maxTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
   useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -773,6 +773,7 @@ export default function ChatApp() {
         <ChatLayout
           user={user}
           isAdmin={!!user?.isAdmin}
+          isSettingsReady={isSettingsReady}
           showProfileModal={showProfileModal}
           onCloseProfile={() => setShowProfileModal(false)}
           themeMode={themeMode}
@@ -827,6 +828,7 @@ export default function ChatApp() {
             isStreaming,
             isWaitingForAI: loading && messages.length > 0,
             model,
+            modelReady: isSettingsReady,
             onModelChange: requestModelChange,
             messages,
             contextWindow: currentModelConfig?.contextWindow,

@@ -605,8 +605,6 @@ export async function POST(req) {
             phase: "error",
             message: error?.message === "COUNCIL_ABORTED"
               ? "已停止"
-              : error?.message === "API_TIMEOUT"
-              ? "执行超时"
               : (error?.message || "执行失败"),
           }));
         } catch {

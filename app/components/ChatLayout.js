@@ -10,6 +10,7 @@ import Sidebar from "./Sidebar";
 
 export default function ChatLayout({
   user,
+  isSettingsReady,
   showProfileModal,
   onCloseProfile,
   themeMode,
@@ -80,6 +81,7 @@ export default function ChatLayout({
           editingImage={editingImage}
           fontSizeClass={fontSizeClass}
           model={composerProps?.model}
+          modelReady={isSettingsReady}
           onEditingContentChange={onEditingContentChange}
           onEditingImageSelect={onEditingImageSelect}
           onEditingImageRemove={onEditingImageRemove}
