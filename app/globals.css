@@ -290,11 +290,11 @@ h6 {
 .prose td {
   border: 1px solid var(--border-color);
   padding: 0.65em 0.85em;
-  text-align: left;
+  text-align: center;
   word-break: break-word;
   overflow-wrap: break-word;
   white-space: normal;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 @media (max-width: 768px) {

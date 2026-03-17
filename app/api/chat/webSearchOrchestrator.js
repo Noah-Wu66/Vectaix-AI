@@ -235,6 +235,9 @@ const MULTI_CLAUSE_QUERY_PATTERN = /[，,；;。]|顺便|另外|然后|再帮我
 const ENGLISH_LEADING_POLITE_PATTERN = /^(please|can you|could you|would you|help me|show me|tell me|look up|search for|find)\b[\s,:-]*/i;
 const ENGLISH_SEARCH_VERB_PATTERN = /^(look up|search for|search|google|find)\b[\s,:-]*/i;
 const LATIN_LETTER_PATTERN = /[A-Za-z]/;
+const CJK_CHARACTER_PATTERN = /[\u3400-\u9FFF]/u;
+const ENGLISH_SEARCH_PRIORITY_PATTERN = /\b(api|sdk|docs?|documentation|official|pricing|price|release|changelog|framework|library|repo|repository|github|npm|vercel|cloudflare|openai|anthropic|google|gemini|claude|deepseek|model)\b/i;
+const ENGLISH_ONLY_QUERY_PATTERN = /^[\s\p{Script=Latin}\p{N}\-+.#:/_()&]+$/u;
 const MIXED_LANGUAGE_INTENT_TOKEN_MAP = Object.freeze({
   '官网': 'official site',
   '官方文档': 'official docs',
@@ -449,6 +452,64 @@ function pushUniqueToken(tokens, token) {
   tokens.push(token);
 }
 
+function countPatternMatches(text, pattern) {
+  if (typeof text !== 'string' || !text) return 0;
+  const matches = text.match(new RegExp(pattern.source, `${pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`}`));
+  return Array.isArray(matches) ? matches.length : 0;
+}
+
+function classifyQueryLanguage(text) {
+  if (typeof text !== 'string') return 'other';
+  const source = text.trim();
+  if (!source) return 'other';
+
+  const cjkCount = countPatternMatches(source, CJK_CHARACTER_PATTERN);
+  const latinCount = countPatternMatches(source, /[A-Za-z]/u);
+
+  if (cjkCount > 0 && latinCount > 0) return 'mixed';
+  if (cjkCount > 0) return 'zh';
+  if (latinCount > 0 && ENGLISH_ONLY_QUERY_PATTERN.test(source)) return 'en';
+  return 'other';
+}
+
+function getQueryLanguageLabel(text) {
+  return {
+    zh: '中文',
+    en: '英文',
+    mixed: '中英混合',
+    other: '其他',
+  }[classifyQueryLanguage(text)] || '其他';
+}
+
+function extractLatinTopicCandidates(text) {
+  if (typeof text !== 'string') return [];
+
+  return Array.from(
+    text.matchAll(/[A-Za-z0-9][A-Za-z0-9+.#:/_-]*(?:\s+[A-Za-z0-9][A-Za-z0-9+.#:/_-]*)*/g)
+  )
+    .map((match) => match[0].trim())
+    .filter((item) => item.length >= 2)
+    .filter((item) => /[A-Za-z]/.test(item))
+    .filter((item) => !/^(please|latest|recent|official|docs?|documentation|guide|reference|pricing|price|news|search|find|look up)$/i.test(item));
+}
+
+function extractBestLatinTopic(...values) {
+  const candidates = values
+    .flatMap((value) => extractLatinTopicCandidates(value))
+    .sort((a, b) => b.length - a.length);
+
+  return candidates[0] || '';
+}
+
+function hasChineseIntentToken(text) {
+  return includesAnyKeyword(typeof text === 'string' ? text : '', Object.keys(MIXED_LANGUAGE_INTENT_TOKEN_MAP));
+}
+
+function hasEnglishIntentToken(text) {
+  const source = typeof text === 'string' ? text : '';
+  return Object.values(MIXED_LANGUAGE_INTENT_TOKEN_MAP).some((token) => source.toLowerCase().includes(token.toLowerCase()));
+}
+
 function extractIntentTokens(text) {
   const source = cleanupQueryText(text);
   const lower = source.toLowerCase();
@@ -503,6 +564,19 @@ function extractIntentTokens(text) {
   return tokens.slice(0, 3);
 }
 
+function buildEnglishIntentTokens(text, freshness = 'noLimit') {
+  const chineseTokens = extractIntentTokens(text);
+  const englishTokens = chineseTokens
+    .map((token) => MIXED_LANGUAGE_INTENT_TOKEN_MAP[token])
+    .filter(Boolean);
+
+  if (freshness === 'oneWeek' && !englishTokens.includes('latest') && !englishTokens.includes('news')) {
+    englishTokens.push('latest');
+  }
+
+  return englishTokens.slice(0, 4);
+}
+
 function buildQueryFromTopic({ topic, intentTokens, freshness, preferMixedLanguage = false }) {
   const parts = [];
   const tokens = Array.isArray(intentTokens) ? intentTokens : [];
@@ -532,6 +606,76 @@ function buildQueryFromTopic({ topic, intentTokens, freshness, preferMixedLangua
   return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, MAX_FINAL_QUERY_LENGTH);
 }
 
+function shouldPreferEnglishSearch({ prompt, rawQuery, query, topic }) {
+  const merged = [prompt, rawQuery, query, topic]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .join(' ')
+    .trim();
+
+  if (!merged) return false;
+  if (ENGLISH_SEARCH_PRIORITY_PATTERN.test(merged)) return true;
+  if (extractBestLatinTopic(merged)) return true;
+  return false;
+}
+
+function buildEnglishSearchQuery({ prompt, rawQuery, query, freshness }) {
+  const topic = extractBestLatinTopic(query, rawQuery, prompt);
+  if (!topic) return '';
+
+  const intentTokens = buildEnglishIntentTokens(
+    [query, rawQuery, prompt].filter(Boolean).join(' '),
+    freshness
+  );
+  const parts = [topic];
+
+  for (const token of intentTokens) {
+    if (!token || parts.includes(token)) continue;
+    parts.push(token);
+  }
+
+  const englishQuery = parts.join(' ').replace(/\s+/g, ' ').trim();
+  if (!englishQuery) return '';
+
+  return englishQuery.slice(0, Math.max(MAX_FINAL_QUERY_LENGTH, 64));
+}
+
+function normalizeQueryLanguageStrategy({ prompt, rawQuery, query, freshness }) {
+  const cleaned = cleanupQueryText(query);
+  if (!cleaned) return '';
+
+  const language = classifyQueryLanguage(cleaned);
+  const preferEnglish = shouldPreferEnglishSearch({
+    prompt,
+    rawQuery,
+    query: cleaned,
+  });
+
+  if (preferEnglish && language !== 'en' && !hasEnglishIntentToken(cleaned)) {
+    const englishQuery = buildEnglishSearchQuery({
+      prompt,
+      rawQuery,
+      query: cleaned,
+      freshness,
+    });
+
+    if (englishQuery) {
+      return englishQuery;
+    }
+  }
+
+  if (preferEnglish && language === 'mixed' && hasChineseIntentToken(cleaned) && !hasEnglishIntentToken(cleaned)) {
+    const englishQuery = buildEnglishSearchQuery({
+      prompt,
+      rawQuery,
+      query: cleaned,
+      freshness,
+    });
+    if (englishQuery) return englishQuery;
+  }
+
+  return cleaned;
+}
+
 function finalizeSearchQuery({ prompt, historyMessages, rawQuery, freshness }) {
   const cleanedQuery = cleanupQueryText(rawQuery);
   const promptIsCompact = isCompactSearchQuery(prompt);
@@ -543,7 +687,12 @@ function finalizeSearchQuery({ prompt, historyMessages, rawQuery, freshness }) {
     && !MULTI_CLAUSE_QUERY_PATTERN.test(cleanedQuery)
     && (promptIsCompact || !isQueryNearlySameAsPrompt(cleanedQuery, prompt))
   ) {
-    return cleanedQuery;
+    return normalizeQueryLanguageStrategy({
+      prompt,
+      rawQuery,
+      query: cleanedQuery,
+      freshness,
+    });
   }
 
   const topic = extractTopicFromText(prompt)
@@ -554,11 +703,21 @@ function finalizeSearchQuery({ prompt, historyMessages, rawQuery, freshness }) {
   const rebuiltQuery = buildQueryFromTopic({ topic, intentTokens, freshness, preferMixedLanguage });
 
   if (rebuiltQuery && isCompactSearchQuery(rebuiltQuery)) {
-    return rebuiltQuery;
+    return normalizeQueryLanguageStrategy({
+      prompt,
+      rawQuery,
+      query: rebuiltQuery,
+      freshness,
+    });
   }
 
   if (!rebuiltQuery && topic && isCompactSearchQuery(topic)) {
-    return topic;
+    return normalizeQueryLanguageStrategy({
+      prompt,
+      rawQuery,
+      query: topic,
+      freshness,
+    });
   }
 
   return '';
@@ -755,13 +914,26 @@ function buildSearchRoundsDecisionText(searchRounds) {
         .map((item) => item?.title || item?.url || '')
         .filter(Boolean)
       : [];
+    const weakResult = isWeakSearchResult({
+      prompt: round?.query || '',
+      query: round?.query || '',
+      results: round?.results,
+      summary: round?.summary,
+    });
+    const language = getQueryLanguageLabel(round?.query || '');
 
     const lines = [
       `第 ${round.round} 轮`,
       `搜索词：${round.query || '(空)'}`,
+      `query语言：${language}`,
       `时效：${round.freshness || 'noLimit'}`,
       `结果数：${Array.isArray(round?.results) ? round.results.length : 0}`,
     ];
+    if (weakResult) {
+      lines.push(language === '中文' || language === '中英混合'
+        ? '结果判断：偏弱，可尝试英文或更偏英文的关键词'
+        : '结果判断：偏弱，需换关键词方向');
+    }
 
     const summary = clipHelperText(round?.summary, 420);
     if (summary) lines.push(`摘要：${summary}`);
@@ -769,6 +941,36 @@ function buildSearchRoundsDecisionText(searchRounds) {
 
     return lines.join('\n');
   }).join('\n\n');
+}
+
+function looksLikeAuthoritativeResult(item) {
+  const text = `${item?.title || ''} ${item?.url || ''} ${item?.siteName || ''}`.toLowerCase();
+  if (!text) return false;
+
+  return /\b(official|docs?|documentation|developer|reference|pricing|changelog|release|github|vercel|cloudflare|openai|anthropic|google|deepseek)\b/.test(text)
+    || /\/(docs?|pricing|blog|news|release|reference)\b/.test(text);
+}
+
+function isWeakSearchResult({ prompt, query, results, summary }) {
+  const list = Array.isArray(results) ? results : [];
+  const normalizedSummary = typeof summary === 'string' ? summary.trim() : '';
+  const resultCount = list.length;
+
+  if (resultCount === 0) return true;
+
+  const snippetCount = list.filter((item) => typeof item?.snippet === 'string' && item.snippet.trim().length >= 24).length;
+  const authoritativeCount = list.slice(0, 3).filter(looksLikeAuthoritativeResult).length;
+  const preferEnglish = shouldPreferEnglishSearch({
+    prompt,
+    rawQuery: query,
+    query,
+  });
+
+  if (resultCount === 1 && !normalizedSummary && snippetCount === 0) return true;
+  if (snippetCount === 0 && resultCount <= 2) return true;
+  if (preferEnglish && authoritativeCount === 0 && resultCount <= 3) return true;
+
+  return false;
 }
 
 function buildAccumulatedSearchContext(searchRounds) {
@@ -1007,6 +1209,7 @@ export async function runWebSearchOrchestration(options) {
       queryDiscarded: needSearch && !nextQuery,
       duplicateQuery,
       freshness: finalFreshness,
+      queryLanguage: getQueryLanguageLabel(nextQuery),
       model,
       conversationId,
       priorSearchRounds: searchRounds.length,

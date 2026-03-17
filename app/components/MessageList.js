@@ -38,6 +38,12 @@ import { AGENT_MODEL_ID, CHAT_MODELS, getModelConfig, isCouncilModel } from "@/l
 
 const AGENT_MIN_TOTAL_STEPS = 9;
 
+function containsMarkdownTable(text) {
+  if (typeof text !== "string") return false;
+  const normalized = text.replace(/\r\n/g, "\n");
+  return /\|.*\|[\t ]*\n[\t ]*\|?[\t ]*:?-{3,}:?[\t ]*(\|[\t ]*:?-{3,}:?[\t ]*)+\|?/u.test(normalized);
+}
+
 export default function MessageList({
   messages,
   loading,
@@ -294,6 +300,10 @@ export default function MessageList({
       ) : (
         messages.map((msg, i) => {
           const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
+          const hasTableContent = (
+            (typeof msg.content === "string" && containsMarkdownTable(msg.content))
+            || (hasParts && msg.parts.some((part) => containsMarkdownTable(part?.text)))
+          );
           const hasBodyOutput =
             (typeof msg.content === "string" && msg.content.trim().length > 0)
             || (hasParts && msg.parts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
@@ -501,10 +511,12 @@ export default function MessageList({
                 ) : (
                   <>
                     {(hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
-                      <div
-                        className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
+                    <div
+                      className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 inline-block max-w-full md:max-w-[900px] lg:max-w-[1000px] max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
-                          : "bg-zinc-100 text-zinc-800 inline-block max-w-full md:max-w-[900px] lg:max-w-[1000px]"
+                          : hasTableContent
+                            ? "bg-zinc-100 text-zinc-800 inline-block max-w-full md:max-w-[980px] lg:max-w-[1180px] xl:max-w-[1320px]"
+                            : "bg-zinc-100 text-zinc-800 inline-block max-w-full md:max-w-[900px] lg:max-w-[1000px]"
                           }`}
                         style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
                         onCopy={handleBubbleCopy}
