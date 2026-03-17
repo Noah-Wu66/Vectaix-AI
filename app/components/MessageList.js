@@ -37,11 +37,16 @@ import {
 import { AGENT_MODEL_ID, CHAT_MODELS, getModelConfig, isCouncilModel } from "@/lib/shared/models";
 
 const AGENT_MIN_TOTAL_STEPS = 9;
+const PENDING_RUN_TEXTS = new Set(["正在处理中...", "Council 正在处理中..."]);
 
 function containsMarkdownTable(text) {
   if (typeof text !== "string") return false;
   const normalized = text.replace(/\r\n/g, "\n");
   return /\|.*\|[\t ]*\n[\t ]*\|?[\t ]*:?-{3,}:?[\t ]*(\|[\t ]*:?-{3,}:?[\t ]*)+\|?/u.test(normalized);
+}
+
+function isPendingRunText(text) {
+  return typeof text === "string" && PENDING_RUN_TEXTS.has(text.trim());
 }
 
 export default function MessageList({
@@ -301,14 +306,18 @@ export default function MessageList({
         )
       ) : (
         messages.map((msg, i) => {
-          const hasParts = Array.isArray(msg.parts) && msg.parts.length > 0;
+          const displayParts = Array.isArray(msg.parts) && msg.role === "model"
+            ? msg.parts.filter((part) => !(typeof part?.text === "string" && isPendingRunText(part.text)))
+            : msg.parts;
+          const hasParts = Array.isArray(displayParts) && displayParts.length > 0;
+          const hasVisibleContent = typeof msg.content === "string" && msg.content.trim().length > 0 && !isPendingRunText(msg.content);
           const hasTableContent = (
-            (typeof msg.content === "string" && containsMarkdownTable(msg.content))
-            || (hasParts && msg.parts.some((part) => containsMarkdownTable(part?.text)))
+            (hasVisibleContent && containsMarkdownTable(msg.content))
+            || (hasParts && displayParts.some((part) => containsMarkdownTable(part?.text)))
           );
           const hasBodyOutput =
-            (typeof msg.content === "string" && msg.content.trim().length > 0)
-            || (hasParts && msg.parts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
+            hasVisibleContent
+            || (hasParts && displayParts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
           const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline)
             && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool");
           const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
@@ -326,8 +335,18 @@ export default function MessageList({
             && agentRun?.status !== "failed"
             && agentRun?.status !== "cancelled"
             && agentRun?.status !== "completed";
+          const isPendingOnlyModelMessage = msg.role === "model"
+            && !msg.thought
+            && !hasVisibleContent
+            && !hasParts
+            && !msg.isSearching
+            && !msg.searchError
+            && !hasThinkingTimeline
+            && !hasCouncilExpertStates
+            && !hasCouncilSummaryState
+            && (msg.isWaitingFirstChunk || chatRunActive || agentIsRunning);
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
-          if (msg.role === "model" && msg.isWaitingFirstChunk && !msg.thought && !msg.content && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState) {
+          if (isPendingOnlyModelMessage) {
             return null;
           }
           return (
@@ -349,7 +368,7 @@ export default function MessageList({
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
-              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || chatRunActive) && (
+              {msg.role === "model" && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || chatRunActive) && (
                 <div className="flex items-center gap-1.5">
                   <AIAvatar
                     model={model}
@@ -515,7 +534,7 @@ export default function MessageList({
                   </div>
                 ) : (
                   <>
-                    {(hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
+                    {(hasParts || hasVisibleContent) && (
                     <div
                       className={`msg-bubble px-4 py-3 rounded-2xl overflow-hidden break-words ${msg.role === "user"
                           ? "bg-white border border-zinc-200 text-zinc-800 inline-block max-w-full md:max-w-[900px] lg:max-w-[1000px] max-h-[45vh] overflow-y-auto mobile-scroll custom-scrollbar"
@@ -529,7 +548,7 @@ export default function MessageList({
                         {hasParts ? (
                           <div className="flex flex-col gap-2">
                             {(() => {
-                              const entries = msg.parts.map((part, idx) => ({ part, idx }));
+                              const entries = displayParts.map((part, idx) => ({ part, idx }));
                               const isUser = msg.role === "user";
                               const imageEntries = entries.filter(({ part }) => {
                                 const url = part?.inlineData?.url;
@@ -588,7 +607,7 @@ export default function MessageList({
                         className={`flex flex-wrap gap-1 mt-1 ${msg.role === "user" ? "flex-row-reverse" : ""
                           }`}
                       >
-                        {(hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
+                        {(hasParts || hasVisibleContent) && (
                           <button
                             onClick={() => onCopy(buildCopyText(msg))}
                             className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
@@ -598,7 +617,7 @@ export default function MessageList({
                           </button>
                         )}
 
-                        {msg.role === "model" && (hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
+                        {msg.role === "model" && (hasParts || hasVisibleContent) && (
                           <button
                             onClick={() => onCopy(buildPlainText(msg))}
                             className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
@@ -673,7 +692,7 @@ export default function MessageList({
                                 <RotateCcw size={14} />
                               </button>
                             ) : null}
-                            {(hasParts || (typeof msg.content === "string" && msg.content.trim().length > 0)) && (
+                            {(hasParts || hasVisibleContent) && (
                               <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
                                 <button
                                   type="button"
