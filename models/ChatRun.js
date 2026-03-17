@@ -73,6 +73,10 @@ const ChatRunSchema = new mongoose.Schema({
     type: [mongoose.Schema.Types.Mixed],
     default: [],
   },
+  searchContextTokens: {
+    type: Number,
+    default: 0,
+  },
   timeline: {
     type: [mongoose.Schema.Types.Mixed],
     default: [],

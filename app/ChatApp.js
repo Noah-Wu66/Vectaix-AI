@@ -425,12 +425,41 @@ export default function ChatApp() {
     };
   }, []);
 
-  const sortConversations = (list) => {
+  const sortConversations = (list, previousList = null) => {
     if (!Array.isArray(list)) return [];
+    const previousIndexMap = new Map(
+      (Array.isArray(previousList) ? previousList : [])
+        .map((conversation, index) => [conversation?._id, index]),
+    );
+
     return list.slice().sort((a, b) => {
       const ap = a?.pinned ? 1 : 0;
       const bp = b?.pinned ? 1 : 0;
       if (ap !== bp) return bp - ap;
+
+      const aPrevIndex = previousIndexMap.get(a?._id);
+      const bPrevIndex = previousIndexMap.get(b?._id);
+      const aShouldKeepPosition = a?.hasActiveRun === true && Number.isInteger(aPrevIndex);
+      const bShouldKeepPosition = b?.hasActiveRun === true && Number.isInteger(bPrevIndex);
+
+      if (aShouldKeepPosition && bShouldKeepPosition && aPrevIndex !== bPrevIndex) {
+        return aPrevIndex - bPrevIndex;
+      }
+
+      if (aShouldKeepPosition && !bShouldKeepPosition) {
+        const bWasBeforeA = Number.isInteger(bPrevIndex) && bPrevIndex < aPrevIndex;
+        if (bWasBeforeA) return 1;
+        const bWasAfterA = Number.isInteger(bPrevIndex) && bPrevIndex > aPrevIndex;
+        if (bWasAfterA) return -1;
+      }
+
+      if (!aShouldKeepPosition && bShouldKeepPosition) {
+        const aWasBeforeB = Number.isInteger(aPrevIndex) && aPrevIndex < bPrevIndex;
+        if (aWasBeforeB) return -1;
+        const aWasAfterB = Number.isInteger(aPrevIndex) && aPrevIndex > bPrevIndex;
+        if (aWasAfterB) return 1;
+      }
+
       const at = new Date(a?.updatedAt || 0).getTime();
       const bt = new Date(b?.updatedAt || 0).getTime();
       return bt - at;
@@ -464,10 +493,13 @@ export default function ChatApp() {
         data = null;
       }
       if (!res.ok) return;
-      const nextConversations = data?.conversations
-        ? sortConversations(mergeConversationRunState(data.conversations))
-        : [];
-      setConversations(nextConversations);
+      let nextConversations = [];
+      setConversations((prev) => {
+        nextConversations = data?.conversations
+          ? sortConversations(mergeConversationRunState(data.conversations), prev)
+          : [];
+        return nextConversations;
+      });
       if (currentConversationId && !nextConversations.some((conv) => conv._id === currentConversationId)) {
         setCurrentConversationId(null);
         setMessages([]);
@@ -486,7 +518,7 @@ export default function ChatApp() {
       if (!res.ok) return [];
       const nextRuns = Array.isArray(data?.runs) ? data.runs : [];
       setActiveRuns(nextRuns);
-      setConversations((prev) => sortConversations(mergeConversationRunState(prev, nextRuns)));
+      setConversations((prev) => sortConversations(mergeConversationRunState(prev, nextRuns), prev));
       return nextRuns;
     } catch {
       return [];
@@ -541,15 +573,7 @@ export default function ChatApp() {
     onSensitiveRefusal: handleSensitiveRefusal,
     onAuthExpired: handleAuthExpired,
     onConversationMissing: handleConversationMissing,
-    onConversationActivity: (id) => {
-      setConversations((prev) => {
-        const idx = prev.findIndex((c) => c._id === id);
-        if (idx < 0) return prev;
-        const next = prev.slice();
-        next[idx] = { ...next[idx], updatedAt: new Date().toISOString() };
-        return sortConversations(next);
-      });
-    },
+    onConversationActivity: () => {},
     loadConversationById: (...args) => loadConversation(...args),
   });
 

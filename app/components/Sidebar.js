@@ -184,8 +184,12 @@ export default function Sidebar({
                       <span className="shrink-0"><ModelGlyph model={conv.model} size={16} /></span>
                       <span className="truncate">{conv.title}</span>
                       {conv?.hasActiveRun ? (
-                        <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
-                          进行中
+                        <span
+                          className="shrink-0 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100"
+                          aria-label="执行中"
+                          title="执行中"
+                        >
+                          <span className="h-2.5 w-2.5 animate-spin rounded-full border border-emerald-600 border-t-transparent" />
                         </span>
                       ) : null}
                   </button>
