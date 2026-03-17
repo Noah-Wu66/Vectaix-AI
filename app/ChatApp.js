@@ -246,7 +246,10 @@ export default function ChatApp() {
   const lastTextModelRef = useRef(GEMINI_FLASH_MODEL);
   const hasRestoredConversationRef = useRef(false);
   const currentConversationIdRef = useRef(null);
+  const messagesRef = useRef([]);
   const isStreamingRef = useRef(false);
+  const foregroundRunRef = useRef(null);
+  const agentHandoffRef = useRef({ runId: "", handedOff: false, handoffInFlight: false });
   const userChannelRef = useRef(null);
   const conversationChannelRef = useRef(null);
   const realtimeHandlersRef = useRef({});
@@ -254,10 +257,13 @@ export default function ChatApp() {
   const loadConversationRef = useRef(null);
   const isStreaming = messages.some((message) => {
     const chatRunStatus = String(message?.chatRun?.status || "");
+    const agentRunStatus = String(message?.agentRun?.status || "");
     return (
       message?.isStreaming === true ||
       chatRunStatus === "queued" ||
-      chatRunStatus === "running"
+      chatRunStatus === "running" ||
+      agentRunStatus === "queued" ||
+      agentRunStatus === "running"
     );
   });
   isStreamingRef.current = isStreaming;
@@ -358,6 +364,10 @@ export default function ChatApp() {
   }, [currentConversationId]);
 
   useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
     if (!user || hasRestoredConversationRef.current || conversations.length === 0) return;
     hasRestoredConversationRef.current = true;
     if (typeof window === "undefined") return;
@@ -387,6 +397,18 @@ export default function ChatApp() {
       disconnectPusherClient();
       userChannelRef.current = null;
       conversationChannelRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handlePageHide = () => {
+      if (!isStreamingRef.current) return;
+      void handoffForegroundRunToBackground({ keepalive: true });
+    };
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
     };
   }, []);
 
@@ -472,6 +494,169 @@ export default function ChatApp() {
     toast.warning("消息包含敏感内容，请修改后重新尝试");
     if (shouldPrefill && typeof promptText === "string" && promptText.trim()) {
       setComposerPrefill({ text: promptText, nonce: Date.now() });
+    }
+  };
+
+  const handleForegroundRunStart = (payload) => {
+    if (!payload || typeof payload !== "object") return;
+    foregroundRunRef.current = {
+      prompt: typeof payload.prompt === "string" ? payload.prompt : "",
+      model: typeof payload.model === "string" ? payload.model : "",
+      config: payload.config && typeof payload.config === "object" ? payload.config : {},
+      history: Array.isArray(payload.history) ? payload.history : [],
+      historyLimit: Number.isFinite(Number(payload.historyLimit)) ? Number(payload.historyLimit) : 0,
+      messageId: typeof payload.messageId === "string" ? payload.messageId : "",
+      handedOff: false,
+      handoffInFlight: false,
+    };
+  };
+
+  const handleForegroundRunComplete = () => {
+    foregroundRunRef.current = null;
+  };
+
+  const buildForegroundHandoffMessages = (activeMessageId) => {
+    const sourceMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
+    if (sourceMessages.length === 0) return [];
+    const nextMessages = sourceMessages.slice();
+    const lastMessage = nextMessages[nextMessages.length - 1];
+    const shouldDropLastModel = lastMessage?.role === "model" && (
+      lastMessage?.isStreaming === true ||
+      (typeof activeMessageId === "string" && activeMessageId && lastMessage?.id === activeMessageId)
+    );
+    if (shouldDropLastModel) {
+      nextMessages.pop();
+    }
+    return nextMessages;
+  };
+
+  const getActiveAgentRunForHandoff = () => {
+    const sourceMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
+    for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
+      const message = sourceMessages[index];
+      if (message?.role !== "model") continue;
+      const runId = typeof message?.agentRun?.runId === "string" ? message.agentRun.runId : "";
+      const status = String(message?.agentRun?.status || "");
+      if (!runId || !AGENT_RUN_STREAMING_STATUSES.has(status)) {
+        continue;
+      }
+      return {
+        runId,
+        messageId: typeof message?.id === "string" ? message.id : "",
+      };
+    }
+    return null;
+  };
+
+  const getAgentHandoffState = (runId) => {
+    if (agentHandoffRef.current.runId !== runId) {
+      agentHandoffRef.current = {
+        runId,
+        handedOff: false,
+        handoffInFlight: false,
+      };
+    }
+    return agentHandoffRef.current;
+  };
+
+  const handoffForegroundRunToBackground = async (options = {}) => {
+    const keepalive = options?.keepalive === true;
+    const activeAgentRun = getActiveAgentRunForHandoff();
+    if (activeAgentRun?.runId) {
+      const handoffState = getAgentHandoffState(activeAgentRun.runId);
+      if (handoffState.handedOff === true || handoffState.handoffInFlight === true) {
+        return false;
+      }
+
+      handoffState.handedOff = true;
+      handoffState.handoffInFlight = !keepalive;
+
+      const requestInit = {
+        method: "POST",
+        credentials: "same-origin",
+        ...(keepalive ? { keepalive: true } : {}),
+      };
+
+      if (keepalive) {
+        fetch(`/api/runs/${activeAgentRun.runId}/handoff`, requestInit).catch(() => {});
+        return true;
+      }
+
+      try {
+        const response = await fetch(`/api/runs/${activeAgentRun.runId}/handoff`, requestInit);
+        if (!response.ok) {
+          throw new Error("handoff failed");
+        }
+        return true;
+      } catch {
+        handoffState.handedOff = false;
+        handoffState.handoffInFlight = false;
+        return false;
+      }
+    }
+
+    const activeRun = foregroundRunRef.current;
+    if (!activeRun || activeRun.handedOff === true || activeRun.handoffInFlight === true) {
+      return false;
+    }
+    if (!activeRun.model || activeRun.model === AGENT_MODEL_ID) {
+      return false;
+    }
+
+    const conversationId = currentConversationIdRef.current;
+    if (!conversationId) {
+      return false;
+    }
+
+    const snapshotMessages = buildForegroundHandoffMessages(activeRun.messageId);
+    if (snapshotMessages.length === 0 || snapshotMessages[snapshotMessages.length - 1]?.role !== "user") {
+      return false;
+    }
+
+    const requestBody = JSON.stringify({
+      prompt: activeRun.prompt,
+      model: activeRun.model,
+      config: activeRun.config,
+      history: activeRun.history,
+      historyLimit: activeRun.historyLimit,
+      conversationId,
+      messageId: activeRun.messageId || undefined,
+      mode: "regenerate",
+      messages: snapshotMessages,
+    });
+
+    foregroundRunRef.current = {
+      ...activeRun,
+      handedOff: true,
+      handoffInFlight: !keepalive,
+    };
+
+    const requestInit = {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: requestBody,
+      credentials: "same-origin",
+      ...(keepalive ? { keepalive: true } : {}),
+    };
+
+    if (keepalive) {
+      fetch("/api/runs", requestInit).catch(() => {});
+      return true;
+    }
+
+    try {
+      const response = await fetch("/api/runs", requestInit);
+      if (!response.ok) {
+        throw new Error("handoff failed");
+      }
+      return true;
+    } catch {
+      foregroundRunRef.current = {
+        ...activeRun,
+        handedOff: false,
+        handoffInFlight: false,
+      };
+      return false;
     }
   };
 
@@ -603,6 +788,8 @@ export default function ChatApp() {
     setEditingImage,
     completionSoundVolume,
     onSensitiveRefusal: handleSensitiveRefusal,
+    onForegroundRunStart: handleForegroundRunStart,
+    onForegroundRunComplete: handleForegroundRunComplete,
     onAuthExpired: handleAuthExpired,
     onConversationMissing: handleConversationMissing,
     onConversationActivity: () => {},
@@ -789,6 +976,10 @@ export default function ChatApp() {
 
   const loadConversation = async (id, options = {}) => {
     const silent = options?.silent === true;
+    if (currentConversationIdRef.current && currentConversationIdRef.current !== id && isStreamingRef.current) {
+      await handoffForegroundRunToBackground();
+      stopOngoingChatWork();
+    }
     if (!silent) {
       setLoading(true);
       setMessages([]); // 先清空消息，显示加载动画
@@ -1033,8 +1224,9 @@ export default function ChatApp() {
     } catch { }
   };
 
-  const startNewChat = () => {
+  const startNewChat = async () => {
     userInterruptedRef.current = false;
+    await handoffForegroundRunToBackground();
     stopOngoingChatWork();
     setCurrentConversationId(null);
     setMessages([]);
