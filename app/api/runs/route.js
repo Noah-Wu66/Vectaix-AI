@@ -59,6 +59,8 @@ export async function POST(request) {
     settings,
     userMessageId,
     messageId,
+    mode,
+    messages,
   } = body || {};
 
   if (typeof model !== "string" || !model) {
@@ -78,6 +80,8 @@ export async function POST(request) {
       settings,
       userMessageId,
       messageId,
+      mode,
+      messages,
     });
 
     if (model === AGENT_MODEL_ID) {

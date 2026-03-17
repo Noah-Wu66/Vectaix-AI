@@ -2,8 +2,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createChatAppActions } from "@/lib/client/chat/chatAppActions";
+import { getPusherClient, disconnectPusherClient } from "@/lib/client/realtime/pusherClient";
 import { useThemeMode } from "@/lib/client/hooks/useThemeMode";
 import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
+import { REALTIME_EVENTS, getConversationChannelName, getUserChannelName } from "@/lib/shared/realtime";
 import {
   AGENT_MODEL_ID,
   CHAT_MODELS,
@@ -210,7 +212,6 @@ export default function ChatApp() {
   const [confirmModalConfig, setConfirmModalConfig] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
-  const [activeRuns, setActiveRuns] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -245,9 +246,12 @@ export default function ChatApp() {
   const lastTextModelRef = useRef(GEMINI_FLASH_MODEL);
   const hasRestoredConversationRef = useRef(false);
   const currentConversationIdRef = useRef(null);
-  const activeRunsPollInFlightRef = useRef(false);
-  const conversationPollInFlightRef = useRef(false);
   const isStreamingRef = useRef(false);
+  const userChannelRef = useRef(null);
+  const conversationChannelRef = useRef(null);
+  const realtimeHandlersRef = useRef({});
+  const fetchConversationsRef = useRef(null);
+  const loadConversationRef = useRef(null);
   const isStreaming = messages.some((message) => {
     const chatRunStatus = String(message?.chatRun?.status || "");
     return (
@@ -285,9 +289,11 @@ export default function ChatApp() {
   const handleAuthExpired = () => {
     stopOngoingChatWork();
     hasRestoredConversationRef.current = false;
+    disconnectPusherClient();
+    userChannelRef.current = null;
+    conversationChannelRef.current = null;
     setUser(null);
     setConversations([]);
-    setActiveRuns([]);
     setCurrentConversationId(null);
     setMessages([]);
     setSettingsError(null);
@@ -330,7 +336,6 @@ export default function ChatApp() {
         if (data.user) {
           setUser(data.user);
           fetchConversations();
-          fetchActiveRuns();
           fetchSettings(); // 只获取系统提示词
         } else {
           handleAuthExpired();
@@ -364,47 +369,6 @@ export default function ChatApp() {
     }
   }, [conversations, user]);
 
-  useEffect(() => {
-    if (!user) return undefined;
-    const timer = setInterval(() => {
-      if (activeRunsPollInFlightRef.current) return;
-      activeRunsPollInFlightRef.current = true;
-      fetchActiveRuns().finally(() => {
-        activeRunsPollInFlightRef.current = false;
-      });
-    }, 1500);
-    return () => clearInterval(timer);
-  }, [user]);
-
-  useEffect(() => {
-    if (!currentConversationId) return undefined;
-    const hasConversationRun = conversations.some(
-      (conversation) => conversation?._id === currentConversationId && conversation?.hasActiveRun
-    );
-    const hasMessageRun = messages.some((message) => {
-      const chatRunStatus = String(message?.chatRun?.status || "");
-      const agentRunStatus = String(message?.agentRun?.status || "");
-      return (
-        chatRunStatus === "queued" ||
-        chatRunStatus === "running" ||
-        agentRunStatus === "running" ||
-        agentRunStatus === "waiting_continue" ||
-        agentRunStatus === "awaiting_approval"
-      );
-    });
-    if (!hasConversationRun && !hasMessageRun) return undefined;
-
-    const timer = setInterval(() => {
-      const targetConversationId = currentConversationIdRef.current;
-      if (!targetConversationId || conversationPollInFlightRef.current) return;
-      conversationPollInFlightRef.current = true;
-      loadConversation(targetConversationId, { silent: true }).finally(() => {
-        conversationPollInFlightRef.current = false;
-      });
-    }, 1200);
-    return () => clearInterval(timer);
-  }, [conversations, currentConversationId, messages]);
-
   // Cleanup: abort pending requests on unmount
   useEffect(() => {
     return () => {
@@ -420,8 +384,9 @@ export default function ChatApp() {
       }
       pendingSettingsRef.current = {};
       pendingConversationIdRef.current = null;
-      activeRunsPollInFlightRef.current = false;
-      conversationPollInFlightRef.current = false;
+      disconnectPusherClient();
+      userChannelRef.current = null;
+      conversationChannelRef.current = null;
     };
   }, []);
 
@@ -466,19 +431,6 @@ export default function ChatApp() {
     });
   };
 
-  const mergeConversationRunState = (list, runs = activeRuns) => {
-    if (!Array.isArray(list)) return [];
-    const activeConversationIds = new Set(
-      (Array.isArray(runs) ? runs : [])
-        .map((run) => (typeof run?.conversationId === "string" ? run.conversationId : ""))
-        .filter(Boolean)
-    );
-    return list.map((conversation) => ({
-      ...conversation,
-      hasActiveRun: activeConversationIds.has(conversation?._id),
-    }));
-  };
-
   const fetchConversations = async () => {
     try {
       const res = await fetch("/api/conversations");
@@ -496,7 +448,7 @@ export default function ChatApp() {
       let nextConversations = [];
       setConversations((prev) => {
         nextConversations = data?.conversations
-          ? sortConversations(mergeConversationRunState(data.conversations), prev)
+          ? sortConversations(data.conversations, prev)
           : [];
         return nextConversations;
       });
@@ -507,24 +459,6 @@ export default function ChatApp() {
     } catch { }
   };
 
-  const fetchActiveRuns = async () => {
-    try {
-      const res = await fetch("/api/runs", { cache: "no-store" });
-      if (res.status === 401) {
-        handleAuthExpired();
-        return [];
-      }
-      const data = await res.json().catch(() => null);
-      if (!res.ok) return [];
-      const nextRuns = Array.isArray(data?.runs) ? data.runs : [];
-      setActiveRuns(nextRuns);
-      setConversations((prev) => sortConversations(mergeConversationRunState(prev, nextRuns), prev));
-      return nextRuns;
-    } catch {
-      return [];
-    }
-  };
-
   const handleConversationMissing = () => {
     stopOngoingChatWork();
     setCurrentConversationId(null);
@@ -532,14 +466,103 @@ export default function ChatApp() {
     fetchConversations();
   };
 
-  const handleSensitiveRefusal = (payload) => {
-    const promptText = typeof payload === "string" ? payload : payload?.prompt;
-    const shouldPrefill = typeof payload === "object" ? payload?.shouldPrefill !== false : true;
-    toast.warning("消息包含敏感内容，请修改后重新尝试");
-    if (shouldPrefill && typeof promptText === "string" && promptText.trim()) {
-      setComposerPrefill({ text: promptText, nonce: Date.now() });
+  const applyConversationUpsertEvent = (payload) => {
+    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
+    if (!conversationId) return;
+    const nextConversation = {
+      _id: conversationId,
+      title: typeof payload?.title === "string" ? payload.title : "",
+      model: typeof payload?.model === "string" ? payload.model : "",
+      pinned: payload?.pinned === true,
+      updatedAt: typeof payload?.updatedAt === "string" ? payload.updatedAt : new Date().toISOString(),
+      hasActiveRun: payload?.hasActiveRun === true,
+    };
+    setConversations((prev) => {
+      const index = prev.findIndex((conversation) => conversation?._id === conversationId);
+      const merged = index >= 0
+        ? prev.map((conversation) => (
+            conversation?._id === conversationId
+              ? { ...conversation, ...nextConversation }
+              : conversation
+          ))
+        : [...prev, nextConversation];
+      return sortConversations(merged, prev);
+    });
+  };
+
+  const applyConversationRemoveEvent = (payload) => {
+    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
+    if (!conversationId) return;
+    setConversations((prev) => prev.filter((conversation) => conversation?._id !== conversationId));
+    if (currentConversationIdRef.current === conversationId) {
+      stopOngoingChatWork();
+      setCurrentConversationId(null);
+      setMessages([]);
     }
   };
+
+  const applyMessageUpsertEvent = (payload) => {
+    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
+    if (!conversationId || conversationId !== currentConversationIdRef.current) return;
+    const nextMessage = payload?.message && typeof payload.message === "object"
+      ? decorateConversationMessages([payload.message])[0]
+      : null;
+    if (!nextMessage?.id) return;
+    setMessages((prev) => {
+      const index = prev.findIndex((message) => message?.id === nextMessage.id);
+      const nextList = index >= 0
+        ? prev.map((message) => (message?.id === nextMessage.id ? nextMessage : message))
+        : [...prev, nextMessage];
+      return mergeConversationMessages(nextList, prev);
+    });
+  };
+
+  const applyMessageRemoveEvent = (payload) => {
+    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
+    const messageId = typeof payload?.messageId === "string" ? payload.messageId : "";
+    if (!conversationId || !messageId || conversationId !== currentConversationIdRef.current) return;
+    setMessages((prev) => prev.filter((message) => message?.id !== messageId));
+  };
+
+  const applyRunStatusEvent = (payload) => {
+    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
+    const messageId = typeof payload?.messageId === "string" ? payload.messageId : "";
+    if (!conversationId || !messageId || conversationId !== currentConversationIdRef.current) return;
+    setMessages((prev) => prev.map((message) => {
+      if (message?.id !== messageId) return message;
+      if (payload?.runType === "agent") {
+        return {
+          ...message,
+          agentRun: {
+            ...(message?.agentRun || {}),
+            runId: typeof payload?.runId === "string" ? payload.runId : message?.agentRun?.runId || "",
+            status: typeof payload?.status === "string" ? payload.status : message?.agentRun?.status || "",
+            executionState: typeof payload?.phase === "string" ? payload.phase : message?.agentRun?.executionState || "",
+            updatedAt: typeof payload?.updatedAt === "string" ? payload.updatedAt : message?.agentRun?.updatedAt || null,
+          },
+        };
+      }
+      return {
+        ...message,
+        chatRun: {
+          ...(message?.chatRun || {}),
+          runId: typeof payload?.runId === "string" ? payload.runId : message?.chatRun?.runId || "",
+          status: typeof payload?.status === "string" ? payload.status : message?.chatRun?.status || "",
+          phase: typeof payload?.phase === "string" ? payload.phase : message?.chatRun?.phase || "",
+          updatedAt: typeof payload?.updatedAt === "string" ? payload.updatedAt : message?.chatRun?.updatedAt || null,
+        },
+      };
+    }));
+  };
+
+  realtimeHandlersRef.current = {
+    applyConversationUpsertEvent,
+    applyConversationRemoveEvent,
+    applyMessageUpsertEvent,
+    applyMessageRemoveEvent,
+    applyRunStatusEvent,
+  };
+  fetchConversationsRef.current = fetchConversations;
 
   const actions = createChatAppActions({
     toast,
@@ -557,7 +580,6 @@ export default function ChatApp() {
     historyLimit,
     currentConversationId,
     setCurrentConversationId,
-    fetchConversations,
     chatAbortRef,
     chatRequestLockRef,
     userInterruptedRef,
@@ -569,12 +591,10 @@ export default function ChatApp() {
     setEditingContent,
     setEditingImageAction,
     setEditingImage,
-    completionSoundVolume,
-    onSensitiveRefusal: handleSensitiveRefusal,
+    loadConversationById: (...args) => loadConversation(...args),
     onAuthExpired: handleAuthExpired,
     onConversationMissing: handleConversationMissing,
     onConversationActivity: () => {},
-    loadConversationById: (...args) => loadConversation(...args),
   });
 
   useEffect(() => {
@@ -727,7 +747,6 @@ export default function ChatApp() {
         setConfirmPassword("");
         toast.success(authMode === "login" ? "登录成功" : "注册成功");
         fetchConversations();
-        fetchActiveRuns();
         fetchSettings();
       } else {
         toast.error(data.error);
@@ -741,10 +760,12 @@ export default function ChatApp() {
     await fetch("/api/auth/me", { method: "DELETE" });
     stopOngoingChatWork();
     hasRestoredConversationRef.current = false;
+    disconnectPusherClient();
+    userChannelRef.current = null;
+    conversationChannelRef.current = null;
     setUser(null);
     setMessages([]);
     setConversations([]);
-    setActiveRuns([]);
     setCurrentConversationId(null);
     setSettingsError(null);
     // 清除登录表单敏感信息
@@ -866,6 +887,98 @@ export default function ChatApp() {
     }
   };
 
+  loadConversationRef.current = loadConversation;
+
+  useEffect(() => {
+    if (!user?.id) {
+      disconnectPusherClient();
+      userChannelRef.current = null;
+      return undefined;
+    }
+
+    const pusher = getPusherClient();
+    const userChannelName = getUserChannelName(user.id);
+    const channel = pusher.subscribe(userChannelName);
+    userChannelRef.current = channel;
+
+    const handleConversationUpsert = (payload) => {
+      realtimeHandlersRef.current.applyConversationUpsertEvent?.(payload);
+    };
+    const handleConversationRemove = (payload) => {
+      realtimeHandlersRef.current.applyConversationRemoveEvent?.(payload);
+    };
+    const handleStateChange = (states) => {
+      const current = states?.current;
+      const previous = states?.previous;
+      if (current === "connected" && previous && previous !== "connected") {
+        fetchConversationsRef.current?.();
+        const targetConversationId = currentConversationIdRef.current;
+        if (targetConversationId) {
+          loadConversationRef.current?.(targetConversationId, { silent: true });
+        }
+      }
+    };
+
+    channel.bind(REALTIME_EVENTS.conversationUpsert, handleConversationUpsert);
+    channel.bind(REALTIME_EVENTS.conversationRemove, handleConversationRemove);
+    pusher.connection.bind("state_change", handleStateChange);
+
+    return () => {
+      channel.unbind(REALTIME_EVENTS.conversationUpsert, handleConversationUpsert);
+      channel.unbind(REALTIME_EVENTS.conversationRemove, handleConversationRemove);
+      pusher.connection.unbind("state_change", handleStateChange);
+      pusher.unsubscribe(userChannelName);
+      userChannelRef.current = null;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const pusher = user?.id ? getPusherClient() : null;
+    const previousChannel = conversationChannelRef.current;
+    if (previousChannel) {
+      previousChannel.unbind();
+    }
+    if (!pusher || !currentConversationId) {
+      if (previousChannel?.name) {
+        pusher?.unsubscribe(previousChannel.name);
+      }
+      conversationChannelRef.current = null;
+      return undefined;
+    }
+
+    if (previousChannel?.name) {
+      pusher.unsubscribe(previousChannel.name);
+    }
+
+    const conversationChannelName = getConversationChannelName(currentConversationId);
+    const channel = pusher.subscribe(conversationChannelName);
+    conversationChannelRef.current = channel;
+
+    const handleMessageUpsert = (payload) => {
+      realtimeHandlersRef.current.applyMessageUpsertEvent?.(payload);
+    };
+    const handleMessageRemove = (payload) => {
+      realtimeHandlersRef.current.applyMessageRemoveEvent?.(payload);
+    };
+    const handleRunStatus = (payload) => {
+      realtimeHandlersRef.current.applyRunStatusEvent?.(payload);
+    };
+
+    channel.bind(REALTIME_EVENTS.messageUpsert, handleMessageUpsert);
+    channel.bind(REALTIME_EVENTS.messageRemove, handleMessageRemove);
+    channel.bind(REALTIME_EVENTS.runStatus, handleRunStatus);
+
+    return () => {
+      channel.unbind(REALTIME_EVENTS.messageUpsert, handleMessageUpsert);
+      channel.unbind(REALTIME_EVENTS.messageRemove, handleMessageRemove);
+      channel.unbind(REALTIME_EVENTS.runStatus, handleRunStatus);
+      pusher.unsubscribe(conversationChannelName);
+      if (conversationChannelRef.current?.name === conversationChannelName) {
+        conversationChannelRef.current = null;
+      }
+    };
+  }, [currentConversationId, user?.id]);
+
   // 同步对话参数到数据库（防抖，累积多个设置变更）
   const syncConversationSettings = (settingsUpdate) => {
     if (!currentConversationId || isCouncilModel(model)) return;
@@ -902,7 +1015,6 @@ export default function ChatApp() {
     try {
       await fetch(`/api/conversations/${id}`, { method: "DELETE" });
       setConversations((prev) => prev.filter((c) => c._id !== id));
-      setActiveRuns((prev) => prev.filter((run) => run?.conversationId !== id));
       if (currentConversationId === id) {
         setCurrentConversationId(null);
         setMessages([]);

@@ -92,6 +92,17 @@ export default function MessageList({
   const toast = useToast();
   const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
   const hasStreamingContent = messages.some((message) => (message?.isStreaming && !message?.isWaitingFirstChunk) || message?.isSearching);
+  const hasActiveConversationRun = messages.some((message) => {
+    const chatRunStatus = String(message?.chatRun?.status || "");
+    const agentRunStatus = String(message?.agentRun?.status || "");
+    return (
+      message?.isStreaming === true ||
+      chatRunStatus === "queued" ||
+      chatRunStatus === "running" ||
+      agentRunStatus === "queued" ||
+      agentRunStatus === "running"
+    );
+  });
 
   useEffect(() => {
     prevMessagesRef.current = messages;
@@ -685,7 +696,7 @@ export default function MessageList({
                             {!isAgentConversation ? (
                               <button
                                 onClick={() => onRegenerateModelMessage(i)}
-                                disabled={loading}
+                                disabled={loading || hasActiveConversationRun}
                                 className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
                                 title="重新生成"
                               >

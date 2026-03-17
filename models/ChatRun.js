@@ -45,6 +45,10 @@ const ChatRunSchema = new mongoose.Schema({
     type: [mongoose.Schema.Types.Mixed],
     default: [],
   },
+  messagesSnapshot: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: [],
+  },
   configSnapshot: {
     type: mongoose.Schema.Types.Mixed,
     default: null,

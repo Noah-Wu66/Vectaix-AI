@@ -6,6 +6,7 @@ import Conversation from "@/models/Conversation";
 import { buildAgentMessageMeta } from "@/lib/server/agent/runHelpers";
 import { patchConversationMessage } from "@/lib/server/runs/service";
 import { resumeAgentRunInBackground } from "@/lib/server/runs/execute";
+import { publishRunStatus } from "@/lib/server/realtime/publishers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,15 @@ export async function POST(request, context) {
       parts: [{ text: "继续执行中..." }],
       agentRun: publicRun,
     },
+  });
+  await publishRunStatus({
+    conversationId: run.conversationId,
+    runId: run._id,
+    runType: "agent",
+    messageId: targetMessage.id,
+    status: publicRun.status,
+    phase: publicRun.executionState,
+    updatedAt: publicRun.updatedAt,
   });
 
   const requestHeaders = extractRequestHeaders(request);

@@ -4,29 +4,11 @@ import AgentRun from "@/models/AgentRun";
 import Conversation from "@/models/Conversation";
 import { AGENT_EXECUTION_STATES, buildAgentMessageMeta } from "@/lib/server/agent/runHelpers";
 import { killSandboxSession } from "@/lib/server/sandbox/vercelSandbox";
+import { patchConversationMessage } from "@/lib/server/runs/service";
+import { publishRunStatus } from "@/lib/server/realtime/publishers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-async function syncConversationAgentRun({ conversationId, userId, runId, agentRun, content }) {
-  const conversation = await Conversation.findOne({ _id: conversationId, userId }).select("messages");
-  if (!conversation) return;
-  const nextMessages = Array.isArray(conversation.messages)
-    ? conversation.messages.map((item) => (item?.toObject ? item.toObject() : item))
-    : [];
-  const index = nextMessages.findIndex((item) => item?.agentRun?.runId === runId || item?.id === runId);
-  if (index < 0) return;
-  nextMessages[index] = {
-    ...nextMessages[index],
-    content,
-    parts: [{ text: content }],
-    agentRun,
-  };
-  await Conversation.updateOne(
-    { _id: conversationId, userId },
-    { $set: { messages: nextMessages, updatedAt: Date.now() } }
-  );
-}
 
 export async function POST(request, context) {
   await dbConnect();
@@ -68,12 +50,30 @@ export async function POST(request, context) {
     executionState: nextRun.executionState,
     canResume: false,
   });
-  await syncConversationAgentRun({
-    conversationId: nextRun.conversationId,
-    userId: auth.userId,
-    runId: nextRun._id.toString(),
-    agentRun: publicRun,
-    content: "你已拒绝继续执行，本次任务已结束。",
-  });
+  const conversation = await Conversation.findOne({ _id: nextRun.conversationId, userId: auth.userId }).select("messages");
+  const targetMessage = Array.isArray(conversation?.messages)
+    ? conversation.messages.find((item) => item?.agentRun?.runId === nextRun._id.toString() || item?.id === nextRun._id.toString())
+    : null;
+  if (targetMessage?.id) {
+    await patchConversationMessage({
+      conversationId: nextRun.conversationId,
+      userId: auth.userId,
+      messageId: targetMessage.id,
+      patch: {
+        content: "你已拒绝继续执行，本次任务已结束。",
+        parts: [{ text: "你已拒绝继续执行，本次任务已结束。" }],
+        agentRun: publicRun,
+      },
+    });
+    await publishRunStatus({
+      conversationId: nextRun.conversationId,
+      runId: nextRun._id,
+      runType: "agent",
+      messageId: targetMessage.id,
+      status: publicRun.status,
+      phase: publicRun.executionState,
+      updatedAt: publicRun.updatedAt,
+    });
+  }
   return Response.json({ success: true, run: publicRun, content: "你已拒绝继续执行，本次任务已结束。" });
 }
