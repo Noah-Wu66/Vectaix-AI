@@ -183,6 +183,11 @@ export default function Sidebar({
                     >
                       <span className="shrink-0"><ModelGlyph model={conv.model} size={16} /></span>
                       <span className="truncate">{conv.title}</span>
+                      {conv?.hasActiveRun ? (
+                        <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                          进行中
+                        </span>
+                      ) : null}
                   </button>
                   <div className={`mr-1 flex items-center gap-0.5 transition-opacity ${activeActionsId === conv._id ? "opacity-100" : "pointer-events-none opacity-0"}`}>
                     <button

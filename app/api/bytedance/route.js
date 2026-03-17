@@ -97,7 +97,10 @@ export async function POST(req) {
             settings,
             userMessageId,
             modelMessageId,
+            executionMode,
+            skipConversationWrite,
         } = body;
+        const isBackgroundMode = executionMode === "background" || skipConversationWrite === true;
 
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
@@ -156,7 +159,7 @@ export async function POST(req) {
         }
 
         let currentConversationId = conversationId;
-        if (user && !currentConversationId) {
+        if (user && !currentConversationId && !isBackgroundMode) {
             const titleSource = isNonEmptyString(prompt)
                 ? prompt
                 : (Array.isArray(config?.attachments) && config.attachments[0]?.name
@@ -279,7 +282,7 @@ export async function POST(req) {
             }
         }
 
-        if (user && !isRegenerateMode) {
+        if (user && !isRegenerateMode && !isBackgroundMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
 
@@ -385,9 +388,11 @@ export async function POST(req) {
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
 
-        try {
-            req?.signal?.addEventListener?.('abort', onAbort, { once: true });
-        } catch { }
+        if (!isBackgroundMode) {
+            try {
+                req?.signal?.addEventListener?.('abort', onAbort, { once: true });
+            } catch { }
+        }
 
         const PADDING = ' '.repeat(2048);
         let paddingSent = false;
@@ -437,7 +442,7 @@ export async function POST(req) {
                         sendEvent,
                         pushCitations,
                         sendSearchError,
-                        isClientAborted: () => clientAborted,
+                        isClientAborted: isBackgroundMode ? (() => false) : (() => clientAborted),
                         model,
                         conversationId: currentConversationId,
                         ...seedWebSearchRuntime,
@@ -550,7 +555,7 @@ export async function POST(req) {
 
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
-                    if (user && currentConversationId) {
+                    if (user && currentConversationId && !isBackgroundMode) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
                             : { _id: currentConversationId, userId: user.userId };
@@ -600,9 +605,11 @@ export async function POST(req) {
                         clearInterval(heartbeatTimer);
                         heartbeatTimer = null;
                     }
-                    try {
-                        req?.signal?.removeEventListener?.('abort', onAbort);
-                    } catch { }
+                    if (!isBackgroundMode) {
+                        try {
+                            req?.signal?.removeEventListener?.('abort', onAbort);
+                        } catch { }
+                    }
                 }
             }
         });

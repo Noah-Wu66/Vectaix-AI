@@ -128,7 +128,10 @@ export async function POST(req) {
     history,
     mode,
     messages,
+    executionMode,
+    skipConversationWrite,
   } = body || {};
+  const isBackgroundMode = executionMode === "background" || skipConversationWrite === true;
 
   if (model !== COUNCIL_MODEL_ID) {
     return Response.json({ error: "Council 模式请求无效" }, { status: 400 });
@@ -223,7 +226,7 @@ export async function POST(req) {
     }
   }
 
-  if (!currentConversation) {
+  if (!currentConversation && !isBackgroundMode) {
     const createdConversation = await Conversation.create({
       userId: auth.userId,
       title: buildTitle(promptText),
@@ -233,6 +236,10 @@ export async function POST(req) {
     });
     currentConversation = createdConversation.toObject();
     createdConversationForRequest = true;
+  }
+
+  if (!currentConversation) {
+    return Response.json({ error: "conversationId missing" }, { status: 400 });
   }
 
   const currentConversationId = currentConversation._id.toString();
@@ -271,21 +278,23 @@ export async function POST(req) {
     promptText = councilInput.prompt || "";
     historyMemo = buildCouncilHistoryMemo(sanitizedMessages.slice(0, -1));
 
-    const regenerateTime = Date.now();
-    const updatedConversation = await Conversation.findOneAndUpdate(
-      { _id: currentConversationId, userId: auth.userId },
-      {
-        $set: {
-          messages: sanitizedMessages,
-          updatedAt: regenerateTime,
+    if (!isBackgroundMode) {
+      const regenerateTime = Date.now();
+      const updatedConversation = await Conversation.findOneAndUpdate(
+        { _id: currentConversationId, userId: auth.userId },
+        {
+          $set: {
+            messages: sanitizedMessages,
+            updatedAt: regenerateTime,
+          },
         },
-      },
-      { new: true }
-    ).select("updatedAt");
-    if (!updatedConversation) {
-      return Response.json({ error: "Not found" }, { status: 404 });
+        { new: true }
+      ).select("updatedAt");
+      if (!updatedConversation) {
+        return Response.json({ error: "Not found" }, { status: 404 });
+      }
+      writePermitTime = updatedConversation.updatedAt?.getTime?.() ?? regenerateTime;
     }
-    writePermitTime = updatedConversation.updatedAt?.getTime?.() ?? regenerateTime;
   } else {
     const completedRounds = countCompletedCouncilRounds(previousMessages);
     if (completedRounds >= COUNCIL_MAX_ROUNDS) {
@@ -323,37 +332,42 @@ export async function POST(req) {
       parts: councilInput.userParts,
     };
 
-    const userMsgTime = Date.now();
-    const updatedConversation = await Conversation.findOneAndUpdate(
-      { _id: currentConversationId, userId: auth.userId },
-      {
-        $set: { updatedAt: userMsgTime },
-        $push: { messages: storedUserMessage },
-      },
-      { new: true }
-    ).select("updatedAt");
-    if (!updatedConversation) {
-      return Response.json({ error: "Not found" }, { status: 404 });
+    if (!isBackgroundMode) {
+      const userMsgTime = Date.now();
+      const updatedConversation = await Conversation.findOneAndUpdate(
+        { _id: currentConversationId, userId: auth.userId },
+        {
+          $set: { updatedAt: userMsgTime },
+          $push: { messages: storedUserMessage },
+        },
+        { new: true }
+      ).select("updatedAt");
+      if (!updatedConversation) {
+        return Response.json({ error: "Not found" }, { status: 404 });
+      }
+      writePermitTime = updatedConversation.updatedAt?.getTime?.() ?? userMsgTime;
     }
-    writePermitTime = updatedConversation.updatedAt?.getTime?.() ?? userMsgTime;
   }
 
   let clientAborted = false;
   const onAbort = () => {
     clientAborted = true;
   };
-  try {
-    req?.signal?.addEventListener?.("abort", onAbort, { once: true });
-  } catch {
-    // ignore
+  if (!isBackgroundMode) {
+    try {
+      req?.signal?.addEventListener?.("abort", onAbort, { once: true });
+    } catch {
+      // ignore
+    }
   }
 
   const responseStream = new ReadableStream({
     async start(controller) {
       const streamHelpers = createCouncilStreamHelpers(controller);
       let finalMessagePersisted = false;
-      const councilSignal = req?.signal;
+      const councilSignal = isBackgroundMode ? undefined : req?.signal;
       const rollbackCouncilTurn = async () => {
+        if (isBackgroundMode) return;
         if (finalMessagePersisted) return;
 
         const writeCondition = buildConversationWriteCondition(
@@ -481,19 +495,21 @@ export async function POST(req) {
             experts: [],
           });
 
-          const persistedConversation = await Conversation.findOneAndUpdate(
-            buildConversationWriteCondition(currentConversationId, auth.userId, writePermitTime),
-            {
-              $set: { updatedAt: Date.now() },
-              $push: { messages: finalMessage },
-            },
-            { new: true }
-          ).select("updatedAt");
-          if (!persistedConversation) {
-            throw new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+          if (!isBackgroundMode) {
+            const persistedConversation = await Conversation.findOneAndUpdate(
+              buildConversationWriteCondition(currentConversationId, auth.userId, writePermitTime),
+              {
+                $set: { updatedAt: Date.now() },
+                $push: { messages: finalMessage },
+              },
+              { new: true }
+            ).select("updatedAt");
+            if (!persistedConversation) {
+              throw new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+            }
+            finalMessagePersisted = true;
+            writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
           }
-          finalMessagePersisted = true;
-          writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
           streamHelpers.sendCitations(finalMessage.citations);
           updateSummaryState({
@@ -575,19 +591,21 @@ export async function POST(req) {
           experts,
         });
 
-        const persistedConversation = await Conversation.findOneAndUpdate(
-          buildConversationWriteCondition(currentConversationId, auth.userId, writePermitTime),
-          {
-            $set: { updatedAt: Date.now() },
-            $push: { messages: finalMessage },
-          },
-          { new: true }
-        ).select("updatedAt");
-        if (!persistedConversation) {
-          throw new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+        if (!isBackgroundMode) {
+          const persistedConversation = await Conversation.findOneAndUpdate(
+            buildConversationWriteCondition(currentConversationId, auth.userId, writePermitTime),
+            {
+              $set: { updatedAt: Date.now() },
+              $push: { messages: finalMessage },
+            },
+            { new: true }
+          ).select("updatedAt");
+          if (!persistedConversation) {
+            throw new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+          }
+          finalMessagePersisted = true;
+          writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
         }
-        finalMessagePersisted = true;
-        writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
         streamHelpers.sendCouncilExperts(experts);
         streamHelpers.sendCitations(finalMessage.citations);
@@ -634,10 +652,12 @@ export async function POST(req) {
           controller.error(error);
         }
       } finally {
-        try {
-          req?.signal?.removeEventListener?.("abort", onAbort);
-        } catch {
-          // ignore
+        if (!isBackgroundMode) {
+          try {
+            req?.signal?.removeEventListener?.("abort", onAbort);
+          } catch {
+            // ignore
+          }
         }
       }
     },

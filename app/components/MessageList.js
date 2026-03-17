@@ -311,6 +311,9 @@ export default function MessageList({
             && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool");
           const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
           const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
+          const chatRun = msg?.chatRun && typeof msg.chatRun === "object" ? msg.chatRun : null;
+          const chatRunStatus = typeof chatRun?.status === "string" ? chatRun.status : "";
+          const chatRunActive = chatRunStatus === "queued" || chatRunStatus === "running";
           const agentRun = msg?.agentRun && typeof msg.agentRun === "object" ? msg.agentRun : null;
           const agentCanResume = agentRun?.canResume === true && typeof agentRun?.runId === "string" && agentRun.runId;
           const agentExecutionState = typeof agentRun?.executionState === "string" ? agentRun.executionState : agentRun?.status;
@@ -344,12 +347,12 @@ export default function MessageList({
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
-              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState) && (
+              {msg.role === "model" && (msg.thought || msg.content || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || chatRunActive) && (
                 <div className="flex items-center gap-1.5">
                   <AIAvatar
                     model={model}
                     size={28}
-                    animate={(isCouncilModel(model) && msg.isStreaming) || (model === AGENT_MODEL_ID && agentIsRunning)}
+                    animate={(isCouncilModel(model) && (msg.isStreaming || chatRunActive)) || (model === AGENT_MODEL_ID && agentIsRunning) || chatRunActive}
                   />
                   <span className="text-xs text-zinc-400 font-medium">
                     {CHAT_MODELS.find((m) => m.id === model)?.name}

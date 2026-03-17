@@ -216,7 +216,10 @@ export async function POST(req) {
       runId,
       resume,
       approvalDecision,
+      executionMode,
+      skipConversationWrite,
     } = body || {};
+    const isBackgroundMode = executionMode === "background" || skipConversationWrite === true;
 
     if (model !== AGENT_MODEL_ID) {
       return Response.json({ error: "当前接口仅支持 Agent 模型" }, { status: 400 });
@@ -276,7 +279,7 @@ export async function POST(req) {
       return Response.json({ error: "Agent 模式不支持重新生成或编辑并重新生成" }, { status: 400 });
     }
 
-    if (!currentConversationId && !isResume) {
+    if (!currentConversationId && !isResume && !isBackgroundMode) {
       const titleSource = isNonEmptyString(prompt)
         ? prompt
         : (Array.isArray(config?.attachments) && config.attachments[0]?.name
@@ -310,11 +313,16 @@ export async function POST(req) {
       : [];
 
     if (!isResume) {
-      effectiveHistoryMessages = await loadConversationHistory({
-        conversationId: currentConversationId,
-        userId: auth.userId,
-        historyLimit: limit,
-      });
+      effectiveHistoryMessages = isBackgroundMode
+        ? history
+            .map(buildHistoryMessage)
+            .filter(Boolean)
+            .slice(limit > 0 ? -limit : 0)
+        : await loadConversationHistory({
+            conversationId: currentConversationId,
+            userId: auth.userId,
+            historyLimit: limit,
+          });
 
       const userMessageParts = buildUserMessageParts({
         prompt: currentPrompt,
@@ -326,21 +334,23 @@ export async function POST(req) {
         return Response.json({ error: "请至少输入内容或上传附件" }, { status: 400 });
       }
 
-      await Conversation.findOneAndUpdate(
-        { _id: currentConversationId, userId: auth.userId },
-        {
-          $push: {
-            messages: {
-              id: userMessageId,
-              role: "user",
-              content: currentPrompt,
-              type: "parts",
-              parts: userMessageParts,
+      if (!isBackgroundMode) {
+        await Conversation.findOneAndUpdate(
+          { _id: currentConversationId, userId: auth.userId },
+          {
+            $push: {
+              messages: {
+                id: userMessageId,
+                role: "user",
+                content: currentPrompt,
+                type: "parts",
+                parts: userMessageParts,
+              },
             },
-          },
-          updatedAt: Date.now(),
-        }
-      );
+            updatedAt: Date.now(),
+          }
+        );
+      }
     } else {
       effectiveHistoryMessages = await loadConversationHistory({
         conversationId: currentConversationId,
@@ -416,6 +426,7 @@ export async function POST(req) {
             config,
             attachments: currentAttachments,
             images: currentImages,
+            messageId: modelMessageId,
             runId,
             resume: isResume,
             approvalDecision: isApproveMode ? "approved" : approvalDecision,
@@ -429,20 +440,22 @@ export async function POST(req) {
           });
           const storedContent = buildStoredAgentMessageContent(result.status, fullText, finalAgentRun);
 
-          await upsertAgentMessage({
-            conversationId: currentConversationId,
-            userId: auth.userId,
-            messageId: modelMessageId,
-            runId: result.run?._id?.toString?.() || finalAgentRun?.runId,
-            append: !isResume,
-            message: buildStoredAgentMessage({
+          if (!isBackgroundMode) {
+            await upsertAgentMessage({
+              conversationId: currentConversationId,
+              userId: auth.userId,
               messageId: modelMessageId,
-              content: storedContent,
-              citations,
-              timeline,
-              latestAgentRun: finalAgentRun,
-            }),
-          });
+              runId: result.run?._id?.toString?.() || finalAgentRun?.runId,
+              append: !isResume,
+              message: buildStoredAgentMessage({
+                messageId: modelMessageId,
+                content: storedContent,
+                citations,
+                timeline,
+                latestAgentRun: finalAgentRun,
+              }),
+            });
+          }
 
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();

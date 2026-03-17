@@ -37,6 +37,7 @@ export default function ChatApp() {
   const [confirmModalConfig, setConfirmModalConfig] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversations, setConversations] = useState([]);
+  const [activeRuns, setActiveRuns] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -69,8 +70,17 @@ export default function ChatApp() {
   const pendingSettingsRef = useRef({});
   const pendingConversationIdRef = useRef(null);
   const lastTextModelRef = useRef(GEMINI_FLASH_MODEL);
+  const hasRestoredConversationRef = useRef(false);
+  const currentConversationIdRef = useRef(null);
   const isStreamingRef = useRef(false);
-  const isStreaming = messages.some((m) => m.isStreaming);
+  const isStreaming = messages.some((message) => {
+    const chatRunStatus = String(message?.chatRun?.status || "");
+    return (
+      message?.isStreaming === true ||
+      chatRunStatus === "queued" ||
+      chatRunStatus === "running"
+    );
+  });
   isStreamingRef.current = isStreaming;
   const SCROLL_BOTTOM_THRESHOLD = 80;
   const lastSettingsErrorRef = useRef(null);
@@ -99,8 +109,10 @@ export default function ChatApp() {
 
   const handleAuthExpired = () => {
     stopOngoingChatWork();
+    hasRestoredConversationRef.current = false;
     setUser(null);
     setConversations([]);
+    setActiveRuns([]);
     setCurrentConversationId(null);
     setMessages([]);
     setSettingsError(null);
@@ -143,6 +155,7 @@ export default function ChatApp() {
         if (data.user) {
           setUser(data.user);
           fetchConversations();
+          fetchActiveRuns();
           fetchSettings(); // 只获取系统提示词
         } else {
           handleAuthExpired();
@@ -153,6 +166,62 @@ export default function ChatApp() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+    if (typeof window === "undefined") return;
+    if (currentConversationId) {
+      window.localStorage.setItem("vectaix-current-conversation", currentConversationId);
+      return;
+    }
+    window.localStorage.removeItem("vectaix-current-conversation");
+  }, [currentConversationId]);
+
+  useEffect(() => {
+    if (!user || hasRestoredConversationRef.current || conversations.length === 0) return;
+    hasRestoredConversationRef.current = true;
+    if (typeof window === "undefined") return;
+    const savedConversationId = window.localStorage.getItem("vectaix-current-conversation");
+    if (!savedConversationId) return;
+    const exists = conversations.some((conversation) => conversation?._id === savedConversationId);
+    if (exists) {
+      loadConversation(savedConversationId, { silent: true });
+    }
+  }, [conversations, user]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    const timer = setInterval(() => {
+      fetchActiveRuns();
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [user]);
+
+  useEffect(() => {
+    if (!currentConversationId) return undefined;
+    const hasConversationRun = conversations.some(
+      (conversation) => conversation?._id === currentConversationId && conversation?.hasActiveRun
+    );
+    const hasMessageRun = messages.some((message) => {
+      const chatRunStatus = String(message?.chatRun?.status || "");
+      const agentRunStatus = String(message?.agentRun?.status || "");
+      return (
+        chatRunStatus === "queued" ||
+        chatRunStatus === "running" ||
+        agentRunStatus === "running" ||
+        agentRunStatus === "waiting_continue" ||
+        agentRunStatus === "awaiting_approval"
+      );
+    });
+    if (!hasConversationRun && !hasMessageRun) return undefined;
+
+    const timer = setInterval(() => {
+      const targetConversationId = currentConversationIdRef.current;
+      if (!targetConversationId) return;
+      loadConversation(targetConversationId, { silent: true });
+    }, 1200);
+    return () => clearInterval(timer);
+  }, [conversations, currentConversationId, messages]);
 
   // Cleanup: abort pending requests on unmount
   useEffect(() => {
@@ -184,6 +253,19 @@ export default function ChatApp() {
     });
   };
 
+  const mergeConversationRunState = (list, runs = activeRuns) => {
+    if (!Array.isArray(list)) return [];
+    const activeConversationIds = new Set(
+      (Array.isArray(runs) ? runs : [])
+        .map((run) => (typeof run?.conversationId === "string" ? run.conversationId : ""))
+        .filter(Boolean)
+    );
+    return list.map((conversation) => ({
+      ...conversation,
+      hasActiveRun: activeConversationIds.has(conversation?._id),
+    }));
+  };
+
   const fetchConversations = async () => {
     try {
       const res = await fetch("/api/conversations");
@@ -198,13 +280,33 @@ export default function ChatApp() {
         data = null;
       }
       if (!res.ok) return;
-      const nextConversations = data?.conversations ? sortConversations(data.conversations) : [];
+      const nextConversations = data?.conversations
+        ? sortConversations(mergeConversationRunState(data.conversations))
+        : [];
       setConversations(nextConversations);
       if (currentConversationId && !nextConversations.some((conv) => conv._id === currentConversationId)) {
         setCurrentConversationId(null);
         setMessages([]);
       }
     } catch { }
+  };
+
+  const fetchActiveRuns = async () => {
+    try {
+      const res = await fetch("/api/runs", { cache: "no-store" });
+      if (res.status === 401) {
+        handleAuthExpired();
+        return [];
+      }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return [];
+      const nextRuns = Array.isArray(data?.runs) ? data.runs : [];
+      setActiveRuns(nextRuns);
+      setConversations((prev) => sortConversations(mergeConversationRunState(prev, nextRuns)));
+      return nextRuns;
+    } catch {
+      return [];
+    }
   };
 
   const handleConversationMissing = () => {
@@ -264,6 +366,7 @@ export default function ChatApp() {
         return sortConversations(next);
       });
     },
+    loadConversationById: (...args) => loadConversation(...args),
   });
 
   useEffect(() => {
@@ -407,6 +510,7 @@ export default function ChatApp() {
       const data = await res.json();
       if (data.success || data.user) {
         stopOngoingChatWork();
+        hasRestoredConversationRef.current = false;
         setUser(data.user);
         setShowAuthModal(false);
         setAuthMode("login");
@@ -415,6 +519,7 @@ export default function ChatApp() {
         setConfirmPassword("");
         toast.success(authMode === "login" ? "登录成功" : "注册成功");
         fetchConversations();
+        fetchActiveRuns();
         fetchSettings();
       } else {
         toast.error(data.error);
@@ -427,9 +532,11 @@ export default function ChatApp() {
   const handleLogout = async () => {
     await fetch("/api/auth/me", { method: "DELETE" });
     stopOngoingChatWork();
+    hasRestoredConversationRef.current = false;
     setUser(null);
     setMessages([]);
     setConversations([]);
+    setActiveRuns([]);
     setCurrentConversationId(null);
     setSettingsError(null);
     // 清除登录表单敏感信息
@@ -440,12 +547,15 @@ export default function ChatApp() {
     setShowProfileModal(false);
   };
 
-  const loadConversation = async (id) => {
-    setLoading(true);
-    setMessages([]); // 先清空消息，显示加载动画
-    if (window.innerWidth < 768) setSidebarOpen(false); // 移动端立即折叠侧边栏
+  const loadConversation = async (id, options = {}) => {
+    const silent = options?.silent === true;
+    if (!silent) {
+      setLoading(true);
+      setMessages([]); // 先清空消息，显示加载动画
+      if (window.innerWidth < 768) setSidebarOpen(false); // 移动端立即折叠侧边栏
+    }
     try {
-      const res = await fetch(`/api/conversations/${id}`);
+      const res = await fetch(`/api/conversations/${id}`, { cache: "no-store" });
       if (res.status === 401) {
         handleAuthExpired();
         throw new Error("登录已过期，请重新登录");
@@ -465,6 +575,9 @@ export default function ChatApp() {
       }
       if (!res.ok) throw new Error(data?.error || "加载会话失败");
       if (data.conversation) {
+        if (silent && currentConversationIdRef.current && currentConversationIdRef.current !== id) {
+          return;
+        }
         const nextMessages = data.conversation.messages;
         userInterruptedRef.current = false;
         setMessages(nextMessages);
@@ -531,9 +644,13 @@ export default function ChatApp() {
         }
       }
     } catch (e) {
-      toast.error(`加载会话失败：${e?.message}`);
+      if (!silent) {
+        toast.error(`加载会话失败：${e?.message}`);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -573,6 +690,7 @@ export default function ChatApp() {
     try {
       await fetch(`/api/conversations/${id}`, { method: "DELETE" });
       setConversations((prev) => prev.filter((c) => c._id !== id));
+      setActiveRuns((prev) => prev.filter((run) => run?.conversationId !== id));
       if (currentConversationId === id) {
         setCurrentConversationId(null);
         setMessages([]);
@@ -582,6 +700,7 @@ export default function ChatApp() {
 
   const startNewChat = () => {
     userInterruptedRef.current = false;
+    stopOngoingChatWork();
     setCurrentConversationId(null);
     setMessages([]);
     if (window.innerWidth < 768) setSidebarOpen(false);

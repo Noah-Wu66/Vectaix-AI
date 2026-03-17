@@ -101,7 +101,8 @@ export async function POST(req) {
             return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
         }
 
-        const { prompt, model, config, history, historyLimit, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
+        const { prompt, model, config, history, historyLimit, conversationId, mode, messages, settings, userMessageId, modelMessageId, executionMode, skipConversationWrite } = body;
+        const isBackgroundMode = executionMode === "background" || skipConversationWrite === true;
 
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
@@ -163,7 +164,7 @@ export async function POST(req) {
         });
 
         // 创建新会话
-        if (user && !currentConversationId) {
+        if (user && !currentConversationId && !isBackgroundMode) {
             const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
@@ -255,7 +256,7 @@ export async function POST(req) {
         }
 
         // 保存用户消息
-        if (user && !isRegenerateMode) {
+        if (user && !isRegenerateMode && !isBackgroundMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
 
@@ -352,9 +353,11 @@ export async function POST(req) {
         const encoder = new TextEncoder();
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
-        try {
-            req?.signal?.addEventListener?.('abort', onAbort, { once: true });
-        } catch { /* ignore */ }
+        if (!isBackgroundMode) {
+            try {
+                req?.signal?.addEventListener?.('abort', onAbort, { once: true });
+            } catch { /* ignore */ }
+        }
 
         const PADDING = ' '.repeat(2048);
         let paddingSent = false;
@@ -409,7 +412,7 @@ export async function POST(req) {
                         sendEvent,
                         pushCitations,
                         sendSearchError,
-                        isClientAborted: () => clientAborted,
+                        isClientAborted: isBackgroundMode ? (() => false) : (() => clientAborted),
                         model,
                         conversationId: currentConversationId,
                         logDecision: true,
@@ -480,7 +483,7 @@ export async function POST(req) {
 
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
-                    if (user && currentConversationId) {
+                    if (user && currentConversationId && !isBackgroundMode) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
                             : { _id: currentConversationId, userId: user.userId };
@@ -529,9 +532,11 @@ export async function POST(req) {
                         clearInterval(heartbeatTimer);
                         heartbeatTimer = null;
                     }
-                    try {
-                        req?.signal?.removeEventListener?.('abort', onAbort);
-                    } catch { /* ignore */ }
+                    if (!isBackgroundMode) {
+                        try {
+                            req?.signal?.removeEventListener?.('abort', onAbort);
+                        } catch { /* ignore */ }
+                    }
                 }
             }
         });
