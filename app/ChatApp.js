@@ -466,6 +466,15 @@ export default function ChatApp() {
     fetchConversations();
   };
 
+  const handleSensitiveRefusal = (payload) => {
+    const promptText = typeof payload === "string" ? payload : payload?.prompt;
+    const shouldPrefill = typeof payload === "object" ? payload?.shouldPrefill !== false : true;
+    toast.warning("消息包含敏感内容，请修改后重新尝试");
+    if (shouldPrefill && typeof promptText === "string" && promptText.trim()) {
+      setComposerPrefill({ text: promptText, nonce: Date.now() });
+    }
+  };
+
   const applyConversationUpsertEvent = (payload) => {
     const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
     if (!conversationId) return;
@@ -580,6 +589,7 @@ export default function ChatApp() {
     historyLimit,
     currentConversationId,
     setCurrentConversationId,
+    fetchConversations,
     chatAbortRef,
     chatRequestLockRef,
     userInterruptedRef,
@@ -591,7 +601,8 @@ export default function ChatApp() {
     setEditingContent,
     setEditingImageAction,
     setEditingImage,
-    loadConversationById: (...args) => loadConversation(...args),
+    completionSoundVolume,
+    onSensitiveRefusal: handleSensitiveRefusal,
     onAuthExpired: handleAuthExpired,
     onConversationMissing: handleConversationMissing,
     onConversationActivity: () => {},
