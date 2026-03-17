@@ -17,6 +17,12 @@ import {
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
+import {
+    parseMaxTokens,
+    parseOpenAIThinkingLevel,
+    parseSystemPrompt,
+    parseWebSearchEnabled,
+} from '@/lib/server/chat/requestConfig';
 import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
 import { getModelRoutes, resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
 
@@ -246,12 +252,15 @@ export async function POST(req) {
         }
 
         // 构建 Responses API 请求
-        const maxTokens = Number.parseInt(config?.maxTokens, 10);
-        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
-            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
+        let maxTokens;
+        let thinkingLevel;
+        try {
+            maxTokens = parseMaxTokens(config?.maxTokens);
+            thinkingLevel = parseOpenAIThinkingLevel(config?.thinkingLevel);
+        } catch (error) {
+            return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
-        const thinkingLevel = typeof config?.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
-        const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
+        const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
         const baseInput = Array.isArray(openaiInput) ? openaiInput : [];
@@ -276,7 +285,7 @@ export async function POST(req) {
         };
 
         // 是否启用联网搜索
-        const enableWebSearch = config?.webSearch === true;
+        const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const normalizeDecisionText = (value) => {
             if (typeof value === 'string') return value;
@@ -747,4 +756,3 @@ export async function POST(req) {
         return Response.json({ error: errorMessage }, { status });
     }
 }
-

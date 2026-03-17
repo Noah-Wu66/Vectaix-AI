@@ -12,24 +12,31 @@ import {
 } from "@/app/api/chat/webSearchOrchestrator";
 import { buildSeedMessageInput } from "@/app/api/bytedance/bytedanceHelpers";
 import { buildEconomySystemPrompt } from "@/lib/server/chat/economyModels";
+import { parseGeminiThinkingLevel } from "@/lib/server/chat/requestConfig";
 import {
   WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
   buildWebSearchGuide,
   getWebSearchProviderRuntimeOptions,
 } from "@/lib/server/chat/webSearchConfig";
 import {
+  buildSeedRequestBody,
+  extractSeedResponseText,
+  normalizeSeedChunkText,
+  requestSeedResponses,
+} from "@/lib/server/seed/service";
+import {
   CLAUDE_OPUS_MODEL,
-  COUNCIL_EXPERTS,
+  DEFAULT_SEED_THINKING_LEVEL,
   GEMINI_FLASH_MODEL,
+  getCouncilExpertConfigs,
   getCouncilExpertDisplayLabel,
   SEED_MODEL_ID,
 } from "@/lib/shared/models";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ARK_API_KEY = process.env.ARK_API_KEY;
-const SEED_API_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
 const GEMINI_DECISION_MODEL = GEMINI_FLASH_MODEL;
-const GEMINI_DECISION_THINKING_LEVEL = "MINIMAL";
+const GEMINI_DECISION_THINKING_LEVEL = parseGeminiThinkingLevel("MINIMAL", GEMINI_DECISION_MODEL);
 const FORMATTING_GUARD =
   "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
@@ -40,7 +47,7 @@ const MAX_FINDING_TEXT_CHARS = 1000;
 const HISTORY_USER_SUMMARY_CHARS = 500;
 const HISTORY_MODEL_SUMMARY_CHARS = 1200;
 
-export const COUNCIL_EXPERT_CONFIGS = COUNCIL_EXPERTS.map((expert) => ({ ...expert }));
+export const COUNCIL_EXPERT_CONFIGS = getCouncilExpertConfigs();
 
 function assertConfigured(value, message) {
   if (!value) {
@@ -876,21 +883,15 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
   throwIfAborted(signal);
 
   try {
-    const response = await fetch(`${SEED_API_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${ARK_API_KEY}`,
-      },
-      body: JSON.stringify({
+    const response = await requestSeedResponses({
+      apiKey: ARK_API_KEY,
+      requestBody: buildSeedRequestBody({
         model: SEED_MODEL_ID,
         stream: false,
-        max_tokens: TRIAGE_MAX_OUTPUT_TOKENS,
+        maxTokens: TRIAGE_MAX_OUTPUT_TOKENS,
+        thinkingLevel: "minimal",
         temperature: 0.3,
-        messages: [
-          {
-            role: "system",
-            content: `你是 Council 路由判断器。Council 会并行调用三位专家模型讨论，开销大、速度慢。你的任务是判断用户消息是否真的需要 Council。
+        instructions: `你是 Council 路由判断器。Council 会并行调用三位专家模型讨论，开销大、速度慢。你的任务是判断用户消息是否真的需要 Council。
 
 不需要 Council 的情况（直接回答）：
 - 打招呼、闲聊、问候（"你好"、"在吗"、"谢谢"等）
@@ -913,17 +914,20 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
 {"needCouncil":false,"directAnswer":"你的回答内容"}
 如果需要 Council：
 {"needCouncil":true}`,
-          },
-          { role: "user", content: trimmed },
+        input: [
+          buildSeedMessageInput({
+            role: "user",
+            content: [{ type: "input_text", text: trimmed }],
+          }),
         ],
       }),
-      signal,
+      req: { signal },
     });
 
     if (!response.ok) return { needCouncil: true };
 
     const data = await response.json();
-    const text = data?.choices?.[0]?.message?.content?.trim();
+    const text = extractSeedResponseText(data);
     if (!text) return { needCouncil: true };
 
     // 尝试从回复中提取 JSON（兼容模型在 JSON 前后加了额外文字的情况）
@@ -946,13 +950,9 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
 export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTextDelta, signal }) {
   assertConfigured(ARK_API_KEY, "ARK_API_KEY 未配置");
   const instructions = await buildSeedSystemPrompt();
-  const response = await fetch(`${SEED_API_BASE_URL}/responses`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${ARK_API_KEY}`,
-    },
-    body: JSON.stringify({
+  const response = await requestSeedResponses({
+    apiKey: ARK_API_KEY,
+    requestBody: buildSeedRequestBody({
       model: SEED_MODEL_ID,
       stream: true,
       input: [
@@ -967,13 +967,11 @@ export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTe
         }),
       ],
       instructions,
-      max_output_tokens: SEED_MAX_OUTPUT_TOKENS,
+      maxTokens: SEED_MAX_OUTPUT_TOKENS,
+      thinkingLevel: DEFAULT_SEED_THINKING_LEVEL,
       temperature: 1,
-      top_p: 0.95,
-      thinking: { type: "enabled" },
-      reasoning: { effort: "medium" },
     }),
-    signal,
+    req: { signal },
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -990,7 +988,7 @@ export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTe
   let completedText = "";
 
   const emitDelta = (value) => {
-    const delta = normalizeResponseText(value);
+    const delta = normalizeSeedChunkText(value);
     if (!delta) return;
     streamedText += delta;
     onTextDelta?.(delta);
@@ -1019,7 +1017,7 @@ export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTe
       return;
     }
     if (eventType === "response.completed") {
-      applyCompletedText(extractResponsesText(event?.response));
+      applyCompletedText(extractSeedResponseText(event?.response));
     }
   };
 

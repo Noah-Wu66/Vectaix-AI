@@ -7,6 +7,7 @@ import { AGENT_MODEL_ID } from "@/lib/shared/models";
 import { isNonEmptyString } from "@/app/api/chat/utils";
 import { runAgentRuntimeV2 } from "@/lib/server/agent/runtimeV2";
 import { buildAgentMessageMeta } from "@/lib/server/agent/runHelpers";
+import { parseSeedThinkingLevel } from "@/lib/server/chat/requestConfig";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -222,6 +223,11 @@ export async function POST(req) {
     }
     if (!Array.isArray(history)) {
       return Response.json({ error: "history must be an array" }, { status: 400 });
+    }
+    try {
+      parseSeedThinkingLevel(config?.thinkingLevel);
+    } catch (error) {
+      return Response.json({ error: error?.message || "thinkingLevel invalid" }, { status: 400 });
     }
 
     const auth = await getAuthPayload();

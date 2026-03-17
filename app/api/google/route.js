@@ -21,6 +21,12 @@ import {
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
+import {
+    parseGeminiThinkingLevel,
+    parseMaxTokens,
+    parseSystemPrompt,
+    parseWebSearchEnabled,
+} from '@/lib/server/chat/requestConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -263,27 +269,20 @@ export async function POST(req) {
             });
         }
 
-        const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
+        const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const baseSystemText = await injectCurrentTimeSystemReminder(userSystemPrompt);
         const generationConfig = (config?.generationConfig && typeof config.generationConfig === 'object' && !Array.isArray(config.generationConfig))
             ? config.generationConfig
             : {};
         const safeGenerationConfig = { ...generationConfig };
         delete safeGenerationConfig.temperature;
-        const maxTokens = Number.parseInt(config?.maxTokens, 10);
-        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
-            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
-        }
-
-        const rawThinkingLevel = typeof config?.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
-        const thinkingLevel = rawThinkingLevel.toUpperCase();
-        const flashAllowedLevels = new Set(['MINIMAL', 'LOW', 'MEDIUM', 'HIGH']);
-        const proAllowedLevels = new Set(['LOW', 'MEDIUM', 'HIGH']);
-        const isAllowedThinkingLevel = apiModel === GEMINI_FLASH_MODEL
-            ? flashAllowedLevels.has(thinkingLevel)
-            : proAllowedLevels.has(thinkingLevel);
-        if (!isAllowedThinkingLevel) {
-            return Response.json({ error: 'thinkingLevel invalid' }, { status: 400 });
+        let maxTokens;
+        let thinkingLevel;
+        try {
+            maxTokens = parseMaxTokens(config?.maxTokens);
+            thinkingLevel = parseGeminiThinkingLevel(config?.thinkingLevel, apiModel);
+        } catch (error) {
+            return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
 
         const baseConfig = {
@@ -299,7 +298,7 @@ export async function POST(req) {
             }
         };
 
-        const enableWebSearch = config?.webSearch === true;
+        const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const extractGeminiDecisionText = (result) => {
             const parts = Array.isArray(result?.candidates?.[0]?.content?.parts)

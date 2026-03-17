@@ -16,7 +16,6 @@ import { buildBytedanceInputFromHistory, buildSeedMessageInput } from '@/app/api
 import {
     SEED_MODEL_ID,
     AGENT_MODEL_ID,
-    SEED_REASONING_LEVELS,
     isSeedModel,
     normalizeModelId,
     resolveSeedRuntimeModelId,
@@ -26,37 +25,25 @@ import {
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
+import {
+    parseMaxTokens,
+    parseSeedThinkingLevel,
+    parseSystemPrompt,
+    parseWebSearchEnabled,
+} from '@/lib/server/chat/requestConfig';
 import { buildAttachmentTextBlock, getPreparedAttachmentTextsByUrls } from '@/lib/server/files/service';
+import {
+    buildSeedRequestBody,
+    extractSeedResponseText,
+    normalizeSeedChunkText,
+    requestSeedResponses,
+} from '@/lib/server/seed/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const SEED_API_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
-const SEED_MAX_RETRIES = 2;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
-const VALID_SEED_REASONING_LEVELS = new Set(SEED_REASONING_LEVELS);
-
-function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function normalizeChunkText(value) {
-    if (typeof value === 'string') return value;
-    if (Array.isArray(value)) {
-        return value.map((item) => {
-            if (typeof item === 'string') return item;
-            if (item && typeof item.text === 'string') return item.text;
-            if (item && typeof item.content === 'string') return item.content;
-            return '';
-        }).join('');
-    }
-    if (value && typeof value === 'object') {
-        if (typeof value.text === 'string') return value.text;
-        if (typeof value.content === 'string') return value.content;
-    }
-    return '';
-}
 
 function pushUniqueCitations(target, items) {
     if (!Array.isArray(target) || !Array.isArray(items)) return;
@@ -81,102 +68,6 @@ function collectFileUrlsFromMessages(messages) {
     return Array.from(urls);
 }
 
-function buildSeedRequestBody({
-    model,
-    input,
-    instructions,
-    maxTokens,
-    thinkingLevel,
-}) {
-    const normalizedThinkingLevel = typeof thinkingLevel === 'string'
-        ? thinkingLevel.trim().toLowerCase()
-        : '';
-
-    const requestBody = {
-        model,
-        stream: true,
-        input,
-        instructions,
-        temperature: 1,
-        top_p: 0.95,
-    };
-
-    if (Number.isFinite(maxTokens) && maxTokens > 0) {
-        requestBody.max_output_tokens = maxTokens;
-    }
-
-    if (normalizedThinkingLevel === 'minimal') {
-        requestBody.thinking = { type: 'disabled' };
-    } else {
-        if (!VALID_SEED_REASONING_LEVELS.has(normalizedThinkingLevel)) {
-            throw new Error('thinkingLevel invalid');
-        }
-        requestBody.thinking = { type: 'enabled' };
-        requestBody.reasoning = {
-            effort: normalizedThinkingLevel,
-        };
-    }
-
-    return requestBody;
-}
-
-function extractSeedResponseText(payload) {
-    if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
-        return payload.output_text.trim();
-    }
-
-    const outputs = Array.isArray(payload?.output) ? payload.output : [];
-    return outputs
-        .filter((item) => item?.type === 'message')
-        .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
-        .map((item) => normalizeChunkText(item?.text ?? item))
-        .join('')
-        .trim();
-}
-
-async function requestSeedResponses({ apiKey, requestBody, req }) {
-    const url = `${SEED_API_BASE_URL}/responses`;
-
-    for (let attempt = 0; attempt < SEED_MAX_RETRIES; attempt += 1) {
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify(requestBody),
-                signal: req?.signal,
-            });
-
-            if (response.ok) {
-                return response;
-            }
-
-            const errorText = await response.text();
-            const shouldRetry = response.status >= 500 && attempt < SEED_MAX_RETRIES - 1;
-
-            if (shouldRetry) {
-                await sleep(800 * (attempt + 1));
-                continue;
-            }
-
-            const error = new Error(`Seed 官方接口请求失败（${response.status}）：${errorText}`);
-            error.status = response.status;
-            throw error;
-        } catch (error) {
-            if (error?.name === 'AbortError') {
-                throw error;
-            }
-            if (attempt >= SEED_MAX_RETRIES - 1) {
-                throw error;
-            }
-            await sleep(800 * (attempt + 1));
-        }
-    }
-
-    throw new Error('Seed 官方接口请求失败');
-}
 
 export async function POST(req) {
     let writePermitTime = null;
@@ -438,19 +329,17 @@ export async function POST(req) {
             writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
-        const maxTokens = Number.parseInt(config?.maxTokens, 10);
-        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
-            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
+        let maxTokens;
+        let thinkingLevel;
+        try {
+            maxTokens = parseMaxTokens(config?.maxTokens);
+            thinkingLevel = parseSeedThinkingLevel(config?.thinkingLevel);
+        } catch (error) {
+            return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
-        const thinkingLevel = typeof config?.thinkingLevel === 'string'
-            ? config.thinkingLevel.trim().toLowerCase()
-            : '';
-        if (thinkingLevel !== 'minimal' && !VALID_SEED_REASONING_LEVELS.has(thinkingLevel)) {
-            return Response.json({ error: 'thinkingLevel invalid' }, { status: 400 });
-        }
-        const enableWebSearch = config?.webSearch === true;
+        const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(
-            typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
+            parseSystemPrompt(config?.systemPrompt)
         );
         const formattingGuard = 'Output formatting rules: Do not use Markdown horizontal rules or standalone lines of \'---\'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.';
         const webSearchGuard = buildWebSearchGuide(enableWebSearch).trim();
@@ -463,7 +352,7 @@ export async function POST(req) {
                 searchRounds,
             });
 
-            const decisionRequestBody = {
+            const decisionRequestBody = buildSeedRequestBody({
                 model: apiModel || SEED_MODEL_ID,
                 stream: false,
                 input: [buildSeedMessageInput({
@@ -474,11 +363,10 @@ export async function POST(req) {
                     }],
                 })],
                 instructions: systemText,
-                max_output_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
+                maxTokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
+                thinkingLevel: 'minimal',
                 temperature: 0.1,
-                top_p: 0.95,
-                thinking: { type: 'disabled' },
-            };
+            });
 
             const response = await requestSeedResponses({
                 apiKey,
@@ -597,7 +485,7 @@ export async function POST(req) {
                         const eventType = typeof event?.type === 'string' ? event.type : '';
 
                         if (eventType === 'response.output_text.delta') {
-                            const text = normalizeChunkText(event?.delta);
+                            const text = normalizeSeedChunkText(event?.delta);
                             if (!text) return;
                             fullText += text;
                             sendEvent({ type: 'text', content: text });
@@ -605,7 +493,7 @@ export async function POST(req) {
                         }
 
                         if (eventType === 'response.reasoning.delta' || eventType === 'response.reasoning_summary_text.delta') {
-                            const thought = normalizeChunkText(event?.delta);
+                            const thought = normalizeSeedChunkText(event?.delta);
                             if (!thought) return;
                             fullThought += thought;
                             sendEvent({ type: 'thought', content: thought });

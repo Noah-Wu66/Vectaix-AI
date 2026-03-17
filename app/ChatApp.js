@@ -240,7 +240,6 @@ export default function ChatApp() {
     currentConversationId,
     setCurrentConversationId,
     fetchConversations,
-    currentModelConfig,
     chatAbortRef,
     chatRequestLockRef,
     userInterruptedRef,

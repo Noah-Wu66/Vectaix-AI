@@ -22,6 +22,13 @@ import {
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
+import {
+    clampMaxTokens,
+    parseClaudeThinkingLevel,
+    parseMaxTokens,
+    parseSystemPrompt,
+    parseWebSearchEnabled,
+} from '@/lib/server/chat/requestConfig';
 import { getModelRoutes, resolveOpusProviderConfig } from '@/lib/modelRoutes';
 
 export const runtime = 'nodejs';
@@ -283,28 +290,27 @@ export async function POST(req) {
         }
 
         // 构建请求参数（联网搜索上下文将在流式开始前注入）
-        const maxTokens = Number.parseInt(config?.maxTokens, 10);
-        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
-            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
+        let maxTokens;
+        let thinkingLevel;
+        try {
+            maxTokens = parseMaxTokens(config?.maxTokens);
+            thinkingLevel = parseClaudeThinkingLevel(config?.thinkingLevel);
+        } catch (error) {
+            return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
-        const thinkingLevel = typeof config?.thinkingLevel === 'string' ? config.thinkingLevel.trim() : '';
         const isClaudeAdaptiveThinkingModel = typeof model === "string"
             && (model.startsWith(CLAUDE_OPUS_MODEL) || model.startsWith(CLAUDE_SONNET_MODEL));
         if (!isClaudeAdaptiveThinkingModel) {
             return Response.json({ error: 'unsupported Claude model' }, { status: 400 });
         }
         const maxTokenCap = typeof model === "string" && model.startsWith(CLAUDE_OPUS_MODEL) ? 128000 : 64000;
-        const normalizedMaxTokens = Math.min(maxTokens, maxTokenCap);
-        const allowedThinkingLevels = new Set(["low", "medium", "high", "max"]);
-        if (!allowedThinkingLevels.has(thinkingLevel)) {
-            return Response.json({ error: 'thinkingLevel invalid' }, { status: 400 });
-        }
-        const userSystemPrompt = typeof config?.systemPrompt === 'string' ? config.systemPrompt : '';
+        const normalizedMaxTokens = clampMaxTokens(maxTokens, maxTokenCap);
+        const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         // 是否启用联网搜索
-        const enableWebSearch = config?.webSearch === true;
+        const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
 
         // 启用联网搜索时禁用来源括号标注
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);

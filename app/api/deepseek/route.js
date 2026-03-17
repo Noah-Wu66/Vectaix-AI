@@ -19,6 +19,12 @@ import {
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
+import {
+    clampMaxTokens,
+    parseMaxTokens,
+    parseSystemPrompt,
+    parseWebSearchEnabled,
+} from '@/lib/server/chat/requestConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -260,17 +266,19 @@ export async function POST(req) {
             writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
-        const maxTokens = Number.parseInt(config?.maxTokens, 10);
-        if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
-            return Response.json({ error: 'maxTokens invalid' }, { status: 400 });
+        let maxTokens;
+        try {
+            maxTokens = parseMaxTokens(config?.maxTokens);
+        } catch (error) {
+            return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
 
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(
-            typeof config?.systemPrompt === 'string' ? config.systemPrompt : ''
+            parseSystemPrompt(config?.systemPrompt)
         );
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
-        const enableWebSearch = config?.webSearch === true;
+        const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const normalizeDecisionMessageText = (value) => {
             if (typeof value === 'string') return value;
@@ -416,7 +424,7 @@ export async function POST(req) {
                         model: apiModel,
                         messages: finalMessages,
                         stream: true,
-                        max_tokens: Math.min(maxTokens, 65536),
+                        max_tokens: clampMaxTokens(maxTokens, 65536),
                     };
 
                     const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
