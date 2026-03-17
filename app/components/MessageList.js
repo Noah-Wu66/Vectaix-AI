@@ -85,6 +85,8 @@ export default function MessageList({
   const isAgentConversation = model === AGENT_MODEL_ID;
   const canEditImages = getModelConfig(model)?.supportsImages === true;
   const toast = useToast();
+  const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
+  const hasStreamingContent = messages.some((message) => (message?.isStreaming && !message?.isWaitingFirstChunk) || message?.isSearching);
 
   useEffect(() => {
     prevMessagesRef.current = messages;
@@ -280,7 +282,7 @@ export default function MessageList({
           // 加载历史会话时的居中加载动画
           <div className="h-full flex flex-col items-center justify-center">
             <div className="flex items-center gap-1.5 px-4 py-3 bg-zinc-100 rounded-2xl">
-              <LoadingSweepText text="加载中" className="text-base" />
+              <LoadingSweepText text="..." ariaText="加载中" className="loading-sweep-dots text-lg sm:text-xl" />
             </div>
           </div>
         ) : (
@@ -724,7 +726,7 @@ export default function MessageList({
       )}
 
       {/* 只在有消息且加载中且没有正在流式输出或搜索的消息时显示加载指示器 */}
-      {messages.length > 0 && (loading || messages.some((m) => m.isWaitingFirstChunk)) && !messages.some((m) => (m.isStreaming && !m.isWaitingFirstChunk) || m.isSearching) && (
+      {messages.length > 0 && (loading || hasWaitingFirstChunk) && !hasStreamingContent && (
         <div className="flex gap-2 sm:gap-3 items-start">
           <ResponsiveAIAvatar
             model={model}
@@ -733,7 +735,11 @@ export default function MessageList({
             animate={isCouncilModel(model) || model === AGENT_MODEL_ID}
           />
           <div className="flex min-w-[4.75rem] items-center justify-center px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
-            <LoadingSweepText text="..." ariaText="等待响应" className="loading-sweep-dots text-lg sm:text-xl" />
+            <LoadingSweepText
+              text="..."
+              ariaText={hasWaitingFirstChunk ? "等待响应" : "加载中"}
+              className="loading-sweep-dots text-lg sm:text-xl"
+            />
           </div>
         </div>
       )}

@@ -22,6 +22,179 @@ import ConfirmModal from "./components/ConfirmModal";
 import ChatLayout from "./components/ChatLayout";
 
 const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium", large: "text-size-large" };
+const CHAT_RUN_ACTIVE_STATUSES = new Set(["queued", "running"]);
+const AGENT_RUN_STREAMING_STATUSES = new Set(["queued", "running"]);
+const PENDING_MESSAGE_TEXTS = new Set(["正在处理中...", "Council 正在处理中..."]);
+
+function hasDisplayableModelProgress(message) {
+  if (!message || message.role !== "model") return false;
+
+  const content = typeof message.content === "string" ? message.content.trim() : "";
+  if (content && !PENDING_MESSAGE_TEXTS.has(content)) {
+    return true;
+  }
+
+  if (typeof message.thought === "string" && message.thought.trim()) {
+    return true;
+  }
+
+  if (typeof message.searchError === "string" && message.searchError.trim()) {
+    return true;
+  }
+
+  if (Array.isArray(message.parts) && message.parts.some((part) => {
+    const text = typeof part?.text === "string" ? part.text.trim() : "";
+    return text && !PENDING_MESSAGE_TEXTS.has(text);
+  })) {
+    return true;
+  }
+
+  if (Array.isArray(message.thinkingTimeline) && message.thinkingTimeline.length > 0) {
+    return true;
+  }
+
+  if (Array.isArray(message.councilExpertStates) && message.councilExpertStates.length > 0) {
+    return true;
+  }
+
+  if (message.councilSummaryState && typeof message.councilSummaryState === "object") {
+    return true;
+  }
+
+  return false;
+}
+
+function hasActiveStreamingRun(message) {
+  if (!message || message.role !== "model") return false;
+  const chatRunStatus = String(message?.chatRun?.status || "");
+  const agentRunStatus = String(message?.agentRun?.status || "");
+  return CHAT_RUN_ACTIVE_STATUSES.has(chatRunStatus) || AGENT_RUN_STREAMING_STATUSES.has(agentRunStatus);
+}
+
+function decorateConversationMessages(messages) {
+  if (!Array.isArray(messages)) return [];
+  return messages.map((message) => {
+    if (!hasActiveStreamingRun(message)) return message;
+    const hasProgress = hasDisplayableModelProgress(message);
+    return {
+      ...message,
+      isStreaming: true,
+      isWaitingFirstChunk: !hasProgress,
+      isThinkingStreaming: !hasProgress || Boolean(message?.isThinkingStreaming),
+    };
+  });
+}
+
+function mergeConversationMessages(serverMessages, localMessages) {
+  const nextServerMessages = decorateConversationMessages(serverMessages);
+  if (!Array.isArray(localMessages) || localMessages.length === 0) {
+    return nextServerMessages;
+  }
+
+  const localById = new Map(
+    localMessages
+      .filter((message) => typeof message?.id === "string" && message.id)
+      .map((message) => [message.id, message]),
+  );
+
+  const serverIds = new Set(
+    nextServerMessages
+      .filter((message) => typeof message?.id === "string" && message.id)
+      .map((message) => message.id),
+  );
+
+  const merged = nextServerMessages.map((serverMessage) => {
+    const localMessage = localById.get(serverMessage?.id);
+    if (!localMessage) return serverMessage;
+
+    const nextMessage = { ...serverMessage };
+    const serverContent = typeof serverMessage?.content === "string" ? serverMessage.content : "";
+    const localContent = typeof localMessage?.content === "string" ? localMessage.content : "";
+
+    if (localContent.length > serverContent.length) {
+      nextMessage.content = localContent;
+      if (Array.isArray(localMessage?.parts) && localMessage.parts.length > 0) {
+        nextMessage.parts = localMessage.parts;
+      }
+    }
+
+    const serverThought = typeof serverMessage?.thought === "string" ? serverMessage.thought : "";
+    const localThought = typeof localMessage?.thought === "string" ? localMessage.thought : "";
+    if (localThought.length > serverThought.length) {
+      nextMessage.thought = localThought;
+    }
+
+    if (
+      Array.isArray(localMessage?.thinkingTimeline)
+      && localMessage.thinkingTimeline.length > (Array.isArray(serverMessage?.thinkingTimeline) ? serverMessage.thinkingTimeline.length : 0)
+    ) {
+      nextMessage.thinkingTimeline = localMessage.thinkingTimeline;
+    }
+
+    if (
+      Array.isArray(localMessage?.councilExpertStates)
+      && localMessage.councilExpertStates.length > (Array.isArray(serverMessage?.councilExpertStates) ? serverMessage.councilExpertStates.length : 0)
+    ) {
+      nextMessage.councilExpertStates = localMessage.councilExpertStates;
+    }
+
+    if (
+      Array.isArray(localMessage?.councilExperts)
+      && localMessage.councilExperts.length > (Array.isArray(serverMessage?.councilExperts) ? serverMessage.councilExperts.length : 0)
+    ) {
+      nextMessage.councilExperts = localMessage.councilExperts;
+    }
+
+    if (
+      Array.isArray(localMessage?.citations)
+      && localMessage.citations.length > (Array.isArray(serverMessage?.citations) ? serverMessage.citations.length : 0)
+    ) {
+      nextMessage.citations = localMessage.citations;
+    }
+
+    if (!nextMessage.searchError && localMessage?.searchError) {
+      nextMessage.searchError = localMessage.searchError;
+    }
+
+    if (!nextMessage.searchQuery && localMessage?.searchQuery) {
+      nextMessage.searchQuery = localMessage.searchQuery;
+    }
+
+    if (!nextMessage.searchResults && localMessage?.searchResults) {
+      nextMessage.searchResults = localMessage.searchResults;
+    }
+
+    if (!nextMessage.councilSummaryState && localMessage?.councilSummaryState) {
+      nextMessage.councilSummaryState = localMessage.councilSummaryState;
+    }
+
+    if (serverMessage?.isStreaming) {
+      nextMessage.isStreaming = true;
+      nextMessage.isWaitingFirstChunk = Boolean(serverMessage?.isWaitingFirstChunk)
+        || (Boolean(localMessage?.isWaitingFirstChunk) && !hasDisplayableModelProgress(serverMessage));
+      nextMessage.isThinkingStreaming = Boolean(serverMessage?.isThinkingStreaming)
+        || Boolean(localMessage?.isThinkingStreaming);
+    }
+
+    return nextMessage;
+  });
+
+  const trailingLocalMessages = [];
+  for (let i = localMessages.length - 1; i >= 0; i -= 1) {
+    const message = localMessages[i];
+    const messageId = typeof message?.id === "string" ? message.id : "";
+    if (messageId && serverIds.has(messageId)) {
+      break;
+    }
+    trailingLocalMessages.unshift(message);
+  }
+
+  if (trailingLocalMessages.length === 0) {
+    return merged;
+  }
+
+  return [...merged, ...trailingLocalMessages];
+}
 
 export default function ChatApp() {
   const toast = useToast();
@@ -72,6 +245,8 @@ export default function ChatApp() {
   const lastTextModelRef = useRef(GEMINI_FLASH_MODEL);
   const hasRestoredConversationRef = useRef(false);
   const currentConversationIdRef = useRef(null);
+  const activeRunsPollInFlightRef = useRef(false);
+  const conversationPollInFlightRef = useRef(false);
   const isStreamingRef = useRef(false);
   const isStreaming = messages.some((message) => {
     const chatRunStatus = String(message?.chatRun?.status || "");
@@ -192,7 +367,11 @@ export default function ChatApp() {
   useEffect(() => {
     if (!user) return undefined;
     const timer = setInterval(() => {
-      fetchActiveRuns();
+      if (activeRunsPollInFlightRef.current) return;
+      activeRunsPollInFlightRef.current = true;
+      fetchActiveRuns().finally(() => {
+        activeRunsPollInFlightRef.current = false;
+      });
     }, 1500);
     return () => clearInterval(timer);
   }, [user]);
@@ -217,8 +396,11 @@ export default function ChatApp() {
 
     const timer = setInterval(() => {
       const targetConversationId = currentConversationIdRef.current;
-      if (!targetConversationId) return;
-      loadConversation(targetConversationId, { silent: true });
+      if (!targetConversationId || conversationPollInFlightRef.current) return;
+      conversationPollInFlightRef.current = true;
+      loadConversation(targetConversationId, { silent: true }).finally(() => {
+        conversationPollInFlightRef.current = false;
+      });
     }, 1200);
     return () => clearInterval(timer);
   }, [conversations, currentConversationId, messages]);
@@ -238,6 +420,8 @@ export default function ChatApp() {
       }
       pendingSettingsRef.current = {};
       pendingConversationIdRef.current = null;
+      activeRunsPollInFlightRef.current = false;
+      conversationPollInFlightRef.current = false;
     };
   }, []);
 
@@ -578,9 +762,13 @@ export default function ChatApp() {
         if (silent && currentConversationIdRef.current && currentConversationIdRef.current !== id) {
           return;
         }
-        const nextMessages = data.conversation.messages;
         userInterruptedRef.current = false;
-        setMessages(nextMessages);
+        setMessages((prev) => {
+          const serverMessages = Array.isArray(data.conversation.messages) ? data.conversation.messages : [];
+          return silent
+            ? mergeConversationMessages(serverMessages, prev)
+            : decorateConversationMessages(serverMessages);
+        });
         setCurrentConversationId(id);
 
         // 获取对话的模型和 provider

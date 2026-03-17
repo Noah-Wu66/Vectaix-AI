@@ -5,13 +5,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Bot,
   ChevronDown,
-  Download,
   RefreshCw,
   Lock,
   Settings,
   Palette,
   Type,
-  Upload,
   Users,
   X,
   Camera,
@@ -42,21 +40,15 @@ export default function ProfileModal({
   const toast = useToast();
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
-  const [showDataManager, setShowDataManager] = useState(false);
   const [showRouteSelector, setShowRouteSelector] = useState(false);
   const [showAgentManager, setShowAgentManager] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showAgentConfirmModal, setShowAgentConfirmModal] = useState(false);
-  const [pendingImportFile, setPendingImportFile] = useState(null);
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
-
-  const [exportLoading, setExportLoading] = useState(false);
-  const [importLoading, setImportLoading] = useState(false);
 
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -82,81 +74,6 @@ export default function ProfileModal({
 
   const avatarFileInputRef = useRef(null);
   const hasRouteChanges = modelRoutes.openai !== savedModelRoutes.openai || modelRoutes.opus !== savedModelRoutes.opus;
-  const parseDownloadFilename = (contentDisposition) => {
-    if (!contentDisposition || typeof contentDisposition !== "string") return null;
-    const m = contentDisposition.match(/filename="([^"]+)"/i);
-    return m?.[1];
-  };
-
-  const triggerDownload = (blob, filename) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const onExport = async () => {
-    setExportLoading(true);
-    try {
-      const res = await fetch("/api/data/export", { method: "GET" });
-      if (!res.ok) {
-        let errText = "";
-        try {
-          const j = await res.json();
-          errText = j?.error ? String(j.error) : "";
-        } catch { }
-        throw new Error(errText);
-      }
-      const blob = await res.blob();
-      const filename =
-        parseDownloadFilename(res.headers.get("content-disposition"));
-      triggerDownload(blob, filename);
-      toast.success("导出成功");
-    } catch (e) {
-      toast.error(e?.message);
-    } finally {
-      setExportLoading(false);
-    }
-  };
-
-  const onImportFile = async (file) => {
-    if (!file) return;
-    setPendingImportFile(file);
-    setShowConfirmModal(true);
-  };
-
-  const confirmImport = async () => {
-    if (!pendingImportFile) return;
-
-    setImportLoading(true);
-    try {
-      const text = await pendingImportFile.text();
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        throw new Error("文件不是合法 JSON");
-      }
-
-      const res = await fetch("/api/data/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(json),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error);
-      toast.success(`导入成功（会话：${data?.imported?.conversationsCount}）`);
-    } catch (e) {
-      toast.error(e?.message);
-    } finally {
-      setImportLoading(false);
-      setPendingImportFile(null);
-    }
-  };
 
   const handleAvatarSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -702,85 +619,11 @@ export default function ProfileModal({
                   <ChevronDown size={16} className="text-zinc-400" />
                 </button>
               )}
-
-              {/* 数据管理 */}
-              <button
-                onClick={() => setShowDataManager(!showDataManager)}
-                className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
-              >
-                <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
-                  <Download size={14} /> 数据管理
-                </span>
-                <ChevronDown
-                  size={16}
-                  className={`text-zinc-400 transition-transform ${showDataManager ? "rotate-180" : ""
-                    }`}
-                />
-              </button>
-
-              <AnimatePresence>
-                {showDataManager && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-3">
-                      <button
-                        type="button"
-                        onClick={onExport}
-                        disabled={exportLoading || importLoading}
-                        className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Download size={16} />
-                        {exportLoading ? "导出中..." : "导出数据（JSON）"}
-                      </button>
-
-                      <div className="w-full">
-                        <label className="w-full flex items-center justify-center gap-2 bg-white hover:bg-zinc-100 border border-zinc-200 rounded-lg py-2.5 text-sm text-zinc-700 transition-colors cursor-pointer">
-                          <Upload size={16} />
-                          {importLoading ? "导入中..." : "导入数据（覆盖当前账号）"}
-                          <input
-                            type="file"
-                            accept="application/json"
-                            className="hidden"
-                            disabled={exportLoading || importLoading}
-                            onChange={(e) =>
-                              onImportFile(e.target.files?.[0])
-                            }
-                          />
-                        </label>
-                        <p className="text-xs text-zinc-500 mt-2 leading-relaxed">
-                          导入会清空当前账号的全部聊天记录与个人设置，然后按文件内容重建。
-                          图片仅导入文件里保存的 URL/parts，不包含二进制图片。
-                        </p>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
-    <ConfirmModal
-      open={showConfirmModal}
-      onClose={() => {
-        setShowConfirmModal(false);
-        setPendingImportFile(null);
-      }}
-      onConfirm={() => {
-        setShowConfirmModal(false);
-        confirmImport();
-      }}
-      title="确认导入"
-      message="导入会覆盖当前账号的所有聊天记录与个人设置，且不可撤销。是否继续？"
-      confirmText="确定"
-      cancelText="取消"
-      danger
-    />
     <ConfirmModal
       open={showAgentConfirmModal}
       onClose={() => setShowAgentConfirmModal(false)}

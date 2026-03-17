@@ -14,8 +14,6 @@ export default function PromptEditorModal({
   onSave,
   saving = false,
 }) {
-  if (!open) return null;
-
   return (
     <AnimatePresence>
       {open && (

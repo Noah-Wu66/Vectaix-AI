@@ -151,8 +151,6 @@ export default function UserManagementModal({ open, onClose }) {
     });
   };
 
-  if (!open) return null;
-
   return (
     <>
       <AnimatePresence>

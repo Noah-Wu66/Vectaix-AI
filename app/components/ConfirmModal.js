@@ -53,8 +53,6 @@ export default function ConfirmModal({
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [open, isProcessing, handleConfirm, handleCancel]);
 
-    if (!open) return null;
-
     return (
         <AnimatePresence>
             {open && (
