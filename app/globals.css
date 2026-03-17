@@ -297,6 +297,12 @@ h6 {
   vertical-align: middle;
 }
 
+.prose .table-cell-inner {
+  display: inline-block;
+  max-width: 100%;
+  text-align: left;
+}
+
 @media (max-width: 768px) {
   .prose .table-scroll-wrapper {
     margin-left: -0.25rem;

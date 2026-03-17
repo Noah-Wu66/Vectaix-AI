@@ -77,6 +77,16 @@ export default function Markdown({
               <table {...props}>{children}</table>
             </div>
           ),
+          th: ({ children, ...props }) => (
+            <th {...props}>
+              <div className="table-cell-inner">{children}</div>
+            </th>
+          ),
+          td: ({ children, ...props }) => (
+            <td {...props}>
+              <div className="table-cell-inner">{children}</div>
+            </td>
+          ),
           code: ({ node, className, children, inline, ...props }) => {
             // inline prop is passed by react-markdown for inline code
             // For code blocks without language, className is undefined but inline is false
