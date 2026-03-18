@@ -6,7 +6,6 @@ import { rateLimit, getClientIP } from "@/lib/rateLimit";
 import { AGENT_MODEL_ID } from "@/lib/shared/models";
 import { isNonEmptyString } from "@/app/api/chat/utils";
 import { runAgentRuntimeV2 } from "@/lib/server/agent/runtimeV2";
-import { buildAgentMessageMeta } from "@/lib/server/agent/runHelpers";
 import { parseSeedThinkingLevel } from "@/lib/server/chat/requestConfig";
 
 export const runtime = "nodejs";
@@ -45,46 +44,20 @@ function buildUserMessageParts({ prompt, images, attachments }) {
   return parts;
 }
 
-function buildHistoryMessage(message) {
-  if (!message || typeof message !== "object") return null;
-  if (message.role !== "user" && message.role !== "model") return null;
-  const parts = Array.isArray(message.parts)
-    ? message.parts.map((part) => (part?.toObject ? part.toObject() : part)).filter(Boolean)
-    : [];
-  const content = typeof message.content === "string" ? message.content : "";
-  return {
-    role: message.role,
-    content,
-    parts,
-  };
+function buildConversationTitle(prompt, attachments) {
+  const promptText = isNonEmptyString(prompt) ? prompt.trim() : "";
+  if (promptText) return promptText.length > 30 ? `${promptText.slice(0, 30)}...` : promptText;
+  const firstAttachment = Array.isArray(attachments) ? attachments[0] : null;
+  if (firstAttachment?.name) return `附件：${firstAttachment.name}`;
+  return "New Chat";
 }
 
-async function loadConversationHistory({
-  conversationId,
-  userId,
-  historyLimit,
-  excludeRunId = "",
-}) {
-  const conv = await Conversation.findOne({ _id: conversationId, userId }).select("messages");
-  if (!conv) return [];
-
-  const normalized = Array.isArray(conv.messages)
-    ? conv.messages
-      .map((item) => (item?.toObject ? item.toObject() : item))
-      .filter((item) => item?.agentRun?.runId !== excludeRunId)
-      .map(buildHistoryMessage)
-      .filter(Boolean)
-    : [];
-
-  return historyLimit > 0 ? normalized.slice(-historyLimit) : normalized;
-}
-
-function createTimelineStepFromAgentEvent(step) {
+function buildTimelineStep(step) {
   if (!step || typeof step !== "object") return null;
   return {
-    id: step.id,
-    kind: step.kind || "thought",
-    status: step.status || "done",
+    id: typeof step.id === "string" ? step.id : "",
+    kind: typeof step.kind === "string" ? step.kind : "thought",
+    status: typeof step.status === "string" ? step.status : "done",
     title: typeof step.title === "string" ? step.title : "",
     content: typeof step.content === "string" ? step.content : "",
     message: typeof step.message === "string" ? step.message : "",
@@ -92,100 +65,19 @@ function createTimelineStepFromAgentEvent(step) {
   };
 }
 
-function pushOrReplaceTimelineStep(timeline, nextStep) {
-  if (!nextStep?.id) {
-    timeline.push(nextStep);
-    return timeline;
-  }
-  const next = Array.isArray(timeline) ? timeline.slice() : [];
-  const index = next.findIndex((item) => item?.id === nextStep.id);
-  if (index >= 0) {
-    next[index] = { ...next[index], ...nextStep };
+function upsertTimelineStep(list, step) {
+  const next = Array.isArray(list) ? list.slice() : [];
+  if (!step?.id) {
+    next.push(step);
     return next;
   }
-  next.push(nextStep);
+  const index = next.findIndex((item) => item?.id === step.id);
+  if (index >= 0) {
+    next[index] = { ...next[index], ...step };
+    return next;
+  }
+  next.push(step);
   return next;
-}
-
-function buildStoredAgentMessageContent(status, fullText, latestAgentRun) {
-  if (status === "awaiting_approval") {
-    return latestAgentRun?.approvalReason || "Vectaix Agent 已暂停，等待你的确认。";
-  }
-  if (status === "waiting_continue") {
-    return fullText || "任务处理中，系统将继续下一轮执行。";
-  }
-  if (status === "cancelled") {
-    return "任务已取消。";
-  }
-  if (status === "failed") {
-    return latestAgentRun?.failureReason || latestAgentRun?.lastError || "任务执行失败。";
-  }
-  return fullText || "任务已完成。";
-}
-
-function buildStoredAgentMessage({
-  messageId,
-  content,
-  citations,
-  timeline,
-  latestAgentRun,
-}) {
-  return {
-    id: messageId,
-    role: "model",
-    content,
-    type: "text",
-    parts: [{ text: content }],
-    citations: citations.length > 0 ? citations : null,
-    thinkingTimeline: timeline,
-    agentRun: latestAgentRun || undefined,
-  };
-}
-
-async function upsertAgentMessage({
-  conversationId,
-  userId,
-  messageId,
-  runId,
-  message,
-  append,
-}) {
-  const conv = await Conversation.findOne({ _id: conversationId, userId }).select("messages");
-  if (!conv) return null;
-  const nextMessages = Array.isArray(conv.messages)
-    ? conv.messages.map((item) => (item?.toObject ? item.toObject() : item))
-    : [];
-
-  const targetIndex = runId
-    ? nextMessages.findIndex((item) => item?.agentRun?.runId === runId)
-    : -1;
-
-  if (append || targetIndex < 0) {
-    if (!append) {
-      return conv;
-    }
-    nextMessages.push(message);
-  } else {
-    const prevMessage = nextMessages[targetIndex] || {};
-    const prevTimeline = Array.isArray(prevMessage?.thinkingTimeline) ? prevMessage.thinkingTimeline : [];
-    const nextTimeline = Array.isArray(message?.thinkingTimeline) ? message.thinkingTimeline : [];
-    const mergedTimeline = nextTimeline.reduce(
-      (acc, step) => pushOrReplaceTimelineStep(acc, step),
-      prevTimeline.slice()
-    );
-    nextMessages[targetIndex] = {
-      ...prevMessage,
-      ...message,
-      id: prevMessage?.id || messageId || message.id,
-      thinkingTimeline: mergedTimeline,
-    };
-  }
-
-  return Conversation.findOneAndUpdate(
-    { _id: conversationId, userId },
-    { $set: { messages: nextMessages, updatedAt: Date.now() } },
-    { new: true }
-  );
 }
 
 export async function POST(req) {
@@ -213,13 +105,7 @@ export async function POST(req) {
       settings,
       userMessageId,
       modelMessageId,
-      runId,
-      resume,
-      approvalDecision,
-      executionMode,
-      skipConversationWrite,
     } = body || {};
-    const isBackgroundMode = executionMode === "background" || skipConversationWrite === true;
 
     if (model !== AGENT_MODEL_ID) {
       return Response.json({ error: "当前接口仅支持 Agent 模型" }, { status: 400 });
@@ -227,6 +113,10 @@ export async function POST(req) {
     if (!Array.isArray(history)) {
       return Response.json({ error: "history must be an array" }, { status: 400 });
     }
+    if (mode === "regenerate" || mode === "continue" || mode === "approve") {
+      return Response.json({ error: "Agent 模式已改为当前页同步执行，不再支持继续执行或后台恢复" }, { status: 400 });
+    }
+
     try {
       parseSeedThinkingLevel(config?.thinkingLevel);
     } catch (error) {
@@ -271,39 +161,8 @@ export async function POST(req) {
       return Response.json({ error: "historyLimit invalid" }, { status: 400 });
     }
 
-    let currentConversationId = conversationId;
-    const isContinueMode = (mode === "continue" || resume === true) && isNonEmptyString(runId);
-    const isApproveMode = (mode === "approve" || approvalDecision === "approved" || approvalDecision === true) && isNonEmptyString(runId);
-    const isResume = isContinueMode || isApproveMode;
-    if (mode === "regenerate") {
-      return Response.json({ error: "Agent 模式不支持重新生成或编辑并重新生成" }, { status: 400 });
-    }
-
-    if (!currentConversationId && !isResume && !isBackgroundMode) {
-      const titleSource = isNonEmptyString(prompt)
-        ? prompt
-        : (Array.isArray(config?.attachments) && config.attachments[0]?.name
-          ? `附件：${config.attachments[0].name}`
-          : "New Chat");
-      const title = titleSource.length > 30 ? `${titleSource.substring(0, 30)}...` : titleSource;
-      const newConv = await Conversation.create({
-        userId: auth.userId,
-        title,
-        model: AGENT_MODEL_ID,
-        settings,
-        messages: [],
-      });
-      currentConversationId = newConv._id.toString();
-    }
-
-    if (!currentConversationId) {
-      return Response.json({ error: "conversationId missing" }, { status: 400 });
-    }
-
-    let effectiveHistoryMessages = [];
-    let currentPrompt = typeof prompt === "string" ? prompt : "";
-    let currentAttachments = Array.isArray(config?.attachments) ? config.attachments : [];
-    let currentImages = Array.isArray(config?.images)
+    const currentAttachments = Array.isArray(config?.attachments) ? config.attachments : [];
+    const currentImages = Array.isArray(config?.images)
       ? config.images
         .filter((item) => item?.url)
         .map((item) => ({
@@ -312,79 +171,70 @@ export async function POST(req) {
         }))
       : [];
 
-    if (!isResume) {
-      effectiveHistoryMessages = isBackgroundMode
-        ? history
-            .map(buildHistoryMessage)
-            .filter(Boolean)
-            .slice(limit > 0 ? -limit : 0)
-        : await loadConversationHistory({
-            conversationId: currentConversationId,
-            userId: auth.userId,
-            historyLimit: limit,
-          });
+    const userMessageParts = buildUserMessageParts({
+      prompt: typeof prompt === "string" ? prompt : "",
+      images: currentImages,
+      attachments: currentAttachments,
+    });
 
-      const userMessageParts = buildUserMessageParts({
-        prompt: currentPrompt,
-        images: currentImages,
-        attachments: currentAttachments,
-      });
-
-      if (userMessageParts.length === 0) {
-        return Response.json({ error: "请至少输入内容或上传附件" }, { status: 400 });
-      }
-
-      if (!isBackgroundMode) {
-        await Conversation.findOneAndUpdate(
-          { _id: currentConversationId, userId: auth.userId },
-          {
-            $push: {
-              messages: {
-                id: userMessageId,
-                role: "user",
-                content: currentPrompt,
-                type: "parts",
-                parts: userMessageParts,
-              },
-            },
-            updatedAt: Date.now(),
-          }
-        );
-      }
-    } else {
-      effectiveHistoryMessages = await loadConversationHistory({
-        conversationId: currentConversationId,
-        userId: auth.userId,
-        historyLimit: limit,
-        excludeRunId: runId || "",
-      });
+    if (userMessageParts.length === 0) {
+      return Response.json({ error: "请至少输入内容或上传附件" }, { status: 400 });
     }
+
+    let currentConversationId = conversationId;
+    if (!currentConversationId) {
+      const newConv = await Conversation.create({
+        userId: auth.userId,
+        title: buildConversationTitle(prompt, currentAttachments),
+        model: AGENT_MODEL_ID,
+        settings,
+        messages: [],
+      });
+      currentConversationId = newConv._id.toString();
+    }
+
+    const userMessage = {
+      id: typeof userMessageId === "string" && userMessageId ? userMessageId : `msg_${Date.now()}_user`,
+      role: "user",
+      content: typeof prompt === "string" ? prompt : "",
+      type: "parts",
+      parts: userMessageParts,
+    };
+
+    await Conversation.findOneAndUpdate(
+      { _id: currentConversationId, userId: auth.userId },
+      {
+        $push: { messages: userMessage },
+        updatedAt: Date.now(),
+      },
+      { new: true }
+    );
+
+    const effectiveHistoryMessages = (limit > 0 ? history.slice(-limit) : history)
+      .filter((message) => message?.role === "user" || message?.role === "model");
 
     const encoder = new TextEncoder();
     let timeline = [];
     let citations = [];
     let fullText = "";
-    let latestAgentRun = null;
+    let fullThought = "";
 
     const responseStream = new ReadableStream({
       async start(controller) {
         const sendEvent = (payload) => {
           if (payload?.type === "text" && typeof payload.content === "string") {
             fullText += payload.content;
+          } else if (payload?.type === "thought" && typeof payload.content === "string") {
+            fullThought += payload.content;
           } else if (payload?.type === "citations" && Array.isArray(payload.citations)) {
             citations = payload.citations;
-          } else if (payload?.type === "agent_status") {
-            latestAgentRun = {
-              ...(latestAgentRun || {}),
-              ...(payload || {}),
-            };
           } else if (payload?.type === "agent_step") {
-            const step = createTimelineStepFromAgentEvent(payload.step);
+            const step = buildTimelineStep(payload.step);
             if (step) {
-              timeline = pushOrReplaceTimelineStep(timeline, step);
+              timeline = upsertTimelineStep(timeline, step);
             }
           } else if (payload?.type === "search_start") {
-            timeline = pushOrReplaceTimelineStep(timeline, {
+            timeline = upsertTimelineStep(timeline, {
               id: `search_${payload.round || Date.now()}`,
               kind: "search",
               status: "running",
@@ -392,16 +242,16 @@ export async function POST(req) {
               title: "联网搜索中",
             });
           } else if (payload?.type === "search_result") {
-            timeline = pushOrReplaceTimelineStep(timeline, {
+            timeline = upsertTimelineStep(timeline, {
               id: `search_${payload.round || Date.now()}`,
               kind: "search",
               status: "done",
               query: payload.query || "",
               title: "联网搜索完成",
-              resultCount: Array.isArray(payload.results) ? payload.results.length : 0,
+              message: Array.isArray(payload.results) ? `共 ${payload.results.length} 条结果` : "",
             });
           } else if (payload?.type === "search_error") {
-            timeline = pushOrReplaceTimelineStep(timeline, {
+            timeline = upsertTimelineStep(timeline, {
               id: `search_error_${payload.round || Date.now()}`,
               kind: "search",
               status: "error",
@@ -421,41 +271,33 @@ export async function POST(req) {
             userId: auth.userId,
             conversationId: currentConversationId,
             model,
-            prompt: currentPrompt,
+            prompt: typeof prompt === "string" ? prompt : "",
             historyMessages: effectiveHistoryMessages,
             config,
             attachments: currentAttachments,
             images: currentImages,
-            messageId: modelMessageId,
-            runId,
-            resume: isResume,
-            approvalDecision: isApproveMode ? "approved" : approvalDecision,
             sendEvent,
           });
 
-          const finalAgentRun = latestAgentRun || buildAgentMessageMeta(result.run, {
-            status: result.status,
-            executionState: result.run?.executionState,
-            canResume: result.status === "waiting_continue",
-          });
-          const storedContent = buildStoredAgentMessageContent(result.status, fullText, finalAgentRun);
+          const content = result?.finalAnswer || fullText || "任务已完成。";
+          const message = {
+            id: typeof modelMessageId === "string" && modelMessageId ? modelMessageId : `msg_${Date.now()}_model`,
+            role: "model",
+            content,
+            type: "text",
+            parts: [{ text: content }],
+            thought: fullThought || "",
+            citations: citations.length > 0 ? citations : null,
+            thinkingTimeline: timeline,
+          };
 
-          if (!isBackgroundMode) {
-            await upsertAgentMessage({
-              conversationId: currentConversationId,
-              userId: auth.userId,
-              messageId: modelMessageId,
-              runId: result.run?._id?.toString?.() || finalAgentRun?.runId,
-              append: !isResume,
-              message: buildStoredAgentMessage({
-                messageId: modelMessageId,
-                content: storedContent,
-                citations,
-                timeline,
-                latestAgentRun: finalAgentRun,
-              }),
-            });
-          }
+          await Conversation.findOneAndUpdate(
+            { _id: currentConversationId, userId: auth.userId },
+            {
+              $push: { messages: message },
+              updatedAt: Date.now(),
+            }
+          );
 
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
@@ -470,15 +312,15 @@ export async function POST(req) {
       },
     });
 
-    const headers = {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-      "X-Conversation-Id": currentConversationId,
-    };
-
-    return new Response(responseStream, { headers });
+    return new Response(responseStream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+        "X-Conversation-Id": currentConversationId,
+      },
+    });
   } catch (error) {
     console.error("Agent API Error:", {
       message: error?.message,

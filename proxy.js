@@ -18,7 +18,7 @@ function buildCsp(nonce) {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob: https: https://blob.vercel-storage.com https://public.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
-    "connect-src 'self' https://blob.vercel-storage.com https://public.blob.vercel-storage.com https://*.pusher.com wss://*.pusher.com",
+    "connect-src 'self' https://blob.vercel-storage.com https://public.blob.vercel-storage.com",
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",

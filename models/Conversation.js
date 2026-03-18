@@ -13,8 +13,6 @@ const MessageSchema = new mongoose.Schema({
   // - image parts: { inlineData: { mimeType, url }, thoughtSignature? }
   parts: { type: [mongoose.Schema.Types.Mixed] },
   councilExperts: { type: [mongoose.Schema.Types.Mixed] },
-  agentRun: { type: mongoose.Schema.Types.Mixed },
-  chatRun: { type: mongoose.Schema.Types.Mixed },
   searchContextTokens: { type: Number },
   createdAt: { type: Date, default: Date.now }
 });

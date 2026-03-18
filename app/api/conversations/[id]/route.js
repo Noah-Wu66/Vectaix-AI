@@ -6,12 +6,6 @@ import {
   isValidConversationId,
   updateConversationForUser,
 } from "@/lib/server/conversations/service";
-import {
-  publishConversationRemove,
-  publishConversationUpsert,
-  publishMessageRemove,
-  publishMessageUpsert,
-} from "@/lib/server/realtime/publishers";
 
 const MAX_REQUEST_BYTES = 2_000_000;
 
@@ -55,7 +49,6 @@ export async function DELETE(req, context) {
   }
 
   await deleteConversationForUser(id, user.userId);
-  await publishConversationRemove({ conversationId: id, userId: user.userId });
   return Response.json({ success: true });
 }
 
@@ -81,43 +74,10 @@ export async function PUT(req, context) {
   }
 
   try {
-    const previousConversation = await getConversationForUser(id, user.userId);
-    if (!previousConversation) {
-      return Response.json({ error: "Not found" }, { status: 404 });
-    }
-
     const conversation = await updateConversationForUser(id, user.userId, body);
     const nextConversation = conversation?.toObject?.() || conversation;
-
-    await publishConversationUpsert({
-      conversationId: id,
-      userId: user.userId,
-      conversation: nextConversation,
-    });
-
-    if (Array.isArray(body?.messages)) {
-      const previousIds = new Set(
-        (Array.isArray(previousConversation?.messages) ? previousConversation.messages : [])
-          .map((message) => (typeof message?.id === "string" ? message.id : ""))
-          .filter(Boolean),
-      );
-      const nextIds = new Set(
-        (Array.isArray(nextConversation?.messages) ? nextConversation.messages : [])
-          .map((message) => (typeof message?.id === "string" ? message.id : ""))
-          .filter(Boolean),
-      );
-
-      const removedMessageIds = [...previousIds].filter((messageId) => !nextIds.has(messageId));
-      await Promise.all([
-        ...removedMessageIds.map((messageId) => publishMessageRemove({ conversationId: id, messageId })),
-        ...(Array.isArray(nextConversation?.messages) ? nextConversation.messages : []).map((message) => (
-          publishMessageUpsert({
-            conversationId: id,
-            userId: user.userId,
-            message,
-          })
-        )),
-      ]);
+    if (!nextConversation) {
+      return Response.json({ error: "Not found" }, { status: 404 });
     }
 
     return Response.json({ conversation: nextConversation });

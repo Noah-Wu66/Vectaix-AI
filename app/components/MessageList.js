@@ -72,9 +72,6 @@ export default function MessageList({
   onDeleteModelMessage,
   onDeleteUserMessage,
   onRegenerateModelMessage,
-  onContinueAgentRun,
-  onApproveAgentRun,
-  onRejectAgentRun,
   onStartEdit,
   userAvatar,
 }) {
@@ -92,17 +89,7 @@ export default function MessageList({
   const toast = useToast();
   const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
   const hasStreamingContent = messages.some((message) => (message?.isStreaming && !message?.isWaitingFirstChunk) || message?.isSearching);
-  const hasActiveConversationRun = messages.some((message) => {
-    const chatRunStatus = String(message?.chatRun?.status || "");
-    const agentRunStatus = String(message?.agentRun?.status || "");
-    return (
-      message?.isStreaming === true ||
-      chatRunStatus === "queued" ||
-      chatRunStatus === "running" ||
-      agentRunStatus === "queued" ||
-      agentRunStatus === "running"
-    );
-  });
+  const hasActiveConversationRun = messages.some((message) => message?.isStreaming === true);
 
   useEffect(() => {
     prevMessagesRef.current = messages;
@@ -333,19 +320,6 @@ export default function MessageList({
             && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool");
           const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
           const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
-          const chatRun = msg?.chatRun && typeof msg.chatRun === "object" ? msg.chatRun : null;
-          const chatRunStatus = typeof chatRun?.status === "string" ? chatRun.status : "";
-          const chatRunActive = chatRunStatus === "queued" || chatRunStatus === "running";
-          const agentRun = msg?.agentRun && typeof msg.agentRun === "object" ? msg.agentRun : null;
-          const agentCanResume = agentRun?.canResume === true && typeof agentRun?.runId === "string" && agentRun.runId;
-          const agentExecutionState = typeof agentRun?.executionState === "string" ? agentRun.executionState : agentRun?.status;
-          const agentNeedsApproval = agentExecutionState === "awaiting_approval";
-          const agentIsRunning = Boolean(agentRun)
-            && !agentNeedsApproval
-            && agentExecutionState !== "waiting_continue"
-            && agentRun?.status !== "failed"
-            && agentRun?.status !== "cancelled"
-            && agentRun?.status !== "completed";
           const isPendingOnlyModelMessage = msg.role === "model"
             && !msg.thought
             && !hasVisibleContent
@@ -355,7 +329,7 @@ export default function MessageList({
             && !hasThinkingTimeline
             && !hasCouncilExpertStates
             && !hasCouncilSummaryState
-            && (msg.isWaitingFirstChunk || chatRunActive || agentIsRunning);
+            && msg.isWaitingFirstChunk;
           // 跳过等待首个内容且没有任何可显示内容的 model 消息（但搜索中的消息不跳过）
           if (isPendingOnlyModelMessage) {
             return null;
@@ -379,12 +353,12 @@ export default function MessageList({
                   <span className="text-xs text-zinc-400 font-medium">你</span>
                 </div>
               )}
-              {msg.role === "model" && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || chatRunActive) && (
+              {msg.role === "model" && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState) && (
                 <div className="flex items-center gap-1.5">
                   <AIAvatar
                     model={model}
                     size={28}
-                    animate={(isCouncilModel(model) && (msg.isStreaming || chatRunActive)) || (model === AGENT_MODEL_ID && agentIsRunning) || chatRunActive}
+                    animate={msg.isStreaming}
                   />
                   <span className="text-xs text-zinc-400 font-medium">
                     {CHAT_MODELS.find((m) => m.id === model)?.name}
@@ -659,33 +633,6 @@ export default function MessageList({
                           </>
                         ) : msg.role === "model" ? (
                           <>
-                            {agentNeedsApproval ? (
-                              <button
-                                type="button"
-                                onClick={() => onApproveAgentRun?.(i)}
-                                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
-                              >
-                                批准继续
-                              </button>
-                            ) : null}
-                            {agentNeedsApproval ? (
-                              <button
-                                type="button"
-                                onClick={() => onRejectAgentRun?.(i)}
-                                className="rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-200"
-                              >
-                                拒绝
-                              </button>
-                            ) : null}
-                            {agentCanResume ? (
-                              <button
-                                type="button"
-                                onClick={() => onContinueAgentRun?.(i)}
-                                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
-                              >
-                                继续执行
-                              </button>
-                            ) : null}
                             <button
                               onClick={() => handleDeleteClick(i, "model")}
                               className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"

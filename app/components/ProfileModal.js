@@ -3,9 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Bot,
   ChevronDown,
-  RefreshCw,
   Lock,
   Settings,
   Palette,
@@ -20,7 +18,6 @@ import {
 import { upload } from "@vercel/blob/client";
 import { apiJson } from "@/lib/client/apiClient";
 import { useToast } from "./ToastProvider";
-import ConfirmModal from "./ConfirmModal";
 import UserManagementModal from "./UserManagementModal";
 
 export default function ProfileModal({
@@ -41,9 +38,7 @@ export default function ProfileModal({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
   const [showRouteSelector, setShowRouteSelector] = useState(false);
-  const [showAgentManager, setShowAgentManager] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
-  const [showAgentConfirmModal, setShowAgentConfirmModal] = useState(false);
 
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -53,16 +48,8 @@ export default function ProfileModal({
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeSaving, setRouteSaving] = useState(false);
-  const [agentLoading, setAgentLoading] = useState(false);
-  const [agentResetting, setAgentResetting] = useState(false);
   const [modelRoutes, setModelRoutes] = useState({ openai: "default", opus: "default" });
   const [savedModelRoutes, setSavedModelRoutes] = useState({ openai: "default", opus: "default" });
-  const [agentSandboxInfo, setAgentSandboxInfo] = useState({
-    provider: "",
-    agentRuntime: "",
-    parserRuntime: "",
-    currentSession: null,
-  });
   const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
     ? Number(completionSoundVolume)
     : 60;
@@ -112,12 +99,8 @@ export default function ProfileModal({
 
     const fetchAdminConfig = async () => {
       setRouteLoading(true);
-      setAgentLoading(true);
       try {
-        const [routesData, agentData] = await Promise.all([
-          apiJson("/api/admin/model-routes"),
-          apiJson("/api/admin/agent-sandbox"),
-        ]);
+        const routesData = await apiJson("/api/admin/model-routes");
 
         if (!cancelled) {
           const nextRoutes = {
@@ -126,12 +109,6 @@ export default function ProfileModal({
           };
           setModelRoutes(nextRoutes);
           setSavedModelRoutes(nextRoutes);
-          setAgentSandboxInfo({
-            provider: agentData?.provider || "Vercel Sandbox",
-            agentRuntime: agentData?.agentRuntime || "",
-            parserRuntime: agentData?.parserRuntime || "",
-            currentSession: agentData?.currentSession || null,
-          });
         }
       } catch (e) {
         if (!cancelled) {
@@ -140,7 +117,6 @@ export default function ProfileModal({
       } finally {
         if (!cancelled) {
           setRouteLoading(false);
-          setAgentLoading(false);
         }
       }
     };
@@ -174,23 +150,6 @@ export default function ProfileModal({
       toast.error(e?.message || "保存线路配置失败");
     } finally {
       setRouteSaving(false);
-    }
-  };
-
-  const resetCurrentAgentSession = async () => {
-    setAgentResetting(true);
-    try {
-      const data = await apiJson("/api/admin/agent-sandbox", { method: "POST" });
-      setAgentSandboxInfo((prev) => ({
-        ...prev,
-        currentSession: data?.currentSession || null,
-      }));
-      toast.success(data?.message || "当前 Agent 会话已重置");
-    } catch (e) {
-      toast.error(e?.message || "重置 Agent 会话失败");
-    } finally {
-      setAgentResetting(false);
-      setShowAgentConfirmModal(false);
     }
   };
 
@@ -453,76 +412,6 @@ export default function ProfileModal({
               {isAdmin && (
                 <>
                   <button
-                    onClick={() => setShowAgentManager(!showAgentManager)}
-                    className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
-                  >
-                    <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
-                      <Bot size={14} /> Agent 管理
-                    </span>
-                    <ChevronDown
-                      size={16}
-                      className={`text-zinc-400 transition-transform ${showAgentManager ? "rotate-180" : ""}`}
-                    />
-                  </button>
-
-                  <AnimatePresence>
-                    {showAgentManager && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
-                          <div className="space-y-1">
-                            <div className="text-xs text-zinc-500">这里管理 Agent 运行使用的 Vercel Sandbox 会话。</div>
-                            <div className="text-sm text-zinc-700 break-all">
-                              当前提供方：
-                              <code className="ml-1 rounded bg-white px-2 py-1 text-xs text-zinc-900 border border-zinc-200">
-                                {agentSandboxInfo.provider || "Vercel Sandbox"}
-                              </code>
-                            </div>
-                            <div className="text-sm text-zinc-700">
-                              Agent 运行时：
-                              <code className="ml-1 rounded bg-white px-2 py-1 text-xs text-zinc-900 border border-zinc-200">
-                                {agentSandboxInfo.agentRuntime || "未设置"}
-                              </code>
-                            </div>
-                            <div className="text-sm text-zinc-700">
-                              文档解析运行时：
-                              <code className="ml-1 rounded bg-white px-2 py-1 text-xs text-zinc-900 border border-zinc-200">
-                                {agentSandboxInfo.parserRuntime || "未设置"}
-                              </code>
-                            </div>
-                            <div className="text-xs text-zinc-500">
-                              {agentLoading
-                                ? "正在读取 Agent 配置..."
-                                : agentSandboxInfo.currentSession
-                                  ? `当前会话状态：${agentSandboxInfo.currentSession.status || "running"}`
-                                  : "当前账号没有活动中的 Agent 会话。"}
-                            </div>
-                            {agentSandboxInfo.currentSession?.lastConnectedAt && (
-                              <div className="text-xs text-zinc-500">
-                                最近连接时间：{new Date(agentSandboxInfo.currentSession.lastConnectedAt).toLocaleString("zh-CN")}
-                              </div>
-                            )}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setShowAgentConfirmModal(true)}
-                            disabled={agentLoading || agentResetting || !agentSandboxInfo.currentSession}
-                            className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-                          >
-                            <RefreshCw size={16} className={agentResetting ? "animate-spin" : ""} />
-                            {agentResetting ? "正在重置 Agent 会话..." : "重置当前 Agent 会话"}
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  <button
                     onClick={() => setShowRouteSelector(!showRouteSelector)}
                     className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
                   >
@@ -624,15 +513,6 @@ export default function ProfileModal({
         </motion.div>
       )}
     </AnimatePresence>
-    <ConfirmModal
-      open={showAgentConfirmModal}
-      onClose={() => setShowAgentConfirmModal(false)}
-      onConfirm={resetCurrentAgentSession}
-      title="重置当前 Agent 会话"
-      message="确定要重置当前账号最近一次 Agent 会话吗？重置后，下次执行会自动创建新的 Vercel Sandbox。"
-      confirmText={agentResetting ? "重置中..." : "开始重置"}
-      cancelText="取消"
-    />
     <UserManagementModal
       open={showUserManagement}
       onClose={() => setShowUserManagement(false)}

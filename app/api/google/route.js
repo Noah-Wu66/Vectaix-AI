@@ -115,8 +115,7 @@ export async function POST(req) {
             );
         }
 
-        const { prompt, model, config, history, historyLimit, conversationId, mode, messages, settings, userMessageId, modelMessageId, executionMode, skipConversationWrite } = body;
-        const isBackgroundMode = executionMode === "background" || skipConversationWrite === true;
+        const { prompt, model, config, history, historyLimit, conversationId, mode, messages, settings, userMessageId, modelMessageId } = body;
 
         if (!model || typeof model !== 'string') {
             return Response.json(
@@ -181,7 +180,7 @@ export async function POST(req) {
         const apiModel = resolveGeminiApiModel(model);
         const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-        if (user && !currentConversationId && !isBackgroundMode) {
+        if (user && !currentConversationId) {
             const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
             const newConv = await Conversation.create({
                 userId: user.userId,
@@ -350,7 +349,7 @@ export async function POST(req) {
 
         const geminiWebSearchRuntime = getWebSearchProviderRuntimeOptions('gemini');
 
-        if (user && !isRegenerateMode && !isBackgroundMode) {
+        if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
 
@@ -386,12 +385,10 @@ export async function POST(req) {
         const encoder = new TextEncoder();
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
-        if (!isBackgroundMode) {
-            try {
-                req?.signal?.addEventListener?.('abort', onAbort, { once: true });
-            } catch {
-                // ignore
-            }
+        try {
+            req?.signal?.addEventListener?.('abort', onAbort, { once: true });
+        } catch {
+            // ignore
         }
 
         const PADDING = ' '.repeat(2048);
@@ -448,7 +445,7 @@ export async function POST(req) {
                         sendEvent,
                         pushCitations,
                         sendSearchError,
-                        isClientAborted: isBackgroundMode ? (() => false) : (() => clientAborted),
+                        isClientAborted: () => clientAborted,
                         model,
                         conversationId: currentConversationId,
                         ...geminiWebSearchRuntime,
@@ -521,7 +518,7 @@ export async function POST(req) {
 
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
-                    if (user && currentConversationId && !isBackgroundMode) {
+                    if (user && currentConversationId) {
                         const writeCondition = writePermitTime
                             ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
                             : { _id: currentConversationId, userId: user.userId };
@@ -569,12 +566,10 @@ export async function POST(req) {
                         clearInterval(heartbeatTimer);
                         heartbeatTimer = null;
                     }
-                    if (!isBackgroundMode) {
-                        try {
-                            req?.signal?.removeEventListener?.('abort', onAbort);
-                        } catch {
-                            // ignore
-                        }
+                    try {
+                        req?.signal?.removeEventListener?.('abort', onAbort);
+                    } catch {
+                        // ignore
                     }
                 }
             }

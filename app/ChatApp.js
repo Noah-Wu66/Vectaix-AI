@@ -2,10 +2,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createChatAppActions } from "@/lib/client/chat/chatAppActions";
-import { getPusherClient, disconnectPusherClient } from "@/lib/client/realtime/pusherClient";
 import { useThemeMode } from "@/lib/client/hooks/useThemeMode";
 import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
-import { REALTIME_EVENTS, getConversationChannelName, getUserChannelName } from "@/lib/shared/realtime";
 import {
   AGENT_MODEL_ID,
   CHAT_MODELS,
@@ -24,8 +22,6 @@ import ConfirmModal from "./components/ConfirmModal";
 import ChatLayout from "./components/ChatLayout";
 
 const FONT_SIZE_CLASSES = { small: "text-size-small", medium: "text-size-medium", large: "text-size-large" };
-const CHAT_RUN_ACTIVE_STATUSES = new Set(["queued", "running"]);
-const AGENT_RUN_STREAMING_STATUSES = new Set(["queued", "running"]);
 const PENDING_MESSAGE_TEXTS = new Set(["正在处理中...", "Council 正在处理中..."]);
 
 function hasDisplayableModelProgress(message) {
@@ -66,25 +62,9 @@ function hasDisplayableModelProgress(message) {
   return false;
 }
 
-function hasActiveStreamingRun(message) {
-  if (!message || message.role !== "model") return false;
-  const chatRunStatus = String(message?.chatRun?.status || "");
-  const agentRunStatus = String(message?.agentRun?.status || "");
-  return CHAT_RUN_ACTIVE_STATUSES.has(chatRunStatus) || AGENT_RUN_STREAMING_STATUSES.has(agentRunStatus);
-}
-
 function decorateConversationMessages(messages) {
   if (!Array.isArray(messages)) return [];
-  return messages.map((message) => {
-    if (!hasActiveStreamingRun(message)) return message;
-    const hasProgress = hasDisplayableModelProgress(message);
-    return {
-      ...message,
-      isStreaming: true,
-      isWaitingFirstChunk: !hasProgress,
-      isThinkingStreaming: !hasProgress || Boolean(message?.isThinkingStreaming),
-    };
-  });
+  return messages.map((message) => ({ ...message, isStreaming: false, isWaitingFirstChunk: false, isThinkingStreaming: false }));
 }
 
 function mergeConversationMessages(serverMessages, localMessages) {
@@ -239,33 +219,14 @@ export default function ChatApp() {
   const scrollRafRef = useRef(0);
   const chatAbortRef = useRef(null);
   const chatRequestLockRef = useRef(false);
-  const autoResumeRunIdRef = useRef(null);
   const syncSettingsTimeoutRef = useRef(null);
   const pendingSettingsRef = useRef({});
   const pendingConversationIdRef = useRef(null);
   const lastTextModelRef = useRef(GEMINI_FLASH_MODEL);
   const hasRestoredConversationRef = useRef(false);
   const currentConversationIdRef = useRef(null);
-  const messagesRef = useRef([]);
   const isStreamingRef = useRef(false);
-  const foregroundRunRef = useRef(null);
-  const agentHandoffRef = useRef({ runId: "", handedOff: false, handoffInFlight: false });
-  const userChannelRef = useRef(null);
-  const conversationChannelRef = useRef(null);
-  const realtimeHandlersRef = useRef({});
-  const fetchConversationsRef = useRef(null);
-  const loadConversationRef = useRef(null);
-  const isStreaming = messages.some((message) => {
-    const chatRunStatus = String(message?.chatRun?.status || "");
-    const agentRunStatus = String(message?.agentRun?.status || "");
-    return (
-      message?.isStreaming === true ||
-      chatRunStatus === "queued" ||
-      chatRunStatus === "running" ||
-      agentRunStatus === "queued" ||
-      agentRunStatus === "running"
-    );
-  });
+  const isStreaming = messages.some((message) => message?.isStreaming === true);
   isStreamingRef.current = isStreaming;
   const SCROLL_BOTTOM_THRESHOLD = 80;
   const lastSettingsErrorRef = useRef(null);
@@ -295,9 +256,6 @@ export default function ChatApp() {
   const handleAuthExpired = () => {
     stopOngoingChatWork();
     hasRestoredConversationRef.current = false;
-    disconnectPusherClient();
-    userChannelRef.current = null;
-    conversationChannelRef.current = null;
     setUser(null);
     setConversations([]);
     setCurrentConversationId(null);
@@ -364,10 +322,6 @@ export default function ChatApp() {
   }, [currentConversationId]);
 
   useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-
-  useEffect(() => {
     if (!user || hasRestoredConversationRef.current || conversations.length === 0) return;
     hasRestoredConversationRef.current = true;
     if (typeof window === "undefined") return;
@@ -394,58 +348,15 @@ export default function ChatApp() {
       }
       pendingSettingsRef.current = {};
       pendingConversationIdRef.current = null;
-      disconnectPusherClient();
-      userChannelRef.current = null;
-      conversationChannelRef.current = null;
     };
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const handlePageHide = () => {
-      if (!isStreamingRef.current) return;
-      void handoffForegroundRunToBackground({ keepalive: true });
-    };
-    window.addEventListener("pagehide", handlePageHide);
-    return () => {
-      window.removeEventListener("pagehide", handlePageHide);
-    };
-  }, []);
-
-  const sortConversations = (list, previousList = null) => {
+  const sortConversations = (list) => {
     if (!Array.isArray(list)) return [];
-    const previousIndexMap = new Map(
-      (Array.isArray(previousList) ? previousList : [])
-        .map((conversation, index) => [conversation?._id, index]),
-    );
-
     return list.slice().sort((a, b) => {
       const ap = a?.pinned ? 1 : 0;
       const bp = b?.pinned ? 1 : 0;
       if (ap !== bp) return bp - ap;
-
-      const aPrevIndex = previousIndexMap.get(a?._id);
-      const bPrevIndex = previousIndexMap.get(b?._id);
-      const aShouldKeepPosition = a?.hasActiveRun === true && Number.isInteger(aPrevIndex);
-      const bShouldKeepPosition = b?.hasActiveRun === true && Number.isInteger(bPrevIndex);
-
-      if (aShouldKeepPosition && bShouldKeepPosition && aPrevIndex !== bPrevIndex) {
-        return aPrevIndex - bPrevIndex;
-      }
-
-      if (aShouldKeepPosition && !bShouldKeepPosition) {
-        const bWasBeforeA = Number.isInteger(bPrevIndex) && bPrevIndex < aPrevIndex;
-        if (bWasBeforeA) return 1;
-        const bWasAfterA = Number.isInteger(bPrevIndex) && bPrevIndex > aPrevIndex;
-        if (bWasAfterA) return -1;
-      }
-
-      if (!aShouldKeepPosition && bShouldKeepPosition) {
-        const aWasBeforeB = Number.isInteger(aPrevIndex) && aPrevIndex < bPrevIndex;
-        if (aWasBeforeB) return -1;
-        const aWasAfterB = Number.isInteger(aPrevIndex) && aPrevIndex > bPrevIndex;
-        if (aWasAfterB) return 1;
-      }
 
       const at = new Date(a?.updatedAt || 0).getTime();
       const bt = new Date(b?.updatedAt || 0).getTime();
@@ -470,7 +381,7 @@ export default function ChatApp() {
       let nextConversations = [];
       setConversations((prev) => {
         nextConversations = data?.conversations
-          ? sortConversations(data.conversations, prev)
+          ? sortConversations(data.conversations)
           : [];
         return nextConversations;
       });
@@ -496,267 +407,6 @@ export default function ChatApp() {
       setComposerPrefill({ text: promptText, nonce: Date.now() });
     }
   };
-
-  const handleForegroundRunStart = (payload) => {
-    if (!payload || typeof payload !== "object") return;
-    foregroundRunRef.current = {
-      prompt: typeof payload.prompt === "string" ? payload.prompt : "",
-      model: typeof payload.model === "string" ? payload.model : "",
-      config: payload.config && typeof payload.config === "object" ? payload.config : {},
-      history: Array.isArray(payload.history) ? payload.history : [],
-      historyLimit: Number.isFinite(Number(payload.historyLimit)) ? Number(payload.historyLimit) : 0,
-      messageId: typeof payload.messageId === "string" ? payload.messageId : "",
-      handedOff: false,
-      handoffInFlight: false,
-    };
-  };
-
-  const handleForegroundRunComplete = () => {
-    foregroundRunRef.current = null;
-  };
-
-  const buildForegroundHandoffMessages = (activeMessageId) => {
-    const sourceMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
-    if (sourceMessages.length === 0) return [];
-    const nextMessages = sourceMessages.slice();
-    const lastMessage = nextMessages[nextMessages.length - 1];
-    const shouldDropLastModel = lastMessage?.role === "model" && (
-      lastMessage?.isStreaming === true ||
-      (typeof activeMessageId === "string" && activeMessageId && lastMessage?.id === activeMessageId)
-    );
-    if (shouldDropLastModel) {
-      nextMessages.pop();
-    }
-    return nextMessages;
-  };
-
-  const getActiveAgentRunForHandoff = () => {
-    const sourceMessages = Array.isArray(messagesRef.current) ? messagesRef.current : [];
-    for (let index = sourceMessages.length - 1; index >= 0; index -= 1) {
-      const message = sourceMessages[index];
-      if (message?.role !== "model") continue;
-      const runId = typeof message?.agentRun?.runId === "string" ? message.agentRun.runId : "";
-      const status = String(message?.agentRun?.status || "");
-      if (!runId || !AGENT_RUN_STREAMING_STATUSES.has(status)) {
-        continue;
-      }
-      return {
-        runId,
-        messageId: typeof message?.id === "string" ? message.id : "",
-      };
-    }
-    return null;
-  };
-
-  const getAgentHandoffState = (runId) => {
-    if (agentHandoffRef.current.runId !== runId) {
-      agentHandoffRef.current = {
-        runId,
-        handedOff: false,
-        handoffInFlight: false,
-      };
-    }
-    return agentHandoffRef.current;
-  };
-
-  const handoffForegroundRunToBackground = async (options = {}) => {
-    const keepalive = options?.keepalive === true;
-    const activeAgentRun = getActiveAgentRunForHandoff();
-    if (activeAgentRun?.runId) {
-      const handoffState = getAgentHandoffState(activeAgentRun.runId);
-      if (handoffState.handedOff === true || handoffState.handoffInFlight === true) {
-        return false;
-      }
-
-      handoffState.handedOff = true;
-      handoffState.handoffInFlight = !keepalive;
-
-      const requestInit = {
-        method: "POST",
-        credentials: "same-origin",
-        ...(keepalive ? { keepalive: true } : {}),
-      };
-
-      if (keepalive) {
-        fetch(`/api/runs/${activeAgentRun.runId}/handoff`, requestInit).catch(() => {});
-        return true;
-      }
-
-      try {
-        const response = await fetch(`/api/runs/${activeAgentRun.runId}/handoff`, requestInit);
-        if (!response.ok) {
-          throw new Error("handoff failed");
-        }
-        return true;
-      } catch {
-        handoffState.handedOff = false;
-        handoffState.handoffInFlight = false;
-        return false;
-      }
-    }
-
-    const activeRun = foregroundRunRef.current;
-    if (!activeRun || activeRun.handedOff === true || activeRun.handoffInFlight === true) {
-      return false;
-    }
-    if (!activeRun.model || activeRun.model === AGENT_MODEL_ID) {
-      return false;
-    }
-
-    const conversationId = currentConversationIdRef.current;
-    if (!conversationId) {
-      return false;
-    }
-
-    const snapshotMessages = buildForegroundHandoffMessages(activeRun.messageId);
-    if (snapshotMessages.length === 0 || snapshotMessages[snapshotMessages.length - 1]?.role !== "user") {
-      return false;
-    }
-
-    const requestBody = JSON.stringify({
-      prompt: activeRun.prompt,
-      model: activeRun.model,
-      config: activeRun.config,
-      history: activeRun.history,
-      historyLimit: activeRun.historyLimit,
-      conversationId,
-      messageId: activeRun.messageId || undefined,
-      mode: "regenerate",
-      messages: snapshotMessages,
-    });
-
-    foregroundRunRef.current = {
-      ...activeRun,
-      handedOff: true,
-      handoffInFlight: !keepalive,
-    };
-
-    const requestInit = {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: requestBody,
-      credentials: "same-origin",
-      ...(keepalive ? { keepalive: true } : {}),
-    };
-
-    if (keepalive) {
-      fetch("/api/runs", requestInit).catch(() => {});
-      return true;
-    }
-
-    try {
-      const response = await fetch("/api/runs", requestInit);
-      if (!response.ok) {
-        throw new Error("handoff failed");
-      }
-      return true;
-    } catch {
-      foregroundRunRef.current = {
-        ...activeRun,
-        handedOff: false,
-        handoffInFlight: false,
-      };
-      return false;
-    }
-  };
-
-  const applyConversationUpsertEvent = (payload) => {
-    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
-    if (!conversationId) return;
-    const nextConversation = {
-      _id: conversationId,
-      title: typeof payload?.title === "string" ? payload.title : "",
-      model: typeof payload?.model === "string" ? payload.model : "",
-      pinned: payload?.pinned === true,
-      updatedAt: typeof payload?.updatedAt === "string" ? payload.updatedAt : new Date().toISOString(),
-      hasActiveRun: payload?.hasActiveRun === true,
-    };
-    setConversations((prev) => {
-      const index = prev.findIndex((conversation) => conversation?._id === conversationId);
-      const merged = index >= 0
-        ? prev.map((conversation) => (
-            conversation?._id === conversationId
-              ? { ...conversation, ...nextConversation }
-              : conversation
-          ))
-        : [...prev, nextConversation];
-      return sortConversations(merged, prev);
-    });
-  };
-
-  const applyConversationRemoveEvent = (payload) => {
-    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
-    if (!conversationId) return;
-    setConversations((prev) => prev.filter((conversation) => conversation?._id !== conversationId));
-    if (currentConversationIdRef.current === conversationId) {
-      stopOngoingChatWork();
-      setCurrentConversationId(null);
-      setMessages([]);
-    }
-  };
-
-  const applyMessageUpsertEvent = (payload) => {
-    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
-    if (!conversationId || conversationId !== currentConversationIdRef.current) return;
-    const nextMessage = payload?.message && typeof payload.message === "object"
-      ? decorateConversationMessages([payload.message])[0]
-      : null;
-    if (!nextMessage?.id) return;
-    setMessages((prev) => {
-      const index = prev.findIndex((message) => message?.id === nextMessage.id);
-      const nextList = index >= 0
-        ? prev.map((message) => (message?.id === nextMessage.id ? nextMessage : message))
-        : [...prev, nextMessage];
-      return mergeConversationMessages(nextList, prev);
-    });
-  };
-
-  const applyMessageRemoveEvent = (payload) => {
-    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
-    const messageId = typeof payload?.messageId === "string" ? payload.messageId : "";
-    if (!conversationId || !messageId || conversationId !== currentConversationIdRef.current) return;
-    setMessages((prev) => prev.filter((message) => message?.id !== messageId));
-  };
-
-  const applyRunStatusEvent = (payload) => {
-    const conversationId = typeof payload?.conversationId === "string" ? payload.conversationId : "";
-    const messageId = typeof payload?.messageId === "string" ? payload.messageId : "";
-    if (!conversationId || !messageId || conversationId !== currentConversationIdRef.current) return;
-    setMessages((prev) => prev.map((message) => {
-      if (message?.id !== messageId) return message;
-      if (payload?.runType === "agent") {
-        return {
-          ...message,
-          agentRun: {
-            ...(message?.agentRun || {}),
-            runId: typeof payload?.runId === "string" ? payload.runId : message?.agentRun?.runId || "",
-            status: typeof payload?.status === "string" ? payload.status : message?.agentRun?.status || "",
-            executionState: typeof payload?.phase === "string" ? payload.phase : message?.agentRun?.executionState || "",
-            updatedAt: typeof payload?.updatedAt === "string" ? payload.updatedAt : message?.agentRun?.updatedAt || null,
-          },
-        };
-      }
-      return {
-        ...message,
-        chatRun: {
-          ...(message?.chatRun || {}),
-          runId: typeof payload?.runId === "string" ? payload.runId : message?.chatRun?.runId || "",
-          status: typeof payload?.status === "string" ? payload.status : message?.chatRun?.status || "",
-          phase: typeof payload?.phase === "string" ? payload.phase : message?.chatRun?.phase || "",
-          updatedAt: typeof payload?.updatedAt === "string" ? payload.updatedAt : message?.chatRun?.updatedAt || null,
-        },
-      };
-    }));
-  };
-
-  realtimeHandlersRef.current = {
-    applyConversationUpsertEvent,
-    applyConversationRemoveEvent,
-    applyMessageUpsertEvent,
-    applyMessageRemoveEvent,
-    applyRunStatusEvent,
-  };
-  fetchConversationsRef.current = fetchConversations;
 
   const actions = createChatAppActions({
     toast,
@@ -788,8 +438,6 @@ export default function ChatApp() {
     setEditingImage,
     completionSoundVolume,
     onSensitiveRefusal: handleSensitiveRefusal,
-    onForegroundRunStart: handleForegroundRunStart,
-    onForegroundRunComplete: handleForegroundRunComplete,
     onAuthExpired: handleAuthExpired,
     onConversationMissing: handleConversationMissing,
     onConversationActivity: () => {},
@@ -801,26 +449,6 @@ export default function ChatApp() {
     }
     wasStreamingRef.current = isStreaming;
   }, [isStreaming]);
-
-  useEffect(() => {
-    if (loading || model !== AGENT_MODEL_ID || !currentConversationId) return;
-    const index = messages.findIndex((msg) =>
-      msg?.role === "model" &&
-      msg?.agentRun?.status === "waiting_continue" &&
-      msg?.agentRun?.canResume === true &&
-      typeof msg?.agentRun?.runId === "string" &&
-      msg.agentRun.runId
-    );
-    if (index < 0) return;
-    const runId = messages[index]?.agentRun?.runId;
-    if (!runId || autoResumeRunIdRef.current === runId) return;
-    autoResumeRunIdRef.current = runId;
-    actions.continueAgentRun(index).finally(() => {
-      if (autoResumeRunIdRef.current === runId) {
-        autoResumeRunIdRef.current = null;
-      }
-    });
-  }, [actions, currentConversationId, loading, messages, model]);
 
   useEffect(() => {
     if (userInterruptedRef.current) return;
@@ -958,9 +586,6 @@ export default function ChatApp() {
     await fetch("/api/auth/me", { method: "DELETE" });
     stopOngoingChatWork();
     hasRestoredConversationRef.current = false;
-    disconnectPusherClient();
-    userChannelRef.current = null;
-    conversationChannelRef.current = null;
     setUser(null);
     setMessages([]);
     setConversations([]);
@@ -977,7 +602,6 @@ export default function ChatApp() {
   const loadConversation = async (id, options = {}) => {
     const silent = options?.silent === true;
     if (currentConversationIdRef.current && currentConversationIdRef.current !== id && isStreamingRef.current) {
-      await handoffForegroundRunToBackground();
       stopOngoingChatWork();
     }
     if (!silent) {
@@ -1089,98 +713,6 @@ export default function ChatApp() {
     }
   };
 
-  loadConversationRef.current = loadConversation;
-
-  useEffect(() => {
-    if (!user?.id) {
-      disconnectPusherClient();
-      userChannelRef.current = null;
-      return undefined;
-    }
-
-    const pusher = getPusherClient();
-    const userChannelName = getUserChannelName(user.id);
-    const channel = pusher.subscribe(userChannelName);
-    userChannelRef.current = channel;
-
-    const handleConversationUpsert = (payload) => {
-      realtimeHandlersRef.current.applyConversationUpsertEvent?.(payload);
-    };
-    const handleConversationRemove = (payload) => {
-      realtimeHandlersRef.current.applyConversationRemoveEvent?.(payload);
-    };
-    const handleStateChange = (states) => {
-      const current = states?.current;
-      const previous = states?.previous;
-      if (current === "connected" && previous && previous !== "connected") {
-        fetchConversationsRef.current?.();
-        const targetConversationId = currentConversationIdRef.current;
-        if (targetConversationId) {
-          loadConversationRef.current?.(targetConversationId, { silent: true });
-        }
-      }
-    };
-
-    channel.bind(REALTIME_EVENTS.conversationUpsert, handleConversationUpsert);
-    channel.bind(REALTIME_EVENTS.conversationRemove, handleConversationRemove);
-    pusher.connection.bind("state_change", handleStateChange);
-
-    return () => {
-      channel.unbind(REALTIME_EVENTS.conversationUpsert, handleConversationUpsert);
-      channel.unbind(REALTIME_EVENTS.conversationRemove, handleConversationRemove);
-      pusher.connection.unbind("state_change", handleStateChange);
-      pusher.unsubscribe(userChannelName);
-      userChannelRef.current = null;
-    };
-  }, [user?.id]);
-
-  useEffect(() => {
-    const pusher = user?.id ? getPusherClient() : null;
-    const previousChannel = conversationChannelRef.current;
-    if (previousChannel) {
-      previousChannel.unbind();
-    }
-    if (!pusher || !currentConversationId) {
-      if (previousChannel?.name) {
-        pusher?.unsubscribe(previousChannel.name);
-      }
-      conversationChannelRef.current = null;
-      return undefined;
-    }
-
-    if (previousChannel?.name) {
-      pusher.unsubscribe(previousChannel.name);
-    }
-
-    const conversationChannelName = getConversationChannelName(currentConversationId);
-    const channel = pusher.subscribe(conversationChannelName);
-    conversationChannelRef.current = channel;
-
-    const handleMessageUpsert = (payload) => {
-      realtimeHandlersRef.current.applyMessageUpsertEvent?.(payload);
-    };
-    const handleMessageRemove = (payload) => {
-      realtimeHandlersRef.current.applyMessageRemoveEvent?.(payload);
-    };
-    const handleRunStatus = (payload) => {
-      realtimeHandlersRef.current.applyRunStatusEvent?.(payload);
-    };
-
-    channel.bind(REALTIME_EVENTS.messageUpsert, handleMessageUpsert);
-    channel.bind(REALTIME_EVENTS.messageRemove, handleMessageRemove);
-    channel.bind(REALTIME_EVENTS.runStatus, handleRunStatus);
-
-    return () => {
-      channel.unbind(REALTIME_EVENTS.messageUpsert, handleMessageUpsert);
-      channel.unbind(REALTIME_EVENTS.messageRemove, handleMessageRemove);
-      channel.unbind(REALTIME_EVENTS.runStatus, handleRunStatus);
-      pusher.unsubscribe(conversationChannelName);
-      if (conversationChannelRef.current?.name === conversationChannelName) {
-        conversationChannelRef.current = null;
-      }
-    };
-  }, [currentConversationId, user?.id]);
-
   // 同步对话参数到数据库（防抖，累积多个设置变更）
   const syncConversationSettings = (settingsUpdate) => {
     if (!currentConversationId || isCouncilModel(model)) return;
@@ -1226,7 +758,6 @@ export default function ChatApp() {
 
   const startNewChat = async () => {
     userInterruptedRef.current = false;
-    await handoffForegroundRunToBackground();
     stopOngoingChatWork();
     setCurrentConversationId(null);
     setMessages([]);
@@ -1462,9 +993,6 @@ export default function ChatApp() {
           onDeleteModelMessage={actions.deleteModelMessage}
           onDeleteUserMessage={actions.deleteUserMessage}
           onRegenerateModelMessage={actions.regenerateModelMessage}
-          onContinueAgentRun={actions.continueAgentRun}
-          onApproveAgentRun={actions.approveAgentRun}
-          onRejectAgentRun={actions.rejectAgentRun}
           onStartEdit={actions.startEdit}
           userAvatar={avatar}
           onAvatarChange={setAvatar}

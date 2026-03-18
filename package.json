@@ -23,8 +23,6 @@
     "next": "16.1.1",
     "mammoth": "^1.9.1",
     "pdf-parse": "^1.1.1",
-    "pusher": "^5.2.0",
-    "pusher-js": "^8.4.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^9.0.0",
