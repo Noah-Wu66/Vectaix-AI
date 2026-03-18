@@ -7,6 +7,10 @@ import { ModelGlyph } from "./ModelVisuals";
 
 export default function ModelSelector({ model, onModelChange, ready = true }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
+  const [showOtherModels, setShowOtherModels] = useState(() => {
+    const current = ready ? CHAT_MODELS.find((m) => m.id === model) : null;
+    return current ? (current.provider !== "vectaix" && current.provider !== "council") : false;
+  });
   const visibleModels = CHAT_MODELS;
   const currentModel = ready ? CHAT_MODELS.find((m) => m.id === model) : null;
   const currentModelLabel = currentModel?.shortName || currentModel?.name || "模型";
@@ -97,12 +101,42 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               className="absolute bottom-full left-0 mb-2 w-[min(68vw,196px)] bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50"
             >
-              {MODEL_GROUP_ORDER.map((groupKey, index) => (
-                <div key={groupKey}>
-                  {index > 0 && <div className="my-1.5 border-t border-zinc-200" />}
-                  {renderModelGroup(groupKey, groupTitles[groupKey] || groupKey)}
-                </div>
-              ))}
+              <div key="vectaix">
+                {renderModelGroup("vectaix", groupTitles["vectaix"] || "Vectaix")}
+              </div>
+              <div className="my-1.5 border-t border-zinc-200" />
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowOtherModels(!showOtherModels);
+                }}
+                className="w-full px-3 py-1.5 flex items-center justify-between text-[10px] font-semibold text-zinc-400 tracking-wider hover:text-zinc-600 transition-colors"
+                type="button"
+              >
+                <span>其他模型</span>
+                <ChevronUp
+                  size={12}
+                  className={`transition-transform ${showOtherModels ? "" : "rotate-180"}`}
+                />
+              </button>
+              <AnimatePresence initial={false}>
+                {showOtherModels && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    {MODEL_GROUP_ORDER.filter((g) => g !== "vectaix").map((groupKey, index) => (
+                      <div key={groupKey}>
+                        {index > 0 && <div className="my-1.5 border-t border-zinc-200" />}
+                        {renderModelGroup(groupKey, groupTitles[groupKey] || groupKey)}
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           </>
         )}

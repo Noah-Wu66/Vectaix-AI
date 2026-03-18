@@ -17,6 +17,11 @@ const SystemConfigSchema = new mongoose.Schema({
       enum: ["default", "zenmux"],
       default: "default",
     },
+    gemini: {
+      type: String,
+      enum: ["default", "zenmux"],
+      default: "default",
+    },
   },
   updatedAt: {
     type: Date,
