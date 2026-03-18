@@ -494,6 +494,12 @@ export default function Composer({
           </button>
         </div>
 
+        {(loading || isStreaming || isWaitingForAI) && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
+            生成期间请勿新建对话或关闭当前页面，否则流程会被中断。
+          </div>
+        )}
+
         {isCouncilSelected && hasReachedCouncilRoundLimit && (
           <div className="text-xs text-zinc-500 px-1">
             {`Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，当前已到上限；如需继续，请新建对话。`}
