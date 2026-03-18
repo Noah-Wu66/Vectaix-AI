@@ -118,7 +118,6 @@ function normalizeCitations(value) {
     const citedText = normalizeString(item.cited_text, 1000);
     if (citedText) entry.cited_text = citedText;
     citations.push(entry);
-    if (citations.length >= 20) break;
   }
   return citations;
 }
