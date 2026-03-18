@@ -46,6 +46,12 @@ const MAX_RAW_MARKDOWN_CHARS = 20000;
 const MAX_FINDING_TEXT_CHARS = 1000;
 const HISTORY_USER_SUMMARY_CHARS = 500;
 const HISTORY_MODEL_SUMMARY_CHARS = 1200;
+const COUNCIL_TRIAGE_GREETING_PATTERNS = [
+  /^(你好|您好|嗨|哈喽|hi|hello|hey|在吗|早上好|中午好|下午好|晚上好)[\s!,.，。！？~]*$/i,
+  /^(谢谢|谢了|多谢|辛苦了|明白了|收到|好的|好的呢|ok|okay)[\s!,.，。！？~]*$/i,
+];
+const COUNCIL_TRIAGE_COMPLEX_HINT_PATTERN =
+  /(代码|编程|程序|脚本|报错|bug|错误|调试|分析|比较|对比|区别|优缺点|推荐|方案|策划|步骤|计划|原因|为什么|如何|怎么做|实现|设计|架构|优化|总结|复盘|写一篇|写个|生成|创作|文案|提示词|工作流|营销|研究|评估|审核|审查|review|debug|code)/i;
 
 export const COUNCIL_EXPERT_CONFIGS = getCouncilExpertConfigs();
 
@@ -265,6 +271,32 @@ function normalizeResponseText(value) {
     if (typeof value.content === "string") return value.content;
   }
   return "";
+}
+
+function isCouncilGreetingPrompt(text) {
+  return COUNCIL_TRIAGE_GREETING_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function isVerySimpleCouncilPrompt(text) {
+  if (!text) return false;
+  if (text.includes("\n")) return false;
+  if (text.length > 18) return false;
+  if (COUNCIL_TRIAGE_COMPLEX_HINT_PATTERN.test(text)) return false;
+
+  const sentenceParts = text
+    .split(/[，,。！？；;、]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (sentenceParts.length > 1) return false;
+
+  const latinTokens = text.match(/[A-Za-z0-9]+/g) || [];
+  if (latinTokens.length > 4) return false;
+
+  return true;
+}
+
+function shouldAllowCouncilDirectAnswer(text) {
+  return isCouncilGreetingPrompt(text) || isVerySimpleCouncilPrompt(text);
 }
 
 function extractResponsesText(payload) {
@@ -878,6 +910,9 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
   if (hasImages) return { needCouncil: true };
   const trimmed = typeof prompt === "string" ? prompt.trim() : "";
   if (!trimmed) return { needCouncil: true };
+  if (!shouldAllowCouncilDirectAnswer(trimmed)) {
+    return { needCouncil: true };
+  }
 
   assertConfigured(ARK_API_KEY, "ARK_API_KEY 未配置");
   throwIfAborted(signal);
@@ -891,23 +926,21 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
         maxTokens: TRIAGE_MAX_OUTPUT_TOKENS,
         thinkingLevel: "minimal",
         temperature: 0.3,
-        instructions: `你是 Council 路由判断器。Council 会并行调用三位专家模型讨论，开销大、速度慢。你的任务是判断用户消息是否真的需要 Council。
+        instructions: `你是 Council 路由判断器。Council 会并行调用三位专家模型讨论。你的判断必须非常保守，只有在用户消息明显属于“打招呼 / 非常简单的一句话小问题”时，才允许跳过专家。
 
-不需要 Council 的情况（直接回答）：
-- 打招呼、闲聊、问候（"你好"、"在吗"、"谢谢"等）
-- 简单事实查询（一句话能回答的常识）
-- 简单翻译、格式转换
-- 纯粹的情绪表达或感谢
-- 简短的跟进确认（"明白了"、"好的"、"还有别的吗"）
-- 简单指令（"帮我写个xxx"且 xxx 非常简短直白）
+只有以下两类，才可以不调用 Council（直接回答）：
+- 打招呼、问候、感谢、确认、寒暄，例如“你好”“在吗”“谢谢”“好的”
+- 非常简单的一句话小问题，并且满足：很短、没有分析要求、没有创作要求、没有专业判断要求、没有多步骤要求
 
-需要 Council 的情况（返回 needCouncil: true）：
-- 复杂的分析、比较、研究
-- 编程、调试、代码审查
-- 有争议或多角度的话题
-- 需要专业知识的深度讨论
-- 长文创作、策划方案
-- 任何你觉得不确定能一个人答好的问题
+下面这些一律必须调用 Council（返回 needCouncil: true）：
+- 任何分析、比较、解释、总结、推荐、评估、研究
+- 任何编程、调试、代码、脚本、报错、审查
+- 任何写作、创作、文案、策划、方案、提示词
+- 任何带明显专业判断的问题
+- 任何稍微复杂、稍微长一点、稍微不确定的问题
+- 只要你有一丝犹豫，就必须调用 Council
+
+你要默认“调用 Council”，而不是默认“跳过专家”。
 
 你必须返回 JSON，不要输出其他内容。
 如果不需要 Council，同时给出直接回答：
@@ -935,7 +968,12 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
     if (!jsonMatch) return { needCouncil: true };
 
     const parsed = JSON.parse(jsonMatch[0]);
-    if (parsed.needCouncil === false && typeof parsed.directAnswer === "string" && parsed.directAnswer.trim()) {
+    if (
+      parsed.needCouncil === false
+      && shouldAllowCouncilDirectAnswer(trimmed)
+      && typeof parsed.directAnswer === "string"
+      && parsed.directAnswer.trim()
+    ) {
       return { needCouncil: false, directAnswer: parsed.directAnswer.trim() };
     }
     return { needCouncil: true };
