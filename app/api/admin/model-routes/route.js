@@ -41,7 +41,11 @@ export async function PATCH(req) {
   }
 
   const normalizedRoutes = normalizeModelRoutes(body);
-  if (normalizedRoutes.openai !== body.openai || normalizedRoutes.opus !== body.opus) {
+  if (
+    normalizedRoutes.openai !== body.openai ||
+    normalizedRoutes.opus !== body.opus ||
+    normalizedRoutes.gemini !== body.gemini
+  ) {
     return Response.json({ error: "线路值无效" }, { status: 400 });
   }
 

@@ -405,11 +405,36 @@ function extractUpstreamErrorMessage(status, rawText) {
   return text.length > 600 ? `${text.slice(0, 600)}...` : text;
 }
 
-async function buildGeminiDecisionRunner(ai) {
+function createGeminiClient(providerConfig) {
+  if (providerConfig?.useVertexAI) {
+    // Zenmux Vertex AI 模式
+    return new GoogleGenAI({
+      apiKey: providerConfig.apiKey,
+      vertexai: true,
+      httpOptions: {
+        apiVersion: 'v1',
+        baseUrl: providerConfig.baseUrl,
+      },
+    });
+  }
+  // 默认 Google AI 模式
+  return new GoogleGenAI({ apiKey: providerConfig?.apiKey || process.env.GEMINI_API_KEY });
+}
+
+function getGeminiModelId(expertModelId, providerConfig) {
+  if (providerConfig?.useVertexAI) {
+    // Zenmux 需要加 google/ 前缀
+    return `google/${expertModelId}`;
+  }
+  return expertModelId;
+}
+
+async function buildGeminiDecisionRunner(ai, providerConfig) {
   return async ({ prompt, historyMessages, searchRounds }) => {
     const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
+    const modelId = getGeminiModelId(GEMINI_DECISION_MODEL, providerConfig);
     const result = await ai.models.generateContent({
-      model: GEMINI_DECISION_MODEL,
+      model: modelId,
       contents: [{ role: "user", parts: [{ text: userText }] }],
       config: {
         systemInstruction: { parts: [{ text: systemText }] },
@@ -601,9 +626,9 @@ async function collectSearchContext({
   };
 
   if (expert.provider === "gemini") {
-    assertConfigured(GEMINI_API_KEY, "GEMINI_API_KEY is not set");
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const decisionRunner = await buildGeminiDecisionRunner(ai);
+    const geminiConfig = providerRoutes.gemini;
+    const ai = createGeminiClient(geminiConfig);
+    const decisionRunner = await buildGeminiDecisionRunner(ai, geminiConfig);
     const { searchContextText } = await raceWithSignal(runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
@@ -672,9 +697,9 @@ async function collectSearchContext({
   throw new Error(`未知专家 provider：${expert.provider}`);
 }
 
-async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContextText, signal }) {
-  assertConfigured(GEMINI_API_KEY, "GEMINI_API_KEY is not set");
-  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
+  const ai = createGeminiClient(providerConfig);
+  const modelId = getGeminiModelId(expert.modelId, providerConfig);
   const parts = [{ text: prompt }];
   for (const image of imagePayloads) {
     parts.push({
@@ -690,7 +715,7 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
     searchContextText,
   });
   const result = await raceWithSignal(ai.models.generateContent({
-    model: expert.modelId,
+    model: modelId,
     contents: [{ role: "user", parts }],
     config: {
       systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -837,6 +862,7 @@ export async function runCouncilExpert({
         imagePayloads,
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
         searchContextText,
+        providerConfig: providerRoutes.gemini,
         signal,
       });
     } else if (expert.provider === "claude") {

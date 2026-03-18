@@ -48,8 +48,8 @@ export default function ProfileModal({
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeSaving, setRouteSaving] = useState(false);
-  const [modelRoutes, setModelRoutes] = useState({ openai: "default", opus: "default" });
-  const [savedModelRoutes, setSavedModelRoutes] = useState({ openai: "default", opus: "default" });
+  const [modelRoutes, setModelRoutes] = useState({ openai: "default", opus: "default", gemini: "default" });
+  const [savedModelRoutes, setSavedModelRoutes] = useState({ openai: "default", opus: "default", gemini: "default" });
   const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
     ? Number(completionSoundVolume)
     : 60;
@@ -60,7 +60,10 @@ export default function ProfileModal({
   }, [user?.email]);
 
   const avatarFileInputRef = useRef(null);
-  const hasRouteChanges = modelRoutes.openai !== savedModelRoutes.openai || modelRoutes.opus !== savedModelRoutes.opus;
+  const hasRouteChanges =
+    modelRoutes.openai !== savedModelRoutes.openai ||
+    modelRoutes.opus !== savedModelRoutes.opus ||
+    modelRoutes.gemini !== savedModelRoutes.gemini;
 
   const handleAvatarSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -106,6 +109,7 @@ export default function ProfileModal({
           const nextRoutes = {
             openai: routesData?.routes?.openai === "zenmux" ? "zenmux" : "default",
             opus: routesData?.routes?.opus === "zenmux" ? "zenmux" : "default",
+            gemini: routesData?.routes?.gemini === "zenmux" ? "zenmux" : "default",
           };
           setModelRoutes(nextRoutes);
           setSavedModelRoutes(nextRoutes);
@@ -142,6 +146,7 @@ export default function ProfileModal({
       const nextRoutes = {
         openai: data?.routes?.openai === "zenmux" ? "zenmux" : "default",
         opus: data?.routes?.opus === "zenmux" ? "zenmux" : "default",
+        gemini: data?.routes?.gemini === "zenmux" ? "zenmux" : "default",
       };
       setModelRoutes(nextRoutes);
       setSavedModelRoutes(nextRoutes);
@@ -471,6 +476,29 @@ export default function ProfileModal({
                                   onClick={() => setProviderRoute("opus", item.id)}
                                   disabled={routeLoading || routeSaving}
                                   className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.opus === item.id
+                                    ? "bg-zinc-600 text-white border-zinc-600"
+                                    : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                    } disabled:opacity-50`}
+                                >
+                                  {item.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">Gemini 线路</label>
+                            <div className="flex gap-2">
+                              {[
+                                { id: "default", label: "Google AI" },
+                                { id: "zenmux", label: "Zenmux" },
+                              ].map((item) => (
+                                <button
+                                  key={`gemini-${item.id}`}
+                                  type="button"
+                                  onClick={() => setProviderRoute("gemini", item.id)}
+                                  disabled={routeLoading || routeSaving}
+                                  className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.gemini === item.id
                                     ? "bg-zinc-600 text-white border-zinc-600"
                                     : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
                                     } disabled:opacity-50`}

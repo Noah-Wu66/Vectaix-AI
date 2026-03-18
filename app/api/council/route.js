@@ -20,6 +20,7 @@ import {
   runSeedCouncilSummary,
   runSeedTriage,
 } from "./councilHelpers";
+import { getModelRoutes } from "@/lib/modelRoutes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -179,7 +180,8 @@ export async function POST(req) {
 
   let providerRoutes;
   try {
-    providerRoutes = resolveCouncilProviderRoutes();
+    const savedRoutes = await getModelRoutes();
+    providerRoutes = resolveCouncilProviderRoutes(savedRoutes);
   } catch (error) {
     return Response.json({ error: error?.message || "模型线路配置错误" }, { status: 500 });
   }
