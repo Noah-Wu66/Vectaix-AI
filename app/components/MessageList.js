@@ -557,13 +557,14 @@ export default function MessageList({
                                 }
                                 if (part && typeof part.text === "string" && part.text.trim()) {
                                   return isUser ? (
-                                    <Markdown key={idx} enableHighlight={false}>
+                                    <Markdown key={idx} enableHighlight={false} enableMath={false}>
                                       {part.text}
                                     </Markdown>
                                   ) : (
                                     <Markdown
                                       key={idx}
                                       enableHighlight={!msg.isStreaming}
+                                      enableMath={true}
                                     >
                                       {part.text}
                                     </Markdown>
@@ -575,9 +576,9 @@ export default function MessageList({
                           </div>
                         ) : (
                           msg.role === "user" ? (
-                            <Markdown enableHighlight={false}>{msg.content}</Markdown>
+                            <Markdown enableHighlight={false} enableMath={false}>{msg.content}</Markdown>
                           ) : (
-                            <Markdown enableHighlight={!msg.isStreaming}>{msg.content}</Markdown>
+                            <Markdown enableHighlight={!msg.isStreaming} enableMath={true}>{msg.content}</Markdown>
                           )
                         )}
 

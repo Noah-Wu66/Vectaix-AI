@@ -267,6 +267,7 @@ export default function ThinkingBlock({
             >
               <Markdown
                 enableHighlight={!isThoughtStreaming}
+                enableMath={true}
                 className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
               >
                 {step.content}
@@ -374,7 +375,7 @@ export default function ThinkingBlock({
                 </div>
                 {isOpen && expertData && (
                   <div className="mt-2 mb-1 ml-1 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800">
-                    <Markdown enableHighlight={true}>{expertData.content}</Markdown>
+                    <Markdown enableHighlight={true} enableMath={true}>{expertData.content}</Markdown>
                     <Citations citations={expertData.citations} />
                   </div>
                 )}
@@ -472,6 +473,7 @@ export default function ThinkingBlock({
                           >
                             <Markdown
                               enableHighlight={!isStreaming}
+                              enableMath={true}
                               className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
                             >
                               {safeThought}

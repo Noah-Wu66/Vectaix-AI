@@ -42,6 +42,7 @@ export default function Markdown({
   children,
   className = "",
   enableHighlight = true,
+  enableMath = false,
 }) {
   // 使用 ref 记住上一次的 enableHighlight 值，避免重复触发
   const prevEnableRef = useRef(enableHighlight);
@@ -59,17 +60,23 @@ export default function Markdown({
     prevEnableRef.current = enableHighlight;
   }, [enableHighlight]);
 
-  // Sanitize first, then render KaTeX/highlight output
-  const rehypePlugins = actualHighlight
-    ? [[rehypeSanitize, sanitizeSchema], rehypeKatex, rehypeHighlight]
-    : [[rehypeSanitize, sanitizeSchema], rehypeKatex];
+  const remarkPlugins = enableMath ? [remarkMath, remarkGfm] : [remarkGfm];
+  const rehypePlugins = [[rehypeSanitize, sanitizeSchema]];
+
+  if (enableMath) {
+    rehypePlugins.push([rehypeKatex, { strict: "ignore" }]);
+  }
+
+  if (actualHighlight) {
+    rehypePlugins.push(rehypeHighlight);
+  }
 
   return (
     <div
       className={`prose prose-sm max-w-none prose-zinc prose-pre:bg-zinc-900 prose-pre:text-zinc-100 prose-code:before:content-none prose-code:after:content-none ${className}`}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkMath, remarkGfm]}
+        remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}
         components={{
           table: ({ children, ...props }) => (
