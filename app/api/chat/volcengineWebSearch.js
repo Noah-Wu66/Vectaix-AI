@@ -1,5 +1,6 @@
 import {
   WEB_SEARCH_LIMIT,
+  WEB_SEARCH_MIN_REQUEST_INTERVAL_MS,
   WEB_SEARCH_PROVIDER,
 } from '@/lib/server/chat/webSearchConfig';
 import { WEB_SEARCH_MAX_COUNT } from '@/lib/shared/webSearch';
@@ -10,6 +11,7 @@ const VOLCENGINE_MAX_RETRIES = 3;
 const DEFAULT_MAX_RESULTS = WEB_SEARCH_LIMIT;
 
 let volcengineSearchQueue = Promise.resolve();
+let lastVolcengineRequestStartedAt = 0;
 
 function toAbortError(signal) {
   if (signal?.reason instanceof Error) return signal.reason;
@@ -34,6 +36,38 @@ function enqueueVolcengineSearch(task, { signal } = {}) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sleepWithSignal(ms, signal) {
+  if (!Number.isFinite(ms) || ms <= 0) return;
+  if (!signal) {
+    await sleep(ms);
+    return;
+  }
+  if (signal.aborted) {
+    throw toAbortError(signal);
+  }
+
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      reject(toAbortError(signal));
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function waitForVolcengineRequestSlot(signal) {
+  const waitMs = Math.max(0, (lastVolcengineRequestStartedAt + WEB_SEARCH_MIN_REQUEST_INTERVAL_MS) - Date.now());
+  await sleepWithSignal(waitMs, signal);
+  lastVolcengineRequestStartedAt = Date.now();
 }
 
 function clipText(text, maxLen) {
@@ -353,6 +387,7 @@ async function requestVolcengine(body, { timeoutMs = VOLCENGINE_TIMEOUT_MS, sign
       }
 
       try {
+        await waitForVolcengineRequestSlot(signal);
         response = await fetch(VOLCENGINE_WEB_SEARCH_API_URL, {
           method: 'POST',
           headers,
