@@ -9,6 +9,29 @@ const VOLCENGINE_TIMEOUT_MS = 30000;
 const VOLCENGINE_MAX_RETRIES = 3;
 const DEFAULT_MAX_RESULTS = WEB_SEARCH_LIMIT;
 
+let volcengineSearchQueue = Promise.resolve();
+
+function toAbortError(signal) {
+  if (signal?.reason instanceof Error) return signal.reason;
+  if (typeof signal?.reason === 'string' && signal.reason) {
+    return new Error(signal.reason);
+  }
+  return new Error('Request aborted');
+}
+
+function enqueueVolcengineSearch(task, { signal } = {}) {
+  const previousTask = volcengineSearchQueue.catch(() => undefined);
+  const queuedTask = previousTask.then(async () => {
+    if (signal?.aborted) {
+      throw toAbortError(signal);
+    }
+    return task();
+  });
+
+  volcengineSearchQueue = queuedTask.catch(() => undefined);
+  return queuedTask;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -319,57 +342,59 @@ function summarizeVolcengineResponse(rawText) {
 }
 
 async function requestVolcengine(body, { timeoutMs = VOLCENGINE_TIMEOUT_MS, signal } = {}) {
-  const headers = buildVolcengineHeaders();
-  let response = null;
-  let lastError = null;
+  return enqueueVolcengineSearch(async () => {
+    const headers = buildVolcengineHeaders();
+    let response = null;
+    let lastError = null;
 
-  for (let attempt = 0; attempt < VOLCENGINE_MAX_RETRIES; attempt += 1) {
-    if (signal?.aborted) {
-      throw signal.reason instanceof Error ? signal.reason : new Error(typeof signal?.reason === 'string' ? signal.reason : 'Request aborted');
-    }
-
-    try {
-      response = await fetch(VOLCENGINE_WEB_SEARCH_API_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: buildRequestSignal({ timeoutMs, signal }),
-      });
-      lastError = null;
-    } catch (error) {
-      lastError = error;
+    for (let attempt = 0; attempt < VOLCENGINE_MAX_RETRIES; attempt += 1) {
       if (signal?.aborted) {
-        throw signal.reason instanceof Error ? signal.reason : new Error(typeof signal?.reason === 'string' ? signal.reason : 'Request aborted');
+        throw toAbortError(signal);
       }
-      if (attempt >= VOLCENGINE_MAX_RETRIES - 1) {
-        throw error;
+
+      try {
+        response = await fetch(VOLCENGINE_WEB_SEARCH_API_URL, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: buildRequestSignal({ timeoutMs, signal }),
+        });
+        lastError = null;
+      } catch (error) {
+        lastError = error;
+        if (signal?.aborted) {
+          throw toAbortError(signal);
+        }
+        if (attempt >= VOLCENGINE_MAX_RETRIES - 1) {
+          throw error;
+        }
+        await sleep((500 * (2 ** attempt)) + Math.floor(Math.random() * 250));
+        continue;
       }
+
+      if (response.ok) break;
+
+      const shouldRetry = response.status === 429 || response.status >= 500;
+      if (!shouldRetry || attempt >= VOLCENGINE_MAX_RETRIES - 1) break;
       await sleep((500 * (2 ** attempt)) + Math.floor(Math.random() * 250));
-      continue;
     }
 
-    if (response.ok) break;
+    if (!response?.ok) {
+      if (lastError) throw lastError;
 
-    const shouldRetry = response.status === 429 || response.status >= 500;
-    if (!shouldRetry || attempt >= VOLCENGINE_MAX_RETRIES - 1) break;
-    await sleep((500 * (2 ** attempt)) + Math.floor(Math.random() * 250));
-  }
-
-  if (!response?.ok) {
-    if (lastError) throw lastError;
-
-    const rawText = response ? await response.text() : '';
-    let message = rawText.trim();
-    try {
-      const payload = JSON.parse(rawText);
-      message = getVolcengineErrorText(payload) || message;
-    } catch {
-      // ignore non-json error body
+      const rawText = response ? await response.text() : '';
+      let message = rawText.trim();
+      try {
+        const payload = JSON.parse(rawText);
+        message = getVolcengineErrorText(payload) || message;
+      } catch {
+        // ignore non-json error body
+      }
+      throw new Error(`Volcengine API error: ${response?.status || 500} ${message}`.trim());
     }
-    throw new Error(`Volcengine API error: ${response?.status || 500} ${message}`.trim());
-  }
 
-  return response.text();
+    return response.text();
+  }, { signal });
 }
 
 export function buildSearchContext(summary, results, options = {}) {

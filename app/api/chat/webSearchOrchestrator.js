@@ -1198,8 +1198,7 @@ export async function runWebSearchOrchestration(options) {
 
     const needSearch = decision.needSearch === true;
     const rawQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
-    const decisionFreshness = typeof decision.freshness === 'string' ? decision.freshness.trim() : 'noLimit';
-    const effectiveDecisionFreshness = mapTimeRangeToFreshness(configuredTimeRange) || decisionFreshness;
+    const effectiveDecisionFreshness = mapTimeRangeToFreshness(configuredTimeRange) || 'noLimit';
     const nextQuery = needSearch
       ? finalizeSearchQuery({
           prompt: currentPrompt,
@@ -1208,9 +1207,7 @@ export async function runWebSearchOrchestration(options) {
           freshness: effectiveDecisionFreshness,
         })
       : '';
-    const finalFreshness = effectiveDecisionFreshness !== 'noLimit'
-      ? effectiveDecisionFreshness
-      : inferFreshnessFromQuery(nextQuery);
+    const finalFreshness = effectiveDecisionFreshness;
     const duplicateQuery = needSearch && hasSeenQuery(searchRounds, nextQuery);
 
     console.info(`${providerLabel} web search decision`, {
