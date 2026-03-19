@@ -21,6 +21,7 @@ import {
     parseMaxTokens,
     parseOpenAIThinkingLevel,
     parseSystemPrompt,
+    parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
 import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
@@ -147,7 +148,10 @@ export async function POST(req) {
                 userId: user.userId,
                 title: title,
                 model: model,
-                settings: settings,
+                settings: {
+                    ...(settings && typeof settings === 'object' ? settings : {}),
+                    webSearch: parseWebSearchConfig(config?.webSearch),
+                },
                 messages: []
             });
             currentConversationId = newConv._id.toString();
@@ -285,6 +289,7 @@ export async function POST(req) {
         };
 
         // 是否启用联网搜索
+        const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const normalizeDecisionText = (value) => {
@@ -546,6 +551,7 @@ export async function POST(req) {
 
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
+                        webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
                         decisionRunner: runOpenAIDecision,

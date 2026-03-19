@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { getModelProvider } from "@/lib/shared/models";
+import { isWebSearchEnabled } from "@/lib/shared/webSearch";
 
 const ECONOMY_SYSTEM_PROMPT_PREFIX =
   "Additionally, you are a capable general assistant. Please feel free to answer questions on a wide range of topics. Do not restrict your helpfulness to just coding tasks.";
@@ -85,7 +86,7 @@ function buildEstimatedSystemPromptText({ model, systemPromptText, webSearch }) 
     ? basePrompt
     : `${basePrompt}\n\n<system-reminder>\n当前时间：${formatShanghaiNowForEstimate()}（时区：Asia/Shanghai）。你必须以此为准进行判断与回答，不要把现在当成 2024 年。\n</system-reminder>`;
 
-  return [withReminder, FORMATTING_GUARD, webSearch ? WEB_SEARCH_GUIDE_TEXT : ""]
+  return [withReminder, FORMATTING_GUARD, isWebSearchEnabled(webSearch) ? WEB_SEARCH_GUIDE_TEXT : ""]
     .filter((item) => typeof item === "string" && item.trim())
     .join("\n\n");
 }

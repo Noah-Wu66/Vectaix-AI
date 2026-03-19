@@ -23,6 +23,7 @@ import {
     clampMaxTokens,
     parseMaxTokens,
     parseSystemPrompt,
+    parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
 
@@ -161,7 +162,10 @@ export async function POST(req) {
                 userId: user.userId,
                 title: title,
                 model,
-                settings,
+                settings: {
+                    ...(settings && typeof settings === 'object' ? settings : {}),
+                    webSearch: parseWebSearchConfig(config?.webSearch),
+                },
                 messages: []
             });
             currentConversationId = newConv._id.toString();
@@ -278,6 +282,7 @@ export async function POST(req) {
         );
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
+        const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const normalizeDecisionMessageText = (value) => {
@@ -387,6 +392,7 @@ export async function POST(req) {
                     // 联网搜索编排
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
+                        webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
                         decisionRunner: runDeepSeekDecision,

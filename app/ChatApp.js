@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createChatAppActions } from "@/lib/client/chat/chatAppActions";
 import { useThemeMode } from "@/lib/client/hooks/useThemeMode";
 import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
+import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
 import {
   AGENT_MODEL_ID,
   CHAT_MODELS,
@@ -685,8 +686,8 @@ export default function ChatApp() {
           const settings = data.conversation.settings && typeof data.conversation.settings === "object"
             ? data.conversation.settings
             : {};
-          if (typeof settings.webSearch === "boolean") {
-            setWebSearch(settings.webSearch);
+          if (settings.webSearch && typeof settings.webSearch === "object") {
+            setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
           }
           // activePromptId：优先使用对话存储的值，但需验证该提示词是否仍存在
           if (settings.activePromptId !== undefined) {
@@ -917,8 +918,8 @@ export default function ChatApp() {
       const nextSettings = duplicatedConversation.settings && typeof duplicatedConversation.settings === "object"
         ? duplicatedConversation.settings
         : {};
-      if (typeof nextSettings.webSearch === "boolean") {
-        setWebSearch(nextSettings.webSearch);
+      if (nextSettings.webSearch && typeof nextSettings.webSearch === "object") {
+        setWebSearch(normalizeWebSearchSettings(nextSettings.webSearch, { defaultEnabled: true }));
       }
       if (nextSettings.activePromptId !== undefined) {
         const promptExists = systemPrompts.some(

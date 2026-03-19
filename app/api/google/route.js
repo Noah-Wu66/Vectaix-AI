@@ -25,6 +25,7 @@ import {
     parseGeminiThinkingLevel,
     parseMaxTokens,
     parseSystemPrompt,
+    parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
 
@@ -186,7 +187,10 @@ export async function POST(req) {
                 userId: user.userId,
                 title: title,
                 model: model,
-                settings: settings,
+                settings: {
+                    ...(settings && typeof settings === 'object' ? settings : {}),
+                    webSearch: parseWebSearchConfig(config?.webSearch),
+                },
                 messages: []
             });
             currentConversationId = newConv._id.toString();
@@ -298,6 +302,7 @@ export async function POST(req) {
             }
         };
 
+        const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const extractGeminiDecisionText = (result) => {
@@ -439,6 +444,7 @@ export async function POST(req) {
 
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
+                        webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
                         decisionRunner: runGeminiDecision,

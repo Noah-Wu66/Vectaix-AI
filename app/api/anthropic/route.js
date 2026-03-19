@@ -27,6 +27,7 @@ import {
     parseClaudeThinkingLevel,
     parseMaxTokens,
     parseSystemPrompt,
+    parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
 import { getModelRoutes, resolveOpusProviderConfig } from '@/lib/modelRoutes';
@@ -169,7 +170,10 @@ export async function POST(req) {
                 userId: user.userId,
                 title: title,
                 model: model,
-                settings: settings,
+                settings: {
+                    ...(settings && typeof settings === 'object' ? settings : {}),
+                    webSearch: parseWebSearchConfig(config?.webSearch),
+                },
                 messages: []
             });
             currentConversationId = newConv._id.toString();
@@ -310,6 +314,7 @@ export async function POST(req) {
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         // 是否启用联网搜索
+        const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
 
         // 启用联网搜索时禁用来源括号标注
@@ -403,6 +408,7 @@ export async function POST(req) {
 
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
+                        webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
                         decisionRunner: runClaudeDecision,

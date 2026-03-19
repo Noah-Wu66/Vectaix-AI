@@ -6,7 +6,7 @@ import { rateLimit, getClientIP } from "@/lib/rateLimit";
 import { AGENT_MODEL_ID } from "@/lib/shared/models";
 import { isNonEmptyString } from "@/app/api/chat/utils";
 import { runAgentRuntimeV2 } from "@/lib/server/agent/runtimeV2";
-import { parseSeedThinkingLevel } from "@/lib/server/chat/requestConfig";
+import { parseSeedThinkingLevel, parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -187,7 +187,10 @@ export async function POST(req) {
         userId: auth.userId,
         title: buildConversationTitle(prompt, currentAttachments),
         model: AGENT_MODEL_ID,
-        settings,
+        settings: {
+          ...(settings && typeof settings === "object" ? settings : {}),
+          webSearch: parseWebSearchConfig(config?.webSearch),
+        },
         messages: [],
       });
       currentConversationId = newConv._id.toString();

@@ -29,6 +29,7 @@ import {
     parseMaxTokens,
     parseSeedThinkingLevel,
     parseSystemPrompt,
+    parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
 import { buildAttachmentTextBlock, getPreparedAttachmentTextsByUrls } from '@/lib/server/files/service';
@@ -167,7 +168,10 @@ export async function POST(req) {
                 userId: user.userId,
                 title,
                 model: conversationModel,
-                settings,
+                settings: {
+                    ...(settings && typeof settings === 'object' ? settings : {}),
+                    webSearch: parseWebSearchConfig(config?.webSearch),
+                },
                 messages: [],
             });
             currentConversationId = newConv._id.toString();
@@ -337,6 +341,7 @@ export async function POST(req) {
         } catch (error) {
             return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
+        const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(
             parseSystemPrompt(config?.systemPrompt)
@@ -431,6 +436,7 @@ export async function POST(req) {
 
                     const { searchContextText } = await runWebSearchOrchestration({
                         enableWebSearch,
+                        webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
                         decisionRunner: runSeedDecision,

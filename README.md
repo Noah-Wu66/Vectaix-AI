@@ -281,7 +281,7 @@ vercel.json                 Vercel cron 配置
   - OpenAI 默认线路
 - `AIGOCODE_API_KEY`
   - Claude Opus 默认线路
-- `PERPLEXITY_API_KEY`
+- `VOLCENGINE_WEB_SEARCH_API_KEY`
   - 联网搜索
 
 ### 按功能启用

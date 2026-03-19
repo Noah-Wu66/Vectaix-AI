@@ -10,10 +10,14 @@ import {
   WEB_SEARCH_PROVIDER,
 } from '@/lib/server/chat/webSearchConfig';
 import {
-  perplexitySearch,
+  volcengineWebSearch,
   buildSearchContext,
   buildSearchEventResults,
-} from '@/app/api/chat/perplexitySearch';
+} from '@/app/api/chat/volcengineWebSearch';
+import {
+  formatWebSearchSummary,
+  mapTimeRangeToFreshness,
+} from '@/lib/shared/webSearch';
 
 const VALID_FRESHNESS_VALUES = new Set(['oneDay', 'oneWeek', 'oneMonth', 'oneYear', 'noLimit']);
 const EXPLICIT_SEARCH_KEYWORDS = [
@@ -1068,7 +1072,7 @@ export function normalizeWebSearchDecision(rawDecision) {
 
 function isMissingWebSearchCredential(error) {
   const message = typeof error?.message === 'string' ? error.message : '';
-  return message.includes('PERPLEXITY_API_KEY');
+  return message.includes('VOLCENGINE_WEB_SEARCH_API_KEY');
 }
 
 function isTimeoutAbortSignal(signal) {
@@ -1082,6 +1086,7 @@ function isTimeoutAbortSignal(signal) {
 export async function runWebSearchOrchestration(options) {
   const {
     enableWebSearch,
+    webSearchOptions,
     prompt,
     historyMessages,
     decisionRunner,
@@ -1110,6 +1115,15 @@ export async function runWebSearchOrchestration(options) {
   if (!currentPrompt) {
     return { searchContextText: '' };
   }
+
+  const searchOptions = webSearchOptions && typeof webSearchOptions === 'object'
+    ? webSearchOptions
+    : null;
+  const searchLimit = Number.isFinite(searchOptions?.count) && searchOptions.count > 0
+    ? searchOptions.count
+    : WEB_SEARCH_LIMIT;
+  const configuredTimeRange = typeof searchOptions?.timeRange === 'string' ? searchOptions.timeRange.trim() : '';
+  const searchSummary = formatWebSearchSummary(searchOptions);
   if (isClearlyNonSearchReply(currentPrompt) || shouldForceSkipSearch(currentPrompt)) {
     return { searchContextText: '' };
   }
@@ -1186,17 +1200,18 @@ export async function runWebSearchOrchestration(options) {
 
     const needSearch = decision.needSearch === true;
     const rawQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
+    const decisionFreshness = typeof decision.freshness === 'string' ? decision.freshness.trim() : 'noLimit';
+    const effectiveDecisionFreshness = mapTimeRangeToFreshness(configuredTimeRange) || decisionFreshness;
     const nextQuery = needSearch
       ? finalizeSearchQuery({
           prompt: currentPrompt,
           historyMessages,
           rawQuery,
-          freshness: decision.freshness,
+          freshness: effectiveDecisionFreshness,
         })
       : '';
-    const freshness = typeof decision.freshness === 'string' ? decision.freshness.trim() : 'noLimit';
-    const finalFreshness = freshness !== 'noLimit'
-      ? freshness
+    const finalFreshness = effectiveDecisionFreshness !== 'noLimit'
+      ? effectiveDecisionFreshness
       : inferFreshnessFromQuery(nextQuery);
     const duplicateQuery = needSearch && hasSeenQuery(searchRounds, nextQuery);
 
@@ -1250,13 +1265,28 @@ export async function runWebSearchOrchestration(options) {
     }
 
     const round = searchRounds.length + 1;
-    sendEvent({ type: 'search_start', query: nextQuery, round, provider: WEB_SEARCH_PROVIDER, mode: 'search' });
+    sendEvent({
+      type: 'search_start',
+      query: nextQuery,
+      round,
+      provider: WEB_SEARCH_PROVIDER,
+      mode: 'search',
+      title: searchSummary,
+    });
 
     let searchData;
     try {
-      searchData = await perplexitySearch(nextQuery, {
-        count: WEB_SEARCH_LIMIT,
+      searchData = await volcengineWebSearch(nextQuery, {
+        count: searchLimit,
         freshness: finalFreshness,
+        timeRange: configuredTimeRange,
+        needContent: searchOptions?.needContent,
+        needUrl: searchOptions?.needUrl,
+        sites: searchOptions?.sites,
+        blockHosts: searchOptions?.blockHosts,
+        authInfoLevel: searchOptions?.authInfoLevel,
+        queryRewrite: searchOptions?.queryRewrite,
+        industry: searchOptions?.industry,
         signal,
         timeoutMs: searchTimeoutMs,
       });
@@ -1269,10 +1299,10 @@ export async function runWebSearchOrchestration(options) {
         message: searchError?.message,
         name: searchError?.name,
       });
-      const message = searchError?.message?.includes('PERPLEXITY_API_KEY')
-        ? '未配置 Perplexity 联网搜索服务'
+      const message = searchError?.message?.includes('VOLCENGINE_WEB_SEARCH_API_KEY')
+        ? '未配置火山联网搜索服务'
         : '联网搜索失败，请稍后再试';
-      sendSearchError?.(message, { round, query: nextQuery, provider: WEB_SEARCH_PROVIDER, mode: 'search' });
+      sendSearchError?.(message, { round, query: nextQuery, provider: WEB_SEARCH_PROVIDER, mode: 'search', title: searchSummary });
       if (isMissingWebSearchCredential(searchError)) {
         break;
       }
@@ -1289,6 +1319,7 @@ export async function runWebSearchOrchestration(options) {
       round,
       provider: WEB_SEARCH_PROVIDER,
       mode: 'search',
+      title: searchSummary,
       results: buildSearchEventResults(results),
     });
 
@@ -1297,7 +1328,7 @@ export async function runWebSearchOrchestration(options) {
     }
 
     const roundContextText = buildSearchContext(summary, results, {
-      maxResults: WEB_SEARCH_LIMIT,
+      maxResults: searchLimit,
       maxSnippetChars: 280,
     });
 
@@ -1316,7 +1347,7 @@ export async function runWebSearchOrchestration(options) {
     searchRounds.push({
       round,
       query: nextQuery,
-      freshness: finalFreshness,
+      freshness: configuredTimeRange || finalFreshness,
       summary,
       results,
       contextText: roundContextText,
