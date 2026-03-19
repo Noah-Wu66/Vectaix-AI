@@ -15,7 +15,6 @@ import {
   buildSearchEventResults,
 } from '@/app/api/chat/volcengineWebSearch';
 import {
-  formatWebSearchSummary,
   mapTimeRangeToFreshness,
 } from '@/lib/shared/webSearch';
 
@@ -1123,7 +1122,6 @@ export async function runWebSearchOrchestration(options) {
     ? searchOptions.count
     : WEB_SEARCH_LIMIT;
   const configuredTimeRange = typeof searchOptions?.timeRange === 'string' ? searchOptions.timeRange.trim() : '';
-  const searchSummary = formatWebSearchSummary(searchOptions);
   if (isClearlyNonSearchReply(currentPrompt) || shouldForceSkipSearch(currentPrompt)) {
     return { searchContextText: '' };
   }
@@ -1271,7 +1269,6 @@ export async function runWebSearchOrchestration(options) {
       round,
       provider: WEB_SEARCH_PROVIDER,
       mode: 'search',
-      title: searchSummary,
     });
 
     let searchData;
@@ -1302,7 +1299,7 @@ export async function runWebSearchOrchestration(options) {
       const message = searchError?.message?.includes('VOLCENGINE_WEB_SEARCH_API_KEY')
         ? '未配置火山联网搜索服务'
         : '联网搜索失败，请稍后再试';
-      sendSearchError?.(message, { round, query: nextQuery, provider: WEB_SEARCH_PROVIDER, mode: 'search', title: searchSummary });
+      sendSearchError?.(message, { round, query: nextQuery, provider: WEB_SEARCH_PROVIDER, mode: 'search' });
       if (isMissingWebSearchCredential(searchError)) {
         break;
       }
@@ -1319,7 +1316,6 @@ export async function runWebSearchOrchestration(options) {
       round,
       provider: WEB_SEARCH_PROVIDER,
       mode: 'search',
-      title: searchSummary,
       results: buildSearchEventResults(results),
     });
 

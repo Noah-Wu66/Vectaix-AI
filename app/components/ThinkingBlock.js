@@ -280,8 +280,6 @@ export default function ThinkingBlock({
 
     if (step.kind === "search") {
       const querySuffix = step.query ? `「${step.query}」` : "";
-      const countSuffix = Number.isFinite(step.resultCount) && step.resultCount > 0 ? `（${step.resultCount}条）` : "";
-      const detailText = step.title || "";
       return (
         <div key={step.id || `search-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
@@ -289,12 +287,9 @@ export default function ThinkingBlock({
             {isRunning ? (
               <SplitStatusText status="联网搜索中" suffix={querySuffix} active />
             ) : (
-              <span>{isError ? `联网搜索失败${querySuffix}` : `联网搜索完成${querySuffix}${countSuffix}`}</span>
+              <span>{isError ? `联网搜索失败${querySuffix}` : `联网搜索完成${querySuffix}`}</span>
             )}
           </div>
-          {detailText ? (
-            <div className="mt-1 text-xs text-zinc-400 leading-5">{detailText}</div>
-          ) : null}
         </div>
       );
     }
