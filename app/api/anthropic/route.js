@@ -25,6 +25,8 @@ import {
 import {
     clampMaxTokens,
     parseClaudeThinkingLevel,
+    parseMiMoThinkingLevel,
+    parseMiniMaxThinkingLevel,
     parseMaxTokens,
     parseSystemPrompt,
     parseWebSearchConfig,
@@ -335,11 +337,15 @@ export async function POST(req) {
             maxTokens = parseMaxTokens(config?.maxTokens);
             if (isClaudeModel(model)) {
                 thinkingLevel = parseClaudeThinkingLevel(config?.thinkingLevel);
+            } else if (isMiMoModel(model)) {
+                thinkingLevel = parseMiMoThinkingLevel(config?.thinkingLevel);
+            } else if (isMiniMaxModel(model)) {
+                thinkingLevel = parseMiniMaxThinkingLevel(config?.thinkingLevel);
             }
         } catch (error) {
             return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
-        const maxTokenCap = typeof model === "string" && (model.startsWith(CLAUDE_OPUS_MODEL) || model === MIMO_V2_PRO_MODEL) ? 128000 : 64000;
+        const maxTokenCap = typeof model === "string" && (model === MIMO_V2_PRO_MODEL || model === MINIMAX_M2_7_HIGHSPEED_MODEL) ? 131072 : (model.startsWith(CLAUDE_OPUS_MODEL) ? 128000 : 64000);
         const normalizedMaxTokens = clampMaxTokens(maxTokens, maxTokenCap);
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
@@ -492,7 +498,9 @@ export async function POST(req) {
                             effort: thinkingLevel
                         };
                     } else if (isMiMoModel(model)) {
-                        requestParams.thinking = { type: "disabled" };
+                        requestParams.thinking = { type: thinkingLevel || "enabled" };
+                    } else if (isMiniMaxModel(model)) {
+                        requestParams.thinking = { type: thinkingLevel || "enabled" };
                     }
 
                     const stream = await client.messages.stream(requestParams);
