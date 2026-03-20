@@ -34,6 +34,7 @@ const ConversationSchema = new mongoose.Schema({
   // 对话专属设置
   settings: {
     activePromptId: { type: String, default: null },
+    agentModel: { type: String, default: null },
     webSearch: { type: mongoose.Schema.Types.Mixed, default: null },
   },
   pinned: {

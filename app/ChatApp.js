@@ -15,6 +15,7 @@ import {
   OPENAI_PRIMARY_MODEL,
   SEED_MODEL_ID,
   isCouncilModel,
+  normalizeAgentDriverModelId,
   normalizeModelId,
 } from "@/lib/shared/models";
 import { useToast } from "./components/ToastProvider";
@@ -197,7 +198,7 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, isSettingsReady, setModel, thinkingLevels, historyLimit, maxTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
+  const { model, agentModel, isSettingsReady, setModel, setAgentModel, thinkingLevels, historyLimit, maxTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
   useThemeMode(themeMode);
   const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
@@ -416,6 +417,7 @@ export default function ChatApp() {
     loading,
     setLoading,
     model,
+    agentModel,
     thinkingLevels,
     mediaResolution,
     systemPrompts,
@@ -688,6 +690,9 @@ export default function ChatApp() {
             : {};
           if (settings.webSearch && typeof settings.webSearch === "object") {
             setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
+          }
+          if (conversationProvider === "vectaix") {
+            setAgentModel(normalizeAgentDriverModelId(settings.agentModel));
           }
           // activePromptId：优先使用对话存储的值，但需验证该提示词是否仍存在
           if (settings.activePromptId !== undefined) {
@@ -1007,6 +1012,13 @@ export default function ChatApp() {
             messages,
             contextWindow: currentModelConfig?.contextWindow,
             historyLimit,
+            agentModel,
+            setAgentModel: (nextValue) => {
+              setAgentModel(nextValue);
+              if (model === AGENT_MODEL_ID) {
+                syncConversationSettings({ agentModel: nextValue });
+              }
+            },
             webSearch,
             setWebSearch: (v) => {
               setWebSearch(v);

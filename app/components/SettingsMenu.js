@@ -6,6 +6,12 @@ import { ChevronDown, Globe, Pencil, Settings2, Trash2, X } from "lucide-react";
 import ConfirmModal from "./ConfirmModal";
 import PromptEditorModal from "./PromptEditorModal";
 import {
+  AGENT_MODEL_ID,
+  getAgentDriverModels,
+  MODEL_GROUP_ORDER,
+  normalizeAgentDriverModelId,
+} from "@/lib/shared/models";
+import {
   DEFAULT_WEB_SEARCH_SETTINGS,
   WEB_SEARCH_AUTH_INFO_LEVELS,
   WEB_SEARCH_INDUSTRIES,
@@ -30,8 +36,20 @@ const INDUSTRY_LABELS = {
   game: "game（游戏）",
 };
 
+const MODEL_GROUP_TITLES = {
+  gemini: "Google",
+  claude: "Anthropic",
+  openai: "OpenAI",
+  seed: "ByteDance",
+  deepseek: "DeepSeek",
+};
+
+const AGENT_MODEL_OPTIONS = getAgentDriverModels();
+
 export default function SettingsMenu({
   model,
+  agentModel,
+  setAgentModel,
   webSearch,
   setWebSearch,
   systemPrompts,
@@ -63,10 +81,19 @@ export default function SettingsMenu({
 
   const activePrompt = systemPrompts.find((prompt) => String(prompt?._id) === String(activePromptId));
   const activePromptName = activePrompt?.name || "无";
+  const normalizedAgentModel = normalizeAgentDriverModelId(agentModel);
   const webSearchSettings = webSearch && typeof webSearch === "object"
     ? { ...DEFAULT_WEB_SEARCH_SETTINGS, ...webSearch }
     : DEFAULT_WEB_SEARCH_SETTINGS;
   const customTimeRange = splitCustomTimeRange(webSearchSettings.timeRange);
+  const agentModelGroups = MODEL_GROUP_ORDER
+    .filter((groupKey) => groupKey !== "vectaix")
+    .map((groupKey) => ({
+      groupKey,
+      title: MODEL_GROUP_TITLES[groupKey] || groupKey,
+      models: AGENT_MODEL_OPTIONS.filter((item) => item.provider === groupKey),
+    }))
+    .filter((group) => group.models.length > 0);
 
   const updateWebSearch = (patch) => {
     setWebSearch((prev) => ({
@@ -274,6 +301,27 @@ export default function SettingsMenu({
               </div>
 
               <div className="space-y-4">
+                {model === AGENT_MODEL_ID && (
+                  <div>
+                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                      Agent 模型
+                    </label>
+                    <select
+                      value={normalizedAgentModel}
+                      onChange={(event) => setAgentModel?.(event.target.value)}
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
+                    >
+                      {agentModelGroups.map((group) => (
+                        <optgroup key={group.groupKey} label={group.title}>
+                          {group.models.map((item) => (
+                            <option key={item.id} value={item.id}>{item.name}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                     系统提示词

@@ -3,7 +3,7 @@ import Conversation from "@/models/Conversation";
 import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { rateLimit, getClientIP } from "@/lib/rateLimit";
-import { AGENT_MODEL_ID } from "@/lib/shared/models";
+import { AGENT_MODEL_ID, normalizeAgentDriverModelId } from "@/lib/shared/models";
 import { isNonEmptyString } from "@/app/api/chat/utils";
 import { runAgentRuntimeV2 } from "@/lib/server/agent/runtimeV2";
 import { parseSeedThinkingLevel, parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
@@ -117,6 +117,8 @@ export async function POST(req) {
       return Response.json({ error: "Agent 模式已改为当前页同步执行，不再支持继续执行或后台恢复" }, { status: 400 });
     }
 
+    const driverModel = normalizeAgentDriverModelId(config?.agentModel ?? settings?.agentModel);
+
     try {
       parseSeedThinkingLevel(config?.thinkingLevel);
     } catch (error) {
@@ -183,15 +185,16 @@ export async function POST(req) {
 
     let currentConversationId = conversationId;
     if (!currentConversationId) {
-      const newConv = await Conversation.create({
-        userId: auth.userId,
-        title: buildConversationTitle(prompt, currentAttachments),
-        model: AGENT_MODEL_ID,
-        settings: {
-          ...(settings && typeof settings === "object" ? settings : {}),
-          webSearch: parseWebSearchConfig(config?.webSearch),
-        },
-        messages: [],
+        const newConv = await Conversation.create({
+          userId: auth.userId,
+          title: buildConversationTitle(prompt, currentAttachments),
+          model: AGENT_MODEL_ID,
+          settings: {
+            ...(settings && typeof settings === "object" ? settings : {}),
+            agentModel: driverModel,
+            webSearch: parseWebSearchConfig(config?.webSearch),
+          },
+          messages: [],
       });
       currentConversationId = newConv._id.toString();
     }
@@ -273,7 +276,7 @@ export async function POST(req) {
             req,
             userId: auth.userId,
             conversationId: currentConversationId,
-            model,
+            driverModel,
             prompt: typeof prompt === "string" ? prompt : "",
             historyMessages: effectiveHistoryMessages,
             config,

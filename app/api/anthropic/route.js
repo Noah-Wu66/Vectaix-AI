@@ -4,7 +4,7 @@ import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
-import { CLAUDE_OPUS_MODEL, CLAUDE_SONNET_MODEL } from '@/lib/shared/models';
+import { CLAUDE_OPUS_MODEL, CLAUDE_SONNET_MODEL, MIMO_V2_PRO_MODEL, MINIMAX_M2_7_HIGHSPEED_MODEL } from '@/lib/shared/models';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
@@ -38,6 +38,37 @@ export const dynamic = 'force-dynamic';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 const MAX_REQUEST_BYTES = 2_000_000;
+
+function isClaudeModel(model) {
+    return typeof model === 'string' && (model.startsWith(CLAUDE_OPUS_MODEL) || model.startsWith(CLAUDE_SONNET_MODEL));
+}
+
+function isMiMoModel(model) {
+    return model === MIMO_V2_PRO_MODEL;
+}
+
+function isMiniMaxModel(model) {
+    return model === MINIMAX_M2_7_HIGHSPEED_MODEL;
+}
+
+function isZenmuxAnthropicModel(model) {
+    return isMiMoModel(model) || isMiniMaxModel(model);
+}
+
+function resolveAnthropicApiModel(model) {
+    if (typeof model !== 'string') return model;
+    if (model.startsWith(CLAUDE_OPUS_MODEL)) return CLAUDE_OPUS_MODEL;
+    if (model.startsWith(CLAUDE_SONNET_MODEL)) return CLAUDE_SONNET_MODEL;
+    if (isMiMoModel(model)) return `xiaomi/${model}`;
+    if (isMiniMaxModel(model)) return `minimax/${model}`;
+    return model;
+}
+
+function getAnthropicProviderLabel(model) {
+    if (isMiMoModel(model)) return 'MiMo';
+    if (isMiniMaxModel(model)) return 'MiniMax';
+    return 'Claude';
+}
 
 async function storedPartToClaudePart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -152,12 +183,16 @@ export async function POST(req) {
         let currentConversationId = conversationId;
 
         const modelRoutes = await getModelRoutes();
-        const { baseUrl: anthropicBaseUrl, apiKey } = resolveOpusProviderConfig(modelRoutes);
-        const apiModel = model.startsWith(CLAUDE_OPUS_MODEL)
-            ? CLAUDE_OPUS_MODEL
-            : model.startsWith(CLAUDE_SONNET_MODEL)
-                ? CLAUDE_SONNET_MODEL
-                : model;
+        const supportedAnthropicModel = isClaudeModel(model) || isZenmuxAnthropicModel(model);
+        if (!supportedAnthropicModel) {
+            return Response.json({ error: 'unsupported anthropic-compatible model' }, { status: 400 });
+        }
+
+        const providerConfig = isZenmuxAnthropicModel(model)
+            ? resolveOpusProviderConfig({ opus: 'zenmux' })
+            : resolveOpusProviderConfig(modelRoutes);
+        const { baseUrl: anthropicBaseUrl, apiKey } = providerConfig;
+        const apiModel = resolveAnthropicApiModel(model);
         const client = new Anthropic({
             apiKey,
             baseURL: anthropicBaseUrl,
@@ -295,19 +330,16 @@ export async function POST(req) {
 
         // 构建请求参数（联网搜索上下文将在流式开始前注入）
         let maxTokens;
-        let thinkingLevel;
+        let thinkingLevel = null;
         try {
             maxTokens = parseMaxTokens(config?.maxTokens);
-            thinkingLevel = parseClaudeThinkingLevel(config?.thinkingLevel);
+            if (isClaudeModel(model)) {
+                thinkingLevel = parseClaudeThinkingLevel(config?.thinkingLevel);
+            }
         } catch (error) {
             return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
-        const isClaudeAdaptiveThinkingModel = typeof model === "string"
-            && (model.startsWith(CLAUDE_OPUS_MODEL) || model.startsWith(CLAUDE_SONNET_MODEL));
-        if (!isClaudeAdaptiveThinkingModel) {
-            return Response.json({ error: 'unsupported Claude model' }, { status: 400 });
-        }
-        const maxTokenCap = typeof model === "string" && model.startsWith(CLAUDE_OPUS_MODEL) ? 128000 : 64000;
+        const maxTokenCap = typeof model === "string" && (model.startsWith(CLAUDE_OPUS_MODEL) || model === MIMO_V2_PRO_MODEL) ? 128000 : 64000;
         const normalizedMaxTokens = clampMaxTokens(maxTokens, maxTokenCap);
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
@@ -319,7 +351,7 @@ export async function POST(req) {
 
         // 启用联网搜索时禁用来源括号标注
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
-        const runClaudeDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
+        const runAnthropicDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
             const { systemText, userText } = await buildWebSearchDecisionPrompts({
                 prompt: decisionPrompt,
                 historyMessages,
@@ -352,7 +384,9 @@ export async function POST(req) {
             return text;
         };
 
-        const claudeWebSearchRuntime = getWebSearchProviderRuntimeOptions('claude');
+        const anthropicWebSearchRuntime = getWebSearchProviderRuntimeOptions('claude', {
+            providerLabel: getAnthropicProviderLabel(model),
+        });
 
         const encoder = new TextEncoder();
         let clientAborted = false;
@@ -411,7 +445,7 @@ export async function POST(req) {
                         webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
-                        decisionRunner: runClaudeDecision,
+                        decisionRunner: runAnthropicDecision,
                         sendEvent,
                         pushCitations,
                         sendSearchError,
@@ -419,7 +453,7 @@ export async function POST(req) {
                         model,
                         conversationId: currentConversationId,
                         logDecision: true,
-                        ...claudeWebSearchRuntime,
+                        ...anthropicWebSearchRuntime,
                     });
 
                     if (clientAborted) {
@@ -450,11 +484,16 @@ export async function POST(req) {
                         ],
                         messages: claudeMessages,
                         stream: true,
-                        thinking: { type: "adaptive" },
-                        output_config: {
-                            effort: thinkingLevel
-                        }
                     };
+
+                    if (isClaudeModel(model)) {
+                        requestParams.thinking = { type: "adaptive" };
+                        requestParams.output_config = {
+                            effort: thinkingLevel
+                        };
+                    } else if (isMiMoModel(model)) {
+                        requestParams.thinking = { type: "disabled" };
+                    }
 
                     const stream = await client.messages.stream(requestParams);
 
@@ -554,7 +593,7 @@ export async function POST(req) {
         return new Response(responseStream, { headers });
 
     } catch (error) {
-        console.error("Claude API Error:", {
+        console.error("Anthropic-compatible API Error:", {
             message: error?.message,
             status: error?.status,
             name: error?.name,

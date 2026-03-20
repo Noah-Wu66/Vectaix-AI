@@ -13,7 +13,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
   });
   const visibleModels = CHAT_MODELS;
   const currentModel = ready ? CHAT_MODELS.find((m) => m.id === model) : null;
-  const currentModelLabel = currentModel?.shortName || currentModel?.name || "模型";
+  const currentModelLabel = currentModel?.name || "模型";
   const groupTitles = {
     vectaix: "Vectaix",
     gemini: "Google",

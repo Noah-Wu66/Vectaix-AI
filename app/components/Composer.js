@@ -49,6 +49,8 @@ export default function Composer({
   messages,
   contextWindow,
   historyLimit,
+  agentModel,
+  setAgentModel,
   webSearch,
   setWebSearch,
   systemPrompts,
@@ -351,6 +353,8 @@ export default function Composer({
             <>
               <SettingsMenu
                 model={model}
+                agentModel={agentModel}
+                setAgentModel={setAgentModel}
                 webSearch={webSearch}
                 setWebSearch={setWebSearch}
                 systemPrompts={systemPrompts}
