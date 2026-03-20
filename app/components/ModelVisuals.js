@@ -5,7 +5,7 @@ import Gemini from "@lobehub/icons/es/Gemini";
 import Minimax from "@lobehub/icons/es/Minimax";
 import OpenAI from "@lobehub/icons/es/OpenAI";
 import Perplexity from "@lobehub/icons/es/Perplexity";
-import XiaomiMiMo from "@lobehub/icons/es/XiaomiMiMo";
+import XiaomiMiMo from "./XiaomiMiMoIcon";
 import {
   AGENT_MODEL_ID,
   COUNCIL_MODEL_ID,
