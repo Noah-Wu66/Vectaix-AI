@@ -2,8 +2,10 @@ import Claude from "@lobehub/icons/es/Claude";
 import DeepSeek from "@lobehub/icons/es/DeepSeek";
 import Doubao from "@lobehub/icons/es/Doubao";
 import Gemini from "@lobehub/icons/es/Gemini";
+import Minimax from "@lobehub/icons/es/Minimax";
 import OpenAI from "@lobehub/icons/es/OpenAI";
 import Perplexity from "@lobehub/icons/es/Perplexity";
+import XiaomiMiMo from "@lobehub/icons/es/XiaomiMiMo";
 import {
   AGENT_MODEL_ID,
   COUNCIL_MODEL_ID,
@@ -33,6 +35,14 @@ const PROVIDER_VISUALS = {
   deepseek: {
     Glyph: DeepSeek.Color,
     Avatar: DeepSeek.Avatar,
+  },
+  xiaomi: {
+    Glyph: XiaomiMiMo.Color,
+    Avatar: XiaomiMiMo.Avatar,
+  },
+  minimax: {
+    Glyph: Minimax.Color,
+    Avatar: Minimax.Avatar,
   },
 };
 

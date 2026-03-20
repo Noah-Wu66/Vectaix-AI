@@ -21,6 +21,8 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
     openai: "OpenAI",
     seed: "ByteDance",
     deepseek: "DeepSeek",
+    xiaomi: "Xiaomi",
+    minimax: "MiniMax",
   };
   const groupProviders = {
     vectaix: ["council", "vectaix"],
@@ -29,6 +31,8 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
     openai: ["openai"],
     seed: ["seed"],
     deepseek: ["deepseek"],
+    xiaomi: ["xiaomi"],
+    minimax: ["minimax"],
   };
 
   const renderModelGroup = (groupKey, title) => {
