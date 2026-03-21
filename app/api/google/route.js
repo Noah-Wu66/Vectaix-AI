@@ -15,7 +15,7 @@ import {
     estimateTokens
 } from '@/app/api/chat/utils';
 import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { GEMINI_FLASH_MODEL, GEMINI_PRO_MODEL } from '@/lib/shared/models';
+import { GEMINI_PRO_MODEL } from '@/lib/shared/models';
 import {
     WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
@@ -34,8 +34,8 @@ export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_DECISION_MODEL = GEMINI_FLASH_MODEL;
-const GEMINI_DECISION_THINKING_LEVEL = 'MINIMAL';
+const GEMINI_DECISION_MODEL = GEMINI_PRO_MODEL;
+const GEMINI_DECISION_THINKING_LEVEL = 'LOW';
 const MAX_REQUEST_BYTES = 2_000_000;
 
 async function storedPartToRequestPart(part) {
@@ -82,19 +82,11 @@ function resolveGeminiApiModel(model) {
         ? normalizedModel.slice('google/'.length)
         : normalizedModel;
 
-    if (
-        modelWithoutProvider === GEMINI_PRO_MODEL
-    ) {
+    if (modelWithoutProvider === GEMINI_PRO_MODEL) {
         return GEMINI_PRO_MODEL;
     }
 
-    if (
-        modelWithoutProvider === GEMINI_FLASH_MODEL
-    ) {
-        return GEMINI_FLASH_MODEL;
-    }
-
-    return GEMINI_FLASH_MODEL;
+    return GEMINI_PRO_MODEL;
 }
 
 export async function POST(req) {
@@ -284,7 +276,7 @@ export async function POST(req) {
         let thinkingLevel;
         try {
             maxTokens = parseMaxTokens(config?.maxTokens);
-            thinkingLevel = parseGeminiThinkingLevel(config?.thinkingLevel, apiModel);
+            thinkingLevel = parseGeminiThinkingLevel(config?.thinkingLevel);
         } catch (error) {
             return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }

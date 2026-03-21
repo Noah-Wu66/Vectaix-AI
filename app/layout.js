@@ -7,7 +7,7 @@ import { UI_THEME_MODE_KEY } from '@/lib/shared/storageKeys';
 
 export const metadata = {
     title: 'Vectaix AI',
-    description: 'Experience the next generation of AI with Gemini 3 Pro, Flash, and Image models.',
+    description: 'Experience the next generation of AI with Gemini, Claude, GPT, Seed, and more.',
     manifest: '/manifest.webmanifest',
     icons: {
         shortcut: '/favicon.ico',

@@ -2,7 +2,7 @@ export default function manifest() {
     return {
         name: 'Vectaix AI',
         short_name: 'Vectaix AI',
-        description: 'Experience the next generation of AI with Gemini 3 Pro, Flash, and Image models.',
+        description: 'Experience the next generation of AI with Gemini, Claude, GPT, Seed, and more.',
         start_url: '/',
         display: 'standalone',
         background_color: '#f8fafc',
@@ -21,7 +21,6 @@ export default function manifest() {
         ],
     };
 }
-
 
 
 

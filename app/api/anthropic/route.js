@@ -6,7 +6,6 @@ import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
     CLAUDE_OPUS_MODEL,
-    CLAUDE_SONNET_MODEL,
     MIMO_V2_PRO_MODEL,
     MINIMAX_M2_7_HIGHSPEED_MODEL,
     getDefaultMaxTokensForModel,
@@ -47,7 +46,7 @@ const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
 
 function isClaudeModel(model) {
-    return typeof model === 'string' && (model.startsWith(CLAUDE_OPUS_MODEL) || model.startsWith(CLAUDE_SONNET_MODEL));
+    return typeof model === 'string' && model.startsWith(CLAUDE_OPUS_MODEL);
 }
 
 function isMiMoModel(model) {
@@ -65,7 +64,6 @@ function isZenmuxAnthropicModel(model) {
 function resolveAnthropicApiModel(model) {
     if (typeof model !== 'string') return model;
     if (model.startsWith(CLAUDE_OPUS_MODEL)) return CLAUDE_OPUS_MODEL;
-    if (model.startsWith(CLAUDE_SONNET_MODEL)) return CLAUDE_SONNET_MODEL;
     if (isMiMoModel(model)) return `xiaomi/${model}`;
     if (isMiniMaxModel(model)) return `minimax/${model}`;
     return model;

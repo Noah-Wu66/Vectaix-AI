@@ -726,6 +726,7 @@ h6 {
   text-align: center;
   --loading-sweep-spacing: 0.22em;
   --loading-sweep-line-height: 1;
+  transform: translateY(-0.15em);
 }
 
 .loading-sweep::after {

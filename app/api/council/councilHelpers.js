@@ -27,7 +27,7 @@ import {
 import {
   CLAUDE_OPUS_MODEL,
   DEFAULT_SEED_THINKING_LEVEL,
-  GEMINI_FLASH_MODEL,
+  GEMINI_PRO_MODEL,
   getCouncilExpertConfigs,
   getCouncilExpertDisplayLabel,
   SEED_MODEL_ID,
@@ -35,8 +35,8 @@ import {
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ARK_API_KEY = process.env.ARK_API_KEY;
-const GEMINI_DECISION_MODEL = GEMINI_FLASH_MODEL;
-const GEMINI_DECISION_THINKING_LEVEL = parseGeminiThinkingLevel("MINIMAL", GEMINI_DECISION_MODEL);
+const GEMINI_DECISION_MODEL = GEMINI_PRO_MODEL;
+const GEMINI_DECISION_THINKING_LEVEL = parseGeminiThinkingLevel("LOW");
 const FORMATTING_GUARD =
   "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;

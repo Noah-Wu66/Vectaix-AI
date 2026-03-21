@@ -3,14 +3,14 @@ import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
-import { GEMINI_FLASH_MODEL } from '@/lib/shared/models';
+import { GEMINI_PRO_MODEL } from '@/lib/shared/models';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const COMPRESS_RATE_LIMIT = { limit: 10, windowMs: 60 * 1000 };
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const COMPRESS_MODEL = GEMINI_FLASH_MODEL;
+const COMPRESS_MODEL = GEMINI_PRO_MODEL;
 
 const COMPRESS_SYSTEM_PROMPT = `你是一个对话历史压缩器。你的任务是将一段多轮对话压缩成一份简洁的摘要，保留所有关键信息。
 
@@ -83,7 +83,7 @@ export async function POST(req) {
             return Response.json({ error: 'GEMINI_API_KEY is not set' }, { status: 500 });
         }
 
-        // 使用 Gemini Flash 进行压缩（速度快、上下文窗口大、成本低）
+        // 使用 Gemini Pro 进行压缩
         const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
         const result = await ai.models.generateContent({

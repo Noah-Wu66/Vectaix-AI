@@ -8,10 +8,12 @@ import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
 import {
   AGENT_MODEL_ID,
   CHAT_MODELS,
-  CLAUDE_SONNET_MODEL,
+  CLAUDE_OPUS_MODEL,
   COUNCIL_MODEL_ID,
   DEEPSEEK_REASONER_MODEL,
-  GEMINI_FLASH_MODEL,
+  GEMINI_PRO_MODEL,
+  MINIMAX_M2_7_HIGHSPEED_MODEL,
+  MIMO_V2_PRO_MODEL,
   OPENAI_PRIMARY_MODEL,
   SEED_MODEL_ID,
   isCouncilModel,
@@ -224,7 +226,7 @@ export default function ChatApp() {
   const syncSettingsTimeoutRef = useRef(null);
   const pendingSettingsRef = useRef({});
   const pendingConversationIdRef = useRef(null);
-  const lastTextModelRef = useRef(GEMINI_FLASH_MODEL);
+  const lastTextModelRef = useRef(GEMINI_PRO_MODEL);
   const hasRestoredConversationRef = useRef(false);
   const currentConversationIdRef = useRef(null);
   const isStreamingRef = useRef(false);
@@ -653,8 +655,8 @@ export default function ChatApp() {
         // 铁律：根据对话的 provider 强制切换模型
         // - Council 对话进入后，如果当前不是 Council，强制切为 Council
         // - Vectaix 对话进入后，如果当前不是 Vectaix，强制变为 Agent
-        // - Gemini 对话进入后，如果当前不是 Gemini 模型，强制变为 Flash
-        // - Claude 对话进入后，如果当前不是 Claude 模型，强制变为 Sonnet
+        // - Gemini 对话进入后，如果当前不是 Gemini 模型，强制变为 Pro
+        // - Claude 对话进入后，如果当前不是 Claude 模型，强制变为 Opus
         // - OpenAI 对话进入后，如果当前不是 OpenAI 模型，强制变为 GPT
         // - Seed 对话进入后，如果当前不是 Seed 模型，强制变为 Seed
         // - DeepSeek 对话进入后，如果当前不是 DeepSeek 模型，强制变为 DeepSeek
@@ -664,15 +666,19 @@ export default function ChatApp() {
         } else if (conversationProvider === "vectaix" && currentProvider !== "vectaix") {
           targetModel = AGENT_MODEL_ID;
         } else if (conversationProvider === "gemini" && currentProvider !== "gemini") {
-          targetModel = GEMINI_FLASH_MODEL;
+          targetModel = GEMINI_PRO_MODEL;
         } else if (conversationProvider === "claude" && currentProvider !== "claude") {
-          targetModel = CLAUDE_SONNET_MODEL;
+          targetModel = CLAUDE_OPUS_MODEL;
         } else if (conversationProvider === "openai" && currentProvider !== "openai") {
           targetModel = OPENAI_PRIMARY_MODEL;
         } else if (conversationProvider === "seed" && currentProvider !== "seed") {
           targetModel = SEED_MODEL_ID;
         } else if (conversationProvider === "deepseek" && currentProvider !== "deepseek") {
           targetModel = DEEPSEEK_REASONER_MODEL;
+        } else if (conversationProvider === "xiaomi" && currentProvider !== "xiaomi") {
+          targetModel = MIMO_V2_PRO_MODEL;
+        } else if (conversationProvider === "minimax" && currentProvider !== "minimax") {
+          targetModel = MINIMAX_M2_7_HIGHSPEED_MODEL;
         } else if (conversationProvider === currentProvider) {
           // provider 相同，保持当前模型不变
           targetModel = model;
@@ -779,7 +785,7 @@ export default function ChatApp() {
 
     // 如果有对话历史且 provider 不同，提示用户需要新建对话
     if (messages.length > 0 && currentProvider && nextProvider && currentProvider !== nextProvider) {
-      const providerNames = { council: "Council", vectaix: "Vectaix", gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "Seed", deepseek: "DeepSeek" };
+      const providerNames = { council: "Council", vectaix: "Vectaix", gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "Seed", deepseek: "DeepSeek", xiaomi: "MiMo", minimax: "MiniMax" };
       setConfirmModalConfig({
         title: "切换模型",
         message: `切换到 ${providerNames[nextProvider]} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider]} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,
