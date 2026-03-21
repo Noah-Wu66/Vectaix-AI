@@ -12,14 +12,7 @@ import {
   MODEL_GROUP_ORDER,
   normalizeAgentDriverModelId,
 } from "@/lib/shared/models";
-import {
-  buildCustomTimeRange,
-  DEFAULT_WEB_SEARCH_SETTINGS,
-  splitCustomTimeRange,
-  WEB_SEARCH_INDUSTRIES,
-  WEB_SEARCH_MAX_COUNT,
-  WEB_SEARCH_PRESET_TIME_RANGES,
-} from "@/lib/shared/webSearch";
+import { DEFAULT_WEB_SEARCH_SETTINGS } from "@/lib/shared/webSearch";
 
 const MODEL_GROUP_TITLES = {
   gemini: "Google",
@@ -30,24 +23,6 @@ const MODEL_GROUP_TITLES = {
 };
 
 const AGENT_MODEL_OPTIONS = getAgentDriverModels();
-const CUSTOM_TIME_RANGE_VALUE = "__custom__";
-const WEB_SEARCH_TIME_RANGE_LABELS = {
-  "": "不限制",
-  OneDay: "最近一天",
-  OneWeek: "最近一周",
-  OneMonth: "最近一月",
-  OneYear: "最近一年",
-};
-const WEB_SEARCH_AUTHORITY_OPTIONS = [
-  { value: 0, label: "不限制" },
-  { value: 1, label: "仅非常权威" },
-];
-const WEB_SEARCH_INDUSTRY_LABELS = {
-  "": "默认",
-  finance: "金融",
-  game: "游戏",
-};
-
 export default function SettingsMenu({
   model,
   agentModel,
@@ -75,9 +50,6 @@ export default function SettingsMenu({
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmDanger, setConfirmDanger] = useState(false);
-  const [timeRangeMode, setTimeRangeMode] = useState("");
-  const [customStartDate, setCustomStartDate] = useState("");
-  const [customEndDate, setCustomEndDate] = useState("");
   const confirmActionRef = useRef(null);
   const promptListRef = useRef(null);
 
@@ -104,37 +76,6 @@ export default function SettingsMenu({
       ...patch,
     }));
   };
-
-  const updateWebSearchCount = (rawValue) => {
-    const parsed = Number.parseInt(rawValue, 10);
-    updateWebSearch({
-      count: Number.isFinite(parsed) && parsed > 0
-        ? Math.min(parsed, WEB_SEARCH_MAX_COUNT)
-        : DEFAULT_WEB_SEARCH_SETTINGS.count,
-    });
-  };
-
-  const handleTimeRangeModeChange = (nextValue) => {
-    setTimeRangeMode(nextValue);
-    if (nextValue === CUSTOM_TIME_RANGE_VALUE) {
-      updateWebSearch({ timeRange: buildCustomTimeRange(customStartDate, customEndDate) });
-      return;
-    }
-    updateWebSearch({ timeRange: nextValue });
-  };
-
-  const handleCustomTimeRangeChange = (field, value) => {
-    const nextStartDate = field === "startDate" ? value : customStartDate;
-    const nextEndDate = field === "endDate" ? value : customEndDate;
-    if (field === "startDate") {
-      setCustomStartDate(value);
-    } else {
-      setCustomEndDate(value);
-    }
-    updateWebSearch({ timeRange: buildCustomTimeRange(nextStartDate, nextEndDate) });
-  };
-
-  const isCustomTimeRange = timeRangeMode === CUSTOM_TIME_RANGE_VALUE;
 
   useEffect(() => {
     if (!model || !Array.isArray(systemPrompts)) return;
@@ -179,20 +120,6 @@ export default function SettingsMenu({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showPromptList]);
-
-  useEffect(() => {
-    if (!showSettings) return;
-    const { startDate, endDate } = splitCustomTimeRange(webSearchSettings.timeRange);
-    if (startDate && endDate) {
-      setTimeRangeMode(CUSTOM_TIME_RANGE_VALUE);
-      setCustomStartDate(startDate);
-      setCustomEndDate(endDate);
-      return;
-    }
-    setTimeRangeMode(webSearchSettings.timeRange || "");
-    setCustomStartDate("");
-    setCustomEndDate("");
-  }, [showSettings]);
 
   const closePromptModal = () => {
     if (promptModalSaving) return;
@@ -462,7 +389,7 @@ export default function SettingsMenu({
                 </div>
 
                 {supportsWebSearch && (
-                  <div className="space-y-3">
+                  <div>
                     <div>
                       <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                         联网搜索
@@ -478,140 +405,6 @@ export default function SettingsMenu({
                         <Globe size={14} />
                         {webSearchSettings.enabled ? "开" : "关"}
                       </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-zinc-500 mb-1.5 block">返回条数</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={WEB_SEARCH_MAX_COUNT}
-                          value={webSearchSettings.count}
-                          onChange={(event) => updateWebSearchCount(event.target.value)}
-                          className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-xs text-zinc-500 mb-1.5 block">权威范围</label>
-                        <select
-                          value={String(webSearchSettings.authInfoLevel)}
-                          onChange={(event) => updateWebSearch({ authInfoLevel: Number(event.target.value) })}
-                          className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
-                        >
-                          {WEB_SEARCH_AUTHORITY_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-zinc-500 mb-1.5 block">时间范围</label>
-                      <select
-                        value={timeRangeMode}
-                        onChange={(event) => handleTimeRangeModeChange(event.target.value)}
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
-                      >
-                        {WEB_SEARCH_PRESET_TIME_RANGES.map((value) => (
-                          <option key={value || "default"} value={value}>{WEB_SEARCH_TIME_RANGE_LABELS[value]}</option>
-                        ))}
-                        <option value={CUSTOM_TIME_RANGE_VALUE}>自定义区间</option>
-                      </select>
-                    </div>
-
-                    {isCustomTimeRange && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs text-zinc-500 mb-1.5 block">开始日期</label>
-                          <input
-                            type="date"
-                            value={customStartDate}
-                            onChange={(event) => handleCustomTimeRangeChange("startDate", event.target.value)}
-                            className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-zinc-500 mb-1.5 block">结束日期</label>
-                          <input
-                            type="date"
-                            value={customEndDate}
-                            onChange={(event) => handleCustomTimeRangeChange("endDate", event.target.value)}
-                            className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
-                          />
-                        </div>
-                        <div className="col-span-2 text-[11px] text-zinc-400">
-                          会自动保存成 YYYY-MM-DD..YYYY-MM-DD。
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-3 text-sm text-zinc-700">
-                      <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={webSearchSettings.needContent}
-                          onChange={(event) => updateWebSearch({ needContent: event.target.checked })}
-                          className="h-4 w-4 rounded border-zinc-300"
-                        />
-                        带正文
-                      </label>
-                      <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={webSearchSettings.needUrl}
-                          onChange={(event) => updateWebSearch({ needUrl: event.target.checked })}
-                          className="h-4 w-4 rounded border-zinc-300"
-                        />
-                        带链接
-                      </label>
-                      <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                        <input
-                          type="checkbox"
-                          checked={webSearchSettings.queryRewrite}
-                          onChange={(event) => updateWebSearch({ queryRewrite: event.target.checked })}
-                          className="h-4 w-4 rounded border-zinc-300"
-                        />
-                        改写搜索词
-                      </label>
-                      <div>
-                        <label className="text-xs text-zinc-500 mb-1.5 block">行业模式</label>
-                        <select
-                          value={webSearchSettings.industry}
-                          onChange={(event) => updateWebSearch({ industry: event.target.value })}
-                          className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
-                        >
-                          {WEB_SEARCH_INDUSTRIES.map((value) => (
-                            <option key={value || "default"} value={value}>{WEB_SEARCH_INDUSTRY_LABELS[value]}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-zinc-500 mb-1.5 block">指定站点</label>
-                      <input
-                        type="text"
-                        value={webSearchSettings.sites}
-                        onChange={(event) => updateWebSearch({ sites: event.target.value })}
-                        placeholder="例如：openai.com|platform.openai.com"
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-zinc-500 mb-1.5 block">屏蔽站点</label>
-                      <input
-                        type="text"
-                        value={webSearchSettings.blockHosts}
-                        onChange={(event) => updateWebSearch({ blockHosts: event.target.value })}
-                        placeholder="例如：example.com|foo.bar"
-                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
-                      />
-                      <div className="mt-1 text-[11px] text-zinc-400">
-                        多个域名用 | 分隔，最多 5 个。
-                      </div>
                     </div>
                   </div>
                 )}

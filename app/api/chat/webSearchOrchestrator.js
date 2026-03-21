@@ -316,11 +316,11 @@ function isClearlyNonSearchReply(text) {
 }
 
 function normalizeDecisionTimeRange(value) {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== 'string') return '';
 
   const trimmed = value.trim();
   if (!trimmed) return '';
-  return isValidTimeRange(trimmed) ? trimmed : null;
+  return isValidTimeRange(trimmed) ? trimmed : '';
 }
 
 function extractDecisionQuery(candidate) {
@@ -702,37 +702,6 @@ function finalizeSearchQuery({ prompt, historyMessages, rawQuery, timeRange }) {
   return '';
 }
 
-function inferTimeRangeFromQuery(text) {
-  const source = typeof text === 'string' ? text : '';
-  const lower = source.toLowerCase();
-
-  if (
-    includesAnyKeyword(source, ['今天', '今日', '刚刚', '刚才', '现在', '实时', '目前', '股价', '汇率', '天气', '航班', '比分', '开奖', '热搜'])
-    || includesAnyKeyword(source, AGGRESSIVE_RECENCY_HINT_KEYWORDS)
-    || /\b(today|now|live|real-time|realtime|just released|out yet|released yet)\b/.test(lower)
-  ) {
-    return 'OneDay';
-  }
-
-  if (
-    includesAnyKeyword(source, ['最新', '最近', '新闻', '公告', '动态', '进展', '近况', '更新', '发布'])
-    || (/20\d{2}|今年|本月|本周/u.test(source) && includesAnyKeyword(source, ['发布', '更新', '公告', '规则', '政策', '价格', '状态', '现状', '消息', '进展']))
-    || /\b(latest|recent|news|update|updates|announcement|announcements)\b/.test(lower)
-  ) {
-    return 'OneWeek';
-  }
-
-  if (includesAnyKeyword(source, ['本月', '这个月', '近一个月', '近30天']) || /\bthis month\b/.test(lower)) {
-    return 'OneMonth';
-  }
-
-  if (includesAnyKeyword(source, ['今年', '近一年', '过去一年']) || /\bthis year\b/.test(lower)) {
-    return 'OneYear';
-  }
-
-  return '';
-}
-
 async function raceWithAbortSignal(task, signal) {
   if (!signal) return task;
   if (signal.aborted) {
@@ -855,7 +824,7 @@ function buildHeuristicWebSearchDecision({ prompt, historyMessages }) {
   return {
     needSearch: true,
     query: mergedQuery,
-    timeRange: inferTimeRangeFromQuery(mergedQuery),
+    timeRange: '',
   };
 }
 
@@ -1034,12 +1003,9 @@ export function normalizeWebSearchDecision(rawDecision) {
 
   const query = extractDecisionQuery(candidate);
   const rawTimeRange = candidate.timeRange ?? candidate.time_range;
-  const timeRange = rawTimeRange == null
-    ? inferTimeRangeFromQuery(query)
-    : normalizeDecisionTimeRange(rawTimeRange);
+  const timeRange = normalizeDecisionTimeRange(rawTimeRange);
 
   if (!query) return null;
-  if (timeRange == null) return null;
 
   return {
     needSearch: true,
@@ -1100,7 +1066,6 @@ export async function runWebSearchOrchestration(options) {
   const searchLimit = Number.isFinite(searchOptions?.count) && searchOptions.count > 0
     ? searchOptions.count
     : WEB_SEARCH_LIMIT;
-  const configuredTimeRange = typeof searchOptions?.timeRange === 'string' ? searchOptions.timeRange.trim() : '';
   if (isClearlyNonSearchReply(currentPrompt) || shouldForceSkipSearch(currentPrompt)) {
     return { searchContextText: '' };
   }
@@ -1178,7 +1143,7 @@ export async function runWebSearchOrchestration(options) {
     const needSearch = decision.needSearch === true;
     const rawQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
     const decisionTimeRange = typeof decision.timeRange === 'string' ? decision.timeRange.trim() : '';
-    const finalTimeRange = configuredTimeRange || decisionTimeRange || '';
+    const finalTimeRange = decisionTimeRange || '';
     const nextQuery = needSearch
       ? finalizeSearchQuery({
           prompt: currentPrompt,
