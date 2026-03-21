@@ -15,10 +15,9 @@ import {
   buildSearchEventResults,
 } from '@/app/api/chat/volcengineWebSearch';
 import {
-  mapTimeRangeToFreshness,
+  isValidTimeRange,
 } from '@/lib/shared/webSearch';
 
-const VALID_FRESHNESS_VALUES = new Set(['oneDay', 'oneWeek', 'oneMonth', 'oneYear', 'noLimit']);
 const EXPLICIT_SEARCH_KEYWORDS = [
   '查一下',
   '查一查',
@@ -121,7 +120,7 @@ const BALANCED_SEARCH_HINT_KEYWORDS = [
   '更新了吗',
   '上线了吗',
 ];
-const AGGRESSIVE_FRESHNESS_HINT_KEYWORDS = [
+const AGGRESSIVE_RECENCY_HINT_KEYWORDS = [
   '刚出',
   '刚刚发布',
   '刚发布',
@@ -316,35 +315,12 @@ function isClearlyNonSearchReply(text) {
   return NON_SEARCH_REPLY_KEYWORDS.includes(normalized);
 }
 
-function normalizeFreshnessValue(value) {
+function normalizeDecisionTimeRange(value) {
   if (typeof value !== 'string') return null;
 
   const trimmed = value.trim();
-  if (VALID_FRESHNESS_VALUES.has(trimmed)) return trimmed;
-
-  const compact = trimmed.toLowerCase().replace(/[^a-z]/g, '');
-  const aliasMap = {
-    day: 'oneDay',
-    today: 'oneDay',
-    oneday: 'oneDay',
-    daily: 'oneDay',
-    week: 'oneWeek',
-    weekly: 'oneWeek',
-    oneweek: 'oneWeek',
-    recent: 'oneWeek',
-    month: 'oneMonth',
-    monthly: 'oneMonth',
-    onemonth: 'oneMonth',
-    year: 'oneYear',
-    yearly: 'oneYear',
-    oneyear: 'oneYear',
-    nolimit: 'noLimit',
-    none: 'noLimit',
-    all: 'noLimit',
-    any: 'noLimit',
-  };
-
-  return aliasMap[compact] || null;
+  if (!trimmed) return '';
+  return isValidTimeRange(trimmed) ? trimmed : null;
 }
 
 function extractDecisionQuery(candidate) {
@@ -567,20 +543,20 @@ function extractIntentTokens(text) {
   return tokens.slice(0, 3);
 }
 
-function buildEnglishIntentTokens(text, freshness = 'noLimit') {
+function buildEnglishIntentTokens(text, timeRange = '') {
   const chineseTokens = extractIntentTokens(text);
   const englishTokens = chineseTokens
     .map((token) => MIXED_LANGUAGE_INTENT_TOKEN_MAP[token])
     .filter(Boolean);
 
-  if (freshness === 'oneWeek' && !englishTokens.includes('latest') && !englishTokens.includes('news')) {
+  if ((timeRange === 'OneDay' || timeRange === 'OneWeek') && !englishTokens.includes('latest') && !englishTokens.includes('news')) {
     englishTokens.push('latest');
   }
 
   return englishTokens.slice(0, 4);
 }
 
-function buildQueryFromTopic({ topic, intentTokens, freshness, preferMixedLanguage = false }) {
+function buildQueryFromTopic({ topic, intentTokens, timeRange, preferMixedLanguage = false }) {
   const parts = [];
   const tokens = Array.isArray(intentTokens) ? intentTokens : [];
 
@@ -596,10 +572,10 @@ function buildQueryFromTopic({ topic, intentTokens, freshness, preferMixedLangua
     parts.push(englishToken);
   }
 
-  const shouldAppendFreshness = freshness === 'oneWeek'
+  const shouldAppendRecentIntent = (timeRange === 'OneDay' || timeRange === 'OneWeek')
     && !tokens.some((token) => token.includes('最新'));
 
-  if (shouldAppendFreshness && !parts.includes('最新')) {
+  if (shouldAppendRecentIntent && !parts.includes('最新')) {
     parts.push('最新');
     if (preferMixedLanguage && !parts.includes('latest')) {
       parts.push('latest');
@@ -621,13 +597,13 @@ function shouldPreferEnglishSearch({ prompt, rawQuery, query, topic }) {
   return false;
 }
 
-function buildEnglishSearchQuery({ prompt, rawQuery, query, freshness }) {
+function buildEnglishSearchQuery({ prompt, rawQuery, query, timeRange }) {
   const topic = extractBestLatinTopic(query, rawQuery, prompt);
   if (!topic) return '';
 
   const intentTokens = buildEnglishIntentTokens(
     [query, rawQuery, prompt].filter(Boolean).join(' '),
-    freshness
+    timeRange
   );
   const parts = [topic];
 
@@ -642,7 +618,7 @@ function buildEnglishSearchQuery({ prompt, rawQuery, query, freshness }) {
   return englishQuery.slice(0, Math.max(MAX_FINAL_QUERY_LENGTH, 64));
 }
 
-function normalizeQueryLanguageStrategy({ prompt, rawQuery, query, freshness }) {
+function normalizeQueryLanguageStrategy({ prompt, rawQuery, query, timeRange }) {
   const cleaned = cleanupQueryText(query);
   if (!cleaned) return '';
 
@@ -658,7 +634,7 @@ function normalizeQueryLanguageStrategy({ prompt, rawQuery, query, freshness }) 
       prompt,
       rawQuery,
       query: cleaned,
-      freshness,
+      timeRange,
     });
 
     if (englishQuery) {
@@ -671,7 +647,7 @@ function normalizeQueryLanguageStrategy({ prompt, rawQuery, query, freshness }) 
       prompt,
       rawQuery,
       query: cleaned,
-      freshness,
+      timeRange,
     });
     if (englishQuery) return englishQuery;
   }
@@ -679,7 +655,7 @@ function normalizeQueryLanguageStrategy({ prompt, rawQuery, query, freshness }) 
   return cleaned;
 }
 
-function finalizeSearchQuery({ prompt, historyMessages, rawQuery, freshness }) {
+function finalizeSearchQuery({ prompt, historyMessages, rawQuery, timeRange }) {
   const cleanedQuery = cleanupQueryText(rawQuery);
   const promptIsCompact = isCompactSearchQuery(prompt);
 
@@ -694,7 +670,7 @@ function finalizeSearchQuery({ prompt, historyMessages, rawQuery, freshness }) {
       prompt,
       rawQuery,
       query: cleanedQuery,
-      freshness,
+      timeRange,
     });
   }
 
@@ -703,14 +679,14 @@ function finalizeSearchQuery({ prompt, historyMessages, rawQuery, freshness }) {
     || getRecentTopicHint(historyMessages);
   const intentTokens = extractIntentTokens(`${rawQuery || ''}\n${prompt || ''}`);
   const preferMixedLanguage = shouldUseMixedLanguageQuery(topic, rawQuery, prompt);
-  const rebuiltQuery = buildQueryFromTopic({ topic, intentTokens, freshness, preferMixedLanguage });
+  const rebuiltQuery = buildQueryFromTopic({ topic, intentTokens, timeRange, preferMixedLanguage });
 
   if (rebuiltQuery && isCompactSearchQuery(rebuiltQuery)) {
     return normalizeQueryLanguageStrategy({
       prompt,
       rawQuery,
       query: rebuiltQuery,
-      freshness,
+      timeRange,
     });
   }
 
@@ -719,23 +695,23 @@ function finalizeSearchQuery({ prompt, historyMessages, rawQuery, freshness }) {
       prompt,
       rawQuery,
       query: topic,
-      freshness,
+      timeRange,
     });
   }
 
   return '';
 }
 
-function inferFreshnessFromQuery(text) {
+function inferTimeRangeFromQuery(text) {
   const source = typeof text === 'string' ? text : '';
   const lower = source.toLowerCase();
 
   if (
     includesAnyKeyword(source, ['今天', '今日', '刚刚', '刚才', '现在', '实时', '目前', '股价', '汇率', '天气', '航班', '比分', '开奖', '热搜'])
-    || includesAnyKeyword(source, AGGRESSIVE_FRESHNESS_HINT_KEYWORDS)
+    || includesAnyKeyword(source, AGGRESSIVE_RECENCY_HINT_KEYWORDS)
     || /\b(today|now|live|real-time|realtime|just released|out yet|released yet)\b/.test(lower)
   ) {
-    return 'oneDay';
+    return 'OneDay';
   }
 
   if (
@@ -743,18 +719,18 @@ function inferFreshnessFromQuery(text) {
     || (/20\d{2}|今年|本月|本周/u.test(source) && includesAnyKeyword(source, ['发布', '更新', '公告', '规则', '政策', '价格', '状态', '现状', '消息', '进展']))
     || /\b(latest|recent|news|update|updates|announcement|announcements)\b/.test(lower)
   ) {
-    return 'oneWeek';
+    return 'OneWeek';
   }
 
   if (includesAnyKeyword(source, ['本月', '这个月', '近一个月', '近30天']) || /\bthis month\b/.test(lower)) {
-    return 'oneMonth';
+    return 'OneMonth';
   }
 
   if (includesAnyKeyword(source, ['今年', '近一年', '过去一年']) || /\bthis year\b/.test(lower)) {
-    return 'oneYear';
+    return 'OneYear';
   }
 
-  return 'noLimit';
+  return '';
 }
 
 async function raceWithAbortSignal(task, signal) {
@@ -791,13 +767,13 @@ function isLikelySearchFollowUp(text) {
   return false;
 }
 
-function isLikelyAggressiveFreshnessQuery(text) {
+function isLikelyAggressiveRecentQuery(text) {
   if (typeof text !== 'string') return false;
   const trimmed = text.trim();
   if (!trimmed) return false;
 
   const lower = trimmed.toLowerCase();
-  if (includesAnyKeyword(trimmed, AGGRESSIVE_FRESHNESS_HINT_KEYWORDS)) return true;
+  if (includesAnyKeyword(trimmed, AGGRESSIVE_RECENCY_HINT_KEYWORDS)) return true;
   if (
     includesAnyKeyword(trimmed, ['现在', '目前', '当前'])
     && includesAnyKeyword(trimmed, ['怎么样', '如何', '还能', '可用', '能用', '在售', '有效', '开放', '支持', '行不行', '可以吗'])
@@ -814,14 +790,14 @@ function isLikelyAggressiveFreshnessQuery(text) {
   return false;
 }
 
-function isLikelyKnowledgeGapOrFreshnessQuery(text) {
+function isLikelyKnowledgeGapOrRecentQuery(text) {
   if (typeof text !== 'string') return false;
   const trimmed = text.trim();
   if (!trimmed) return false;
 
   const lower = trimmed.toLowerCase();
   if (includesAnyKeyword(trimmed, BALANCED_SEARCH_HINT_KEYWORDS)) return true;
-  if (isLikelyAggressiveFreshnessQuery(trimmed)) return true;
+  if (isLikelyAggressiveRecentQuery(trimmed)) return true;
   if (/\b(api|sdk|docs?|documentation|pricing|changelog|release notes?)\b/.test(lower)) return true;
   if (/(v\d+|版本|兼容|支持).*(吗|么|？|\?)/u.test(trimmed)) return true;
   return false;
@@ -850,7 +826,7 @@ function buildHeuristicWebSearchDecision({ prompt, historyMessages }) {
   if (!currentPrompt) return null;
 
   if (isClearlyNonSearchReply(currentPrompt) || shouldForceSkipSearch(currentPrompt)) {
-    return { needSearch: false, query: '', freshness: 'noLimit' };
+    return { needSearch: false, query: '', timeRange: '' };
   }
 
   const lowerPrompt = currentPrompt.toLowerCase();
@@ -859,8 +835,8 @@ function buildHeuristicWebSearchDecision({ prompt, historyMessages }) {
   const isFollowUp = isLikelySearchFollowUp(currentPrompt)
     || (currentPrompt.length <= 12 && includesAnyKeyword(currentPrompt, FOLLOW_UP_SEARCH_KEYWORDS))
     || (currentPrompt.length <= 32 && includesAnyKeyword(lowerPrompt, FOLLOW_UP_SEARCH_KEYWORDS_EN));
-  const hasBalancedHint = isLikelyKnowledgeGapOrFreshnessQuery(currentPrompt);
-  const hasAggressiveHint = isLikelyAggressiveFreshnessQuery(currentPrompt);
+  const hasBalancedHint = isLikelyKnowledgeGapOrRecentQuery(currentPrompt);
+  const hasAggressiveHint = isLikelyAggressiveRecentQuery(currentPrompt);
 
   if (!hasExplicitIntent && !isFollowUp && !hasBalancedHint && !hasAggressiveHint) {
     return null;
@@ -879,7 +855,7 @@ function buildHeuristicWebSearchDecision({ prompt, historyMessages }) {
   return {
     needSearch: true,
     query: mergedQuery,
-    freshness: inferFreshnessFromQuery(mergedQuery),
+    timeRange: inferTimeRangeFromQuery(mergedQuery),
   };
 }
 
@@ -929,7 +905,7 @@ function buildSearchRoundsDecisionText(searchRounds) {
       `第 ${round.round} 轮`,
       `搜索词：${round.query || '(空)'}`,
       `query语言：${language}`,
-      `时效：${round.freshness || 'noLimit'}`,
+      `时间范围：${round.timeRange || '(不限制)'}`,
       `结果数：${Array.isArray(round?.results) ? round.results.length : 0}`,
     ];
     if (weakResult) {
@@ -983,8 +959,8 @@ function buildAccumulatedSearchContext(searchRounds) {
   return rounds
     .map((round) => {
       const lines = [`第${round.round}轮联网检索（关键词：${round.query || '(空)'}）`];
-      if (round.freshness && round.freshness !== 'noLimit') {
-        lines.push(`时效要求：${round.freshness}`);
+      if (round.timeRange) {
+        lines.push(`时间范围：${round.timeRange}`);
       }
       if (round.contextText) {
         lines.push(round.contextText);
@@ -1052,20 +1028,23 @@ export function normalizeWebSearchDecision(rawDecision) {
     return {
       needSearch: false,
       query: '',
-      freshness: 'noLimit',
+      timeRange: '',
     };
   }
 
   const query = extractDecisionQuery(candidate);
-  const freshness = normalizeFreshnessValue(candidate.freshness) || inferFreshnessFromQuery(query);
+  const rawTimeRange = candidate.timeRange ?? candidate.time_range;
+  const timeRange = rawTimeRange == null
+    ? inferTimeRangeFromQuery(query)
+    : normalizeDecisionTimeRange(rawTimeRange);
 
   if (!query) return null;
-  if (!VALID_FRESHNESS_VALUES.has(freshness)) return null;
+  if (timeRange == null) return null;
 
   return {
     needSearch: true,
     query,
-    freshness,
+    timeRange,
   };
 }
 
@@ -1180,7 +1159,7 @@ export async function runWebSearchOrchestration(options) {
           model,
           conversationId,
           needSearch: fallbackDecision.needSearch,
-          freshness: fallbackDecision.freshness,
+          timeRange: fallbackDecision.timeRange,
         });
         decision = fallbackDecision;
       } else {
@@ -1198,16 +1177,16 @@ export async function runWebSearchOrchestration(options) {
 
     const needSearch = decision.needSearch === true;
     const rawQuery = typeof decision.query === 'string' ? decision.query.trim() : '';
-    const effectiveDecisionFreshness = mapTimeRangeToFreshness(configuredTimeRange) || 'noLimit';
+    const decisionTimeRange = typeof decision.timeRange === 'string' ? decision.timeRange.trim() : '';
+    const finalTimeRange = configuredTimeRange || decisionTimeRange || '';
     const nextQuery = needSearch
       ? finalizeSearchQuery({
           prompt: currentPrompt,
           historyMessages,
           rawQuery,
-          freshness: effectiveDecisionFreshness,
+          timeRange: finalTimeRange,
         })
       : '';
-    const finalFreshness = effectiveDecisionFreshness;
     const duplicateQuery = needSearch && hasSeenQuery(searchRounds, nextQuery);
 
     console.info(`${providerLabel} web search decision`, {
@@ -1218,7 +1197,7 @@ export async function runWebSearchOrchestration(options) {
       queryChanged: rawQuery !== nextQuery,
       queryDiscarded: needSearch && !nextQuery,
       duplicateQuery,
-      freshness: finalFreshness,
+      timeRange: finalTimeRange || null,
       queryLanguage: getQueryLanguageLabel(nextQuery),
       model,
       conversationId,
@@ -1234,7 +1213,7 @@ export async function runWebSearchOrchestration(options) {
         round: roundIndex + 1,
         rawQuery: rawQuery || null,
         finalQuery: null,
-        freshness: finalFreshness,
+        timeRange: finalTimeRange || null,
         model,
         conversationId,
       });
@@ -1245,7 +1224,7 @@ export async function runWebSearchOrchestration(options) {
       console.info(`${providerLabel} web search skipped duplicate query`, {
         round: roundIndex + 1,
         query: nextQuery,
-        freshness: finalFreshness,
+        timeRange: finalTimeRange || null,
         model,
         conversationId,
       });
@@ -1272,8 +1251,7 @@ export async function runWebSearchOrchestration(options) {
     try {
       searchData = await volcengineWebSearch(nextQuery, {
         count: searchLimit,
-        freshness: finalFreshness,
-        timeRange: configuredTimeRange,
+        timeRange: finalTimeRange,
         needContent: searchOptions?.needContent,
         needUrl: searchOptions?.needUrl,
         sites: searchOptions?.sites,
@@ -1289,7 +1267,7 @@ export async function runWebSearchOrchestration(options) {
         round,
         rawQuery: rawQuery || null,
         query: nextQuery,
-        freshness: finalFreshness,
+        timeRange: finalTimeRange || null,
         message: searchError?.message,
         name: searchError?.name,
       });
@@ -1331,7 +1309,7 @@ export async function runWebSearchOrchestration(options) {
         needSearch,
         rawQuery: rawQuery || null,
         finalQuery: nextQuery,
-        freshness: finalFreshness,
+        timeRange: finalTimeRange || null,
         lastQuery: nextQuery,
         resultCount: results.length,
       });
@@ -1340,7 +1318,7 @@ export async function runWebSearchOrchestration(options) {
     searchRounds.push({
       round,
       query: nextQuery,
-      freshness: configuredTimeRange || finalFreshness,
+      timeRange: finalTimeRange,
       summary,
       results,
       contextText: roundContextText,

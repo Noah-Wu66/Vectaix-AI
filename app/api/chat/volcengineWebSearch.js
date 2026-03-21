@@ -156,16 +156,6 @@ function normalizeQueryInput(query) {
   return query.trim().slice(0, 100);
 }
 
-function mapFreshnessToTimeRange(freshness) {
-  const normalized = typeof freshness === 'string' ? freshness.trim() : 'noLimit';
-  return {
-    oneDay: 'OneDay',
-    oneWeek: 'OneWeek',
-    oneMonth: 'OneMonth',
-    oneYear: 'OneYear',
-  }[normalized] || '';
-}
-
 function buildVolcengineSearchRequestBody(query, options = {}) {
   const normalizedQuery = normalizeQueryInput(query);
   if (!normalizedQuery) {
@@ -178,9 +168,7 @@ function buildVolcengineSearchRequestBody(query, options = {}) {
   const maxResults = Number.isFinite(maxResultsRaw) && maxResultsRaw > 0
     ? Math.min(Math.floor(maxResultsRaw), WEB_SEARCH_MAX_COUNT)
     : DEFAULT_MAX_RESULTS;
-  const timeRange = typeof options.timeRange === 'string' && options.timeRange.trim()
-    ? options.timeRange.trim()
-    : mapFreshnessToTimeRange(options.freshness);
+  const timeRange = typeof options.timeRange === 'string' ? options.timeRange.trim() : '';
   const needContent = options.needContent === true;
   const needUrl = options.needUrl === true;
   const sites = typeof options.sites === 'string' ? options.sites.trim() : '';
