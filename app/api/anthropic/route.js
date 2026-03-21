@@ -4,7 +4,14 @@ import Conversation from '@/models/Conversation';
 import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
-import { CLAUDE_OPUS_MODEL, CLAUDE_SONNET_MODEL, MIMO_V2_PRO_MODEL, MINIMAX_M2_7_HIGHSPEED_MODEL } from '@/lib/shared/models';
+import {
+    CLAUDE_OPUS_MODEL,
+    CLAUDE_SONNET_MODEL,
+    MIMO_V2_PRO_MODEL,
+    MINIMAX_M2_7_HIGHSPEED_MODEL,
+    getDefaultMaxTokensForModel,
+    getModelConfig,
+} from '@/lib/shared/models';
 import {
     fetchImageAsBase64,
     isNonEmptyString,
@@ -25,8 +32,6 @@ import {
 import {
     clampMaxTokens,
     parseClaudeThinkingLevel,
-    parseMiMoThinkingLevel,
-    parseMiniMaxThinkingLevel,
     parseMaxTokens,
     parseSystemPrompt,
     parseWebSearchConfig,
@@ -333,19 +338,20 @@ export async function POST(req) {
         // 构建请求参数（联网搜索上下文将在流式开始前注入）
         let maxTokens;
         let thinkingLevel = null;
+        const modelConfig = getModelConfig(model);
+        const supportsMaxTokensControl = modelConfig?.supportsMaxTokensControl === true;
+        const supportsThinkingLevelControl = modelConfig?.supportsThinkingLevelControl === true;
+        const maxTokenCap = typeof model === "string" && (model === MIMO_V2_PRO_MODEL || model === MINIMAX_M2_7_HIGHSPEED_MODEL) ? 131072 : (model.startsWith(CLAUDE_OPUS_MODEL) ? 128000 : 64000);
         try {
-            maxTokens = parseMaxTokens(config?.maxTokens);
+            maxTokens = supportsMaxTokensControl
+                ? parseMaxTokens(config?.maxTokens)
+                : getDefaultMaxTokensForModel(model);
             if (isClaudeModel(model)) {
                 thinkingLevel = parseClaudeThinkingLevel(config?.thinkingLevel);
-            } else if (isMiMoModel(model)) {
-                thinkingLevel = parseMiMoThinkingLevel(config?.thinkingLevel);
-            } else if (isMiniMaxModel(model)) {
-                thinkingLevel = parseMiniMaxThinkingLevel(config?.thinkingLevel);
             }
         } catch (error) {
             return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
-        const maxTokenCap = typeof model === "string" && (model === MIMO_V2_PRO_MODEL || model === MINIMAX_M2_7_HIGHSPEED_MODEL) ? 131072 : (model.startsWith(CLAUDE_OPUS_MODEL) ? 128000 : 64000);
         const normalizedMaxTokens = clampMaxTokens(maxTokens, maxTokenCap);
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
@@ -497,10 +503,8 @@ export async function POST(req) {
                         requestParams.output_config = {
                             effort: thinkingLevel
                         };
-                    } else if (isMiMoModel(model)) {
-                        requestParams.thinking = { type: thinkingLevel || "enabled" };
-                    } else if (isMiniMaxModel(model)) {
-                        requestParams.thinking = { type: thinkingLevel || "enabled" };
+                    } else if (supportsThinkingLevelControl && thinkingLevel) {
+                        requestParams.thinking = { type: thinkingLevel };
                     }
 
                     const stream = await client.messages.stream(requestParams);
