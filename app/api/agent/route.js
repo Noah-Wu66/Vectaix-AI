@@ -4,7 +4,13 @@ import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { rateLimit, getClientIP } from "@/lib/rateLimit";
 import { AGENT_MODEL_ID, normalizeAgentDriverModelId } from "@/lib/shared/models";
-import { isNonEmptyString } from "@/app/api/chat/utils";
+import { generateMessageId, isNonEmptyString } from "@/app/api/chat/utils";
+import {
+  CONVERSATION_WRITE_CONFLICT_ERROR,
+  buildConversationWriteCondition,
+  loadConversationForRoute,
+  rollbackConversationTurn,
+} from "@/app/api/chat/conversationState";
 import { runAgentRuntimeV2 } from "@/lib/server/agent/runtimeV2";
 import { parseSeedThinkingLevel, parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
 
@@ -183,38 +189,57 @@ export async function POST(req) {
       return Response.json({ error: "请至少输入内容或上传附件" }, { status: 400 });
     }
 
+    let currentConversation = await loadConversationForRoute({
+      conversationId,
+      userId: auth.userId,
+      expectedProvider: "vectaix",
+    });
     let currentConversationId = conversationId;
+    let createdConversationForRequest = false;
+    let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
+    let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
     if (!currentConversationId) {
-        const newConv = await Conversation.create({
-          userId: auth.userId,
-          title: buildConversationTitle(prompt, currentAttachments),
-          model: AGENT_MODEL_ID,
-          settings: {
-            ...(settings && typeof settings === "object" ? settings : {}),
-            agentModel: driverModel,
-            webSearch: parseWebSearchConfig(config?.webSearch),
-          },
-          messages: [],
+      const newConv = await Conversation.create({
+        userId: auth.userId,
+        title: buildConversationTitle(prompt, currentAttachments),
+        model: AGENT_MODEL_ID,
+        settings: {
+          ...(settings && typeof settings === "object" ? settings : {}),
+          agentModel: driverModel,
+          webSearch: parseWebSearchConfig(config?.webSearch),
+        },
+        messages: [],
       });
       currentConversationId = newConv._id.toString();
+      currentConversation = newConv.toObject();
+      createdConversationForRequest = true;
+      previousMessages = [];
+      previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
     }
 
+    const resolvedUserMessageId = typeof userMessageId === "string" && userMessageId ? userMessageId : generateMessageId();
+    const resolvedModelMessageId = typeof modelMessageId === "string" && modelMessageId ? modelMessageId : generateMessageId();
+
     const userMessage = {
-      id: typeof userMessageId === "string" && userMessageId ? userMessageId : `msg_${Date.now()}_user`,
+      id: resolvedUserMessageId,
       role: "user",
       content: typeof prompt === "string" ? prompt : "",
       type: "parts",
       parts: userMessageParts,
     };
 
-    await Conversation.findOneAndUpdate(
+    const updatedConversation = await Conversation.findOneAndUpdate(
       { _id: currentConversationId, userId: auth.userId },
       {
         $push: { messages: userMessage },
         updatedAt: Date.now(),
       },
       { new: true }
-    );
+    ).select("updatedAt");
+    if (!updatedConversation) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+    let writePermitTime = updatedConversation.updatedAt?.getTime?.() ?? Date.now();
 
     const effectiveHistoryMessages = (limit > 0 ? history.slice(-limit) : history)
       .filter((message) => message?.role === "user" || message?.role === "model");
@@ -227,6 +252,21 @@ export async function POST(req) {
 
     const responseStream = new ReadableStream({
       async start(controller) {
+        let finalMessagePersisted = false;
+        const rollbackCurrentTurn = async () => {
+          if (finalMessagePersisted) return;
+          await rollbackConversationTurn({
+            conversationId: currentConversationId,
+            userId: auth.userId,
+            createdConversationForRequest,
+            isRegenerateMode: false,
+            previousMessages,
+            previousUpdatedAt,
+            userMessageId: resolvedUserMessageId,
+            writePermitTime,
+          });
+        };
+
         const sendEvent = (payload) => {
           if (payload?.type === "text" && typeof payload.content === "string") {
             fullText += payload.content;
@@ -287,7 +327,7 @@ export async function POST(req) {
 
           const content = result?.finalAnswer || fullText || "任务已完成。";
           const message = {
-            id: typeof modelMessageId === "string" && modelMessageId ? modelMessageId : `msg_${Date.now()}_model`,
+            id: resolvedModelMessageId,
             role: "model",
             content,
             type: "text",
@@ -297,17 +337,28 @@ export async function POST(req) {
             thinkingTimeline: timeline,
           };
 
-          await Conversation.findOneAndUpdate(
-            { _id: currentConversationId, userId: auth.userId },
+          const persistedConversation = await Conversation.findOneAndUpdate(
+            buildConversationWriteCondition(currentConversationId, auth.userId, writePermitTime),
             {
               $push: { messages: message },
               updatedAt: Date.now(),
-            }
-          );
+            },
+            { new: true }
+          ).select("updatedAt");
+          if (!persistedConversation) {
+            const conflictError = new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+            conflictError.status = 409;
+            throw conflictError;
+          }
+          finalMessagePersisted = true;
+          writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (error) {
+          try {
+            await rollbackCurrentTurn();
+          } catch { }
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({
             type: "stream_error",
             message: error?.message || "Unknown error",

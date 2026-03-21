@@ -1263,10 +1263,7 @@ export async function runWebSearchOrchestration(options) {
       pushCitations(citations);
     }
 
-    const roundContextText = buildSearchContext(summary, results, {
-      maxResults: searchLimit,
-      maxSnippetChars: 280,
-    });
+    const roundContextText = buildSearchContext(summary);
 
     if (warnOnNoContext && !roundContextText) {
       console.warn(`${providerLabel} web search produced no context`, {

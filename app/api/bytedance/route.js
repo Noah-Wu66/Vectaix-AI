@@ -7,6 +7,7 @@ import {
     fetchImageAsBase64,
     buildWebSearchContextBlock,
     estimateTokens,
+    generateMessageId,
     injectCurrentTimeSystemReminder,
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
@@ -39,6 +40,12 @@ import {
     normalizeSeedChunkText,
     requestSeedResponses,
 } from '@/lib/server/seed/service';
+import {
+    CONVERSATION_WRITE_CONFLICT_ERROR,
+    buildConversationWriteCondition,
+    loadConversationForRoute,
+    rollbackConversationTurn,
+} from '@/app/api/chat/conversationState';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -157,25 +164,14 @@ export async function POST(req) {
         }
 
         let currentConversationId = conversationId;
-        if (user && !currentConversationId) {
-            const titleSource = isNonEmptyString(prompt)
-                ? prompt
-                : (Array.isArray(config?.attachments) && config.attachments[0]?.name
-                    ? `附件：${config.attachments[0].name}`
-                    : 'New Chat');
-            const title = titleSource.length > 30 ? `${titleSource.substring(0, 30)}...` : titleSource;
-            const newConv = await Conversation.create({
-                userId: user.userId,
-                title,
-                model: conversationModel,
-                settings: {
-                    ...(settings && typeof settings === 'object' ? settings : {}),
-                    webSearch: parseWebSearchConfig(config?.webSearch),
-                },
-                messages: [],
-            });
-            currentConversationId = newConv._id.toString();
-        }
+        let currentConversation = await loadConversationForRoute({
+            conversationId: currentConversationId,
+            userId: user.userId,
+            expectedProvider: conversationModel === AGENT_MODEL_ID ? 'vectaix' : 'seed',
+        });
+        let createdConversationForRequest = false;
+        let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
+        let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
         let seedInput = [];
         let effectiveHistoryMessages = [];
@@ -186,6 +182,12 @@ export async function POST(req) {
         }
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
+        const resolvedUserMessageId = (typeof userMessageId === 'string' && userMessageId.trim())
+            ? userMessageId.trim()
+            : generateMessageId();
+        const resolvedModelMessageId = (typeof modelMessageId === 'string' && modelMessageId.trim())
+            ? modelMessageId.trim()
+            : generateMessageId();
 
         if (isRegenerateMode) {
             let sanitized;
@@ -283,56 +285,6 @@ export async function POST(req) {
             }
         }
 
-        if (user && !isRegenerateMode) {
-            const storedUserParts = [];
-            if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
-
-            if (dbImageEntries.length > 0) {
-                for (const entry of dbImageEntries) {
-                    storedUserParts.push({
-                        inlineData: {
-                            mimeType: entry.mimeType,
-                            url: entry.url,
-                        },
-                    });
-                }
-            }
-            if (attachmentEntries.length > 0) {
-                for (const attachment of attachmentEntries) {
-                    storedUserParts.push({
-                        fileData: {
-                            url: attachment.url,
-                            name: attachment.name,
-                            mimeType: attachment.mimeType,
-                            size: attachment.size,
-                            extension: attachment.extension,
-                            category: attachment.category,
-                        },
-                    });
-                }
-            }
-
-            const userMsgTime = Date.now();
-            const userMessage = {
-                id: userMessageId,
-                role: 'user',
-                content: typeof prompt === 'string' ? prompt : '',
-                type: 'parts',
-                parts: storedUserParts,
-            };
-
-            const updatedConv = await Conversation.findOneAndUpdate(
-                { _id: currentConversationId, userId: user.userId },
-                {
-                    $push: { messages: userMessage },
-                    updatedAt: userMsgTime,
-                },
-                { new: true }
-            ).select('updatedAt');
-
-            writePermitTime = updatedConv?.updatedAt?.getTime?.();
-        }
-
         let maxTokens;
         let thinkingLevel;
         try {
@@ -386,6 +338,84 @@ export async function POST(req) {
             return text;
         };
 
+        if (user && !currentConversationId) {
+            const titleSource = isNonEmptyString(prompt)
+                ? prompt
+                : (Array.isArray(config?.attachments) && config.attachments[0]?.name
+                    ? `附件：${config.attachments[0].name}`
+                    : 'New Chat');
+            const title = titleSource.length > 30 ? `${titleSource.substring(0, 30)}...` : titleSource;
+            const newConv = await Conversation.create({
+                userId: user.userId,
+                title,
+                model: conversationModel,
+                settings: {
+                    ...(settings && typeof settings === 'object' ? settings : {}),
+                    webSearch: parseWebSearchConfig(config?.webSearch),
+                },
+                messages: [],
+            });
+            currentConversationId = newConv._id.toString();
+            currentConversation = newConv.toObject();
+            createdConversationForRequest = true;
+            previousMessages = [];
+            previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
+        }
+
+        if (user && !isRegenerateMode) {
+            const storedUserParts = [];
+            if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
+
+            if (dbImageEntries.length > 0) {
+                for (const entry of dbImageEntries) {
+                    storedUserParts.push({
+                        inlineData: {
+                            mimeType: entry.mimeType,
+                            url: entry.url,
+                        },
+                    });
+                }
+            }
+            if (attachmentEntries.length > 0) {
+                for (const attachment of attachmentEntries) {
+                    storedUserParts.push({
+                        fileData: {
+                            url: attachment.url,
+                            name: attachment.name,
+                            mimeType: attachment.mimeType,
+                            size: attachment.size,
+                            extension: attachment.extension,
+                            category: attachment.category,
+                        },
+                    });
+                }
+            }
+
+            const userMsgTime = Date.now();
+            const userMessage = {
+                id: resolvedUserMessageId,
+                role: 'user',
+                content: typeof prompt === 'string' ? prompt : '',
+                type: 'parts',
+                parts: storedUserParts,
+            };
+
+            const updatedConv = await Conversation.findOneAndUpdate(
+                { _id: currentConversationId, userId: user.userId },
+                {
+                    $push: { messages: userMessage },
+                    updatedAt: userMsgTime,
+                },
+                { new: true }
+            ).select('updatedAt');
+
+            if (!updatedConv) {
+                return Response.json({ error: 'Not found' }, { status: 404 });
+            }
+
+            writePermitTime = updatedConv.updatedAt?.getTime?.() ?? userMsgTime;
+        }
+
         const encoder = new TextEncoder();
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
@@ -405,6 +435,21 @@ export async function POST(req) {
                 let fullThought = '';
                 const citations = [];
                 let searchContextTokens = 0;
+                let finalMessagePersisted = false;
+
+                const rollbackCurrentTurn = async () => {
+                    if (finalMessagePersisted) return;
+                    await rollbackConversationTurn({
+                        conversationId: currentConversationId,
+                        userId: user.userId,
+                        createdConversationForRequest,
+                        isRegenerateMode,
+                        previousMessages,
+                        previousUpdatedAt,
+                        userMessageId: resolvedUserMessageId,
+                        writePermitTime,
+                    });
+                };
 
                 try {
                     const sendHeartbeat = () => {
@@ -450,6 +495,7 @@ export async function POST(req) {
                     });
 
                     if (clientAborted) {
+                        await rollbackCurrentTurn();
                         try { controller.close(); } catch { }
                         return;
                     }
@@ -546,6 +592,7 @@ export async function POST(req) {
                     consumeSseBuffer(true);
 
                     if (clientAborted) {
+                        await rollbackCurrentTurn();
                         try { controller.close(); } catch { }
                         return;
                     }
@@ -557,12 +604,8 @@ export async function POST(req) {
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
                     if (user && currentConversationId) {
-                        const writeCondition = writePermitTime
-                            ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
-                            : { _id: currentConversationId, userId: user.userId };
-
                         const modelMessage = {
-                            id: modelMessageId,
+                            id: resolvedModelMessageId,
                             role: 'model',
                             content: fullText,
                             thought: fullThought,
@@ -572,22 +615,32 @@ export async function POST(req) {
                             parts: [{ text: fullText }],
                         };
 
-                        await Conversation.findOneAndUpdate(
-                            writeCondition,
+                        const persistedConversation = await Conversation.findOneAndUpdate(
+                            buildConversationWriteCondition(currentConversationId, user.userId, writePermitTime),
                             {
                                 $push: { messages: modelMessage },
                                 updatedAt: Date.now(),
-                            }
-                        );
+                            },
+                            { new: true }
+                        ).select('updatedAt');
+                        if (!persistedConversation) {
+                            const conflictError = new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+                            conflictError.status = 409;
+                            throw conflictError;
+                        }
+                        finalMessagePersisted = true;
+                        writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
                     }
 
                     controller.close();
                 } catch (error) {
                     if (clientAborted) {
+                        try { await rollbackCurrentTurn(); } catch { }
                         try { controller.close(); } catch { }
                         return;
                     }
 
+                    try { await rollbackCurrentTurn(); } catch { }
                     try {
                         const errorPayload = JSON.stringify({
                             type: 'stream_error',

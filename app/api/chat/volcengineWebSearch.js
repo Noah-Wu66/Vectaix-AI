@@ -70,14 +70,6 @@ async function waitForVolcengineRequestSlot(signal) {
   lastVolcengineRequestStartedAt = Date.now();
 }
 
-function clipText(text, maxLen) {
-  if (typeof text !== 'string') return '';
-  const trimmed = text.trim();
-  if (!trimmed) return '';
-  if (!Number.isFinite(maxLen) || maxLen <= 0) return trimmed;
-  return trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
-}
-
 function extractHostname(url) {
   try {
     return new URL(url).hostname;
@@ -420,37 +412,10 @@ async function requestVolcengine(body, { timeoutMs = VOLCENGINE_TIMEOUT_MS, sign
   }, { signal });
 }
 
-export function buildSearchContext(summary, results, options = {}) {
-  const maxResults = Number.isFinite(options.maxResults) && options.maxResults > 0 ? options.maxResults : 5;
-  const maxSnippetChars = Number.isFinite(options.maxSnippetChars) && options.maxSnippetChars > 0
-    ? options.maxSnippetChars
-    : 280;
-  const lines = [];
+export function buildSearchContext(summary) {
   const normalizedSummary = typeof summary === 'string' ? summary.trim() : '';
-  const list = Array.isArray(results) ? results.slice(0, maxResults) : [];
-
-  if (normalizedSummary) {
-    lines.push('联网摘要:');
-    lines.push(normalizedSummary);
-  }
-
-  if (list.length > 0) {
-    if (lines.length > 0) lines.push('');
-    lines.push('联网来源:');
-    for (let index = 0; index < list.length; index += 1) {
-      const item = list[index];
-      lines.push(`【${index + 1}】${item.title || item.url}`);
-      lines.push(`URL: ${item.url}`);
-      if (item.siteName) lines.push(`站点: ${item.siteName}`);
-      const snippet = clipText(item.snippet, maxSnippetChars);
-      if (snippet) lines.push(`摘录: ${snippet}`);
-      if (item.datePublished) lines.push(`发布时间: ${item.datePublished}`);
-      if (item.lastUpdated) lines.push(`更新时间: ${item.lastUpdated}`);
-      if (index < list.length - 1) lines.push('');
-    }
-  }
-
-  return lines.join('\n').trim();
+  if (!normalizedSummary) return '';
+  return `联网摘要:\n${normalizedSummary}`;
 }
 
 export function buildSearchEventResults(results, maxItems = 0) {
@@ -485,10 +450,7 @@ export async function volcengineWebSearch(query, options = {}) {
     summary: parsed.summary,
     results: parsed.results,
     citations: parsed.citations,
-    contextText: buildSearchContext(parsed.summary, parsed.results, {
-      maxResults: Number.isFinite(options.count) ? options.count : WEB_SEARCH_LIMIT,
-      maxSnippetChars: 280,
-    }),
+    contextText: buildSearchContext(parsed.summary),
     requestId: parsed.requestId,
     raw: parsed.raw,
   };

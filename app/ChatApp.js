@@ -10,6 +10,7 @@ import {
   CHAT_MODELS,
   CLAUDE_OPUS_MODEL,
   COUNCIL_MODEL_ID,
+  DEFAULT_AGENT_DRIVER_MODEL,
   DEEPSEEK_REASONER_MODEL,
   GEMINI_PRO_MODEL,
   MINIMAX_M2_7_HIGHSPEED_MODEL,
@@ -213,6 +214,7 @@ export default function ChatApp() {
   const [editingImage, setEditingImage] = useState(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [composerPrefill, setComposerPrefill] = useState({ text: "", nonce: 0 });
+  const [serverSettingsReady, setServerSettingsReady] = useState(false);
 
   const chatEndRef = useRef(null);
   const messageListRef = useRef(null);
@@ -260,6 +262,7 @@ export default function ChatApp() {
   const handleAuthExpired = () => {
     stopOngoingChatWork();
     hasRestoredConversationRef.current = false;
+    setServerSettingsReady(false);
     setUser(null);
     setConversations([]);
     setCurrentConversationId(null);
@@ -304,7 +307,9 @@ export default function ChatApp() {
         if (data.user) {
           setUser(data.user);
           fetchConversations();
-          fetchSettings(); // 只获取系统提示词
+          Promise.resolve(fetchSettings()).finally(() => {
+            setServerSettingsReady(true);
+          });
         } else {
           handleAuthExpired();
         }
@@ -326,7 +331,7 @@ export default function ChatApp() {
   }, [currentConversationId]);
 
   useEffect(() => {
-    if (!user || hasRestoredConversationRef.current || conversations.length === 0) return;
+    if (!user || !serverSettingsReady || hasRestoredConversationRef.current || conversations.length === 0) return;
     hasRestoredConversationRef.current = true;
     if (typeof window === "undefined") return;
     const savedConversationId = window.localStorage.getItem("vectaix-current-conversation");
@@ -335,7 +340,7 @@ export default function ChatApp() {
     if (exists) {
       loadConversation(savedConversationId, { silent: true });
     }
-  }, [conversations, user]);
+  }, [conversations, serverSettingsReady, user]);
 
   // Cleanup: abort pending requests on unmount
   useEffect(() => {
@@ -570,6 +575,7 @@ export default function ChatApp() {
       if (data.success || data.user) {
         stopOngoingChatWork();
         hasRestoredConversationRef.current = false;
+        setServerSettingsReady(false);
         setUser(data.user);
         setShowAuthModal(false);
         setAuthMode("login");
@@ -578,7 +584,9 @@ export default function ChatApp() {
         setConfirmPassword("");
         toast.success(authMode === "login" ? "登录成功" : "注册成功");
         fetchConversations();
-        fetchSettings();
+        Promise.resolve(fetchSettings()).finally(() => {
+          setServerSettingsReady(true);
+        });
       } else {
         toast.error(data.error);
       }
@@ -591,6 +599,7 @@ export default function ChatApp() {
     await fetch("/api/auth/me", { method: "DELETE" });
     stopOngoingChatWork();
     hasRestoredConversationRef.current = false;
+    setServerSettingsReady(false);
     setUser(null);
     setMessages([]);
     setConversations([]);
@@ -602,6 +611,49 @@ export default function ChatApp() {
     setConfirmPassword("");
     setShowAuthModal(true);
     setShowProfileModal(false);
+  };
+
+  const applyConversationSettings = (conversationProvider, rawSettings) => {
+    if (conversationProvider === "council") {
+      setActivePromptId(null);
+      return;
+    }
+
+    const settings = rawSettings && typeof rawSettings === "object"
+      ? rawSettings
+      : {};
+
+    setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
+
+    if (conversationProvider === "vectaix") {
+      setAgentModel(normalizeAgentDriverModelId(settings.agentModel ?? DEFAULT_AGENT_DRIVER_MODEL));
+    }
+
+    if (settings.activePromptId !== undefined) {
+      const promptExists = systemPrompts.some(
+        (prompt) => String(prompt?._id) === String(settings.activePromptId)
+      );
+      setActivePromptId(promptExists ? settings.activePromptId : null);
+      return;
+    }
+
+    setActivePromptId(null);
+  };
+
+  const persistConversationModel = async (conversationIdToUpdate, nextModel) => {
+    if (!conversationIdToUpdate || !nextModel || isCouncilModel(nextModel)) return;
+    try {
+      await fetch(`/api/conversations/${conversationIdToUpdate}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: nextModel }),
+      });
+      setConversations((prev) => prev.map((conversation) => (
+        conversation?._id === conversationIdToUpdate
+          ? { ...conversation, model: nextModel }
+          : conversation
+      )));
+    } catch { }
   };
 
   const loadConversation = async (id, options = {}) => {
@@ -647,72 +699,17 @@ export default function ChatApp() {
         });
         setCurrentConversationId(id);
 
-        // 获取对话的模型和 provider
-        const conversationModelConfig = CHAT_MODELS.find((m) => m.id === normalizeModelId(data.conversation.model));
+        const conversationModel = normalizeModelId(data.conversation.model);
+        const conversationModelConfig = CHAT_MODELS.find((entry) => entry.id === conversationModel);
         const conversationProvider = conversationModelConfig?.provider;
-        const currentProvider = currentModelConfig?.provider;
-
-        // 铁律：根据对话的 provider 强制切换模型
-        // - Council 对话进入后，如果当前不是 Council，强制切为 Council
-        // - Vectaix 对话进入后，如果当前不是 Vectaix，强制变为 Agent
-        // - Gemini 对话进入后，如果当前不是 Gemini 模型，强制变为 Pro
-        // - Claude 对话进入后，如果当前不是 Claude 模型，强制变为 Opus
-        // - OpenAI 对话进入后，如果当前不是 OpenAI 模型，强制变为 GPT
-        // - Seed 对话进入后，如果当前不是 Seed 模型，强制变为 Seed
-        // - DeepSeek 对话进入后，如果当前不是 DeepSeek 模型，强制变为 DeepSeek
-        let targetModel = model; // 默认保持当前模型
-        if (conversationProvider === "council" && currentProvider !== "council") {
-          targetModel = COUNCIL_MODEL_ID;
-        } else if (conversationProvider === "vectaix" && currentProvider !== "vectaix") {
-          targetModel = AGENT_MODEL_ID;
-        } else if (conversationProvider === "gemini" && currentProvider !== "gemini") {
-          targetModel = GEMINI_PRO_MODEL;
-        } else if (conversationProvider === "claude" && currentProvider !== "claude") {
-          targetModel = CLAUDE_OPUS_MODEL;
-        } else if (conversationProvider === "openai" && currentProvider !== "openai") {
-          targetModel = OPENAI_PRIMARY_MODEL;
-        } else if (conversationProvider === "seed" && currentProvider !== "seed") {
-          targetModel = SEED_MODEL_ID;
-        } else if (conversationProvider === "deepseek" && currentProvider !== "deepseek") {
-          targetModel = DEEPSEEK_REASONER_MODEL;
-        } else if (conversationProvider === "xiaomi" && currentProvider !== "xiaomi") {
-          targetModel = MIMO_V2_PRO_MODEL;
-        } else if (conversationProvider === "minimax" && currentProvider !== "minimax") {
-          targetModel = MINIMAX_M2_7_HIGHSPEED_MODEL;
-        } else if (conversationProvider === currentProvider) {
-          // provider 相同，保持当前模型不变
-          targetModel = model;
-        }
+        const targetModel = conversationModelConfig?.id || model;
 
         if (targetModel !== model) {
           setModel(targetModel);
           lastTextModelRef.current = targetModel;
         }
 
-        // 只恢复仍然保留在前端里的设置
-        if (conversationProvider !== "council") {
-          const settings = data.conversation.settings && typeof data.conversation.settings === "object"
-            ? data.conversation.settings
-            : {};
-          if (settings.webSearch && typeof settings.webSearch === "object") {
-            setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
-          }
-          if (conversationProvider === "vectaix") {
-            setAgentModel(normalizeAgentDriverModelId(settings.agentModel));
-          }
-          // activePromptId：优先使用对话存储的值，但需验证该提示词是否仍存在
-          if (settings.activePromptId !== undefined) {
-            const promptExists = systemPrompts.some(
-              (p) => String(p?._id) === String(settings.activePromptId)
-            );
-            if (promptExists) {
-              setActivePromptId(settings.activePromptId);
-            } else {
-              // 提示词已删除，回到“无”
-              setActivePromptId(null);
-            }
-          }
-        }
+        applyConversationSettings(conversationProvider, data.conversation.settings);
       }
     } catch (e) {
       if (!silent) {
@@ -807,6 +804,9 @@ export default function ChatApp() {
     const rememberedPromptId = activePromptIds?.[nextModel];
     if (rememberedPromptId != null) setActivePromptId(rememberedPromptId);
     lastTextModelRef.current = nextModel;
+    if (currentConversationId && currentProvider && nextProvider && currentProvider === nextProvider) {
+      persistConversationModel(currentConversationId, nextModel);
+    }
   };
 
   const renameConversation = async (id, newTitle) => {
@@ -921,23 +921,14 @@ export default function ChatApp() {
       setCurrentConversationId(duplicatedConversation._id);
       setMessages(Array.isArray(duplicatedConversation.messages) ? duplicatedConversation.messages : []);
 
-      if (typeof duplicatedConversation.model === "string" && duplicatedConversation.model) {
-        setModel(duplicatedConversation.model);
-        lastTextModelRef.current = duplicatedConversation.model;
+      const duplicatedModel = normalizeModelId(duplicatedConversation.model);
+      const duplicatedModelConfig = CHAT_MODELS.find((entry) => entry.id === duplicatedModel);
+      if (duplicatedModelConfig?.id) {
+        setModel(duplicatedModelConfig.id);
+        lastTextModelRef.current = duplicatedModelConfig.id;
       }
 
-      const nextSettings = duplicatedConversation.settings && typeof duplicatedConversation.settings === "object"
-        ? duplicatedConversation.settings
-        : {};
-      if (nextSettings.webSearch && typeof nextSettings.webSearch === "object") {
-        setWebSearch(normalizeWebSearchSettings(nextSettings.webSearch, { defaultEnabled: true }));
-      }
-      if (nextSettings.activePromptId !== undefined) {
-        const promptExists = systemPrompts.some(
-          (prompt) => String(prompt?._id) === String(nextSettings.activePromptId)
-        );
-        setActivePromptId(promptExists ? nextSettings.activePromptId : null);
-      }
+      applyConversationSettings(duplicatedModelConfig?.provider, duplicatedConversation.settings);
 
       await fetchConversations();
       toast.success("已复制话题");

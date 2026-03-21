@@ -5,6 +5,7 @@ import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
     fetchImageAsBase64,
+    generateMessageId,
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
     injectCurrentTimeSystemReminder,
@@ -26,6 +27,12 @@ import {
 } from '@/lib/server/chat/requestConfig';
 import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
 import { getModelRoutes, resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
+import {
+    CONVERSATION_WRITE_CONFLICT_ERROR,
+    buildConversationWriteCondition,
+    loadConversationForRoute,
+    rollbackConversationTurn,
+} from '@/app/api/chat/conversationState';
 
 import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
 
@@ -140,22 +147,14 @@ export async function POST(req) {
         const apiModel = model;
 
         let currentConversationId = conversationId;
-
-        // 创建新会话
-        if (user && !currentConversationId) {
-            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
-            const newConv = await Conversation.create({
-                userId: user.userId,
-                title: title,
-                model: model,
-                settings: {
-                    ...(settings && typeof settings === 'object' ? settings : {}),
-                    webSearch: parseWebSearchConfig(config?.webSearch),
-                },
-                messages: []
-            });
-            currentConversationId = newConv._id.toString();
-        }
+        let currentConversation = await loadConversationForRoute({
+            conversationId: currentConversationId,
+            userId: user.userId,
+            expectedProvider: 'openai',
+        });
+        let createdConversationForRequest = false;
+        let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
+        let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
         let openaiInput = [];
         let effectiveHistoryMessages = [];
@@ -165,6 +164,12 @@ export async function POST(req) {
         }
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
+        const resolvedUserMessageId = (typeof userMessageId === 'string' && userMessageId.trim())
+            ? userMessageId.trim()
+            : generateMessageId();
+        const resolvedModelMessageId = (typeof modelMessageId === 'string' && modelMessageId.trim())
+            ? modelMessageId.trim()
+            : generateMessageId();
 
         if (isRegenerateMode) {
             let sanitized;
@@ -219,40 +224,6 @@ export async function POST(req) {
             }
 
             openaiInput.push({ role: 'user', content: userContent });
-        }
-
-        // 保存用户消息
-        if (user && !isRegenerateMode) {
-            const storedUserParts = [];
-            if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
-
-            if (dbImageEntries.length > 0) {
-                for (const entry of dbImageEntries) {
-                    storedUserParts.push({
-                        inlineData: {
-                            mimeType: entry.mimeType,
-                            url: entry.url,
-                        },
-                    });
-                }
-            }
-
-            const userMsgTime = Date.now();
-            const resolvedUserMessageId = userMessageId;
-            const userMessage = {
-                id: resolvedUserMessageId,
-                role: 'user',
-                content: prompt,
-                type: 'parts',
-                parts: storedUserParts
-            };
-            const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
-                $push: {
-                    messages: userMessage
-                },
-                updatedAt: userMsgTime
-            }, { new: true }).select('updatedAt');
-            writePermitTime = updatedConv?.updatedAt?.getTime?.();
         }
 
         // 构建 Responses API 请求
@@ -461,6 +432,62 @@ export async function POST(req) {
             return text;
         };
 
+        if (user && !currentConversationId) {
+            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
+            const newConv = await Conversation.create({
+                userId: user.userId,
+                title,
+                model,
+                settings: {
+                    ...(settings && typeof settings === 'object' ? settings : {}),
+                    webSearch: parseWebSearchConfig(config?.webSearch),
+                },
+                messages: [],
+            });
+            currentConversationId = newConv._id.toString();
+            currentConversation = newConv.toObject();
+            createdConversationForRequest = true;
+            previousMessages = [];
+            previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
+        }
+
+        if (user && !isRegenerateMode) {
+            const storedUserParts = [];
+            if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
+
+            if (dbImageEntries.length > 0) {
+                for (const entry of dbImageEntries) {
+                    storedUserParts.push({
+                        inlineData: {
+                            mimeType: entry.mimeType,
+                            url: entry.url,
+                        },
+                    });
+                }
+            }
+
+            const userMsgTime = Date.now();
+            const userMessage = {
+                id: resolvedUserMessageId,
+                role: 'user',
+                content: prompt,
+                type: 'parts',
+                parts: storedUserParts,
+            };
+            const updatedConv = await Conversation.findOneAndUpdate(
+                { _id: currentConversationId, userId: user.userId },
+                {
+                    $push: { messages: userMessage },
+                    updatedAt: userMsgTime,
+                },
+                { new: true }
+            ).select('updatedAt');
+            if (!updatedConv) {
+                return Response.json({ error: 'Not found' }, { status: 404 });
+            }
+            writePermitTime = updatedConv.updatedAt?.getTime?.() ?? userMsgTime;
+        }
+
         const encoder = new TextEncoder();
         let clientAborted = false;
         const onAbort = () => { clientAborted = true; };
@@ -515,6 +542,21 @@ export async function POST(req) {
                 let fullThought = "";
                 let citations = [];
                 let searchContextTokens = 0;
+                let finalMessagePersisted = false;
+
+                const rollbackCurrentTurn = async () => {
+                    if (finalMessagePersisted) return;
+                    await rollbackConversationTurn({
+                        conversationId: currentConversationId,
+                        userId: user.userId,
+                        createdConversationForRequest,
+                        isRegenerateMode,
+                        previousMessages,
+                        previousUpdatedAt,
+                        userMessageId: resolvedUserMessageId,
+                        writePermitTime,
+                    });
+                };
 
                 try {
                     const sendHeartbeat = () => {
@@ -565,6 +607,7 @@ export async function POST(req) {
                     });
 
                     if (clientAborted) {
+                        await rollbackCurrentTurn();
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
@@ -663,6 +706,7 @@ export async function POST(req) {
                     }
 
                     if (clientAborted) {
+                        await rollbackCurrentTurn();
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
@@ -676,10 +720,6 @@ export async function POST(req) {
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
                     if (user && currentConversationId) {
-                        const writeCondition = writePermitTime
-                            ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
-                            : { _id: currentConversationId, userId: user.userId };
-                        const resolvedModelMessageId = modelMessageId;
                         const modelMessage = {
                             id: resolvedModelMessageId,
                             role: 'model',
@@ -690,23 +730,33 @@ export async function POST(req) {
                             type: 'text',
                             parts: [{ text: fullText }]
                         };
-                        await Conversation.findOneAndUpdate(
-                            writeCondition,
+                        const persistedConversation = await Conversation.findOneAndUpdate(
+                            buildConversationWriteCondition(currentConversationId, user.userId, writePermitTime),
                             {
                                 $push: {
                                     messages: modelMessage
                                 },
                                 updatedAt: Date.now()
-                            }
-                        );
+                            },
+                            { new: true }
+                        ).select('updatedAt');
+                        if (!persistedConversation) {
+                            const conflictError = new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+                            conflictError.status = 409;
+                            throw conflictError;
+                        }
+                        finalMessagePersisted = true;
+                        writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
                     }
                     controller.close();
                 } catch (err) {
                     if (clientAborted) {
+                        try { await rollbackCurrentTurn(); } catch { /* ignore */ }
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
                     // 将错误作为 SSE 事件发送给客户端（而非 controller.error），保留原始错误信息
+                    try { await rollbackCurrentTurn(); } catch { /* ignore */ }
                     try {
                         const errorPayload = JSON.stringify({ type: 'stream_error', message: err?.message || 'Unknown error' });
                         const padding = !paddingSent ? PADDING : '';

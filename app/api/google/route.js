@@ -17,6 +17,12 @@ import {
 import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import { GEMINI_PRO_MODEL } from '@/lib/shared/models';
 import {
+    CONVERSATION_WRITE_CONFLICT_ERROR,
+    buildConversationWriteCondition,
+    loadConversationForRoute,
+    rollbackConversationTurn,
+} from '@/app/api/chat/conversationState';
+import {
     WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
@@ -165,28 +171,20 @@ export async function POST(req) {
             );
         }
 
-        let currentConversationId = conversationId;
-
         if (!GEMINI_API_KEY) {
             return Response.json({ error: 'GEMINI_API_KEY is not set' }, { status: 500 });
         }
         const apiModel = resolveGeminiApiModel(model);
         const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
-        if (user && !currentConversationId) {
-            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
-            const newConv = await Conversation.create({
-                userId: user.userId,
-                title: title,
-                model: model,
-                settings: {
-                    ...(settings && typeof settings === 'object' ? settings : {}),
-                    webSearch: parseWebSearchConfig(config?.webSearch),
-                },
-                messages: []
-            });
-            currentConversationId = newConv._id.toString();
-        }
+        let currentConversationId = conversationId;
+        let currentConversation = await loadConversationForRoute({
+            conversationId: currentConversationId,
+            userId: user.userId,
+            expectedProvider: 'gemini',
+        });
+        let createdConversationForRequest = false;
+        let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
+        let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
         let contents = [];
         let effectiveHistoryMessages = [];
@@ -196,6 +194,12 @@ export async function POST(req) {
         }
         const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
+        const resolvedUserMessageId = (typeof userMessageId === 'string' && userMessageId.trim())
+            ? userMessageId.trim()
+            : generateMessageId();
+        const resolvedModelMessageId = (typeof modelMessageId === 'string' && modelMessageId.trim())
+            ? modelMessageId.trim()
+            : generateMessageId();
 
         if (isRegenerateMode) {
             let sanitized;
@@ -228,15 +232,7 @@ export async function POST(req) {
         } else {
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
             effectiveHistoryMessages = effectiveHistory;
-            effectiveHistory.forEach(msg => {
-                if (msg.role === 'user' || msg.role === 'model') {
-                    const hasImage = Array.isArray(msg.parts) && msg.parts.some((p) => typeof p?.inlineData?.url === 'string' && p.inlineData.url);
-                    contents.push({
-                        role: msg.role,
-                        parts: [{ text: `${msg.content} ${hasImage ? '[Image sent previously]' : ''}` }]
-                    });
-                }
-            });
+            contents = await buildGeminiContentsFromMessages(effectiveHistory);
         }
 
         let currentParts = isRegenerateMode ? null : [{ text: prompt }];
@@ -346,6 +342,25 @@ export async function POST(req) {
 
         const geminiWebSearchRuntime = getWebSearchProviderRuntimeOptions('gemini');
 
+        if (user && !currentConversationId) {
+            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
+            const newConv = await Conversation.create({
+                userId: user.userId,
+                title,
+                model,
+                settings: {
+                    ...(settings && typeof settings === 'object' ? settings : {}),
+                    webSearch: parseWebSearchConfig(config?.webSearch),
+                },
+                messages: [],
+            });
+            currentConversationId = newConv._id.toString();
+            currentConversation = newConv.toObject();
+            createdConversationForRequest = true;
+            previousMessages = [];
+            previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
+        }
+
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
@@ -362,7 +377,6 @@ export async function POST(req) {
             }
 
             const userMsgTime = Date.now();
-            const resolvedUserMessageId = userMessageId;
             const userMessage = {
                 id: resolvedUserMessageId,
                 role: 'user',
@@ -376,7 +390,10 @@ export async function POST(req) {
                 },
                 updatedAt: userMsgTime
             }, { new: true }).select('updatedAt');
-            writePermitTime = updatedConv?.updatedAt?.getTime?.();
+            if (!updatedConv) {
+                return Response.json({ error: 'Not found' }, { status: 404 });
+            }
+            writePermitTime = updatedConv.updatedAt?.getTime?.() ?? userMsgTime;
         }
 
         const encoder = new TextEncoder();
@@ -400,6 +417,22 @@ export async function POST(req) {
                 let citations = [];
                 let searchContextTokens = 0;
                 const seenUrls = new Set();
+                let finalMessagePersisted = false;
+
+                const rollbackCurrentTurn = async () => {
+                    if (finalMessagePersisted) return;
+                    await rollbackConversationTurn({
+                        conversationId: currentConversationId,
+                        userId: user.userId,
+                        createdConversationForRequest,
+                        isRegenerateMode,
+                        previousMessages,
+                        previousUpdatedAt,
+                        userMessageId: resolvedUserMessageId,
+                        writePermitTime,
+                    });
+                };
+
                 try {
                     const sendHeartbeat = () => {
                         try {
@@ -450,6 +483,7 @@ export async function POST(req) {
                     });
 
                     if (clientAborted) {
+                        await rollbackCurrentTurn();
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
@@ -506,6 +540,7 @@ export async function POST(req) {
                     }
 
                     if (clientAborted) {
+                        await rollbackCurrentTurn();
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
@@ -517,12 +552,6 @@ export async function POST(req) {
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
                     if (user && currentConversationId) {
-                        const writeCondition = writePermitTime
-                            ? { _id: currentConversationId, userId: user.userId, updatedAt: { $lte: new Date(writePermitTime) } }
-                            : { _id: currentConversationId, userId: user.userId };
-                        const resolvedModelMessageId = (isNonEmptyString(modelMessageId) && modelMessageId.length <= 128)
-                            ? modelMessageId
-                            : generateMessageId();
                         const modelMessage = {
                             id: resolvedModelMessageId,
                             role: 'model',
@@ -533,22 +562,32 @@ export async function POST(req) {
                             type: 'text',
                             parts: [{ text: fullText }]
                         };
-                        await Conversation.findOneAndUpdate(
-                            writeCondition,
+                        const persistedConversation = await Conversation.findOneAndUpdate(
+                            buildConversationWriteCondition(currentConversationId, user.userId, writePermitTime),
                             {
                                 $push: {
                                     messages: modelMessage
                                 },
                                 updatedAt: Date.now()
-                            }
-                        );
+                            },
+                            { new: true }
+                        ).select('updatedAt');
+                        if (!persistedConversation) {
+                            const conflictError = new Error(CONVERSATION_WRITE_CONFLICT_ERROR);
+                            conflictError.status = 409;
+                            throw conflictError;
+                        }
+                        finalMessagePersisted = true;
+                        writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
                     }
                     controller.close();
                 } catch (err) {
                     if (clientAborted) {
+                        try { await rollbackCurrentTurn(); } catch { /* ignore */ }
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
+                    try { await rollbackCurrentTurn(); } catch { /* ignore */ }
                     try {
                         const errorPayload = JSON.stringify({ type: 'stream_error', message: err?.message || 'Unknown error' });
                         const padding = !paddingSent ? PADDING : '';
