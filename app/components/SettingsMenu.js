@@ -253,7 +253,7 @@ export default function SettingsMenu({
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-4 z-50 w-[min(92vw,420px)] max-w-[calc(100vw-2rem)] max-h-[72vh] overflow-y-auto"
+              className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-zinc-200 p-4 z-50 w-[min(92vw,360px)] max-w-[calc(100vw-2rem)] max-h-[72vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center mb-3">
                 <span className="font-medium text-zinc-900 text-sm">设置</span>
