@@ -42,7 +42,13 @@ import {
     parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
-import { getModelRoutes, resolveOpusProviderConfig } from '@/lib/modelRoutes';
+import {
+    getAnthropicProviderLabel,
+    isClaudeModel,
+    isZenmuxAnthropicModel,
+    resolveAnthropicApiModel,
+    resolveAnthropicProviderConfig,
+} from '@/lib/server/chat/providerAdapters';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,36 +56,6 @@ export const dynamic = 'force-dynamic';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 const MAX_REQUEST_BYTES = 2_000_000;
-
-function isClaudeModel(model) {
-    return typeof model === 'string' && model.startsWith(CLAUDE_OPUS_MODEL);
-}
-
-function isMiMoModel(model) {
-    return model === MIMO_V2_PRO_MODEL;
-}
-
-function isMiniMaxModel(model) {
-    return model === MINIMAX_M2_7_HIGHSPEED_MODEL;
-}
-
-function isZenmuxAnthropicModel(model) {
-    return isMiMoModel(model) || isMiniMaxModel(model);
-}
-
-function resolveAnthropicApiModel(model) {
-    if (typeof model !== 'string') return model;
-    if (model.startsWith(CLAUDE_OPUS_MODEL)) return CLAUDE_OPUS_MODEL;
-    if (isMiMoModel(model)) return `xiaomi/${model}`;
-    if (isMiniMaxModel(model)) return `minimax/${model}`;
-    return model;
-}
-
-function getAnthropicProviderLabel(model) {
-    if (isMiMoModel(model)) return 'MiMo';
-    if (isMiniMaxModel(model)) return 'MiniMax';
-    return 'Claude';
-}
 
 async function storedPartToClaudePart(part) {
     if (!part || typeof part !== 'object') return null;
@@ -201,15 +177,12 @@ export async function POST(req) {
         let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
         let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
-        const modelRoutes = await getModelRoutes();
         const supportedAnthropicModel = isClaudeModel(model) || isZenmuxAnthropicModel(model);
         if (!supportedAnthropicModel) {
             return Response.json({ error: 'unsupported anthropic-compatible model' }, { status: 400 });
         }
 
-        const providerConfig = isZenmuxAnthropicModel(model)
-            ? resolveOpusProviderConfig({ opus: 'zenmux' })
-            : resolveOpusProviderConfig(modelRoutes);
+        const providerConfig = await resolveAnthropicProviderConfig(model);
         const { baseUrl: anthropicBaseUrl, apiKey } = providerConfig;
         const apiModel = resolveAnthropicApiModel(model);
         const client = new Anthropic({

@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import User from '@/models/User';
@@ -34,12 +33,12 @@ import {
     parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
+import { createGeminiClient, resolveGeminiApiModel } from '@/lib/server/chat/providerAdapters';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_DECISION_MODEL = GEMINI_PRO_MODEL;
 const GEMINI_DECISION_THINKING_LEVEL = 'LOW';
 const MAX_REQUEST_BYTES = 2_000_000;
@@ -80,19 +79,6 @@ async function buildGeminiContentsFromMessages(messages) {
         if (parts.length) contents.push({ role: msg.role, parts });
     }
     return contents;
-}
-
-function resolveGeminiApiModel(model) {
-    const normalizedModel = typeof model === 'string' ? model.trim() : '';
-    const modelWithoutProvider = normalizedModel.startsWith('google/')
-        ? normalizedModel.slice('google/'.length)
-        : normalizedModel;
-
-    if (modelWithoutProvider === GEMINI_PRO_MODEL) {
-        return GEMINI_PRO_MODEL;
-    }
-
-    return GEMINI_PRO_MODEL;
 }
 
 export async function POST(req) {
@@ -171,11 +157,8 @@ export async function POST(req) {
             );
         }
 
-        if (!GEMINI_API_KEY) {
-            return Response.json({ error: 'GEMINI_API_KEY is not set' }, { status: 500 });
-        }
         const apiModel = resolveGeminiApiModel(model);
-        const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+        const ai = createGeminiClient();
         let currentConversationId = conversationId;
         let currentConversation = await loadConversationForRoute({
             conversationId: currentConversationId,
