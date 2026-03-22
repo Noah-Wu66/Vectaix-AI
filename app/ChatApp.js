@@ -627,6 +627,8 @@ export default function ChatApp() {
 
     if (conversationProvider === "vectaix") {
       setAgentModel(normalizeAgentDriverModelId(settings.agentModel ?? DEFAULT_AGENT_DRIVER_MODEL));
+      setActivePromptId(null);
+      return;
     }
 
     if (settings.activePromptId !== undefined) {
@@ -791,7 +793,9 @@ export default function ChatApp() {
           setCurrentConversationId(null);
           setMessages([]);
           setModel(nextModel);
-          const rememberedPromptId = activePromptIds?.[nextModel];
+          const rememberedPromptId = nextModel === AGENT_MODEL_ID
+            ? null
+            : (activePromptIds?.[nextModel] ?? null);
           setActivePromptId(rememberedPromptId);
           lastTextModelRef.current = nextModel;
         }
@@ -801,8 +805,10 @@ export default function ChatApp() {
     }
 
     setModel(nextModel);
-    const rememberedPromptId = activePromptIds?.[nextModel];
-    if (rememberedPromptId != null) setActivePromptId(rememberedPromptId);
+    const rememberedPromptId = nextModel === AGENT_MODEL_ID
+      ? null
+      : (activePromptIds?.[nextModel] ?? null);
+    setActivePromptId(rememberedPromptId);
     lastTextModelRef.current = nextModel;
     if (currentConversationId && currentProvider && nextProvider && currentProvider === nextProvider) {
       persistConversationModel(currentConversationId, nextModel);

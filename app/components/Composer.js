@@ -79,8 +79,10 @@ export default function Composer({
   const supportsFilePicker = supportsImages || supportsDocuments;
   const attachmentAccept = getAttachmentAcceptForModel({ supportsDocuments, supportsImages });
   const isCouncilSelected = isCouncilModel(model);
+  const isAgentSelected = model === AGENT_MODEL_ID;
   const completedCouncilRounds = isCouncilSelected ? countCompletedCouncilRounds(messages) : 0;
   const hasReachedCouncilRoundLimit = isCouncilSelected && completedCouncilRounds >= COUNCIL_MAX_ROUNDS;
+  const isAgentModelLocked = isAgentSelected && messages.some((message) => message?.role === "model");
 
   useEffect(() => {
     mountedRef.current = true;
@@ -355,6 +357,7 @@ export default function Composer({
                 model={model}
                 agentModel={agentModel}
                 setAgentModel={setAgentModel}
+                agentModelLocked={isAgentModelLocked}
                 webSearch={webSearch}
                 setWebSearch={setWebSearch}
                 systemPrompts={systemPrompts}

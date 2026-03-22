@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
-import { getModelProvider } from "@/lib/shared/models";
+import { AGENT_MODEL_ID, getModelProvider } from "@/lib/shared/models";
 import { isWebSearchEnabled } from "@/lib/shared/webSearch";
 
 const ECONOMY_SYSTEM_PROMPT_PREFIX =
@@ -74,6 +74,8 @@ function formatShanghaiNowForEstimate() {
 }
 
 function buildEstimatedSystemPromptText({ model, systemPromptText, webSearch }) {
+  if (model === AGENT_MODEL_ID) return "";
+
   const provider = getModelProvider(model);
   const userPrompt = typeof systemPromptText === "string" ? systemPromptText : "";
   const basePrompt = (provider === "openai" || provider === "claude")

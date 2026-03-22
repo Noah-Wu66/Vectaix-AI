@@ -199,12 +199,17 @@ export async function POST(req) {
     let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
     let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
     if (!currentConversationId) {
+      const initialSettings = settings && typeof settings === "object"
+        ? { ...settings }
+        : {};
+      delete initialSettings.activePromptId;
+
       const newConv = await Conversation.create({
         userId: auth.userId,
         title: buildConversationTitle(prompt, currentAttachments),
         model: AGENT_MODEL_ID,
         settings: {
-          ...(settings && typeof settings === "object" ? settings : {}),
+          ...initialSettings,
           agentModel: driverModel,
           webSearch: parseWebSearchConfig(config?.webSearch),
         },

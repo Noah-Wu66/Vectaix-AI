@@ -27,6 +27,7 @@ export default function SettingsMenu({
   model,
   agentModel,
   setAgentModel,
+  agentModelLocked = false,
   webSearch,
   setWebSearch,
   systemPrompts,
@@ -55,6 +56,7 @@ export default function SettingsMenu({
 
   const activePrompt = systemPrompts.find((prompt) => String(prompt?._id) === String(activePromptId));
   const activePromptName = activePrompt?.name || "无";
+  const isAgentMode = model === AGENT_MODEL_ID;
   const normalizedAgentModel = normalizeAgentDriverModelId(agentModel);
   const webSearchSettings = webSearch && typeof webSearch === "object"
     ? { ...DEFAULT_WEB_SEARCH_SETTINGS, ...webSearch }
@@ -78,6 +80,25 @@ export default function SettingsMenu({
   };
 
   useEffect(() => {
+    if (isAgentMode) {
+      if (showPromptList) {
+        setShowPromptList(false);
+      }
+
+      if (activePromptIds?.[model]) {
+        setActivePromptIds?.((prev) => {
+          const next = { ...(prev || {}) };
+          delete next[model];
+          return next;
+        });
+      }
+
+      if (activePromptId != null) {
+        setActivePromptId(null);
+      }
+      return;
+    }
+
     if (!model || !Array.isArray(systemPrompts)) return;
     const promptIds = systemPrompts.map((prompt) => String(prompt?._id));
 
@@ -107,7 +128,7 @@ export default function SettingsMenu({
     if (activePromptId != null) {
       setActivePromptId(null);
     }
-  }, [model, systemPrompts, activePromptId, activePromptIds, setActivePromptId, setActivePromptIds]);
+  }, [isAgentMode, model, showPromptList, systemPrompts, activePromptId, activePromptIds, setActivePromptId, setActivePromptIds]);
 
   useEffect(() => {
     if (!showPromptList) return;
@@ -275,7 +296,8 @@ export default function SettingsMenu({
                     <select
                       value={normalizedAgentModel}
                       onChange={(event) => setAgentModel?.(event.target.value)}
-                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500"
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={agentModelLocked}
                     >
                       {agentModelGroups.map((group) => (
                         <optgroup key={group.groupKey} label={group.title}>
@@ -285,108 +307,115 @@ export default function SettingsMenu({
                         </optgroup>
                       ))}
                     </select>
+                    {agentModelLocked && (
+                      <p className="mt-2 text-xs text-zinc-400">
+                        Agent 已经开始回复，当前会话里不能再切换 Agent 模型。
+                      </p>
+                    )}
                   </div>
                 )}
 
-                <div>
-                  <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                    系统提示词
-                  </label>
-                  <div className="relative" ref={promptListRef}>
-                    <button
-                      onClick={() => setShowPromptList((value) => !value)}
-                      className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-700 flex items-center justify-between"
-                      type="button"
-                    >
-                      <span className="truncate pr-2">{activePromptName}</span>
-                      <ChevronDown size={16} className={`transition-transform ${showPromptList ? "rotate-180" : ""}`} />
-                    </button>
+                {!isAgentMode && (
+                  <div>
+                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                      系统提示词
+                    </label>
+                    <div className="relative" ref={promptListRef}>
+                      <button
+                        onClick={() => setShowPromptList((value) => !value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-2 text-sm text-zinc-700 flex items-center justify-between"
+                        type="button"
+                      >
+                        <span className="truncate pr-2">{activePromptName}</span>
+                        <ChevronDown size={16} className={`transition-transform ${showPromptList ? "rotate-180" : ""}`} />
+                      </button>
 
-                    <AnimatePresence>
-                      {showPromptList && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                          className="absolute left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-lg shadow-lg p-1 z-10"
-                        >
-                          <div className="max-h-56 overflow-auto">
-                            <div
-                              className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${activePromptId == null ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
-                            >
-                              <button
-                                onClick={() => {
-                                  setActivePromptId(null);
-                                  setActivePromptIds?.((prev) => {
-                                    const next = { ...(prev || {}) };
-                                    delete next[model];
-                                    return next;
-                                  });
-                                  setShowPromptList(false);
-                                }}
-                                className="flex-1 text-left text-sm text-zinc-700 truncate"
-                                type="button"
-                              >
-                                无
-                              </button>
-                            </div>
-
-                            {systemPrompts.map((prompt) => {
-                              const isActive = String(prompt?._id) === String(activePromptId);
-                              return (
-                                <div
-                                  key={prompt._id}
-                                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${isActive ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
-                                >
-                                  <button
-                                    onClick={() => {
-                                      const nextId = String(prompt?._id);
-                                      setActivePromptId(nextId);
-                                      setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
-                                      setShowPromptList(false);
-                                    }}
-                                    className="flex-1 text-left text-sm text-zinc-700 truncate"
-                                    type="button"
-                                  >
-                                    {prompt?.name}
-                                  </button>
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => openEditPromptModal(prompt)}
-                                      title="编辑提示词"
-                                      className="p-1 text-zinc-500 hover:text-zinc-700"
-                                      type="button"
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
-                                    <button
-                                      onClick={() => requestDeletePromptById(prompt)}
-                                      title="删除提示词"
-                                      className="p-1 text-zinc-500 hover:text-red-600"
-                                      type="button"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            {systemPrompts.length === 0 && (
-                              <div className="px-2 py-2 text-xs text-zinc-400">暂无提示词，请先新建</div>
-                            )}
-                          </div>
-                          <button
-                            onClick={openCreatePromptModal}
-                            className="w-full mt-1 px-2 py-2 text-left text-sm text-zinc-600 hover:text-zinc-800 hover:bg-zinc-50 rounded-md"
-                            type="button"
+                      <AnimatePresence>
+                        {showPromptList && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            className="absolute left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-lg shadow-lg p-1 z-10"
                           >
-                            + 新建提示词
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                            <div className="max-h-56 overflow-auto">
+                              <div
+                                className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${activePromptId == null ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
+                              >
+                                <button
+                                  onClick={() => {
+                                    setActivePromptId(null);
+                                    setActivePromptIds?.((prev) => {
+                                      const next = { ...(prev || {}) };
+                                      delete next[model];
+                                      return next;
+                                    });
+                                    setShowPromptList(false);
+                                  }}
+                                  className="flex-1 text-left text-sm text-zinc-700 truncate"
+                                  type="button"
+                                >
+                                  无
+                                </button>
+                              </div>
+
+                              {systemPrompts.map((prompt) => {
+                                const isActive = String(prompt?._id) === String(activePromptId);
+                                return (
+                                  <div
+                                    key={prompt._id}
+                                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${isActive ? "bg-zinc-100" : "hover:bg-zinc-50"}`}
+                                  >
+                                    <button
+                                      onClick={() => {
+                                        const nextId = String(prompt?._id);
+                                        setActivePromptId(nextId);
+                                        setActivePromptIds?.((prev) => ({ ...prev, [model]: nextId }));
+                                        setShowPromptList(false);
+                                      }}
+                                      className="flex-1 text-left text-sm text-zinc-700 truncate"
+                                      type="button"
+                                    >
+                                      {prompt?.name}
+                                    </button>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => openEditPromptModal(prompt)}
+                                        title="编辑提示词"
+                                        className="p-1 text-zinc-500 hover:text-zinc-700"
+                                        type="button"
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        onClick={() => requestDeletePromptById(prompt)}
+                                        title="删除提示词"
+                                        className="p-1 text-zinc-500 hover:text-red-600"
+                                        type="button"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {systemPrompts.length === 0 && (
+                                <div className="px-2 py-2 text-xs text-zinc-400">暂无提示词，请先新建</div>
+                              )}
+                            </div>
+                            <button
+                              onClick={openCreatePromptModal}
+                              className="w-full mt-1 px-2 py-2 text-left text-sm text-zinc-600 hover:text-zinc-800 hover:bg-zinc-50 rounded-md"
+                              type="button"
+                            >
+                              + 新建提示词
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {supportsWebSearch && (
                   <div>
