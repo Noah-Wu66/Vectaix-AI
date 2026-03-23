@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Eraser, KeyRound, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
+import { Copy, Eraser, KeyRound, RefreshCw, Search, Sparkles, Trash2, Users, X } from "lucide-react";
 import { apiJson } from "@/lib/client/apiClient";
 import { useToast } from "./ToastProvider";
 import ConfirmModal from "./ConfirmModal";
@@ -322,13 +322,14 @@ export default function UserManagementModal({ open, onClose }) {
                               <button
                                 onClick={() => requestToggleAdvancedUser(u)}
                                 disabled={actionLoading !== null}
-                                className={`px-2.5 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-50 ${u.isAdvancedUser
+                                className={`p-2 rounded-lg transition-colors disabled:opacity-50 inline-flex items-center justify-center ${u.isAdvancedUser
                                   ? "text-amber-700 bg-amber-50 hover:bg-amber-100"
                                   : "text-sky-700 bg-sky-50 hover:bg-sky-100"
                                   }`}
                                 title={u.isAdvancedUser ? "降为普通用户" : "升级为高级用户"}
+                                aria-label={u.isAdvancedUser ? "降为普通用户" : "升级为高级用户"}
                               >
-                                {u.isAdvancedUser ? "降普通" : "升高级"}
+                                <Sparkles size={15} className="shrink-0" />
                               </button>
                             )}
                             <button

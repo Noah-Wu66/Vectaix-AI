@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp } from "lucide-react";
-import { CHAT_MODELS, MODEL_GROUP_ORDER } from "@/lib/shared/models";
+import { CHAT_MODELS, MODEL_GROUP_ORDER, MODEL_GROUP_TITLES } from "@/lib/shared/models";
 import { ModelGlyph } from "./ModelVisuals";
 
 export default function ModelSelector({ model, onModelChange, ready = true }) {
@@ -14,16 +14,6 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
   const visibleModels = CHAT_MODELS;
   const currentModel = ready ? CHAT_MODELS.find((m) => m.id === model) : null;
   const currentModelLabel = currentModel?.name || "模型";
-  const groupTitles = {
-    vectaix: "Vectaix",
-    gemini: "Google",
-    claude: "Anthropic",
-    openai: "OpenAI",
-    seed: "ByteDance",
-    deepseek: "DeepSeek",
-    xiaomi: "Xiaomi",
-    minimax: "MiniMax",
-  };
   const groupProviders = {
     vectaix: ["council", "vectaix"],
     gemini: ["gemini"],
@@ -106,7 +96,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
               className="absolute bottom-full left-0 mb-2 w-[min(68vw,196px)] bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50"
             >
               <div key="vectaix">
-                {renderModelGroup("vectaix", groupTitles["vectaix"] || "Vectaix")}
+                {renderModelGroup("vectaix", MODEL_GROUP_TITLES.vectaix)}
               </div>
               <div className="my-1.5 border-t border-zinc-200" />
               <button
@@ -135,7 +125,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
                     {MODEL_GROUP_ORDER.filter((g) => g !== "vectaix").map((groupKey, index) => (
                       <div key={groupKey}>
                         {index > 0 && <div className="my-1.5 border-t border-zinc-200" />}
-                        {renderModelGroup(groupKey, groupTitles[groupKey] || groupKey)}
+                        {renderModelGroup(groupKey, MODEL_GROUP_TITLES[groupKey] || groupKey)}
                       </div>
                     ))}
                   </motion.div>

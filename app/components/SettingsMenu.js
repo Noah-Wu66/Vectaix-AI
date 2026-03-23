@@ -10,17 +10,10 @@ import {
   getModelConfig,
   getAgentDriverModels,
   MODEL_GROUP_ORDER,
+  MODEL_GROUP_TITLES,
   normalizeAgentDriverModelId,
 } from "@/lib/shared/models";
 import { DEFAULT_WEB_SEARCH_SETTINGS } from "@/lib/shared/webSearch";
-
-const MODEL_GROUP_TITLES = {
-  gemini: "Google",
-  claude: "Anthropic",
-  openai: "OpenAI",
-  seed: "ByteDance",
-  deepseek: "DeepSeek",
-};
 
 const AGENT_MODEL_OPTIONS = getAgentDriverModels();
 export default function SettingsMenu({

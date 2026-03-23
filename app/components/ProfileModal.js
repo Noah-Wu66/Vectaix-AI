@@ -17,10 +17,16 @@ import {
 
 import { upload } from "@vercel/blob/client";
 import { apiJson } from "@/lib/client/apiClient";
+import { MODEL_GROUP_TITLES } from "@/lib/shared/models";
 import { useToast } from "./ToastProvider";
 import UserManagementModal from "./UserManagementModal";
 
 const EMPTY_MODEL_ROUTES = { openai: "default", opus: "default", gemini: "default" };
+const MODEL_ROUTE_LABELS = Object.freeze({
+  openai: MODEL_GROUP_TITLES.openai,
+  opus: MODEL_GROUP_TITLES.claude,
+  gemini: MODEL_GROUP_TITLES.gemini,
+});
 
 function normalizeUserModelRoutes(routes) {
   return {
@@ -442,10 +448,8 @@ export default function ProfileModal({
                         className="overflow-hidden"
                       >
                         <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
-                          <p className="text-xs text-zinc-500">保存后只影响你自己的账号，不影响其他人</p>
-
                           <div className="space-y-2">
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">OpenAI 线路</label>
+                            <label className="text-xs text-zinc-500 font-medium tracking-wider block">{MODEL_ROUTE_LABELS.openai} 线路</label>
                             <div className="flex gap-2">
                               {[
                                 { id: "default", label: "AICodeMirror" },
@@ -468,7 +472,7 @@ export default function ProfileModal({
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">Opus 线路</label>
+                            <label className="text-xs text-zinc-500 font-medium tracking-wider block">{MODEL_ROUTE_LABELS.opus} 线路</label>
                             <div className="flex gap-2">
                               {[
                                 { id: "default", label: "AICodeMirror" },
@@ -491,7 +495,7 @@ export default function ProfileModal({
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">Gemini 线路</label>
+                            <label className="text-xs text-zinc-500 font-medium tracking-wider block">{MODEL_ROUTE_LABELS.gemini} 线路</label>
                             <div className="flex gap-2">
                               {[
                                 { id: "default", label: "AICodeMirror" },
