@@ -15,7 +15,7 @@
 - 联网搜索：按问题自动判断是否需要搜索，再把结果整理给模型。
 - 用户系统：注册、登录、退出、改密、企业 SSO。
 - 个人设置：头像、系统提示词、主题、字号、联网开关等。
-- 管理后台：用户管理、异常加密数据清理、模型线路切换、Agent 沙箱重置。
+- 管理后台：用户管理、异常加密数据清理、Agent 沙箱重置。
 - 数据迁移：导出当前账号的对话和设置，再导入回来。
 
 ## 当前支持的模型
@@ -62,7 +62,7 @@
 ```text
 app/
   api/
-    admin/                  管理员接口
+    admin/                  超级管理员接口
     agent/                  Agent 入口、运行状态、审批/取消
     anthropic/              Claude 对话
     auth/                   注册、登录、退出、改密、SSO、当前用户
@@ -76,6 +76,7 @@ app/
     files/                  文档准备、文件下载
     google/                 Gemini 对话
     images/                 图片下载
+    model-routes/           当前用户的模型线路
     openai/                 OpenAI 对话
     settings/               用户设置
     upload/                 Blob 上传签名与落库
@@ -99,7 +100,7 @@ lib/
   admin.js                  管理员权限判断
   auth.js                   JWT 与 Cookie
   db.js                     MongoDB 连接
-  modelRoutes.js            OpenAI / Opus 上游线路配置
+  modelRoutes.js            按用户读取 OpenAI / Opus / Gemini 上游线路配置
   rateLimit.js              简单限流
 
 models/
@@ -107,7 +108,6 @@ models/
   BlobFile.js
   Conversation.js
   MemoryEntry.js
-  SystemConfig.js
   User.js
   UserSettings.js
 
@@ -126,13 +126,14 @@ vercel.json                 Vercel cron 配置
 
 ### `User`
 
-保存用户邮箱、密码哈希、创建时间。
+保存用户邮箱、密码哈希、是否为高级用户、创建时间。
 
 ### `UserSettings`
 
 按用户保存个人设置，例如：
 
 - 头像
+- 个人模型线路
 - 系统提示词列表
 - 当前启用的提示词
 - 主题模式
@@ -190,10 +191,6 @@ vercel.json                 Vercel cron 配置
 
 保存 Agent 的会话记忆摘要，用来让后续任务接上之前的上下文。
 
-### `SystemConfig`
-
-保存系统级配置，目前主要用于模型线路切换。
-
 ## 常用接口
 
 下面这部分只列最常用、最值得先看的接口。
@@ -206,6 +203,8 @@ vercel.json                 Vercel cron 配置
 - `DELETE /api/auth/me`
 - `POST /api/auth/change-password`
 - `GET /api/auth/enterprise`
+- `GET /api/model-routes`
+- `PATCH /api/model-routes`
 
 ### 聊天
 
@@ -250,8 +249,6 @@ vercel.json                 Vercel cron 配置
 - `POST /api/admin/users/[id]`
 - `PATCH /api/admin/users/[id]`
 - `DELETE /api/admin/users/[id]`
-- `GET /api/admin/model-routes`
-- `PATCH /api/admin/model-routes`
 - `GET /api/admin/agent-sandbox`
 - `POST /api/admin/agent-sandbox`
 
@@ -269,27 +266,29 @@ vercel.json                 Vercel cron 配置
   - MongoDB 连接地址
 - `JWT_SECRET`
   - 站内登录 JWT 密钥
-- `GEMINI_API_KEY`
-  - Gemini 对话和历史压缩都会用到
 - `DEEPSEEK_API_KEY`
   - DeepSeek 对话
 - `ARK_API_KEY`
   - Seed 对话和 Agent 运行
-- `RIGHT_CODES_API_KEY`
-  - OpenAI 默认线路
-- `AIGOCODE_API_KEY`
-  - Claude Opus 默认线路
+- `AICODEMIRROR_API_KEY`
+  - OpenAI、Claude Opus、Gemini 的 AICodeMirror 普通线路
 - `VOLCENGINE_WEB_SEARCH_API_KEY`
   - 联网搜索
 
 ### 按功能启用
 
-- `RIGHT_CODES_OPENAI_BASE_URL`
-  - OpenAI 默认线路地址，不填时会走代码里的默认地址
+- `GEMINI_API_KEY`
+  - 高级用户或超级管理员把 Gemini 切到 `Google 原生` 线路时使用
+- `AICODEMIRROR_OPENAI_BASE_URL`
+  - OpenAI 普通线路地址，不填时会走代码里的默认地址
+- `AICODEMIRROR_CLAUDE_BASE_URL`
+  - Claude Opus 普通线路地址，不填时会走代码里的默认地址
+- `AICODEMIRROR_GEMINI_BASE_URL`
+  - Gemini 普通线路地址，不填时会走代码里的默认地址
 - `ZENMUX_API_KEY`
-  - 管理员把 OpenAI 或 Opus 切到 `zenmux` 线路时使用
+  - 高级用户或超级管理员把 OpenAI 或 Opus 切到 `zenmux` 线路时使用
 - `ADMIN_EMAILS`
-  - 管理员邮箱白名单，多个邮箱用英文逗号分隔
+  - 超级管理员邮箱白名单，多个邮箱用英文逗号分隔
 - `OA_SSO_SECRET`
   - 企业 SSO 校验密钥
 - `CRON_SECRET`
@@ -345,7 +344,7 @@ vercel.json                 Vercel cron 配置
 - `lib/server/sandbox/vercelSandbox.js`
   - Vercel Sandbox 交互封装
 - `lib/modelRoutes.js`
-  - OpenAI / Claude Opus 上游线路切换
+  - OpenAI / Claude Opus / Gemini 上游线路切换
 
 ## 一句话总结
 

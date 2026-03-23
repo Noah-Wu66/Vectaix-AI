@@ -75,7 +75,10 @@ export default function UserManagementModal({ open, onClose }) {
     confirmActionRef.current = async () => {
       setActionLoading(user.id);
       try {
-        const data = await apiJson(`/api/admin/users/${user.id}`, { method: "PATCH" });
+        const data = await apiJson(`/api/admin/users/${user.id}`, {
+          method: "PATCH",
+          body: { action: "reset-password" },
+        });
         setResetResult({ email: user.email, password: data.newPassword });
         toast.success("密码已重置");
       } catch (e) {
@@ -109,6 +112,37 @@ export default function UserManagementModal({ open, onClose }) {
     setConfirmMessage(`确定要删除「${user.email}」吗？该用户的所有数据（对话、设置、文件）将被永久删除，此操作不可撤销。`);
     setConfirmButtonText("删除");
     setConfirmDanger(true);
+    setConfirmOpen(true);
+  };
+
+  const requestToggleAdvancedUser = (user) => {
+    const nextIsAdvancedUser = !user.isAdvancedUser;
+    confirmActionRef.current = async () => {
+      setActionLoading(user.id);
+      try {
+        await apiJson(`/api/admin/users/${user.id}`, {
+          method: "PATCH",
+          body: {
+            action: "set-advanced-user",
+            isAdvancedUser: nextIsAdvancedUser,
+          },
+        });
+        toast.success(nextIsAdvancedUser ? "已升级为高级用户" : "已降为普通用户");
+        fetchUsers(page, search.trim());
+      } catch (e) {
+        toast.error(e?.message);
+      } finally {
+        setActionLoading(null);
+      }
+    };
+    setConfirmTitle(nextIsAdvancedUser ? "升级高级用户" : "降为普通用户");
+    setConfirmMessage(
+      nextIsAdvancedUser
+        ? `确定要把「${user.email}」升级为高级用户吗？升级后，这个用户可以自己切换线路，而且只影响自己的账号。`
+        : `确定要把「${user.email}」降为普通用户吗？降级后，这个用户将不能再切换线路，并恢复为普通线路。`
+    );
+    setConfirmButtonText(nextIsAdvancedUser ? "升级" : "降级");
+    setConfirmDanger(false);
     setConfirmOpen(true);
   };
 
@@ -149,6 +183,12 @@ export default function UserManagementModal({ open, onClose }) {
       month: "2-digit",
       day: "2-digit",
     });
+  };
+
+  const getUserLevelLabel = (user) => {
+    if (user?.isAdmin) return "超级管理员";
+    if (user?.isAdvancedUser) return "高级用户";
+    return "普通用户";
   };
 
   return (
@@ -262,12 +302,35 @@ export default function UserManagementModal({ open, onClose }) {
                         className="flex items-center justify-between bg-zinc-50 rounded-xl p-3 border border-zinc-100 hover:border-zinc-200 transition-colors"
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-zinc-800 truncate">{u.email}</div>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="text-sm font-medium text-zinc-800 truncate">{u.email}</div>
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${u.isAdmin
+                              ? "bg-emerald-100 text-emerald-700"
+                              : u.isAdvancedUser
+                                ? "bg-sky-100 text-sky-700"
+                                : "bg-zinc-200 text-zinc-600"
+                              }`}>
+                              {getUserLevelLabel(u)}
+                            </span>
+                          </div>
                           <div className="text-xs text-zinc-400 mt-0.5">
                             注册于 {formatDate(u.createdAt)} · {u.conversationCount} 个对话
                           </div>
                         </div>
                         <div className="flex items-center gap-1 ml-3">
+                            {!u.isAdmin && (
+                              <button
+                                onClick={() => requestToggleAdvancedUser(u)}
+                                disabled={actionLoading !== null}
+                                className={`px-2.5 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-50 ${u.isAdvancedUser
+                                  ? "text-amber-700 bg-amber-50 hover:bg-amber-100"
+                                  : "text-sky-700 bg-sky-50 hover:bg-sky-100"
+                                  }`}
+                                title={u.isAdvancedUser ? "降为普通用户" : "升级为高级用户"}
+                              >
+                                {u.isAdvancedUser ? "降普通" : "升高级"}
+                              </button>
+                            )}
                             <button
                               onClick={() => requestResetPassword(u)}
                               disabled={actionLoading !== null}

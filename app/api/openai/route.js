@@ -142,7 +142,7 @@ export async function POST(req) {
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        const modelRoutes = await getModelRoutes();
+        const modelRoutes = await getModelRoutes(user.userId);
         const { baseUrl: apiBaseUrl, apiKey } = resolveOpenAIProviderConfig(modelRoutes);
         const apiModel = model;
 

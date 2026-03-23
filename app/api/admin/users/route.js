@@ -1,5 +1,5 @@
 import dbConnect from '@/lib/db';
-import { requireAdmin } from '@/lib/admin';
+import { getUserAccessFlags, requireAdmin } from '@/lib/admin';
 import User from '@/models/User';
 import Conversation from '@/models/Conversation';
 import UserSettings from '@/models/UserSettings';
@@ -47,7 +47,7 @@ export async function GET(req) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .select('email createdAt')
+      .select('email createdAt isAdvancedUser')
       .lean(),
     User.countDocuments(filter),
   ]);
@@ -64,6 +64,7 @@ export async function GET(req) {
   }
 
   const result = users.map(u => ({
+    ...getUserAccessFlags(u),
     id: u._id.toString(),
     email: u.email,
     createdAt: u.createdAt,

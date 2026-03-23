@@ -1,4 +1,5 @@
 import dbConnect from '@/lib/db';
+import { getUserAccessFlags } from '@/lib/admin';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
@@ -50,7 +51,11 @@ export async function GET() {
 
     return Response.json({
       success: true,
-      user: { id: user._id, email: user.email },
+      user: {
+        id: user._id,
+        email: user.email,
+        ...getUserAccessFlags(user),
+      },
     });
   } catch (error) {
     console.error("Enterprise auth error:", error?.message);

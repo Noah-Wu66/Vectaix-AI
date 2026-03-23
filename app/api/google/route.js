@@ -158,7 +158,7 @@ export async function POST(req) {
         }
 
         const apiModel = resolveGeminiApiModel(model);
-        const ai = createGeminiClient();
+        const ai = await createGeminiClient(user.userId);
         let currentConversationId = conversationId;
         let currentConversation = await loadConversationForRoute({
             conversationId: currentConversationId,

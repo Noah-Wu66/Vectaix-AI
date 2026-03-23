@@ -180,7 +180,7 @@ export async function POST(req) {
 
   let providerRoutes;
   try {
-    const savedRoutes = await getModelRoutes();
+    const savedRoutes = await getModelRoutes(auth.userId);
     providerRoutes = resolveCouncilProviderRoutes(savedRoutes);
   } catch (error) {
     return Response.json({ error: error?.message || "模型线路配置错误" }, { status: 500 });

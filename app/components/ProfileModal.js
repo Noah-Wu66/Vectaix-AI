@@ -20,6 +20,16 @@ import { apiJson } from "@/lib/client/apiClient";
 import { useToast } from "./ToastProvider";
 import UserManagementModal from "./UserManagementModal";
 
+const EMPTY_MODEL_ROUTES = { openai: "default", opus: "default", gemini: "default" };
+
+function normalizeUserModelRoutes(routes) {
+  return {
+    openai: routes?.openai === "zenmux" ? "zenmux" : "default",
+    opus: routes?.opus === "zenmux" ? "zenmux" : "default",
+    gemini: routes?.gemini === "native" || routes?.gemini === "zenmux" ? "native" : "default",
+  };
+}
+
 export default function ProfileModal({
   open,
   onClose,
@@ -48,8 +58,8 @@ export default function ProfileModal({
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeSaving, setRouteSaving] = useState(false);
-  const [modelRoutes, setModelRoutes] = useState({ openai: "default", opus: "default", gemini: "default" });
-  const [savedModelRoutes, setSavedModelRoutes] = useState({ openai: "default", opus: "default", gemini: "default" });
+  const [modelRoutes, setModelRoutes] = useState(EMPTY_MODEL_ROUTES);
+  const [savedModelRoutes, setSavedModelRoutes] = useState(EMPTY_MODEL_ROUTES);
   const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
     ? Number(completionSoundVolume)
     : 60;
@@ -60,6 +70,8 @@ export default function ProfileModal({
   }, [user?.email]);
 
   const avatarFileInputRef = useRef(null);
+  const canManageUsers = Boolean(isAdmin);
+  const canSwitchRoutes = Boolean(user?.canSwitchRoutes || isAdmin);
   const hasRouteChanges =
     modelRoutes.openai !== savedModelRoutes.openai ||
     modelRoutes.opus !== savedModelRoutes.opus ||
@@ -96,27 +108,23 @@ export default function ProfileModal({
   };
 
   useEffect(() => {
-    if (!open || !isAdmin) return;
+    if (!open || !canSwitchRoutes) return;
 
     let cancelled = false;
 
-    const fetchAdminConfig = async () => {
+    const fetchRouteConfig = async () => {
       setRouteLoading(true);
       try {
-        const routesData = await apiJson("/api/admin/model-routes");
+        const routesData = await apiJson("/api/model-routes");
 
         if (!cancelled) {
-          const nextRoutes = {
-            openai: routesData?.routes?.openai === "zenmux" ? "zenmux" : "default",
-            opus: routesData?.routes?.opus === "zenmux" ? "zenmux" : "default",
-            gemini: routesData?.routes?.gemini === "zenmux" ? "zenmux" : "default",
-          };
+          const nextRoutes = normalizeUserModelRoutes(routesData?.routes);
           setModelRoutes(nextRoutes);
           setSavedModelRoutes(nextRoutes);
         }
       } catch (e) {
         if (!cancelled) {
-          toast.error(e?.message || "加载管理员配置失败");
+          toast.error(e?.message || "加载线路配置失败");
         }
       } finally {
         if (!cancelled) {
@@ -125,11 +133,11 @@ export default function ProfileModal({
       }
     };
 
-    fetchAdminConfig();
+    fetchRouteConfig();
     return () => {
       cancelled = true;
     };
-  }, [open, isAdmin, toast]);
+  }, [open, canSwitchRoutes, toast]);
 
   const setProviderRoute = (provider, route) => {
     setModelRoutes((prev) => ({ ...prev, [provider]: route }));
@@ -138,19 +146,15 @@ export default function ProfileModal({
   const saveModelRoutes = async () => {
     setRouteSaving(true);
     try {
-      const data = await apiJson("/api/admin/model-routes", {
+      const data = await apiJson("/api/model-routes", {
         method: "PATCH",
         body: modelRoutes,
       });
 
-      const nextRoutes = {
-        openai: data?.routes?.openai === "zenmux" ? "zenmux" : "default",
-        opus: data?.routes?.opus === "zenmux" ? "zenmux" : "default",
-        gemini: data?.routes?.gemini === "zenmux" ? "zenmux" : "default",
-      };
+      const nextRoutes = normalizeUserModelRoutes(data?.routes);
       setModelRoutes(nextRoutes);
       setSavedModelRoutes(nextRoutes);
-      toast.success("线路配置已保存，全站立即生效");
+      toast.success("线路配置已保存，只影响当前账号");
     } catch (e) {
       toast.error(e?.message || "保存线路配置失败");
     } finally {
@@ -413,8 +417,8 @@ export default function ProfileModal({
                 )}
               </AnimatePresence>
 
-              {/* 线路选择（仅管理员可见） */}
-              {isAdmin && (
+              {/* 线路选择（仅高级用户和超级管理员可见） */}
+              {canSwitchRoutes && (
                 <>
                   <button
                     onClick={() => setShowRouteSelector(!showRouteSelector)}
@@ -438,13 +442,13 @@ export default function ProfileModal({
                         className="overflow-hidden"
                       >
                         <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
-                          <p className="text-xs text-zinc-500">保存后全站立即生效</p>
+                          <p className="text-xs text-zinc-500">保存后只影响你自己的账号，不影响其他人</p>
 
                           <div className="space-y-2">
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">OpenAI 线路</label>
                             <div className="flex gap-2">
                               {[
-                                { id: "default", label: "Right Code" },
+                                { id: "default", label: "AICodeMirror" },
                                 { id: "zenmux", label: "Zenmux" },
                               ].map((item) => (
                                 <button
@@ -467,7 +471,7 @@ export default function ProfileModal({
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">Opus 线路</label>
                             <div className="flex gap-2">
                               {[
-                                { id: "default", label: "AiGo Code" },
+                                { id: "default", label: "AICodeMirror" },
                                 { id: "zenmux", label: "Zenmux" },
                               ].map((item) => (
                                 <button
@@ -490,8 +494,8 @@ export default function ProfileModal({
                             <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">Gemini 线路</label>
                             <div className="flex gap-2">
                               {[
-                                { id: "default", label: "Google AI" },
-                                { id: "zenmux", label: "Zenmux" },
+                                { id: "default", label: "AICodeMirror" },
+                                { id: "native", label: "Google 原生" },
                               ].map((item) => (
                                 <button
                                   key={`gemini-${item.id}`}
@@ -524,8 +528,8 @@ export default function ProfileModal({
                 </>
               )}
 
-              {/* 用户管理（仅管理员可见） */}
-              {isAdmin && (
+              {/* 用户管理（仅超级管理员可见） */}
+              {canManageUsers && (
                 <button
                   onClick={() => setShowUserManagement(true)}
                   className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"

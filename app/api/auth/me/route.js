@@ -1,19 +1,19 @@
-import { clearAuthCookie, getAuthPayload } from '@/lib/auth';
-import { isAdminEmail } from '@/lib/admin';
+import { clearAuthCookie } from '@/lib/auth';
+import { getCurrentUserWithAccess } from '@/lib/admin';
 
 export async function GET() {
-    const payload = await getAuthPayload();
-    if (!payload) return Response.json({ user: null });
+  const user = await getCurrentUserWithAccess();
+  if (!user) return Response.json({ user: null });
 
-    const isAdmin = isAdminEmail(payload.email);
-
-    return Response.json({
-        user: {
-            id: payload.userId,
-            email: payload.email,
-            isAdmin,
-        }
-    });
+  return Response.json({
+    user: {
+      id: user.userId,
+      email: user.email,
+      isAdmin: user.isAdmin,
+      isAdvancedUser: user.isAdvancedUser,
+      canSwitchRoutes: user.canSwitchRoutes,
+    }
+  });
 }
 
 export async function DELETE() {

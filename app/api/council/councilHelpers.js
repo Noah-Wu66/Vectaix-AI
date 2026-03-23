@@ -33,7 +33,6 @@ import {
   SEED_MODEL_ID,
 } from "@/lib/shared/models";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const ARK_API_KEY = process.env.ARK_API_KEY;
 const GEMINI_DECISION_MODEL = GEMINI_PRO_MODEL;
 const GEMINI_DECISION_THINKING_LEVEL = parseGeminiThinkingLevel("LOW");
@@ -406,33 +405,28 @@ function extractUpstreamErrorMessage(status, rawText) {
 }
 
 function createGeminiClient(providerConfig) {
-  if (providerConfig?.useVertexAI) {
-    // Zenmux Vertex AI 模式
+  if (!providerConfig?.apiKey) {
+    throw new Error("Gemini provider apiKey is not set");
+  }
+  if (providerConfig?.baseUrl) {
     return new GoogleGenAI({
       apiKey: providerConfig.apiKey,
-      vertexai: true,
       httpOptions: {
-        apiVersion: 'v1',
         baseUrl: providerConfig.baseUrl,
       },
     });
   }
-  // 默认 Google AI 模式
-  return new GoogleGenAI({ apiKey: providerConfig?.apiKey || process.env.GEMINI_API_KEY });
+  return new GoogleGenAI({ apiKey: providerConfig.apiKey });
 }
 
-function getGeminiModelId(expertModelId, providerConfig) {
-  if (providerConfig?.useVertexAI) {
-    // Zenmux 需要加 google/ 前缀
-    return `google/${expertModelId}`;
-  }
+function getGeminiModelId(expertModelId) {
   return expertModelId;
 }
 
-async function buildGeminiDecisionRunner(ai, providerConfig) {
+async function buildGeminiDecisionRunner(ai) {
   return async ({ prompt, historyMessages, searchRounds }) => {
     const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
-    const modelId = getGeminiModelId(GEMINI_DECISION_MODEL, providerConfig);
+    const modelId = getGeminiModelId(GEMINI_DECISION_MODEL);
     const result = await ai.models.generateContent({
       model: modelId,
       contents: [{ role: "user", parts: [{ text: userText }] }],
@@ -628,7 +622,7 @@ async function collectSearchContext({
   if (expert.provider === "gemini") {
     const geminiConfig = providerRoutes.gemini;
     const ai = createGeminiClient(geminiConfig);
-    const decisionRunner = await buildGeminiDecisionRunner(ai, geminiConfig);
+    const decisionRunner = await buildGeminiDecisionRunner(ai);
     const { searchContextText } = await raceWithSignal(runWebSearchOrchestration({
       enableWebSearch: true,
       prompt,
@@ -699,7 +693,7 @@ async function collectSearchContext({
 
 async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
   const ai = createGeminiClient(providerConfig);
-  const modelId = getGeminiModelId(expert.modelId, providerConfig);
+  const modelId = getGeminiModelId(expert.modelId);
   const parts = [{ text: prompt }];
   for (const image of imagePayloads) {
     parts.push({

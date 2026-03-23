@@ -182,7 +182,7 @@ export async function POST(req) {
             return Response.json({ error: 'unsupported anthropic-compatible model' }, { status: 400 });
         }
 
-        const providerConfig = await resolveAnthropicProviderConfig(model);
+        const providerConfig = await resolveAnthropicProviderConfig(model, user.userId);
         const { baseUrl: anthropicBaseUrl, apiKey } = providerConfig;
         const apiModel = resolveAnthropicApiModel(model);
         const client = new Anthropic({

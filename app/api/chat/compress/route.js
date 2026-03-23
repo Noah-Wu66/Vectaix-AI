@@ -1,16 +1,15 @@
-import { GoogleGenAI } from "@google/genai";
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
 import { GEMINI_PRO_MODEL } from '@/lib/shared/models';
+import { createGeminiClient, resolveGeminiApiModel } from '@/lib/server/chat/providerAdapters';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const COMPRESS_RATE_LIMIT = { limit: 10, windowMs: 60 * 1000 };
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const COMPRESS_MODEL = GEMINI_PRO_MODEL;
+const COMPRESS_MODEL = resolveGeminiApiModel(GEMINI_PRO_MODEL);
 
 const COMPRESS_SYSTEM_PROMPT = `你是一个对话历史压缩器。你的任务是将一段多轮对话压缩成一份简洁的摘要，保留所有关键信息。
 
@@ -79,12 +78,7 @@ export async function POST(req) {
             return Response.json({ error: 'No valid messages to compress' }, { status: 400 });
         }
 
-        if (!GEMINI_API_KEY) {
-            return Response.json({ error: 'GEMINI_API_KEY is not set' }, { status: 500 });
-        }
-
-        // 使用 Gemini Pro 进行压缩
-        const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+        const ai = await createGeminiClient(auth.userId);
 
         const result = await ai.models.generateContent({
             model: COMPRESS_MODEL,
