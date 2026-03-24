@@ -505,44 +505,57 @@ export default function MessageList({
                                 <RotateCcw size={14} />
                               </button>
                             ) : null}
-                            {(hasParts || hasVisibleContent) && (
-                              <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenExportMenuIndex((prev) => (prev === i ? null : i))}
-                                  className={`inline-flex items-center gap-1 p-1.5 rounded-lg transition-colors ${openExportMenuIndex === i
-                                    ? "text-zinc-700 bg-zinc-100"
-                                    : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
-                                    }`}
-                                  title="导出"
-                                >
-                                  <Download size={14} />
-                                  <ChevronDown size={12} className={`transition-transform ${openExportMenuIndex === i ? "rotate-180" : ""}`} />
-                                </button>
+                        {(hasParts || hasVisibleContent) && (
+                          <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
+                            <button
+                              type="button"
+                              onClick={() => setOpenExportMenuIndex((prev) => (prev === i ? null : i))}
+                              className={`inline-flex items-center gap-1 p-1.5 rounded-lg transition-colors ${openExportMenuIndex === i
+                                ? "text-zinc-700 bg-zinc-100"
+                                : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
+                                }`}
+                              title="导出"
+                            >
+                              <Download size={14} />
+                              <ChevronDown size={12} className={`transition-transform ${openExportMenuIndex === i ? "rotate-180" : ""}`} />
+                            </button>
 
-                                {openExportMenuIndex === i && (
-                                  <motion.div
-                                    initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: 6, scale: 0.96 }}
-                                    className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg sm:left-full sm:right-auto sm:top-1/2 sm:mt-0 sm:ml-2 sm:-translate-y-1/2"
-                                  >
-                                    {[
-                                      { key: "markdown", label: "导出 Markdown" },
-                                      { key: "pdf", label: "导出 PDF" },
-                                      { key: "docx", label: "导出 Docx" },
-                                    ].map((item) => (
-                                      <button
-                                        key={item.key}
-                                        type="button"
-                                        onClick={() => handleExportMessage(item.key, msg)}
-                                        className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-100"
-                                      >
-                                        {item.label}
-                                      </button>
-                                    ))}
-                                  </motion.div>
-                                )}
+                            <AnimatePresence>
+                              {openExportMenuIndex === i && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                                  className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg sm:left-full sm:right-auto sm:top-1/2 sm:mt-0 sm:ml-2 sm:-translate-y-1/2"
+                                >
+                                  {[
+                                    { key: "markdown", label: "导出 Markdown" },
+                                    { key: "pdf", label: "导出 PDF" },
+                                    { key: "docx", label: "导出 Docx" },
+                                  ].map((item) => (
+                                    <button
+                                      key={item.key}
+                                      type="button"
+                                      onClick={() => handleExportMessage(item.key, msg)}
+                                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-100"
+                                    >
+                                      {item.label}
+                                    </button>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        )}
+                      </>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          );
+        })
+      )}
                               </div>
                             )}
                           </>

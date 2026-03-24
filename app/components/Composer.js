@@ -347,7 +347,6 @@ export default function Composer({
   };
 
   return (
-  return (
     <div className="max-w-4xl mx-auto w-full relative group/composer">
       {/* Attachments Preview - Floating style */}
       <AnimatePresence>
