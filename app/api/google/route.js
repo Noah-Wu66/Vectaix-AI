@@ -22,6 +22,10 @@ import {
     rollbackConversationTurn,
 } from '@/app/api/chat/conversationState';
 import {
+    enrichConversationPartsWithBlobIds,
+    enrichStoredMessagesWithBlobIds,
+} from '@/lib/server/conversations/blobReferences';
+import {
     WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
     getWebSearchProviderRuntimeOptions,
@@ -191,6 +195,7 @@ export async function POST(req) {
             } catch (e) {
                 return Response.json({ error: e?.message || 'messages invalid' }, { status: 400 });
             }
+            sanitized = await enrichStoredMessagesWithBlobIds(sanitized, { userId: user.userId });
             const regenerateTime = Date.now();
             const conv = await Conversation.findOneAndUpdate(
                 { _id: currentConversationId, userId: user.userId },
@@ -359,13 +364,16 @@ export async function POST(req) {
                 }
             }
 
+            const enrichedStoredUserParts = await enrichConversationPartsWithBlobIds(storedUserParts, {
+                userId: user.userId,
+            });
             const userMsgTime = Date.now();
             const userMessage = {
                 id: resolvedUserMessageId,
                 role: 'user',
                 content: prompt,
                 type: 'parts',
-                parts: storedUserParts
+                parts: enrichedStoredUserParts
             };
             const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
                 $push: {

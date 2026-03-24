@@ -21,6 +21,10 @@ import {
   runSeedTriage,
 } from "./councilHelpers";
 import { getModelRoutes } from "@/lib/modelRoutes";
+import {
+  enrichConversationPartsWithBlobIds,
+  enrichStoredMessagesWithBlobIds,
+} from "@/lib/server/conversations/blobReferences";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -93,9 +97,10 @@ function sanitizeCouncilExperts(value, fieldPath) {
   return experts;
 }
 
-function sanitizeCouncilRegenerateMessages(messages) {
+async function sanitizeCouncilRegenerateMessages(messages, userId) {
   const sanitized = sanitizeStoredMessagesStrict(messages);
-  return sanitized.map((message, index) => {
+  const enrichedMessages = await enrichStoredMessagesWithBlobIds(sanitized, { userId });
+  return enrichedMessages.map((message, index) => {
     const original = messages[index];
     const nextMessage = { ...message };
     const experts = sanitizeCouncilExperts(original?.councilExperts, `messages[${index}].councilExperts`);
@@ -252,7 +257,7 @@ export async function POST(req) {
   if (isRegenerateMode) {
     let sanitizedMessages;
     try {
-      sanitizedMessages = sanitizeCouncilRegenerateMessages(messages);
+      sanitizedMessages = await sanitizeCouncilRegenerateMessages(messages, auth.userId);
     } catch (error) {
       return Response.json({ error: error?.message || "Council 快照无效" }, { status: 400 });
     }
@@ -321,12 +326,16 @@ export async function POST(req) {
 
     historyMemo = buildCouncilHistoryMemo(previousMessages);
 
+    const enrichedUserParts = await enrichConversationPartsWithBlobIds(councilInput.userParts, {
+      userId: auth.userId,
+    });
+
     const storedUserMessage = {
       id: resolvedUserMessageId,
       role: "user",
       content: promptText,
       type: "parts",
-      parts: councilInput.userParts,
+      parts: enrichedUserParts,
     };
 
     const userMsgTime = Date.now();

@@ -1,4 +1,5 @@
 import { WEB_SEARCH_CONTEXT_WARNING_TEXT } from '@/lib/server/chat/webSearchConfig';
+import { normalizeBlobFileId } from '@/lib/shared/blobFileIds';
 
 /**
  * 共用工具函数 - Gemini 和 Claude API 都会使用
@@ -200,6 +201,8 @@ export function getStoredPartsFromMessage(msg) {
                             url,
                             mimeType: isNonEmptyString(mimeType) ? mimeType : 'image/jpeg',
                         };
+                        const blobFileId = normalizeBlobFileId(part.inlineData.blobFileId);
+                        if (blobFileId) out.inlineData.blobFileId = blobFileId;
                     }
                 }
                 if (part?.fileData && typeof part.fileData === 'object') {
@@ -218,6 +221,8 @@ export function getStoredPartsFromMessage(msg) {
                             extension,
                             category,
                         };
+                        const blobFileId = normalizeBlobFileId(part.fileData.blobFileId);
+                        if (blobFileId) out.fileData.blobFileId = blobFileId;
                     }
                 }
                 if (isNonEmptyString(part.thoughtSignature)) out.thoughtSignature = part.thoughtSignature;
@@ -328,6 +333,9 @@ export function sanitizeStoredMessagesStrict(messages) {
                 if (!isAllowedStoredImageUrl(part.inlineData.url)) {
                     throw createValidationError(`messages[${i}].parts[${pi}].image invalid`);
                 }
+                if (part.inlineData.blobFileId !== undefined && !normalizeBlobFileId(part.inlineData.blobFileId)) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].image blobFileId invalid`);
+                }
             }
             if (part?.fileData?.url) {
                 if (!isAllowedStoredImageUrl(part.fileData.url)) {
@@ -347,6 +355,9 @@ export function sanitizeStoredMessagesStrict(messages) {
                 }
                 if (!Number.isFinite(Number(part.fileData.size)) || Number(part.fileData.size) < 0) {
                     throw createValidationError(`messages[${i}].parts[${pi}].file size invalid`);
+                }
+                if (part.fileData.blobFileId !== undefined && !normalizeBlobFileId(part.fileData.blobFileId)) {
+                    throw createValidationError(`messages[${i}].parts[${pi}].file blobFileId invalid`);
                 }
             }
         }

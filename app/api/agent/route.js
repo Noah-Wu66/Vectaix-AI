@@ -13,6 +13,7 @@ import {
 } from "@/app/api/chat/conversationState";
 import { runAgentRuntimeV2 } from "@/lib/server/agent/runtimeV2";
 import { parseSeedThinkingLevel, parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
+import { enrichConversationPartsWithBlobIds } from "@/lib/server/conversations/blobReferences";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -225,12 +226,16 @@ export async function POST(req) {
     const resolvedUserMessageId = typeof userMessageId === "string" && userMessageId ? userMessageId : generateMessageId();
     const resolvedModelMessageId = typeof modelMessageId === "string" && modelMessageId ? modelMessageId : generateMessageId();
 
+    const enrichedUserMessageParts = await enrichConversationPartsWithBlobIds(userMessageParts, {
+      userId: auth.userId,
+    });
+
     const userMessage = {
       id: resolvedUserMessageId,
       role: "user",
       content: typeof prompt === "string" ? prompt : "",
       type: "parts",
-      parts: userMessageParts,
+      parts: enrichedUserMessageParts,
     };
 
     const updatedConversation = await Conversation.findOneAndUpdate(

@@ -2,6 +2,7 @@ import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
 import { getAuthPayload } from '@/lib/auth';
 import { sanitizeImportedConversation } from '@/lib/server/conversations/sanitize';
+import { enrichStoredMessagesWithBlobIds } from '@/lib/server/conversations/blobReferences';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -45,6 +46,11 @@ export async function POST(req) {
         }
 
         const conversationInput = sanitizeImportedConversation(body, 0, user.userId);
+        if (Array.isArray(conversationInput.messages) && conversationInput.messages.length > 0) {
+            conversationInput.messages = await enrichStoredMessagesWithBlobIds(conversationInput.messages, {
+                userId: user.userId,
+            });
+        }
         const created = await Conversation.create({
             ...conversationInput,
             pinned: Boolean(conversationInput.pinned),
