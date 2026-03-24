@@ -323,8 +323,8 @@ export default function UserManagementModal({ open, onClose }) {
                                 onClick={() => requestToggleAdvancedUser(u)}
                                 disabled={actionLoading !== null}
                                 className={`p-2 rounded-lg transition-colors disabled:opacity-50 inline-flex items-center justify-center ${u.isAdvancedUser
-                                  ? "text-amber-700 bg-amber-50 hover:bg-amber-100"
-                                  : "text-sky-700 bg-sky-50 hover:bg-sky-100"
+                                  ? "text-zinc-400 hover:text-amber-600 hover:bg-amber-50"
+                                  : "text-zinc-400 hover:text-sky-600 hover:bg-sky-50"
                                   }`}
                                 title={u.isAdvancedUser ? "降为普通用户" : "升级为高级用户"}
                                 aria-label={u.isAdvancedUser ? "降为普通用户" : "升级为高级用户"}
