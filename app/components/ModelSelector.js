@@ -42,7 +42,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
             }}
             className={`w-full px-3 py-2.5 rounded-lg text-sm md:text-[13px] font-medium flex items-center gap-2.5 transition-colors ${model === m.id
               ? "bg-zinc-600 text-white"
-              : "text-zinc-600 hover:bg-zinc-50"
+              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
               }`}
             type="button"
           >
@@ -61,7 +61,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
           if (!ready) return;
           setShowModelMenu(!showModelMenu);
         }}
-        className="px-3 py-1.5 rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors flex items-center gap-1.5 text-sm"
+        className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-sm"
         type="button"
         disabled={!ready}
       >
@@ -93,19 +93,19 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 w-[min(68vw,196px)] bg-white rounded-xl shadow-lg border border-zinc-200 p-2 z-50"
+              className="absolute bottom-full left-0 mb-2 w-[min(68vw,196px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
             >
               <div key="vectaix">
                 {renderModelGroup("vectaix", MODEL_GROUP_TITLES.vectaix)}
               </div>
-              <div className="my-1.5 border-t border-zinc-200" />
+              <div className="my-1.5 border-t border-zinc-200 dark:border-zinc-700" />
               <button
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   setShowOtherModels(!showOtherModels);
                 }}
-                className="w-full px-3 py-1.5 flex items-center justify-between text-[10px] font-semibold text-zinc-400 tracking-wider hover:text-zinc-600 transition-colors"
+                className="w-full px-3 py-1.5 flex items-center justify-between text-[10px] font-semibold text-zinc-400 tracking-wider hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
                 type="button"
               >
                 <span>其他模型</span>
@@ -124,7 +124,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
                   >
                     {MODEL_GROUP_ORDER.filter((g) => g !== "vectaix").map((groupKey, index) => (
                       <div key={groupKey}>
-                        {index > 0 && <div className="my-1.5 border-t border-zinc-200" />}
+                        {index > 0 && <div className="my-1.5 border-t border-zinc-200 dark:border-zinc-700" />}
                         {renderModelGroup(groupKey, MODEL_GROUP_TITLES[groupKey] || groupKey)}
                       </div>
                     ))}

@@ -455,7 +455,7 @@ export default function Composer({
             onBlur={() => setIsMainInputFocused(false)}
             readOnly={hasReachedCouncilRoundLimit}
             placeholder={hasReachedCouncilRoundLimit ? `已达到 ${COUNCIL_MAX_ROUNDS} 轮上限...` : "给 AI 发送消息..."}
-            className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-[15px] text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 resize-none py-2 min-h-[44px] transition-all scrollbar-none"
+            className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-base md:text-[15px] text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 resize-none py-2 min-h-[44px] transition-all scrollbar-none"
             rows={1}
           />
 

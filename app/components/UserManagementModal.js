@@ -206,19 +206,19 @@ export default function UserManagementModal({ open, onClose }) {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl w-full max-w-2xl shadow-xl border border-zinc-200 relative max-h-[85vh] flex flex-col"
+              className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-2xl shadow-xl border border-zinc-200 dark:border-zinc-700 relative max-h-[85vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* 头部 */}
-              <div className="flex items-center justify-between p-6 pb-4 border-b border-zinc-100">
+              <div className="flex items-center justify-between p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800">
                 <div className="flex items-center gap-2">
-                  <Users size={18} className="text-zinc-600" />
-                  <h2 className="text-lg font-semibold text-zinc-900">用户管理</h2>
+                  <Users size={18} className="text-zinc-600 dark:text-zinc-400" />
+                  <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">用户管理</h2>
                   <span className="text-xs text-zinc-400 ml-1">共 {total} 位用户</span>
                 </div>
                 <button
                   onClick={onClose}
-                  className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                  className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
                 >
                   <X size={20} />
                 </button>
@@ -233,14 +233,14 @@ export default function UserManagementModal({ open, onClose }) {
                     placeholder="搜索邮箱..."
                     value={search}
                     onChange={(e) => onSearchChange(e.target.value)}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-800 focus:border-zinc-400 outline-none"
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none"
                   />
                 </div>
 
                 <button
                   onClick={requestCleanAllEncrypted}
                   disabled={actionLoading !== null || loading}
-                  className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                  className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-400 transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-50"
                 >
                   <Eraser size={16} />
                   一键清除全部用户加密数据（含侧边栏）
@@ -256,24 +256,24 @@ export default function UserManagementModal({ open, onClose }) {
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden px-6"
                   >
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center justify-between gap-2">
-                      <div className="text-sm text-emerald-800">
+                    <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700 rounded-lg p-3 flex items-center justify-between gap-2">
+                      <div className="text-sm text-emerald-800 dark:text-emerald-300">
                         <span className="font-medium">{resetResult.email}</span> 的新密码：
-                        <code className="bg-emerald-100 px-2 py-0.5 rounded text-emerald-900 font-mono ml-1">
+                        <code className="bg-emerald-100 dark:bg-emerald-800/50 px-2 py-0.5 rounded text-emerald-900 dark:text-emerald-200 font-mono ml-1">
                           {resetResult.password}
                         </code>
                       </div>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => copyToClipboard(resetResult.password)}
-                          className="p-1.5 text-emerald-600 hover:text-emerald-800 transition-colors"
+                          className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-200 transition-colors"
                           title="复制密码"
                         >
                           <Copy size={14} />
                         </button>
                         <button
                           onClick={() => setResetResult(null)}
-                          className="p-1.5 text-emerald-600 hover:text-emerald-800 transition-colors"
+                          className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-200 transition-colors"
                           title="关闭"
                         >
                           <X size={14} />
@@ -299,16 +299,16 @@ export default function UserManagementModal({ open, onClose }) {
                     {users.map((u) => (
                       <div
                         key={u.id}
-                        className="flex items-center justify-between bg-zinc-50 rounded-xl p-3 border border-zinc-100 hover:border-zinc-200 transition-colors"
+                        className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-800 rounded-xl p-3 border border-zinc-100 dark:border-zinc-700 hover:border-zinc-200 dark:hover:border-zinc-600 transition-colors"
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 min-w-0">
-                            <div className="text-sm font-medium text-zinc-800 truncate">{u.email}</div>
+                            <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{u.email}</div>
                             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${u.isAdmin
-                              ? "bg-emerald-100 text-emerald-700"
+                              ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
                               : u.isAdvancedUser
-                                ? "bg-sky-100 text-sky-700"
-                                : "bg-zinc-200 text-zinc-600"
+                                ? "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400"
+                                : "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
                               }`}>
                               {getUserLevelLabel(u)}
                             </span>
@@ -335,7 +335,7 @@ export default function UserManagementModal({ open, onClose }) {
                             <button
                               onClick={() => requestResetPassword(u)}
                               disabled={actionLoading !== null}
-                              className="p-2 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
+                              className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors disabled:opacity-50"
                               title="重置密码"
                             >
                              <KeyRound size={15} />
@@ -357,11 +357,11 @@ export default function UserManagementModal({ open, onClose }) {
 
               {/* 分页 */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 px-6 py-3 border-t border-zinc-100">
+                <div className="flex items-center justify-center gap-2 px-6 py-3 border-t border-zinc-100 dark:border-zinc-800">
                   <button
                     onClick={() => goPage(page - 1)}
                     disabled={page <= 1 || loading}
-                    className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors disabled:opacity-40"
+                    className="px-3 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors disabled:opacity-40"
                   >
                     上一页
                   </button>
@@ -371,7 +371,7 @@ export default function UserManagementModal({ open, onClose }) {
                   <button
                     onClick={() => goPage(page + 1)}
                     disabled={page >= totalPages || loading}
-                    className="px-3 py-1.5 text-xs text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors disabled:opacity-40"
+                    className="px-3 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors disabled:opacity-40"
                   >
                     下一页
                   </button>

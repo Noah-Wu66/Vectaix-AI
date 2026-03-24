@@ -211,12 +211,12 @@ export default function ProfileModal({
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white p-6 md:p-8 rounded-2xl w-full max-w-md shadow-xl border border-zinc-200 relative"
+              className="bg-white dark:bg-zinc-900 p-6 md:p-8 rounded-2xl w-full max-w-md shadow-xl border border-zinc-200 dark:border-zinc-700 relative"
               onClick={(e) => e.stopPropagation()}
             >
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600"
+              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
             >
               <X size={20} />
             </button>
@@ -252,7 +252,7 @@ export default function ProfileModal({
                   </div>
                 )}
               </button>
-              <h2 className="text-lg font-semibold text-zinc-900">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 {user?.email}
               </h2>
               <p className="text-sm text-zinc-500">个人中心</p>
@@ -262,9 +262,9 @@ export default function ProfileModal({
               {/* 修改密码 */}
               <button
                 onClick={() => setShowChangePassword(!showChangePassword)}
-                className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
+                className="w-full flex items-center justify-between bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 transition-colors"
               >
-                <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
                   <Lock size={14} /> 修改密码
                 </span>
                 <ChevronDown
@@ -282,14 +282,14 @@ export default function ProfileModal({
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100">
+                    <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700">
                       <form onSubmit={submitChangePassword} className="space-y-3">
                         <input
                           type="password"
                           placeholder="当前密码"
                           value={oldPassword}
                           onChange={(e) => setOldPassword(e.target.value)}
-                          className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-800 focus:border-zinc-400 outline-none"
+                          className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none"
                           required
                         />
                         <input
@@ -297,7 +297,7 @@ export default function ProfileModal({
                           placeholder="新密码"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
-                          className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-800 focus:border-zinc-400 outline-none"
+                          className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none"
                           required
                         />
                         <input
@@ -305,7 +305,7 @@ export default function ProfileModal({
                           placeholder="确认新密码"
                           value={confirmNewPassword}
                           onChange={(e) => setConfirmNewPassword(e.target.value)}
-                          className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-sm text-zinc-800 focus:border-zinc-400 outline-none"
+                          className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none"
                           required
                         />
                         <button
@@ -324,9 +324,9 @@ export default function ProfileModal({
               {/* 外观设置 */}
               <button
                 onClick={() => setShowAppearance(!showAppearance)}
-                className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
+                className="w-full flex items-center justify-between bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 transition-colors"
               >
-                <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
                   <Settings size={14} /> 系统设置
                 </span>
                 <ChevronDown
@@ -344,7 +344,7 @@ export default function ProfileModal({
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
+                    <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 space-y-4">
                       {/* 主题模式 */}
                       <div>
                         <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block flex items-center gap-1">
@@ -362,7 +362,7 @@ export default function ProfileModal({
                               type="button"
                               className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${themeMode === t.id
                                 ? "bg-zinc-600 text-white border-zinc-600"
-                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                                 }`}
                             >
                               {t.label}
@@ -388,7 +388,7 @@ export default function ProfileModal({
                               type="button"
                               className={`flex-1 py-2 rounded-lg border transition-colors ${fontSize === f.id
                                 ? "bg-zinc-600 text-white border-zinc-600"
-                                : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                                 } ${f.size}`}
                             >
                               {f.label}
@@ -428,9 +428,9 @@ export default function ProfileModal({
                 <>
                   <button
                     onClick={() => setShowRouteSelector(!showRouteSelector)}
-                    className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
+                    className="w-full flex items-center justify-between bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 transition-colors"
                   >
-                    <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
+                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
                       <GitBranch size={14} /> 线路选择
                     </span>
                     <ChevronDown
@@ -447,7 +447,7 @@ export default function ProfileModal({
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                       >
-                        <div className="bg-zinc-50 rounded-xl p-4 border border-zinc-100 space-y-4">
+                        <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 space-y-4">
                           <div className="space-y-2">
                             <label className="text-xs text-zinc-500 font-medium tracking-wider block">{MODEL_ROUTE_LABELS.openai} 线路</label>
                             <div className="flex gap-2">
@@ -462,7 +462,7 @@ export default function ProfileModal({
                                   disabled={routeLoading || routeSaving}
                                   className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.openai === item.id
                                     ? "bg-zinc-600 text-white border-zinc-600"
-                                    : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                                     } disabled:opacity-50`}
                                 >
                                   {item.label}
@@ -485,7 +485,7 @@ export default function ProfileModal({
                                   disabled={routeLoading || routeSaving}
                                   className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.opus === item.id
                                     ? "bg-zinc-600 text-white border-zinc-600"
-                                    : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                                     } disabled:opacity-50`}
                                 >
                                   {item.label}
@@ -508,7 +508,7 @@ export default function ProfileModal({
                                   disabled={routeLoading || routeSaving}
                                   className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.gemini === item.id
                                     ? "bg-zinc-600 text-white border-zinc-600"
-                                    : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100"
+                                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                                     } disabled:opacity-50`}
                                 >
                                   {item.label}
@@ -536,9 +536,9 @@ export default function ProfileModal({
               {canManageUsers && (
                 <button
                   onClick={() => setShowUserManagement(true)}
-                  className="w-full flex items-center justify-between bg-zinc-50 hover:bg-zinc-100 rounded-xl p-4 border border-zinc-100 transition-colors"
+                  className="w-full flex items-center justify-between bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 transition-colors"
                 >
-                  <span className="text-sm font-medium text-zinc-700 flex items-center gap-2">
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
                     <Users size={14} /> 用户管理
                   </span>
                   <ChevronDown size={16} className="text-zinc-400" />

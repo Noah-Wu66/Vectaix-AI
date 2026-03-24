@@ -69,25 +69,25 @@ export default function ConfirmModal({
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.95, opacity: 0 }}
                         onClick={(e) => e.stopPropagation()}
-                        className="relative bg-white rounded-xl shadow-xl max-w-sm w-full p-6"
+                        className="relative bg-white dark:bg-zinc-900 rounded-xl shadow-xl max-w-sm w-full p-6"
                     >
                         <button
                             onClick={handleCancel}
                             disabled={isProcessing}
-                            className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <X size={18} />
                         </button>
 
                         <div className="flex flex-col items-center text-center">
                             <div
-                                className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${danger ? "bg-red-100 text-red-500" : "bg-zinc-100 text-zinc-600"
+                                className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${danger ? "bg-red-100 dark:bg-red-900/30 text-red-500" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
                                     }`}
                             >
                                 <AlertTriangle size={24} />
                             </div>
 
-                            <h3 className="text-lg font-semibold text-zinc-800 mb-2">
+                            <h3 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100 mb-2">
                                 {title}
                             </h3>
                             <p className="text-sm text-zinc-500 mb-6">{message}</p>
@@ -96,7 +96,7 @@ export default function ConfirmModal({
                                 <button
                                     onClick={handleCancel}
                                     disabled={isProcessing}
-                                    className="flex-1 px-4 py-2.5 text-sm font-medium text-zinc-600 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="flex-1 px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {cancelText}
                                 </button>

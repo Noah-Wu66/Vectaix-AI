@@ -365,7 +365,7 @@ export default function ThinkingBlock({
     <div className="thinking-block mb-2 w-full max-w-full">
       {hasCouncilMode ? (
         /* ── Council 模式：直接以内联胶囊显示，不包裹折叠按钮 ── */
-        <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
+        <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80 dark:border-zinc-700/80">
           {normalizedCouncilExpertStates.map((expert) => {
             const isRunning = expert.status === "running";
             const isError = expert.status === "error";
@@ -396,7 +396,7 @@ export default function ThinkingBlock({
                   {hasContent ? (isOpen ? <ChevronUp size={12} className="ml-1 shrink-0" /> : <ChevronDown size={12} className="ml-1 shrink-0" />) : null}
                 </div>
                 {isOpen && expertData && (
-                  <div className="mt-2 mb-1 ml-1 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800">
+                  <div className="mt-2 mb-1 ml-1 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200">
                     <Markdown enableHighlight={true} enableMath={true}>{expertData.content}</Markdown>
                     <Citations citations={expertData.citations} />
                   </div>
@@ -436,7 +436,7 @@ export default function ThinkingBlock({
               }
               setCollapsed(!collapsed);
             }}
-            className="thinking-btn flex items-center font-medium mb-1.5 transition-colors text-zinc-500 hover:text-zinc-700 bg-zinc-100"
+            className="thinking-btn flex items-center font-medium mb-1.5 transition-colors text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 bg-zinc-100 dark:bg-zinc-800"
           >
             {headerIcon}
             <span className="thinking-btn-label flex items-center">
@@ -469,13 +469,13 @@ export default function ThinkingBlock({
               >
                 {hasTimeline ? (
                   /* 时间线模式：内层各步骤气泡（每个可独立折叠 = 第二层） */
-                  <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
+                  <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80 dark:border-zinc-700/80">
                     {timelineItems.map((step, idx) => renderTimelineStep(step, idx))}
                   </div>
                 ) : (
                   /* 简单模式：内嵌一个"思考过程"气泡（第二层） */
                   safeThought ? (
-                    <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80">
+                    <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80 dark:border-zinc-700/80">
                       <div className="w-full max-w-[760px]">
                         <button
                           type="button"

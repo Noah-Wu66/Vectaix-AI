@@ -117,7 +117,7 @@ export function Thumb({ src, className = "", onClick }) {
       <img
         src={src}
         alt=""
-        className="block max-w-[240px] max-h-[180px] w-auto h-auto object-cover rounded-lg border border-zinc-200 bg-zinc-50"
+        className="block max-w-[240px] max-h-[180px] w-auto h-auto object-cover rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
         loading="eager"
         decoding="async"
       />
@@ -133,12 +133,12 @@ export function AttachmentCard({ file, compact = false }) {
     : null;
 
   return (
-    <div className={`flex items-center gap-3 rounded-xl border border-zinc-200 bg-white/70 px-3 py-2 ${compact ? "min-w-[220px]" : "min-w-[240px]"}`}>
+    <div className={`flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white/70 px-3 py-2 ${compact ? "min-w-[220px]" : "min-w-[240px]"}`}>
       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 shrink-0">
         <FileText size={18} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium text-zinc-700">{file.name}</div>
+        <div className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-300">{file.name}</div>
         <div className="truncate text-xs text-zinc-400">{formatAttachmentMeta(file)}</div>
         {typeof file.formatSummary === "string" && file.formatSummary.trim() ? (
           <div className="truncate text-xs text-zinc-400/90">{file.formatSummary}</div>
@@ -184,11 +184,11 @@ export function Citations({ citations }) {
   };
 
   return (
-    <div className="mt-3 pt-3 border-t border-zinc-200">
+    <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700">
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full text-xs transition-colors"
+        className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 rounded-full text-xs transition-colors"
         title="查看全部来源"
       >
         <Globe size={12} className="text-zinc-500" />
@@ -202,7 +202,7 @@ export function Citations({ citations }) {
                 key={idx}
                 src={iconUrl}
                 alt=""
-                className="w-4 h-4 rounded-full border border-white bg-white"
+                className="w-4 h-4 rounded-full border border-white dark:border-zinc-700 bg-white dark:bg-zinc-800"
                 loading="lazy"
                 decoding="async"
               />
@@ -220,16 +220,16 @@ export function Citations({ citations }) {
             className="absolute inset-0 bg-black/40"
             onClick={() => setOpen(false)}
           />
-          <div className="relative bg-white rounded-2xl shadow-xl border border-zinc-200 w-full max-w-md p-4">
+          <div className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-700 w-full max-w-md p-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2 text-sm text-zinc-700 font-medium">
+              <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 font-medium">
                 <Globe size={14} />
                 信息来源
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100"
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                 title="关闭"
               >
                 <X size={16} />
@@ -247,13 +247,13 @@ export function Citations({ citations }) {
                       href={citation.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-2.5 py-2 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 rounded-lg text-sm text-zinc-700 transition-colors"
+                      className="flex items-center gap-2 px-2.5 py-2 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-700 dark:text-zinc-300 transition-colors"
                       title={citation.title || citation.url}
                     >
                       <img
                         src={iconUrl}
                         alt=""
-                        className="w-5 h-5 rounded-full border border-white bg-white flex-shrink-0"
+                        className="w-5 h-5 rounded-full border border-white dark:border-zinc-700 bg-white dark:bg-zinc-800 flex-shrink-0"
                         loading="lazy"
                         decoding="async"
                       />
