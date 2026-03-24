@@ -124,7 +124,7 @@ export default function Sidebar({
         className={`fixed md:relative z-40 w-72 h-full glass-effect border-r border-zinc-200/50 flex-col transition-all duration-300 ${isOpen ? "translate-x-0 flex" : "-translate-x-full md:translate-x-0 hidden md:flex"
           }`}
       >
-        <div className="p-4 border-b border-zinc-200/50 flex items-center justify-between">
+        <div className="p-4 border-b border-zinc-200/50 dark:border-zinc-800/50 flex items-center justify-between">
           <button
             onClick={onStartNewChat}
             className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md active:scale-[0.98] group"
@@ -207,7 +207,7 @@ export default function Sidebar({
           ))}
         </div>
 
-        <div className="p-4 border-t border-zinc-200/50 bg-zinc-50/50 dark:bg-zinc-900/50">
+        <div className="p-4 border-t border-zinc-200/50 dark:border-zinc-800/50 bg-zinc-50/50 dark:bg-zinc-900/50">
           <div className="flex items-center gap-3">
             <button
               onClick={onOpenProfile}
