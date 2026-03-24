@@ -99,6 +99,7 @@ export default function ThinkingBlock({
   councilExperts,
   bodyText,
   showThoughtDetails = true,
+  isAgentMode = false,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
@@ -219,7 +220,9 @@ export default function ThinkingBlock({
     const isManualExpanded = manualExpandedStepIdRef.current === step.id;
     const showThoughtDots = isThoughtStreaming && (!hasDetail || (isExpanded && !isManualExpanded));
 
-    const thoughtIcon = isThoughtStreaming
+    const activeThoughtLabel = isAgentMode ? "决策中" : "思考中";
+    const completedThoughtLabel = isAgentMode ? "已决策" : "已思考";
+    const thoughtIcon = isAgentMode && isThoughtStreaming
       ? <Scale className="thinking-icon-step" />
       : <Lightbulb className="thinking-icon-step" />;
 
@@ -255,13 +258,13 @@ export default function ThinkingBlock({
               className={`${capsuleClass} cursor-pointer hover:text-zinc-700`}
             >
               {icon}
-              <StepStatusText text={isThoughtStreaming ? "决策中" : "思考过程"} active={showThoughtDots} />
+              <StepStatusText text={isThoughtStreaming ? activeThoughtLabel : "思考过程"} active={showThoughtDots} />
               {isThoughtOpen ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
             </button>
           ) : (
             <div className={`${capsuleClass} cursor-default`}>
               {icon}
-              <StepStatusText text={isThoughtStreaming ? "决策中" : "已思考"} active={showThoughtDots} />
+              <StepStatusText text={isThoughtStreaming ? activeThoughtLabel : completedThoughtLabel} active={showThoughtDots} />
             </div>
           )}
           {isThoughtOpen ? (
@@ -465,8 +468,8 @@ export default function ThinkingBlock({
                           }}
                           className="thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors text-zinc-500 cursor-pointer"
                         >
-                          {isStreaming ? <Scale className="thinking-icon-step" /> : <Lightbulb className="thinking-icon-step" />}
-                          <StepStatusText text={isStreaming ? "决策中" : "思考过程"} active={isStreaming && expandedTimelineId !== "__simple__"} />
+                          {isAgentMode && isStreaming ? <Scale className="thinking-icon-step" /> : <Lightbulb className="thinking-icon-step" />}
+                          <StepStatusText text={isStreaming ? activeThoughtLabel : "思考过程"} active={isStreaming && expandedTimelineId !== "__simple__"} />
                           {expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
                         </button>
                         {expandedTimelineId === "__simple__" ? (
