@@ -121,34 +121,34 @@ export default function Sidebar({
   return (
     <>
       <div
-        className={`fixed md:relative z-30 w-64 h-full bg-zinc-50 border-r border-zinc-200 flex-col ${isOpen ? "flex" : "hidden md:flex"
+        className={`fixed md:relative z-40 w-72 h-full glass-effect border-r border-zinc-200/50 flex-col transition-all duration-300 ${isOpen ? "translate-x-0 flex" : "-translate-x-full md:translate-x-0 hidden md:flex"
           }`}
       >
-        <div className="p-4 border-b border-zinc-200 flex items-center justify-between">
+        <div className="p-4 border-b border-zinc-200/50 flex items-center justify-between">
           <button
             onClick={onStartNewChat}
-            className="flex-1 flex items-center gap-2 bg-white hover:bg-zinc-100 border border-zinc-200 text-zinc-700 p-2.5 rounded-lg text-sm font-medium transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md active:scale-[0.98] group"
           >
-            <Plus size={16} /> 新对话
+            <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" /> 新建对话
           </button>
-          <button onClick={onClose} className="md:hidden p-2 text-zinc-400 ml-2">
-            <X size={18} />
+          <button onClick={onClose} className="md:hidden p-2 text-zinc-400 ml-2 hover:bg-zinc-100 rounded-lg">
+            <X size={20} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-0.5 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar">
           {conversations.map((conv) => (
             <div
               key={conv._id}
               onMouseEnter={() => revealActions(conv._id)}
               onMouseLeave={() => hideActions(conv._id)}
-              className={`flex items-center gap-0.5 rounded-lg transition-colors ${currentConversationId === conv._id
-                ? "bg-white border border-zinc-200"
-                : "hover:bg-white"
+              className={`group relative flex items-center rounded-xl transition-all duration-200 ${currentConversationId === conv._id
+                ? "bg-white dark:bg-zinc-800 shadow-sm border border-zinc-200/60"
+                : "hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
                 }`}
             >
               {editingId === conv._id ? (
-                <div className="flex-1 flex items-center gap-1 p-1.5">
+                <div className="flex-1 flex items-center gap-1 p-2">
                   <input
                     ref={editInputRef}
                     type="text"
@@ -156,68 +156,46 @@ export default function Sidebar({
                     onChange={(e) => setEditingTitle(e.target.value)}
                     onKeyDown={handleKeyDown}
                     onBlur={handleSaveEdit}
-                    className="flex-1 px-2 py-1.5 text-sm border border-zinc-300 rounded-md focus:outline-none focus:border-zinc-400 bg-white"
+                    className="flex-1 px-2 py-1.5 text-sm border border-primary rounded-lg focus:outline-none bg-white dark:bg-zinc-900"
                   />
-                  <button
-                    onClick={handleSaveEdit}
-                    className="p-1.5 text-green-500 hover:bg-zinc-100 rounded transition-colors"
-                  >
-                    <Check size={14} />
-                  </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    className="p-1.5 text-zinc-400 hover:bg-zinc-100 rounded transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
                 </div>
               ) : (
                 <>
                   <button
-                      onClick={() => onLoadConversation(conv._id)}
-                      onTouchStart={(e) => handleConversationTouchStart(conv, e)}
-                      className={`flex-1 flex items-center gap-1.5 text-left py-3 pl-3 pr-0.5 text-sm min-w-0 ${currentConversationId === conv._id
-                        ? "text-zinc-900 font-medium"
-                        : "text-zinc-600"
-                        }`}
-                    >
-                      <span className="shrink-0"><ModelGlyph model={conv.model} size={16} /></span>
-                      <span className="truncate">{conv.title}</span>
+                    onClick={() => onLoadConversation(conv._id)}
+                    onTouchStart={(e) => handleConversationTouchStart(conv, e)}
+                    className={`flex-1 flex items-center gap-3 text-left py-3 px-3 text-sm min-w-0 transition-colors ${currentConversationId === conv._id
+                      ? "text-primary font-semibold"
+                      : "text-zinc-600 dark:text-zinc-400"
+                      }`}
+                  >
+                    <span className={`shrink-0 transition-transform duration-200 ${currentConversationId === conv._id ? "scale-110" : "group-hover:scale-105 opacity-70 group-hover:opacity-100"}`}>
+                      <ModelGlyph model={conv.model} size={18} />
+                    </span>
+                    <span className="truncate pr-8">{conv.title}</span>
                   </button>
-                  <div className={`mr-1 flex items-center gap-0.5 transition-opacity ${activeActionsId === conv._id ? "opacity-100" : "pointer-events-none opacity-0"}`}>
+                  
+                  <div className={`absolute right-2 flex items-center gap-0.5 transition-all duration-200 ${activeActionsId === conv._id ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none"}`}>
                     <button
                       onClick={(e) => handlePinClick(conv, e)}
-                      onFocus={() => revealActions(conv._id)}
-                      className={`p-1.5 transition-colors ${conv.pinned
-                        ? "text-blue-600 hover:text-blue-700"
-                        : "text-zinc-400 hover:text-zinc-600"
+                      className={`p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${conv.pinned
+                        ? "text-blue-500"
+                        : "text-zinc-400"
                         }`}
                       title={conv.pinned ? "取消置顶" : "置顶"}
                     >
                       <Pin size={14} fill={conv.pinned ? "currentColor" : "none"} />
                     </button>
-                    {canDuplicateConversation(conv) ? (
-                      <button
-                        onClick={(e) => handleDuplicateClick(conv, e)}
-                        onFocus={() => revealActions(conv._id)}
-                        className="p-1.5 text-zinc-400 hover:text-zinc-600 transition-colors"
-                        title="复制话题"
-                      >
-                        <Copy size={14} />
-                      </button>
-                    ) : null}
                     <button
                       onClick={(e) => handleEditClick(conv, e)}
-                      onFocus={() => revealActions(conv._id)}
-                      className="p-1.5 text-zinc-400 hover:text-zinc-600 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-zinc-600 transition-colors"
                       title="重命名"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
                       onClick={(e) => handleDeleteClick(conv, e)}
-                      onFocus={() => revealActions(conv._id)}
-                      className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-red-500 transition-colors"
                       title="删除"
                     >
                       <Trash2 size={14} />
@@ -229,32 +207,38 @@ export default function Sidebar({
           ))}
         </div>
 
-        <div className="p-4 border-t border-zinc-200">
-          <div className="flex items-center justify-between">
+        <div className="p-4 border-t border-zinc-200/50 bg-zinc-50/50 dark:bg-zinc-900/50">
+          <div className="flex items-center gap-3">
             <button
               onClick={onOpenProfile}
-              className="flex items-center gap-2 flex-1 hover:bg-white p-2 rounded-lg transition-colors -ml-2 text-left mr-2"
+              className="flex items-center gap-3 flex-1 hover:bg-white dark:hover:bg-zinc-800 p-2 rounded-xl transition-all active:scale-[0.98]"
             >
               {avatar ? (
                 <img
                   src={avatar}
                   alt=""
-                  className="w-8 h-8 rounded-lg object-cover"
+                  className="w-10 h-10 rounded-xl object-cover ring-2 ring-zinc-200 dark:ring-zinc-700"
                 />
               ) : (
-                <div className="w-8 h-8 rounded-lg bg-zinc-500 flex items-center justify-center text-xs font-semibold text-white">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-sm font-bold text-white shadow-sm">
                   {user?.email?.[0]?.toUpperCase?.()}
                 </div>
               )}
-              <div className="text-xs truncate max-w-[100px] text-zinc-600 font-medium">
-                {user?.email}
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+                  {user?.email?.split('@')[0]}
+                </span>
+                <span className="text-[10px] text-zinc-400 truncate">
+                  {user?.email}
+                </span>
               </div>
             </button>
             <button
               onClick={onLogout}
-              className="text-zinc-400 hover:text-red-500 transition-colors p-2"
+              className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+              title="退出登录"
             >
-              <LogOut size={16} />
+              <LogOut size={18} />
             </button>
           </div>
         </div>

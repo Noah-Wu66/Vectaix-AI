@@ -347,12 +347,51 @@ export default function Composer({
   };
 
   return (
-    <div className="p-3 md:p-4 bg-white border-t border-zinc-200 z-20 shrink-0 pb-safe">
-      <div className="max-w-3xl mx-auto space-y-2">
-        <div className="flex items-center gap-2">
+  return (
+    <div className="max-w-4xl mx-auto w-full relative group/composer">
+      {/* Attachments Preview - Floating style */}
+      <AnimatePresence>
+        {selectedAttachments.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="absolute bottom-full mb-3 left-0 right-0 flex flex-wrap gap-2 p-3 glass-effect rounded-2xl shadow-xl border-zinc-200/50 z-30 mx-2 md:mx-0"
+          >
+            {selectedAttachments.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200/60 shadow-sm animate-in fade-in slide-in-from-bottom-1"
+              >
+                {isImageAttachment(item) ? (
+                  <div className="w-6 h-6 rounded-lg overflow-hidden border border-zinc-100 dark:border-zinc-700">
+                    {item.preview ? <img src={item.preview} alt="" className="w-full h-full object-cover" /> : null}
+                  </div>
+                ) : (
+                  <FileText size={14} className="text-primary" />
+                )}
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 truncate max-w-[120px]">
+                  {item.name}
+                </span>
+                <button
+                  onClick={() => removeAttachment(item.id)}
+                  className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-full transition-colors text-zinc-400 hover:text-red-500"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className={`relative flex flex-col glass-effect rounded-[24px] shadow-2xl border-zinc-200/60 overflow-hidden transition-all duration-300 ${isMainInputFocused ? "ring-2 ring-primary/20 border-primary/30" : "hover:border-zinc-300"}`}>
+        {/* Top toolbar */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-900/30">
           <ModelSelector model={model} onModelChange={onModelChange} ready={modelReady} />
+          <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700 mx-1" />
           {!isCouncilSelected && (
-            <>
+            <div className="flex items-center gap-1">
               <SettingsMenu
                 model={model}
                 agentModel={agentModel}
@@ -378,80 +417,14 @@ export default function Composer({
                 model={model}
                 webSearch={webSearch}
               />
-            </>
-          )}
-
-          {selectedAttachments.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              {selectedAttachments.map((item) => {
-                const isUploadingItem = item.uploadStatus === "uploading";
-                const isErrorItem = item.uploadStatus === "error";
-                return (
-                  <div
-                    key={item.id}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border max-w-[200px] ${
-                      isErrorItem
-                        ? "bg-red-50 border-red-200"
-                        : isUploadingItem
-                          ? "bg-zinc-50 border-zinc-200"
-                          : "bg-zinc-100 border-zinc-200"
-                    }`}
-                  >
-                    {isImageAttachment(item) ? (
-                      <span className="w-5 h-5 rounded bg-zinc-200 overflow-hidden shrink-0">
-                        {item.preview ? <img src={item.preview} alt="" className="w-full h-full object-cover" /> : null}
-                      </span>
-                    ) : isUploadingItem ? (
-                      <Loader2 size={14} className="text-zinc-400 shrink-0 animate-spin" />
-                    ) : isErrorItem ? (
-                      <AlertTriangle size={14} className="text-red-500 shrink-0" />
-                    ) : (
-                      <FileText size={14} className="text-zinc-500 shrink-0" />
-                    )}
-                    {isImageAttachment(item) && isUploadingItem ? (
-                      <Loader2 size={12} className="text-zinc-400 shrink-0 animate-spin" />
-                    ) : null}
-                    <span className={`text-xs truncate ${isErrorItem ? "text-red-600" : "text-zinc-600"}`}>
-                      {item.name}
-                    </span>
-                    <button
-                      onClick={() => removeAttachment(item.id)}
-                      className="text-zinc-400 hover:text-red-500 shrink-0"
-                      type="button"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                );
-              })}
-              {selectedAttachments.length < MAX_CHAT_ATTACHMENTS && (
-                <span className="text-xs text-zinc-400">
-                  {MAX_CHAT_ATTACHMENTS - selectedAttachments.length} 个可添加
-                </span>
-              )}
             </div>
           )}
         </div>
 
-        {agentHintVisible && (
-          <div className="flex items-center justify-between gap-3 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
-            <div className="flex items-center gap-2 min-w-0">
-              <Sparkles size={14} className="shrink-0" />
-              <span className="truncate">这类文件目前仅 Agent 支持，切换后再继续上传。</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleSwitchToAgent}
-              className="shrink-0 rounded-full bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-500 transition-colors"
-            >
-              切换到 Agent
-            </button>
-          </div>
-        )}
-
-        <div className="relative flex items-center">
+        {/* Text area and main actions */}
+        <div className="relative flex items-end gap-2 p-3 md:p-4">
           {supportsFilePicker && (
-            <>
+            <div className="flex items-center mb-1">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -460,19 +433,16 @@ export default function Composer({
                 accept={attachmentAccept}
                 multiple
               />
-
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={hasReachedCouncilRoundLimit || selectedAttachments.length >= MAX_CHAT_ATTACHMENTS}
-                className={`absolute left-3 z-10 p-1.5 rounded-lg transition-colors ${selectedAttachments.length > 0
-                  ? "text-zinc-600 bg-zinc-200"
-                  : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
-                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                className="p-2.5 rounded-xl text-zinc-400 hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-30 active:scale-90"
                 type="button"
+                title="上传附件"
               >
-                <Paperclip size={16} />
+                <Paperclip size={20} />
               </button>
-            </>
+            </div>
           )}
 
           <textarea
@@ -484,28 +454,30 @@ export default function Composer({
             onFocus={() => setIsMainInputFocused(true)}
             onBlur={() => setIsMainInputFocused(false)}
             readOnly={hasReachedCouncilRoundLimit}
-            placeholder={hasReachedCouncilRoundLimit ? `已达到 ${COUNCIL_MAX_ROUNDS} 轮上限，请新建对话...` : "输入消息..."}
-            className={`flex-1 bg-zinc-50 border border-zinc-200 rounded-xl ${supportsFilePicker ? "pl-11" : "pl-4"} pr-12 py-3 text-sm text-zinc-800 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 resize-none transition-colors`}
+            placeholder={hasReachedCouncilRoundLimit ? `已达到 ${COUNCIL_MAX_ROUNDS} 轮上限...` : "给 AI 发送消息..."}
+            className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-[15px] text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 resize-none py-2 min-h-[44px] transition-all scrollbar-none"
             rows={1}
-            style={{ minHeight: "48px" }}
           />
 
-          <button
-            onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
-            disabled={!isStreaming && !isWaitingForAI && (hasReachedCouncilRoundLimit || isUploading || (!input.trim() && selectedAttachments.length === 0))}
-            className={`absolute right-2 bottom-2 p-2 rounded-lg text-white disabled:opacity-40 transition-colors ${isStreaming || isWaitingForAI ? "bg-red-600 hover:bg-red-500" : "bg-zinc-600 hover:bg-zinc-500"
+          <div className="flex items-center mb-0.5">
+            <button
+              onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
+              disabled={!isStreaming && !isWaitingForAI && (hasReachedCouncilRoundLimit || isUploading || (!input.trim() && selectedAttachments.length === 0))}
+              className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all shadow-md active:scale-90 ${
+                isStreaming || isWaitingForAI 
+                  ? "bg-red-500 hover:bg-red-600 text-white" 
+                  : "bg-primary hover:bg-primary-hover text-white disabled:bg-zinc-200 dark:disabled:bg-zinc-800 disabled:shadow-none"
               }`}
-            type="button"
-          >
-            {isStreaming || isWaitingForAI ? <Square size={16} /> : <Send size={16} />}
-          </button>
-        </div>
-
-        {isCouncilSelected && hasReachedCouncilRoundLimit && (
-          <div className="text-xs text-zinc-500 px-1">
-            {`Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，当前已到上限；如需继续，请新建对话。`}
+              type="button"
+            >
+              {isStreaming || isWaitingForAI ? (
+                <Square size={18} fill="currentColor" />
+              ) : (
+                <Send size={18} className={input.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
+              )}
+            </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

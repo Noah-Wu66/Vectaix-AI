@@ -95,48 +95,63 @@ export default function Markdown({
             </td>
           ),
           code: ({ node, className, children, inline, ...props }) => {
-            // inline prop is passed by react-markdown for inline code
-            // For code blocks without language, className is undefined but inline is false
+            const match = /language-(\w+)/.exec(className || "");
+            const lang = match ? match[1] : "";
+            
             if (inline) {
-              return <code {...props}>{children}</code>;
+              return <code className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-[13px] font-mono text-primary" {...props}>{children}</code>;
             }
 
             return (
-              <code className={className} {...props}>
-                {children}
-              </code>
-            );
-          },
-          pre: ({ children }) => {
-            const [isCopied, setIsCopied] = useState(false);
-            const preRef = useRef(null);
-
-            const handleCopy = async () => {
-              const text = preRef.current?.textContent;
-              try {
-                await navigator.clipboard.writeText(text);
-                setIsCopied(true);
-                setTimeout(() => setIsCopied(false), 2000);
-              } catch { }
-            };
-
-            return (
-              <div className="relative group">
-                <button
-                  onClick={handleCopy}
-                  className="absolute top-2 right-2 p-1.5 rounded-md bg-zinc-700/80 hover:bg-zinc-600 text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center gap-1"
-                  title={isCopied ? "已复制" : "复制代码"}
-                >
-                  {isCopied ? <Check size={14} /> : <Copy size={14} />}
-                </button>
-                <pre ref={preRef} className="rounded-lg overflow-x-auto p-4 my-3">{children}</pre>
+              <div className="relative group/code my-4 rounded-xl overflow-hidden border border-zinc-200/50 shadow-sm">
+                <div className="flex items-center justify-between px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200/50 text-[11px] font-bold text-zinc-500 uppercase tracking-widest">
+                  <span>{lang || "code"}</span>
+                  <CodeCopyButton text={String(children).replace(/\n$/, "")} />
+                </div>
+                <pre className="!bg-zinc-900 !m-0 !rounded-none p-4 overflow-x-auto scrollbar-thin">
+                  <code className={`${className} !bg-transparent text-[13.5px] leading-relaxed`} {...props}>
+                    {children}
+                  </code>
+                </pre>
               </div>
             );
           },
+          pre: ({ children }) => <>{children}</>,
         }}
       >
         {children}
       </ReactMarkdown>
     </div>
+  );
+}
+
+function CodeCopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1 hover:text-primary transition-colors"
+    >
+      {copied ? (
+        <>
+          <Check size={12} />
+          <span>COPIED</span>
+        </>
+      ) : (
+        <>
+          <Copy size={12} />
+          <span>COPY</span>
+        </>
+      )}
+    </button>
   );
 }

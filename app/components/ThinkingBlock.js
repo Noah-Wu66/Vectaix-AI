@@ -238,13 +238,13 @@ export default function ThinkingBlock({
                 ? <Terminal className="thinking-icon-step" />
                 : thoughtIcon;
 
-    const capsuleClass = `thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`;
+    const capsuleClass = `thinking-capsule flex w-fit max-w-full items-center gap-2 font-medium transition-all duration-300 py-1.5 px-3 rounded-full ${isError ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-primary hover:bg-primary/5"}`;
 
     if (step.kind === "thought") {
       const canExpandThought = showThoughtDetails && hasDetail;
       const isThoughtOpen = canExpandThought && isExpanded;
       return (
-        <div key={step.id || `thought-${idx}`} className="w-full max-w-[760px]">
+        <div key={step.id || `thought-${idx}`} className="w-full max-w-2xl mb-2">
           {canExpandThought ? (
             <button
               type="button"
@@ -255,32 +255,48 @@ export default function ThinkingBlock({
                   return nextId;
                 });
               }}
-              className={`${capsuleClass} cursor-pointer hover:text-zinc-700`}
+              className={capsuleClass}
             >
-              {icon}
+              <div className={`p-1 rounded-md ${isThoughtStreaming ? "bg-primary/10 text-primary animate-pulse" : "bg-zinc-200 dark:bg-zinc-700"}`}>
+                {icon}
+              </div>
               <StepStatusText text={isThoughtStreaming ? activeThoughtLabel : "思考过程"} active={showThoughtDots} />
-              {isThoughtOpen ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
+              <div className="ml-auto flex items-center gap-1">
+                <span className="text-[10px] opacity-50 font-normal uppercase tracking-tighter">Details</span>
+                {isThoughtOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
             </button>
           ) : (
-            <div className={`${capsuleClass} cursor-default`}>
-              {icon}
+            <div className={`${capsuleClass} cursor-default opacity-80`}>
+              <div className="p-1 rounded-md bg-zinc-200 dark:bg-zinc-700">
+                {icon}
+              </div>
               <StepStatusText text={isThoughtStreaming ? activeThoughtLabel : completedThoughtLabel} active={showThoughtDots} />
             </div>
           )}
-          {isThoughtOpen ? (
-            <div
-              className="thinking-content thinking-content-panel mt-2 bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-[760px] text-zinc-400"
-              ref={containerRef}
-            >
-              <Markdown
-                enableHighlight={!isThoughtStreaming}
-                enableMath={true}
-                className="prose-xs prose-pre:bg-zinc-800 prose-pre:text-zinc-100 prose-code:text-xs thinking-prose"
+          <AnimatePresence>
+            {isThoughtOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
               >
-                {step.content}
-              </Markdown>
-            </div>
-          ) : null}
+                <div
+                  className="thinking-content mt-2 ml-4 p-4 glass-effect border-zinc-200/50 rounded-2xl text-sm leading-relaxed"
+                  ref={containerRef}
+                >
+                  <Markdown
+                    enableHighlight={!isThoughtStreaming}
+                    enableMath={true}
+                    className="prose-xs text-zinc-500 dark:text-zinc-400"
+                  >
+                    {step.content}
+                  </Markdown>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       );
     }
