@@ -5,7 +5,12 @@ module.exports = {
     ],
     darkMode: ['class', '.dark-mode'],
     theme: {
-        extend: {},
+        extend: {
+            colors: {
+                primary: 'var(--primary)',
+                'primary-hover': 'var(--primary-hover)',
+            },
+        },
     },
     plugins: [],
 };
