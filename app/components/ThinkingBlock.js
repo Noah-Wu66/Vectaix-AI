@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Search, Terminal, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Scale, Search, Terminal, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
 import { Citations, LoadingSweepText } from "./MessageListHelpers";
@@ -219,6 +219,10 @@ export default function ThinkingBlock({
     const isManualExpanded = manualExpandedStepIdRef.current === step.id;
     const showThoughtDots = isThoughtStreaming && (!hasDetail || (isExpanded && !isManualExpanded));
 
+    const thoughtIcon = isThoughtStreaming
+      ? <Scale className="thinking-icon-step" />
+      : <Lightbulb className="thinking-icon-step" />;
+
     const icon = step.kind === "search"
       ? <Search className="thinking-icon-step" />
       : step.kind === "sandbox"
@@ -227,9 +231,9 @@ export default function ThinkingBlock({
           ? <FileUp className="thinking-icon-step" />
           : step.kind === "parse"
             ? <FileScan className="thinking-icon-step" />
-            : step.kind === "tool"
-              ? <Terminal className="thinking-icon-step" />
-              : <Lightbulb className="thinking-icon-step" />;
+              : step.kind === "tool"
+                ? <Terminal className="thinking-icon-step" />
+                : thoughtIcon;
 
     const capsuleClass = `thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`;
 
@@ -251,13 +255,13 @@ export default function ThinkingBlock({
               className={`${capsuleClass} cursor-pointer hover:text-zinc-700`}
             >
               {icon}
-              <StepStatusText text={isThoughtStreaming ? "思考中" : "思考过程"} active={showThoughtDots} />
+              <StepStatusText text={isThoughtStreaming ? "决策中" : "思考过程"} active={showThoughtDots} />
               {isThoughtOpen ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
             </button>
           ) : (
             <div className={`${capsuleClass} cursor-default`}>
               {icon}
-              <StepStatusText text={isThoughtStreaming ? "思考中" : "已思考"} active={showThoughtDots} />
+              <StepStatusText text={isThoughtStreaming ? "决策中" : "已思考"} active={showThoughtDots} />
             </div>
           )}
           {isThoughtOpen ? (
@@ -461,8 +465,8 @@ export default function ThinkingBlock({
                           }}
                           className="thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors text-zinc-500 cursor-pointer"
                         >
-                          <Lightbulb className="thinking-icon-step" />
-                          <StepStatusText text={isStreaming ? "思考中" : "思考过程"} active={isStreaming && expandedTimelineId !== "__simple__"} />
+                          {isStreaming ? <Scale className="thinking-icon-step" /> : <Lightbulb className="thinking-icon-step" />}
+                          <StepStatusText text={isStreaming ? "决策中" : "思考过程"} active={isStreaming && expandedTimelineId !== "__simple__"} />
                           {expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
                         </button>
                         {expandedTimelineId === "__simple__" ? (
