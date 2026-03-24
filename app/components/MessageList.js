@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronDown,
   Copy,
@@ -13,6 +13,7 @@ import {
   Type,
   User,
   X,
+  Check,
 } from "lucide-react";
 import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
@@ -36,8 +37,14 @@ import {
 } from "./MessageListHelpers";
 import { AGENT_MODEL_ID, CHAT_MODELS, getModelConfig, isCouncilModel } from "@/lib/shared/models";
 
-const AGENT_MIN_TOTAL_STEPS = 9;
 const PENDING_RUN_TEXTS = new Set(["正在处理中...", "Council 正在处理中..."]);
+
+const STARTER_PROMPTS = [
+  { icon: "💡", title: "创意写作", description: "帮我写一个关于火星移民的科幻短篇开头" },
+  { icon: "💻", title: "代码助手", description: "用 React 写一个带防抖功能的搜索框组件" },
+  { icon: "🌍", title: "旅行规划", description: "制定一份去京都的 5 天文化深度游计划" },
+  { icon: "📊", title: "数据分析", description: "如何通俗易懂地解释什么是‘量化宽松’？" },
+];
 
 function containsMarkdownTable(text) {
   if (typeof text !== "string") return false;
@@ -48,13 +55,6 @@ function containsMarkdownTable(text) {
 function isPendingRunText(text) {
   return typeof text === "string" && PENDING_RUN_TEXTS.has(text.trim());
 }
-
-const STARTER_PROMPTS = [
-  { icon: "💡", title: "创意写作", description: "帮我写一个关于火星移民的科幻短篇开头" },
-  { icon: "💻", title: "代码助手", description: "用 React 写一个带防抖功能的搜索框组件" },
-  { icon: "🌍", title: "旅行规划", description: "制定一份去京都的 5 天文化深度游计划" },
-  { icon: "📊", title: "数据分析", description: "如何通俗易懂地解释什么是‘量化宽松’？" },
-];
 
 export default function MessageList({
   messages,
@@ -109,13 +109,9 @@ export default function MessageList({
         setOpenExportMenuIndex(null);
       }
     };
-
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setOpenExportMenuIndex(null);
-      }
+      if (event.key === "Escape") setOpenExportMenuIndex(null);
     };
-
     document.addEventListener("mousedown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -196,70 +192,40 @@ export default function MessageList({
   const scrollEditIntoView = () => {
     const el = editTextareaRef.current;
     const container = listRef?.current;
-    if (!el) return;
-    // 优先只滚动消息列表容器，避免移动端键盘弹出时把整个页面滚飞
-    if (container && typeof container.scrollTo === "function") {
-      const elRect = el.getBoundingClientRect();
-      const cRect = container.getBoundingClientRect();
-      const delta = elRect.top - (cRect.top + cRect.height / 2);
-      container.scrollTo({ top: container.scrollTop + delta, behavior: "auto" });
-      return;
-    }
-    el.scrollIntoView({ block: "center", behavior: "auto" });
+    if (!el || !container) return;
+    const elRect = el.getBoundingClientRect();
+    const cRect = container.getBoundingClientRect();
+    const delta = elRect.top - (cRect.top + cRect.height / 2);
+    container.scrollTo({ top: container.scrollTop + delta, behavior: "auto" });
   };
 
   useEffect(() => {
     if (editingMsgIndex === null || editingMsgIndex === undefined) return;
-    const el = editTextareaRef.current;
     resizeEditTextarea();
-    // 用 preventScroll 阻止浏览器为 focus 自己滚动（移动端键盘弹出时最容易乱跳）
-    if (el && typeof el.focus === "function") {
-      try {
-        el.focus({ preventScroll: true });
-      } catch {
-        el.focus();
-      }
+    const el = editTextareaRef.current;
+    if (el) {
+      try { el.focus({ preventScroll: true }); } catch { el.focus(); }
     }
-    // 首次对齐 + 等键盘/viewport 完成一次布局后再对齐一次
     requestAnimationFrame(scrollEditIntoView);
     const t = setTimeout(scrollEditIntoView, 80);
     return () => clearTimeout(t);
   }, [editingMsgIndex]);
 
   useEffect(() => {
-    if (editingMsgIndex === null || editingMsgIndex === undefined) return;
-    resizeEditTextarea();
+    if (editingMsgIndex !== null && editingMsgIndex !== undefined) resizeEditTextarea();
   }, [editingContent, editingMsgIndex]);
-
-  // 键盘弹出会触发 visualViewport resize；编辑中跟随一次，避免“必须按键才回正”
-  useEffect(() => {
-    if (editingMsgIndex === null || editingMsgIndex === undefined) return;
-    const vv = window.visualViewport;
-    if (!vv?.addEventListener) return;
-    const onResize = () => requestAnimationFrame(scrollEditIntoView);
-    vv.addEventListener("resize", onResize);
-    return () => vv.removeEventListener("resize", onResize);
-  }, [editingMsgIndex]);
 
   const handleBubbleCopy = (e) => {
     const el = e.currentTarget;
-    if (!el) return;
-    if (!isSelectionFullyInsideElement(el)) return;
-
+    if (!el || !isSelectionFullyInsideElement(el)) return;
     const selText = window.getSelection?.()?.toString?.();
     if (!selText) return;
-
     e.preventDefault();
     e.clipboardData?.setData("text/plain", normalizeCopiedText(selText));
   };
 
   const handleExportMessage = async (format, msg) => {
-    const labelMap = {
-      markdown: "Markdown",
-      pdf: "PDF",
-      docx: "Docx",
-    };
-
+    const labelMap = { markdown: "Markdown", pdf: "PDF", docx: "Docx" };
     try {
       await exportMessageContent(format, buildCopyText(msg));
       toast.success(`已导出 ${labelMap[format] || "文件"}`);
@@ -337,7 +303,27 @@ export default function MessageList({
         )
       ) : (
         messages.map((msg, i) => {
-          // ... (保持逻辑部分不变)
+          const displayParts = Array.isArray(msg.parts) && msg.role === "model"
+            ? msg.parts.filter((part) => !(typeof part?.text === "string" && isPendingRunText(part.text)))
+            : msg.parts;
+          const hasParts = Array.isArray(displayParts) && displayParts.length > 0;
+          const hasVisibleContent = typeof msg.content === "string" && msg.content.trim().length > 0 && !isPendingRunText(msg.content);
+          const hasTableContent = (
+            (hasVisibleContent && containsMarkdownTable(msg.content))
+            || (hasParts && displayParts.some((part) => containsMarkdownTable(part?.text)))
+          );
+          const hasBodyOutput =
+            hasVisibleContent
+            || (hasParts && displayParts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
+          const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline)
+            && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool");
+          const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
+          const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
+          
+          if (msg.role === "model" && !msg.thought && !hasVisibleContent && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && msg.isWaitingFirstChunk) {
+            return null;
+          }
+
           return (
             <motion.div
               key={msg.id}
@@ -355,7 +341,6 @@ export default function MessageList({
               )}
 
               <div className={`flex flex-col w-full ${msg.role === "user" ? "items-end" : "items-start"}`}>
-                {/* Thinking Block */}
                 {msg.role === "model" && (msg.thought || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState) && (
                   <ThinkingBlock
                     thought={msg.thought}
@@ -373,193 +358,83 @@ export default function MessageList({
                   />
                 )}
 
-                {/* 消息正文气泡 */}
-                {(hasParts || hasVisibleContent) && (
-                  <div
-                    className={`relative group/bubble px-4 py-3 sm:px-5 sm:py-4 transition-all duration-300 ${
-                      msg.role === "user"
-                        ? "msg-bubble-user max-w-[85%] md:max-w-[75%]"
-                        : "msg-bubble-ai max-w-full md:max-w-[95%] w-full"
-                    } ${msg.isStreaming ? "ai-glow ai-glow-active" : ""}`}
-                    onCopy={handleBubbleCopy}
-                  >
-                    {/* (保持内容渲染逻辑不变) */}
+                {editingMsgIndex === i && msg.role === "user" && !isAgentConversation ? (
+                  <div className="w-full flex flex-col items-end gap-2">
+                    <div className="msg-bubble-user w-full max-w-full glass-effect !bg-white dark:!bg-zinc-800 border-primary/20">
+                      <textarea
+                        ref={editTextareaRef}
+                        value={editingContent}
+                        onChange={(e) => onEditingContentChange(e.target.value)}
+                        className="block w-full max-h-[45vh] resize-none overflow-y-auto bg-transparent p-0 text-sm leading-6 text-zinc-800 dark:text-zinc-100 outline-none"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={onCancelEdit} className="px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 rounded-lg">取消</button>
+                      <button onClick={() => onSubmitEdit(i)} className="px-3 py-1.5 text-xs text-white bg-primary rounded-lg">提交</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {(hasParts || hasVisibleContent) && (
+                      <div
+                        className={`relative group/bubble px-4 py-3 sm:px-5 sm:py-4 transition-all duration-300 ${
+                          msg.role === "user" ? "msg-bubble-user max-w-[85%] md:max-w-[75%]" : "msg-bubble-ai max-w-full md:max-w-[95%] w-full"
+                        } ${msg.isStreaming ? "ai-glow ai-glow-active" : ""}`}
+                        onCopy={handleBubbleCopy}
+                      >
                         {hasParts ? (
                           <div className="flex flex-col gap-2">
                             {(() => {
                               const entries = displayParts.map((part, idx) => ({ part, idx }));
                               const isUser = msg.role === "user";
-                              const imageEntries = entries.filter(({ part }) => {
-                                const url = part?.inlineData?.url;
-                                return typeof url === "string" && url;
-                              });
-                              const fileEntries = entries.filter(({ part }) => {
-                                return part?.fileData?.name && part?.fileData?.mimeType;
-                              });
-                              const textEntries = entries.filter(({ part }) => {
-                                return part && typeof part.text === "string" && part.text.trim();
-                              });
-                              const ordered = isUser ? [...imageEntries, ...fileEntries, ...textEntries] : entries;
+                              const ordered = isUser 
+                                ? [...entries.filter(e => e.part?.inlineData?.url), ...entries.filter(e => e.part?.fileData?.name), ...entries.filter(e => e.part?.text)]
+                                : entries;
 
                               return ordered.map(({ part, idx }) => {
                                 const url = part?.inlineData?.url;
-                                if (typeof url === "string" && url) {
-                                  return <Thumb key={idx} src={url} className="w-fit" onClick={openLightbox} />;
-                                }
-                                if (part?.fileData?.name) {
-                                  return <AttachmentCard key={idx} file={part.fileData} compact={msg.role === "user"} />;
-                                }
-                                if (part && typeof part.text === "string" && part.text.trim()) {
-                                  return isUser ? (
-                                    <Markdown key={idx} enableHighlight={false} enableMath={false}>
-                                      {part.text}
-                                    </Markdown>
-                                  ) : (
-                                    <Markdown
-                                      key={idx}
-                                      enableHighlight={!msg.isStreaming}
-                                      enableMath={true}
-                                    >
-                                      {part.text}
-                                    </Markdown>
-                                  );
+                                if (url) return <Thumb key={idx} src={url} onClick={openLightbox} />;
+                                if (part?.fileData?.name) return <AttachmentCard key={idx} file={part.fileData} compact={isUser} />;
+                                if (part?.text?.trim()) {
+                                  return <Markdown key={idx} enableHighlight={!msg.isStreaming} enableMath={true} className={isUser ? "prose-invert" : ""}>{part.text}</Markdown>;
                                 }
                                 return null;
                               });
                             })()}
                           </div>
                         ) : (
-                          msg.role === "user" ? (
-                            <Markdown enableHighlight={false} enableMath={false}>{msg.content}</Markdown>
-                          ) : (
-                            <Markdown enableHighlight={!msg.isStreaming} enableMath={true}>{msg.content}</Markdown>
-                          )
+                          <Markdown enableHighlight={!msg.isStreaming} enableMath={true} className={msg.role === "user" ? "prose-invert" : ""}>{msg.content}</Markdown>
                         )}
-
-                        {msg.role === "model" && !msg.isStreaming && msg.citations && (
-                          <Citations citations={msg.citations} />
-                        )}
+                        {msg.role === "model" && !msg.isStreaming && msg.citations && <Citations citations={msg.citations} />}
                       </div>
                     )}
-                    {/* 消息操作按钮 */}
+
                     {!msg.isStreaming && (
-                      <div
-                        className={`flex flex-wrap gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 ${msg.role === "user" ? "flex-row-reverse" : ""
-                          }`}
-                      >
-                        {(hasParts || hasVisibleContent) && (
-                          <button
-                            onClick={() => onCopy(buildCopyText(msg))}
-                            className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
-                            title="复制"
-                          >
-                            <Copy size={14} />
-                          </button>
-                        )}
-
-                        {msg.role === "model" && (hasParts || hasVisibleContent) && (
-                          <button
-                            onClick={() => onCopy(buildPlainText(msg))}
-                            className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-                            title="复制纯文本"
-                          >
-                            <Type size={14} />
-                          </button>
-                        )}
-
-                        {msg.role === "user" ? (
-                          <>
-                            <button
-                              onClick={() => handleDeleteClick(i, "user")}
-                              className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
-                              title="删除"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                            {!isAgentConversation ? (
-                              <button
-                                onClick={() => onStartEdit(i, msg)}
-                                className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors"
-                                title="编辑并重新生成"
-                              >
-                                <Edit3 size={14} />
-                              </button>
-                            ) : null}
-                          </>
-                        ) : msg.role === "model" ? (
-                          <>
-                            <button
-                              onClick={() => handleDeleteClick(i, "model")}
-                              className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-zinc-100 rounded-lg transition-colors"
-                              title="删除"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                            {!isAgentConversation ? (
-                              <button
-                                onClick={() => onRegenerateModelMessage(i)}
-                                disabled={loading || hasActiveConversationRun}
-                                className="p-1.5 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-lg transition-colors disabled:opacity-50"
-                                title="重新生成"
-                              >
-                                <RotateCcw size={14} />
-                              </button>
-                            ) : null}
+                      <div className={`flex flex-wrap gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                         {(hasParts || hasVisibleContent) && (
                           <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
-                            <button
-                              type="button"
-                              onClick={() => setOpenExportMenuIndex((prev) => (prev === i ? null : i))}
-                              className={`inline-flex items-center gap-1 p-1.5 rounded-lg transition-colors ${openExportMenuIndex === i
-                                ? "text-zinc-700 bg-zinc-100"
-                                : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100"
-                                }`}
-                              title="导出"
-                            >
+                            <button onClick={() => setOpenExportMenuIndex(prev => prev === i ? null : i)} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg">
                               <Download size={14} />
-                              <ChevronDown size={12} className={`transition-transform ${openExportMenuIndex === i ? "rotate-180" : ""}`} />
                             </button>
-
                             <AnimatePresence>
                               {openExportMenuIndex === i && (
-                                <motion.div
-                                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
-                                  className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg sm:left-full sm:right-auto sm:top-1/2 sm:mt-0 sm:ml-2 sm:-translate-y-1/2"
-                                >
-                                  {[
-                                    { key: "markdown", label: "导出 Markdown" },
-                                    { key: "pdf", label: "导出 PDF" },
-                                    { key: "docx", label: "导出 Docx" },
-                                  ].map((item) => (
-                                    <button
-                                      key={item.key}
-                                      type="button"
-                                      onClick={() => handleExportMessage(item.key, msg)}
-                                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-100"
-                                    >
-                                      {item.label}
-                                    </button>
+                                <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-xl glass-effect border-zinc-200/50 p-1.5 shadow-lg">
+                                  {["markdown", "pdf", "docx"].map(format => (
+                                    <button key={format} onClick={() => handleExportMessage(format, msg)} className="w-full text-left px-3 py-2 text-sm hover:bg-primary/5 rounded-lg uppercase">{format}</button>
                                   ))}
                                 </motion.div>
                               )}
                             </AnimatePresence>
                           </div>
                         )}
-                      </>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          );
-        })
-      )}
-                              </div>
-                            )}
-                          </>
-                        ) : null}
+                        <button onClick={() => onCopy(buildCopyText(msg))} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Copy size={14} /></button>
+                        <button onClick={() => handleDeleteClick(i, msg.role)} className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                        {msg.role === "user" && !isAgentConversation && (
+                          <button onClick={() => onStartEdit(i, msg)} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Edit3 size={14} /></button>
+                        )}
+                        {msg.role === "model" && !isAgentConversation && (
+                          <button onClick={() => onRegenerateModelMessage(i)} disabled={loading || hasActiveConversationRun} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg disabled:opacity-30"><RotateCcw size={14} /></button>
+                        )}
                       </div>
                     )}
                   </>
@@ -570,21 +445,11 @@ export default function MessageList({
         })
       )}
 
-      {/* 只在有消息且加载中且没有正在流式输出或搜索的消息时显示加载指示器 */}
       {messages.length > 0 && (loading || hasWaitingFirstChunk) && !hasStreamingContent && (
-        <div className="flex gap-2 sm:gap-3 items-start">
-          <ResponsiveAIAvatar
-            model={model}
-            mobileSize={22}
-            desktopSize={28}
-            animate={isCouncilModel(model) || model === AGENT_MODEL_ID}
-          />
-          <div className="flex min-w-[4.75rem] items-center justify-center px-3 sm:px-4 py-2.5 sm:py-3 bg-zinc-100 rounded-2xl">
-            <LoadingSweepText
-              text="..."
-              ariaText={hasWaitingFirstChunk ? "等待响应" : "加载中"}
-              className="loading-sweep-dots text-lg sm:text-xl"
-            />
+        <div className="flex gap-3 items-start max-w-4xl mx-auto w-full">
+          <ResponsiveAIAvatar model={model} desktopSize={24} animate />
+          <div className="px-5 py-3 glass-effect rounded-2xl shadow-sm">
+            <LoadingSweepText text="..." className="loading-sweep-dots text-xl" />
           </div>
         </div>
       )}
