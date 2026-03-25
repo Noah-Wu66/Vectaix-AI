@@ -357,7 +357,7 @@ export default function MessageList({
                     councilSummaryState={msg.councilSummaryState}
                     councilExperts={msg.councilExperts}
                     bodyText={hasBodyOutput ? "1" : ""}
-                    showThoughtDetails={!isAgentConversation && !isCouncilConversation}
+                    showThoughtDetails={!isCouncilConversation}
                     isAgentMode={isAgentConversation}
                   />
                 )}

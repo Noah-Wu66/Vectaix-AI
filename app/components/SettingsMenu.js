@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Globe, Pencil, Settings2, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Globe, Pencil, Settings2, Trash2, X } from "lucide-react";
 import ConfirmModal from "./ConfirmModal";
 import { ModelGlyph } from "./ModelVisuals";
 import PromptEditorModal from "./PromptEditorModal";
@@ -35,6 +35,7 @@ export default function SettingsMenu({
 }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showPromptList, setShowPromptList] = useState(false);
+  const [showAgentModelList, setShowAgentModelList] = useState(false);
   const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [promptModalMode, setPromptModalMode] = useState("create");
   const [promptModalPromptId, setPromptModalPromptId] = useState(null);
@@ -47,6 +48,7 @@ export default function SettingsMenu({
   const [confirmDanger, setConfirmDanger] = useState(false);
   const confirmActionRef = useRef(null);
   const promptListRef = useRef(null);
+  const agentModelListRef = useRef(null);
 
   const activePrompt = systemPrompts.find((prompt) => String(prompt?._id) === String(activePromptId));
   const activePromptName = activePrompt?.name || "无";
@@ -136,6 +138,18 @@ export default function SettingsMenu({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showPromptList]);
+
+  useEffect(() => {
+    if (!showAgentModelList) return;
+    const handleClickOutside = (event) => {
+      if (!agentModelListRef.current) return;
+      if (!agentModelListRef.current.contains(event.target)) {
+        setShowAgentModelList(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showAgentModelList]);
 
   const closePromptModal = () => {
     if (promptModalSaving) return;
@@ -288,69 +302,60 @@ export default function SettingsMenu({
                     <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                       Agent 模型
                     </label>
-                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-800/80 px-3 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 shadow-sm shrink-0">
-                          <ModelGlyph
-                            model={selectedAgentModel?.id || normalizedAgentModel}
-                            provider={selectedAgentModel?.provider}
-                            size={18}
-                          />
-                        </span>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                            {selectedAgentModel?.name || "未识别模型"}
-                          </div>
-                          <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                            当前 Agent 执行任务时使用这个模型
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-3 space-y-3">
-                      {agentModelGroups.map((group) => (
-                        <div key={group.groupKey}>
-                          <div className="mb-2 px-1 text-[10px] font-semibold text-zinc-400 tracking-wider">
-                            {group.title}
-                          </div>
-                          <div className="space-y-2">
-                            {group.models.map((item) => {
-                              const isSelected = normalizedAgentModel === item.id;
-                              return (
-                                <button
-                                  key={item.id}
-                                  onClick={() => {
-                                    if (agentModelLocked) return;
-                                    setAgentModel?.(item.id);
-                                  }}
-                                  className={`w-full rounded-xl border px-3 py-3 text-left transition-colors flex items-center gap-3 ${
-                                    isSelected
-                                      ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/10 dark:text-blue-200"
-                                      : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                                  } ${agentModelLocked ? "cursor-not-allowed opacity-60" : ""}`}
-                                  type="button"
-                                  disabled={agentModelLocked}
-                                >
-                                  <span className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border shrink-0 ${
-                                    isSelected
-                                      ? "border-blue-200 bg-white dark:border-blue-400/30 dark:bg-zinc-900"
-                                      : "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800"
-                                  }`}
-                                  >
-                                    <ModelGlyph model={item.id} provider={item.provider} size={18} />
-                                  </span>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="text-sm font-medium truncate">{item.name}</div>
-                                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                      {isSelected ? "当前使用中" : "点一下切换到这个模型"}
-                                    </div>
+                    <div className="relative" ref={agentModelListRef}>
+                      <button
+                        onClick={() => !agentModelLocked && setShowAgentModelList((v) => !v)}
+                        className={`w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-2 text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2 ${agentModelLocked ? "cursor-not-allowed opacity-60" : ""}`}
+                        type="button"
+                        disabled={agentModelLocked}
+                      >
+                        <ModelGlyph model={normalizedAgentModel} provider={selectedAgentModel?.provider} size={16} />
+                        <span className="truncate flex-1 text-left">{selectedAgentModel?.name || "未识别模型"}</span>
+                        <ChevronDown size={16} className={`shrink-0 transition-transform ${showAgentModelList ? "rotate-180" : ""}`} />
+                      </button>
+
+                      <AnimatePresence>
+                        {showAgentModelList && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            className="absolute left-0 right-0 mt-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-1 z-10"
+                          >
+                            <div className="max-h-56 overflow-auto">
+                              {agentModelGroups.map((group) => (
+                                <div key={group.groupKey}>
+                                  <div className="px-2 pt-2 pb-1 text-[10px] font-semibold text-zinc-400 tracking-wider">
+                                    {group.title}
                                   </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
+                                  {group.models.map((item) => {
+                                    const isSelected = normalizedAgentModel === item.id;
+                                    return (
+                                      <button
+                                        key={item.id}
+                                        onClick={() => {
+                                          setAgentModel?.(item.id);
+                                          setShowAgentModelList(false);
+                                        }}
+                                        className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
+                                          isSelected
+                                            ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                                            : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                                        }`}
+                                        type="button"
+                                      >
+                                        <ModelGlyph model={item.id} provider={item.provider} size={16} />
+                                        <span className="truncate">{item.name}</span>
+                                        {isSelected && <Check size={14} className="shrink-0 ml-auto text-blue-500" />}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                     {agentModelLocked && (
                       <p className="mt-2 text-xs text-zinc-400">

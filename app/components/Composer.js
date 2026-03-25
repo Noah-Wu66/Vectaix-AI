@@ -385,7 +385,7 @@ export default function Composer({
         )}
       </AnimatePresence>
 
-      <div className="relative flex flex-col glass-effect rounded-[24px] shadow-2xl border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700">
+      <div className="relative flex flex-col glass-effect rounded-[24px] border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700">
         {/* Top toolbar */}
         <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-900/30 rounded-t-[24px]">
           <ModelSelector model={model} onModelChange={onModelChange} ready={modelReady} />
@@ -408,6 +408,7 @@ export default function Composer({
                 onDeletePrompt={onDeletePrompt}
                 onUpdatePrompt={onUpdatePrompt}
               />
+              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700 mx-1" />
               <TokenCounter
                 messages={messages}
                 systemPrompts={systemPrompts}

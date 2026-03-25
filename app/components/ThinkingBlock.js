@@ -187,6 +187,9 @@ export default function ThinkingBlock({
   // ── 外层图标（始终固定） ──
   const headerIcon = <Zap className="thinking-icon-header" />;
 
+  const activeThoughtLabel = "思考中";
+  const completedThoughtLabel = "已思考";
+
   // ── 渲染时间线内的单个步骤（第二层折叠项）──
   const renderTimelineStep = (step, idx) => {
     const isExpanded = expandedTimelineId === step.id;
@@ -231,11 +234,7 @@ export default function ThinkingBlock({
     const isManualExpanded = manualExpandedStepIdRef.current === step.id;
     const showThoughtDots = isThoughtStreaming && (!hasDetail || (isExpanded && !isManualExpanded));
 
-    const activeThoughtLabel = isAgentMode ? "决策中" : "思考中";
-    const completedThoughtLabel = isAgentMode ? "已决策" : "已思考";
-    const thoughtIcon = isAgentMode && isThoughtStreaming
-      ? <Scale className="thinking-icon-step" />
-      : <Lightbulb className="thinking-icon-step" />;
+    const thoughtIcon = <Lightbulb className="thinking-icon-step" />;
 
     const icon = step.kind === "search"
       ? <Search className="thinking-icon-step" />
@@ -517,7 +516,7 @@ export default function ThinkingBlock({
                           }}
                           className="thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors text-zinc-500 cursor-pointer"
                         >
-                          {isAgentMode && isStreaming ? <Scale className="thinking-icon-step" /> : <Lightbulb className="thinking-icon-step" />}
+                          <Lightbulb className="thinking-icon-step" />
                           <StepStatusText text={isStreaming ? activeThoughtLabel : "思考过程"} active={isStreaming && expandedTimelineId !== "__simple__"} />
                           {expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
                         </button>
