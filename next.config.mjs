@@ -1,0 +1,21 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  transpilePackages: ["@lobehub/icons"],
+  serverExternalPackages: ["@google/genai", "@anthropic-ai/sdk", "@vercel/sandbox"],
+  // 禁用页面缓存，确保每次获取最新版本
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, must-revalidate",
+          },
+        ],
+      },
+    ];
+  },
+};
+
+export default nextConfig;

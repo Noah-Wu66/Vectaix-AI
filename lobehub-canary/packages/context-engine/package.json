@@ -1,0 +1,36 @@
+{
+  "name": "@lobechat/context-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Context Pipeline Engine for LobeChat - A flexible and configurable context processing system",
+  "keywords": [
+    "context",
+    "pipeline",
+    "processor",
+    "chat",
+    "ai",
+    "lobe"
+  ],
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'",
+    "test:update": "vitest -u"
+  },
+  "dependencies": {
+    "@lobechat/database": "workspace:*",
+    "@lobechat/prompts": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "debug": "^4.4.3",
+    "es-toolkit": "^1.43.0",
+    "immer": "^10.2.0",
+    "ts-md5": "^2.0.1",
+    "unist-builder": "^4.0.0",
+    "xast-util-to-xml": "^4.0.0",
+    "xastscript": "^4.0.0"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*",
+    "@types/debug": "^4.1.12"
+  }
+}

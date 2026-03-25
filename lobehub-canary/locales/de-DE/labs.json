@@ -1,0 +1,10 @@
+{
+  "desc": "Hier findest du gelegentliche Updates zu neuen Funktionen, die wir gerade testen – probiere sie gerne aus!",
+  "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
+  "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
+  "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",
+  "features.groupChat.title": "Gruppenchat (Multi-Agenten)",
+  "features.inputMarkdown.desc": "Markdown in Echtzeit im Eingabebereich rendern (fetter Text, Codeblöcke, Tabellen usw.).",
+  "features.inputMarkdown.title": "Markdown-Darstellung im Eingabefeld",
+  "title": "Labs"
+}

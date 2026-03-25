@@ -1,0 +1,10 @@
+{
+  "desc": "Tại đây, bạn sẽ tìm thấy các cập nhật thỉnh thoảng về những tính năng mới mà chúng tôi đang khám phá — hãy thoải mái dùng thử nhé!",
+  "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
+  "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
+  "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",
+  "features.groupChat.title": "Trò Chuyện Nhóm (Đa Tác Nhân)",
+  "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
+  "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
+  "title": "Phòng Thí Nghiệm"
+}

@@ -1,0 +1,484 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  AlertTriangle,
+  FileText,
+  Loader2,
+  Paperclip,
+  Send,
+  Sparkles,
+  Square,
+  X,
+} from "lucide-react";
+import { upload } from "@vercel/blob/client";
+import { useToast } from "./ToastProvider";
+import ModelSelector from "./ModelSelector";
+import SettingsMenu from "./SettingsMenu";
+import TokenCounter from "./TokenCounter";
+import {
+  AGENT_MODEL_ID,
+  COUNCIL_MAX_ROUNDS,
+  countCompletedCouncilRounds,
+  getModelConfig,
+  isCouncilModel,
+} from "@/lib/shared/models";
+import {
+  getAttachmentAcceptForModel,
+  getAttachmentLimits,
+  IMAGE_MIME_TYPES,
+  MAX_CHAT_ATTACHMENTS,
+} from "@/lib/shared/attachments";
+import { createLocalAttachment, isImageAttachment } from "@/lib/shared/messageAttachments";
+
+function readAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event.target?.result || null);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export default function Composer({
+  loading,
+  isStreaming,
+  isWaitingForAI,
+  model,
+  modelReady,
+  onModelChange,
+  messages,
+  contextWindow,
+  historyLimit,
+  agentModel,
+  setAgentModel,
+  webSearch,
+  setWebSearch,
+  systemPrompts,
+  activePromptIds,
+  setActivePromptIds,
+  activePromptId,
+  setActivePromptId,
+  onAddPrompt,
+  onDeletePrompt,
+  onUpdatePrompt,
+  onSend,
+  onStop,
+  prefill,
+}) {
+  const toast = useToast();
+  const [input, setInput] = useState("");
+  const [selectedAttachments, setSelectedAttachments] = useState([]);
+  const [agentHintVisible, setAgentHintVisible] = useState(false);
+  const [isMainInputFocused, setIsMainInputFocused] = useState(false);
+  const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
+  const mountedRef = useRef(true);
+  const modelConfig = getModelConfig(model);
+  const supportsImages = modelConfig?.supportsImages === true;
+  const supportsDocuments = modelConfig?.supportsDocuments === true;
+  const supportsFilePicker = supportsImages || supportsDocuments;
+  const attachmentAccept = getAttachmentAcceptForModel({ supportsDocuments, supportsImages });
+  const isCouncilSelected = isCouncilModel(model);
+  const isAgentSelected = model === AGENT_MODEL_ID;
+  const completedCouncilRounds = isCouncilSelected ? countCompletedCouncilRounds(messages) : 0;
+  const hasReachedCouncilRoundLimit = isCouncilSelected && completedCouncilRounds >= COUNCIL_MAX_ROUNDS;
+  const isAgentModelLocked = isAgentSelected && messages.some((message) => message?.role === "model");
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    const setAppHeight = () => {
+      const vv = window.visualViewport;
+      if (isMainInputFocused) {
+        document.documentElement.style.setProperty("--app-height", `${Math.round(vv?.height)}px`);
+        document.documentElement.style.setProperty("--app-offset-top", `${Math.round(vv?.offsetTop)}px`);
+      } else {
+        document.documentElement.style.setProperty("--app-height", "100dvh");
+        document.documentElement.style.setProperty("--app-offset-top", "0px");
+      }
+    };
+    setAppHeight();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", setAppHeight);
+    vv?.addEventListener("scroll", setAppHeight);
+    window.addEventListener("resize", setAppHeight);
+    return () => {
+      vv?.removeEventListener("resize", setAppHeight);
+      vv?.removeEventListener("scroll", setAppHeight);
+      window.removeEventListener("resize", setAppHeight);
+    };
+  }, [isMainInputFocused]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const sh = el.scrollHeight;
+    el.style.height = `${Math.min(sh, 160)}px`;
+    el.style.overflowY = sh > 160 ? "auto" : "hidden";
+  }, [input, model]);
+
+  useEffect(() => {
+    if (!prefill || typeof prefill.text !== "string") return;
+    setInput(prefill.text);
+    const el = textareaRef.current;
+    if (el) {
+      el.focus();
+      el.style.height = "auto";
+      const sh = el.scrollHeight;
+      el.style.height = `${Math.min(sh, 160)}px`;
+      el.style.overflowY = sh > 160 ? "auto" : "hidden";
+    }
+  }, [prefill?.nonce]);
+
+  useEffect(() => {
+    if (!supportsFilePicker) {
+      if (selectedAttachments.length > 0) {
+        setSelectedAttachments([]);
+      }
+      setAgentHintVisible(false);
+      return;
+    }
+    if (supportsDocuments) {
+      setAgentHintVisible(false);
+      return;
+    }
+    const next = selectedAttachments.filter((item) => isImageAttachment(item));
+    if (next.length !== selectedAttachments.length) {
+      setSelectedAttachments(next);
+      setAgentHintVisible(true);
+    }
+  }, [selectedAttachments, supportsDocuments, supportsFilePicker]);
+
+  const convertToPng = (file) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const baseName = file.name.replace(/\.[^.]+$/, "");
+              const newFile = new File([blob], `${baseName}.png`, { type: "image/png" });
+              resolve(newFile);
+            } else {
+              resolve(null);
+            }
+          },
+          "image/png",
+          1.0
+        );
+      };
+      img.onerror = () => resolve(null);
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const processFiles = async (files) => {
+    if (!supportsFilePicker) return;
+    if (!files.length) return;
+
+    const remainingSlots = MAX_CHAT_ATTACHMENTS - selectedAttachments.length;
+    const filesToAdd = files.slice(0, remainingSlots);
+    const nextAttachments = [];
+    const blockedDocuments = [];
+    const invalidFiles = [];
+    const oversizedFiles = [];
+
+    if (files.length > remainingSlots) {
+      toast.warning(`一次最多添加 ${MAX_CHAT_ATTACHMENTS} 个文件，超出的已跳过`);
+    }
+
+    for (const file of filesToAdd) {
+      const local = createLocalAttachment({ file });
+      if (!local.category) {
+        invalidFiles.push(file.name);
+        continue;
+      }
+
+      const limits = getAttachmentLimits(local.category);
+      if (limits?.maxBytes && file.size > limits.maxBytes) {
+        oversizedFiles.push(file.name);
+        continue;
+      }
+
+      if (!supportsDocuments && !isImageAttachment(local)) {
+        blockedDocuments.push(file.name);
+        continue;
+      }
+
+      if (isImageAttachment(local)) {
+        let processedFile = file;
+        if (!IMAGE_MIME_TYPES.includes(file.type)) {
+          const converted = await convertToPng(file);
+          if (!converted) {
+            invalidFiles.push(file.name);
+            continue;
+          }
+          processedFile = converted;
+        }
+        const preview = await readAsDataUrl(processedFile).catch(() => null);
+        nextAttachments.push({
+          ...createLocalAttachment({ file: processedFile, preview }),
+          uploadStatus: "uploading",
+          blobUrl: null,
+        });
+      } else {
+        const att = { ...local, uploadStatus: "uploading", blobUrl: null };
+        nextAttachments.push(att);
+      }
+    }
+
+    if (oversizedFiles.length > 0) {
+      toast.warning(`以下文件超过大小限制，已跳过：${oversizedFiles.join("、")}`);
+    }
+    if (invalidFiles.length > 0) {
+      toast.warning(`以下文件类型不支持或读取失败，已跳过：${invalidFiles.join("、")}`);
+    }
+    if (blockedDocuments.length > 0) {
+      setAgentHintVisible(true);
+      toast.warning("这类文件目前仅 Agent 支持");
+    }
+
+    if (nextAttachments.length > 0 && mountedRef.current) {
+      setSelectedAttachments((prev) => [...prev, ...nextAttachments].slice(0, MAX_CHAT_ATTACHMENTS));
+
+      for (const att of nextAttachments) {
+        uploadAttachmentInBackground(att);
+      }
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files || []);
+    await processFiles(files);
+  };
+
+  const handlePaste = async (e) => {
+    if (!supportsImages) return;
+    const clipboardItems = Array.from(e.clipboardData?.items || []);
+    if (!clipboardItems.length) return;
+
+    const imageFiles = clipboardItems
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter(Boolean);
+
+    if (!imageFiles.length) return;
+    await processFiles(imageFiles);
+  };
+
+  const uploadAttachmentInBackground = async (att) => {
+    try {
+      const blob = await upload(att.file.name, att.file, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+        clientPayload: JSON.stringify({
+          kind: "chat",
+          model,
+          originalName: att.file.name,
+          declaredMimeType: att.file.type || att.mimeType,
+        }),
+      });
+      if (!mountedRef.current) return;
+      setSelectedAttachments((prev) =>
+        prev.map((item) =>
+          item.id === att.id ? { ...item, uploadStatus: "ready", blobUrl: blob.url } : item
+        )
+      );
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setSelectedAttachments((prev) =>
+        prev.map((item) =>
+          item.id === att.id ? { ...item, uploadStatus: "error" } : item
+        )
+      );
+      toast.error(`「${att.name}」上传失败：${err?.message || "未知错误"}`);
+    }
+  };
+
+  const removeAttachment = (attachmentId) => {
+    setSelectedAttachments((prev) => prev.filter((item) => item.id !== attachmentId));
+  };
+
+  const clearAllAttachments = () => {
+    setSelectedAttachments([]);
+  };
+
+  const isUploading = selectedAttachments.some((item) => item.uploadStatus === "uploading");
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (!isMobile) {
+        e.preventDefault();
+        if (!loading && !isUploading) handleSend();
+      }
+    }
+  };
+
+  const handleSend = () => {
+    const text = input.trim();
+    if ((!text && selectedAttachments.length === 0) || loading || isUploading) return;
+    const validAttachments = selectedAttachments.filter((item) => item.uploadStatus === "ready");
+    if (!text && validAttachments.length === 0) return;
+    if (hasReachedCouncilRoundLimit) {
+      toast.warning(`Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，请新建对话继续。`);
+      return;
+    }
+    onSend({ text, attachments: validAttachments });
+    setInput("");
+    clearAllAttachments();
+    setAgentHintVisible(false);
+  };
+
+  const handleSwitchToAgent = () => {
+    setAgentHintVisible(false);
+    onModelChange(AGENT_MODEL_ID);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto w-full relative group/composer">
+      {/* Attachments Preview - Floating style */}
+      <AnimatePresence>
+        {selectedAttachments.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="absolute bottom-full mb-3 left-0 right-0 flex flex-wrap gap-2 p-3 glass-effect rounded-2xl shadow-xl border-zinc-200/50 z-30 mx-2 md:mx-0"
+          >
+            {selectedAttachments.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200/60 shadow-sm animate-in fade-in slide-in-from-bottom-1"
+              >
+                {isImageAttachment(item) ? (
+                  <div className="w-6 h-6 rounded-lg overflow-hidden border border-zinc-100 dark:border-zinc-700">
+                    {item.preview ? <img src={item.preview} alt="" className="w-full h-full object-cover" /> : null}
+                  </div>
+                ) : (
+                  <FileText size={14} className="text-primary" />
+                )}
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 truncate max-w-[120px]">
+                  {item.name}
+                </span>
+                <button
+                  onClick={() => removeAttachment(item.id)}
+                  className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-full transition-colors text-zinc-400 hover:text-red-500"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="relative flex flex-col glass-effect rounded-[24px] shadow-2xl border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700">
+        {/* Top toolbar */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-900/30 rounded-t-[24px]">
+          <ModelSelector model={model} onModelChange={onModelChange} ready={modelReady} />
+          {!isCouncilSelected && (
+            <div className="flex items-center gap-1">
+              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700 mx-1" />
+              <SettingsMenu
+                model={model}
+                agentModel={agentModel}
+                setAgentModel={setAgentModel}
+                agentModelLocked={isAgentModelLocked}
+                webSearch={webSearch}
+                setWebSearch={setWebSearch}
+                systemPrompts={systemPrompts}
+                activePromptIds={activePromptIds}
+                setActivePromptIds={setActivePromptIds}
+                activePromptId={activePromptId}
+                setActivePromptId={setActivePromptId}
+                onAddPrompt={onAddPrompt}
+                onDeletePrompt={onDeletePrompt}
+                onUpdatePrompt={onUpdatePrompt}
+              />
+              <TokenCounter
+                messages={messages}
+                systemPrompts={systemPrompts}
+                activePromptId={activePromptId}
+                historyLimit={historyLimit}
+                contextWindow={contextWindow}
+                model={model}
+                webSearch={webSearch}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Text area and main actions */}
+        <div className="relative flex items-end gap-2 p-3 md:p-4 rounded-b-[24px]">
+          {supportsFilePicker && (
+            <div className="flex items-center mb-1">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
+                accept={attachmentAccept}
+                multiple
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={hasReachedCouncilRoundLimit || selectedAttachments.length >= MAX_CHAT_ATTACHMENTS}
+                className="p-2.5 rounded-xl text-zinc-400 hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-30 active:scale-90"
+                type="button"
+                title="上传附件"
+              >
+                <Paperclip size={20} />
+              </button>
+            </div>
+          )}
+
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onFocus={() => setIsMainInputFocused(true)}
+            onBlur={() => setIsMainInputFocused(false)}
+            readOnly={hasReachedCouncilRoundLimit}
+            placeholder={hasReachedCouncilRoundLimit ? `已达到 ${COUNCIL_MAX_ROUNDS} 轮上限...` : "给 AI 发送消息..."}
+            className="flex-1 bg-transparent border-none outline-none focus:ring-0 text-base md:text-[15px] text-zinc-800 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 resize-none py-2 min-h-[44px] transition-all scrollbar-none"
+            rows={1}
+          />
+
+          <div className="flex items-center mb-0.5">
+            <button
+              onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
+              disabled={!isStreaming && !isWaitingForAI && (hasReachedCouncilRoundLimit || isUploading || (!input.trim() && selectedAttachments.length === 0))}
+              className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all shadow-md active:scale-90 ${
+                isStreaming || isWaitingForAI 
+                  ? "bg-red-500 hover:bg-red-600 text-white" 
+                  : "bg-primary hover:bg-primary-hover text-white disabled:bg-zinc-200 dark:disabled:bg-zinc-800 disabled:shadow-none"
+              }`}
+              type="button"
+            >
+              {isStreaming || isWaitingForAI ? (
+                <Square size={18} fill="currentColor" />
+              ) : (
+                <Send size={18} className={input.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

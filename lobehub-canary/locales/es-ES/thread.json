@@ -1,0 +1,6 @@
+{
+  "actions.confirmRemoveThread": "Estás a punto de eliminar este subtema. Una vez eliminado, no se podrá recuperar. Por favor, procede con precaución.",
+  "newPortalThread.includeContext": "Incluir contexto del tema",
+  "newPortalThread.title": "Iniciar un nuevo subtema",
+  "notSupportMultiModals": "Actualmente, los subtemas no admiten la carga de archivos o imágenes. Si tienes alguna solicitud, no dudes en dejar un mensaje: <1>💬 Área de discusión</1>"
+}

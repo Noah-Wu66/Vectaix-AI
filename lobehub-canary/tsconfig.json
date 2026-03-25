@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["dom", "dom.iterable", "dom.asynciterable", "esnext", "webworker"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "types": ["vitest/globals"],
+    "paths": {
+      "@/database/*": ["./packages/database/src/*", "./src/database/*"],
+      "@/const/*": ["./packages/const/src/*", "./src/const/*"],
+      "@/utils/*": ["./packages/utils/src/*", "./src/utils/*"],
+      "@/types/*": ["./packages/types/src/*", "./src/types/*"],
+      "@/*": ["./src/*"],
+      "~test-utils": ["./tests/utils.tsx"]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "exclude": [
+    "node_modules",
+    "apps/desktop/**",
+    "apps/device-gateway/**",
+    "apps/mobile/**",
+    "tmp",
+    "temp",
+    ".temp",
+    "e2e/**",
+    "knip.ts"
+  ],
+  "include": [
+    "src/**/*.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/**/*.d.ts",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "tests/**/*.d.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "scripts/**/*.ts",
+    "scripts/**/*.mts",
+    "scripts/**/*.cts",
+    "*.ts",
+    "*.mts",
+    "*.cts",
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "references": [
+    {
+      "path": "./apps/desktop"
+    }
+  ]
+}
