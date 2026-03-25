@@ -330,10 +330,16 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ===== Message Bubbles ===== */
 .msg-bubble-user {
-  background: var(--primary);
-  color: white;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   border-radius: 18px 18px 4px 18px;
   padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+}
+
+.dark-mode .msg-bubble-user {
+  background: #1e1e22;
+  border-color: #3f3f46;
 }
 
 .msg-bubble-ai {

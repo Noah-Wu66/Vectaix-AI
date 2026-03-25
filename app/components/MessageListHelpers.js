@@ -280,8 +280,21 @@ function buildArtifactDownloadUrl(artifact) {
   return `/api/files/download?url=${encodeURIComponent(artifact.url)}&name=${encodeURIComponent(`${title}.${extension}`)}`;
 }
 
-function renderToolPreview(tool) {
-  if (!tool || typeof tool !== "object") return null;
+export function hasToolRunPreview(tool) {
+  if (!tool || typeof tool !== "object") return false;
+
+  if (tool.identifier === "lobe-web-browsing" && Array.isArray(tool.state?.results) && tool.state.results.length > 0) {
+    return true;
+  }
+
+  return Boolean(
+    (typeof tool.summary === "string" && tool.summary)
+    || (typeof tool.content === "string" && tool.content)
+  );
+}
+
+export function ToolRunPreview({ tool }) {
+  if (!hasToolRunPreview(tool)) return null;
 
   if (tool.identifier === "lobe-web-browsing" && Array.isArray(tool.state?.results) && tool.state.results.length > 0) {
     return (
@@ -348,7 +361,7 @@ export function ToolRunCards({ tools }) {
                 <div className="text-[11px] text-zinc-400">{statusText}</div>
               </div>
             </div>
-            {renderToolPreview(tool)}
+            <ToolRunPreview tool={tool} />
           </div>
         );
       })}

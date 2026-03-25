@@ -302,7 +302,7 @@ export default function SettingsMenu({
                     <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
                       Agent 模型
                     </label>
-                    <div className="relative" ref={agentModelListRef}>
+                    <div ref={agentModelListRef}>
                       <button
                         onClick={() => !agentModelLocked && setShowAgentModelList((v) => !v)}
                         className={`w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-2 text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2 ${agentModelLocked ? "cursor-not-allowed opacity-60" : ""}`}
@@ -317,12 +317,12 @@ export default function SettingsMenu({
                       <AnimatePresence>
                         {showAgentModelList && (
                           <motion.div
-                            initial={{ opacity: 0, y: -6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            className="absolute left-0 right-0 mt-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-1 z-10"
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden"
                           >
-                            <div className="max-h-56 overflow-auto">
+                            <div className="mt-2 border border-zinc-200 dark:border-zinc-700 rounded-lg p-1 max-h-56 overflow-auto">
                               {agentModelGroups.map((group) => (
                                 <div key={group.groupKey}>
                                   <div className="px-2 pt-2 pb-1 text-[10px] font-semibold text-zinc-400 tracking-wider">

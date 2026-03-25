@@ -356,9 +356,9 @@ export default function MessageList({
                     councilExpertStates={msg.councilExpertStates}
                     councilSummaryState={msg.councilSummaryState}
                     councilExperts={msg.councilExperts}
+                    tools={msg.tools}
                     bodyText={hasBodyOutput ? "1" : ""}
                     showThoughtDetails={!isCouncilConversation}
-                    isAgentMode={isAgentConversation}
                   />
                 )}
 
@@ -409,7 +409,7 @@ export default function MessageList({
                         ) : hasVisibleContent ? (
                           <Markdown enableHighlight={!msg.isStreaming} enableMath={true} className={msg.role === "user" ? "prose-invert" : ""}>{msg.content}</Markdown>
                         ) : null}
-                        {msg.role === "model" && hasToolRuns && <ToolRunCards tools={msg.tools} />}
+                        {msg.role === "model" && hasToolRuns && !hasThinkingTimeline && <ToolRunCards tools={msg.tools} />}
                         {msg.role === "model" && hasArtifacts && <ArtifactCards artifacts={msg.artifacts} />}
                         {msg.role === "model" && !msg.isStreaming && msg.citations && <Citations citations={msg.citations} />}
                       </div>
