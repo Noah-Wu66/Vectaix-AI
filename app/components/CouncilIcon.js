@@ -9,95 +9,70 @@ function CouncilSvg({ size, animate = false }) {
     >
       {animate && (
         <style>{`
-          @keyframes vexFloat {
-            0%, 100% { transform: translateY(0) rotate(0deg); }
-            25%       { transform: translateY(-1px) rotate(-1.5deg); }
-            50%       { transform: translateY(-2px) rotate(0deg); }
-            75%       { transform: translateY(-1px) rotate(1.5deg); }
+          @keyframes vexBounce {
+            0%, 18% { transform: translateY(0) rotate(0deg); }
+            27%     { transform: translateY(-1.5px) rotate(-5deg); }
+            36%     { transform: translateY(-3px) rotate(3deg); }
+            45%     { transform: translateY(-1px) rotate(-3deg); }
+            54%     { transform: translateY(0) rotate(2deg); }
+            64%     { transform: translateY(-1px) rotate(-1.5deg); }
+            74%     { transform: translateY(0) rotate(0.5deg); }
+            82%, 100% { transform: translateY(0) rotate(0deg); }
           }
-          @keyframes vexGlow {
-            0%, 100% { opacity: 0.55; }
-            50%      { opacity: 1; }
+          @keyframes vexEyesOpen {
+            0%, 30% { opacity: 1; }
+            36%, 64% { opacity: 0; }
+            70%, 100% { opacity: 1; }
           }
-          @keyframes vexEyesNormal {
-            0%, 68% { opacity: 1; }
-            74%, 88% { opacity: 0; }
-            94%, 100% { opacity: 1; }
+          @keyframes vexEyesShut {
+            0%, 30% { opacity: 0; }
+            36%, 64% { opacity: 1; }
+            70%, 100% { opacity: 0; }
           }
-          @keyframes vexEyesHappy {
-            0%, 68% { opacity: 0; }
-            74%, 88% { opacity: 1; }
-            94%, 100% { opacity: 0; }
-          }
-          .vex-body   { animation: vexFloat 3s ease-in-out infinite; transform-origin: 12px 14px; }
-          .vex-glow   { animation: vexGlow 2s ease-in-out infinite; }
-          .vex-eyes-n { animation: vexEyesNormal 3.5s ease-in-out infinite; }
-          .vex-eyes-h { animation: vexEyesHappy 3.5s ease-in-out infinite; }
+          .vex-bot { animation: vexBounce 2s ease-in-out infinite; transform-origin: center center; }
+          .vex-eyes-open { animation: vexEyesOpen 2s ease-in-out infinite; }
+          .vex-eyes-shut { animation: vexEyesShut 2s ease-in-out infinite; }
         `}</style>
       )}
-      <g className={animate ? "vex-body" : undefined}>
-        {/* ── 耳朵（先画，层级在头部后面） ── */}
-        <rect x="0.5" y="10.5" width="3" height="4.5" rx="1.5" fill="#6D28D9" />
-        <rect x="20.5" y="10.5" width="3" height="4.5" rx="1.5" fill="#6D28D9" />
+      <g className={animate ? "vex-bot" : undefined}>
+        {/* 天线信号灯 */}
+        <rect x="10.5" y="0.5" width="3" height="2.5" rx="0.5" fill="#34D399" />
 
-        {/* ── 头部主体 ── */}
-        <rect x="3" y="6" width="18" height="16" rx="5.5" fill="#7C3AED" />
+        {/* 天线杆 */}
+        <rect x="11.25" y="2.5" width="1.5" height="2.5" fill="#A78BFA" />
 
-        {/* ── V 形天线 ── */}
-        <path
-          d="M9.5 6.5 L12 2.2 L14.5 6.5"
-          fill="none"
-          stroke="#A78BFA"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* 天线顶端发光球 */}
-        <circle
-          cx="12"
-          cy="2"
-          r="1.3"
-          fill="#34D399"
-          className={animate ? "vex-glow" : undefined}
-        />
+        {/* 左耳 */}
+        <rect x="0.5" y="9" width="3" height="5" rx="1" fill="#6D28D9" />
+        {/* 右耳 */}
+        <rect x="20.5" y="9" width="3" height="5" rx="1" fill="#6D28D9" />
 
-        {/* ── 面部面板 ── */}
-        <rect x="5.5" y="8.5" width="13" height="11" rx="3.5" fill="#EDE9FE" />
+        {/* 头部主体 */}
+        <rect x="3" y="5" width="18" height="16" rx="2.5" fill="#7C3AED" />
 
         {animate ? (
           <>
-            {/* ●● 正常大眼睛（带高光） */}
-            <g className="vex-eyes-n">
-              <circle cx="9.2" cy="13" r="2.3" fill="#1E1B4B" />
-              <circle cx="10" cy="12.1" r="0.75" fill="#fff" />
-              <circle cx="14.8" cy="13" r="2.3" fill="#1E1B4B" />
-              <circle cx="15.6" cy="12.1" r="0.75" fill="#fff" />
+            {/* 像素方块眼 - 睁眼 */}
+            <g className="vex-eyes-open">
+              <rect x="7" y="9" width="3" height="4" rx="0.5" fill="#EDE9FE" />
+              <rect x="14" y="9" width="3" height="4" rx="0.5" fill="#EDE9FE" />
             </g>
 
-            {/* ^_^ 开心眯眼 */}
-            <g className="vex-eyes-h" style={{ opacity: 0 }}>
-              <path d="M7.2 13.2 Q9.2 10.8 11.2 13.2" fill="none" stroke="#1E1B4B" strokeWidth="1.6" strokeLinecap="round" />
-              <path d="M12.8 13.2 Q14.8 10.8 16.8 13.2" fill="none" stroke="#1E1B4B" strokeWidth="1.6" strokeLinecap="round" />
+            {/* 横条眼 - 闭眼 */}
+            <g className="vex-eyes-shut" style={{ opacity: 0 }}>
+              <rect x="7" y="10.2" width="3" height="1.5" rx="0.5" fill="#EDE9FE" />
+              <rect x="14" y="10.2" width="3" height="1.5" rx="0.5" fill="#EDE9FE" />
             </g>
           </>
         ) : (
           <>
-            {/* 静止大眼睛 */}
-            <circle cx="9.2" cy="13" r="2.3" fill="#1E1B4B" />
-            <circle cx="10" cy="12.1" r="0.75" fill="#fff" />
-            <circle cx="14.8" cy="13" r="2.3" fill="#1E1B4B" />
-            <circle cx="15.6" cy="12.1" r="0.75" fill="#fff" />
+            {/* 静止像素方块眼 */}
+            <rect x="7" y="9" width="3" height="4" rx="0.5" fill="#EDE9FE" />
+            <rect x="14" y="9" width="3" height="4" rx="0.5" fill="#EDE9FE" />
           </>
         )}
 
-        {/* ── 微笑嘴巴 ── */}
-        <path
-          d="M10 17 Q12 18.8 14 17"
-          fill="none"
-          stroke="#6D28D9"
-          strokeWidth="1.1"
-          strokeLinecap="round"
-        />
+        {/* 像素嘴巴 */}
+        <rect x="9.5" y="16" width="5" height="1.5" rx="0.5" fill="#EDE9FE" />
       </g>
     </svg>
   );
