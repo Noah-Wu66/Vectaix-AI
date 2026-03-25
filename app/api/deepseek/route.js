@@ -9,16 +9,12 @@ import {
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
     injectCurrentTimeSystemReminder,
-    buildWebSearchContextBlock,
     estimateTokens,
     getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL } from '@/lib/shared/models';
 import {
-    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
-    getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
 import {
     clampMaxTokens,
@@ -37,12 +33,13 @@ import {
     enrichConversationPartsWithBlobIds,
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
+import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
+import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
-const DEEPSEEK_DECISION_MODEL = DEEPSEEK_CHAT_MODEL;
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
 
@@ -263,57 +260,14 @@ export async function POST(req) {
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
-        const normalizeDecisionMessageText = (value) => {
-            if (typeof value === 'string') return value;
-            if (Array.isArray(value)) {
-                return value.map((item) => {
-                    if (typeof item === 'string') return item;
-                    if (item && typeof item.text === 'string') return item.text;
-                    return '';
-                }).join('');
-            }
-            return '';
-        };
-
-        const runDeepSeekDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
-            const { systemText, userText } = await buildWebSearchDecisionPrompts({
-                prompt: decisionPrompt,
-                historyMessages,
-                searchRounds,
-            });
-
-            const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    model: DEEPSEEK_DECISION_MODEL,
-                    messages: [
-                        { role: 'system', content: systemText },
-                        { role: 'user', content: userText }
-                    ],
-                    stream: false,
-                    max_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS
-                })
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`DeepSeek 联网判断失败（${response.status}）：${errorText}`);
-            }
-
-            const payload = await response.json();
-            const text = normalizeDecisionMessageText(payload?.choices?.[0]?.message?.content).trim();
-            if (!text) {
-                throw new Error('联网判断未返回有效内容');
-            }
-
-            return text;
-        };
-
-        const deepseekWebSearchRuntime = getWebSearchProviderRuntimeOptions('deepseek');
+        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
+            maxTokens,
+            model,
+            req,
+            systemText,
+            userId: user.userId,
+            userText,
+        });
 
         if (user && !currentConversationId) {
             const title = prompt.length > 30 ? `${prompt.substring(0, 30)}...` : prompt;
@@ -423,13 +377,6 @@ export async function POST(req) {
                         controller.enqueue(encoder.encode(data));
                     };
 
-                    let searchErrorSent = false;
-                    const sendSearchError = (message, details = {}) => {
-                        if (searchErrorSent) return;
-                        searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message, ...details });
-                    };
-
                     const pushCitations = (items) => {
                         for (const item of items) {
                             if (!item?.url) continue;
@@ -439,20 +386,16 @@ export async function POST(req) {
                         }
                     };
 
-                    // 联网搜索编排
-                    const { searchContextText } = await runWebSearchOrchestration({
+                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
+                        actionRunner: runWebBrowsingAction,
                         enableWebSearch,
                         webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
-                        decisionRunner: runDeepSeekDecision,
                         sendEvent,
                         pushCitations,
-                        sendSearchError,
                         isClientAborted: () => clientAborted,
-                        model,
-                        conversationId: currentConversationId,
-                        ...deepseekWebSearchRuntime,
+                        signal: req?.signal,
                     });
 
                     if (clientAborted) {
@@ -461,9 +404,7 @@ export async function POST(req) {
                         return;
                     }
 
-                    const searchContextSection = searchContextText
-                        ? buildWebSearchContextBlock(searchContextText)
-                        : '';
+                    const searchContextSection = webBrowsingContextText || '';
                     if (searchContextSection) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });

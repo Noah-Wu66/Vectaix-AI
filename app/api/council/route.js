@@ -529,6 +529,7 @@ export async function POST(req) {
               historyMemo,
               imagePayloads: councilInput.imagePayloads,
               expert,
+              userId: user.userId,
               conversationId: currentConversationId,
               clientAborted: () => clientAborted,
               updateStatus: (patch) => updateExpertState(expert, patch),

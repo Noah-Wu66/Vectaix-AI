@@ -1,4 +1,3 @@
-import { WEB_SEARCH_CONTEXT_WARNING_TEXT } from '@/lib/server/chat/webSearchConfig';
 import { normalizeBlobFileId } from '@/lib/shared/blobFileIds';
 
 /**
@@ -414,11 +413,6 @@ export async function injectCurrentTimeSystemReminder(systemText) {
 
     const reminder = `\n\n<system-reminder>\n${reminderContent}\n</system-reminder>`;
     return `${systemText}${reminder}`;
-}
-
-export function buildWebSearchContextBlock(searchContextText) {
-    if (typeof searchContextText !== 'string' || !searchContextText.trim()) return "";
-    return `\n\n<web-search>\n${WEB_SEARCH_CONTEXT_WARNING_TEXT}\n${searchContextText}\n</web-search>`;
 }
 
 /**

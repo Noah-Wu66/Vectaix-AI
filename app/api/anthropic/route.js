@@ -18,10 +18,8 @@ import {
     sanitizeStoredMessagesStrict,
     generateMessageId,
     injectCurrentTimeSystemReminder,
-    buildWebSearchContextBlock,
     estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
@@ -34,9 +32,7 @@ import {
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
 import {
-    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
-    getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
 import {
     clampMaxTokens,
@@ -47,12 +43,13 @@ import {
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
 import {
-    getAnthropicProviderLabel,
     isClaudeModel,
     isZenmuxAnthropicModel,
     resolveAnthropicApiModel,
     resolveAnthropicProviderConfig,
 } from '@/lib/server/chat/providerAdapters';
+import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
+import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -308,41 +305,14 @@ export async function POST(req) {
 
         // 启用联网搜索时禁用来源括号标注
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
-        const runAnthropicDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
-            const { systemText, userText } = await buildWebSearchDecisionPrompts({
-                prompt: decisionPrompt,
-                historyMessages,
-                searchRounds,
-            });
-
-            const response = await client.messages.create({
-                model: apiModel,
-                max_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
-                system: systemText,
-                messages: [
-                    {
-                        role: 'user',
-                        content: [{ type: 'text', text: userText }]
-                    }
-                ]
-            });
-
-            const text = Array.isArray(response?.content)
-                ? response.content
-                    .map((item) => (typeof item?.text === 'string' ? item.text : ''))
-                    .join('')
-                    .trim()
-                : '';
-
-            if (!text) {
-                throw new Error('联网判断未返回有效内容');
-            }
-
-            return text;
-        };
-
-        const anthropicWebSearchRuntime = getWebSearchProviderRuntimeOptions('claude', {
-            providerLabel: getAnthropicProviderLabel(model),
+        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
+            maxTokens,
+            model,
+            req,
+            systemText,
+            thinkingLevel,
+            userId: user.userId,
+            userText,
         });
 
         if (user && !currentConversationId) {
@@ -455,13 +425,6 @@ export async function POST(req) {
                         controller.enqueue(encoder.encode(data));
                     };
 
-                    let searchErrorSent = false;
-                    const sendSearchError = (message, details = {}) => {
-                        if (searchErrorSent) return;
-                        searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message, ...details });
-                    };
-
                     const pushCitations = (items) => {
                         for (const item of items) {
                             if (!item?.url) continue;
@@ -471,20 +434,16 @@ export async function POST(req) {
                         }
                     };
 
-                    const { searchContextText } = await runWebSearchOrchestration({
+                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
+                        actionRunner: runWebBrowsingAction,
                         enableWebSearch,
                         webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
-                        decisionRunner: runAnthropicDecision,
                         sendEvent,
                         pushCitations,
-                        sendSearchError,
                         isClientAborted: () => clientAborted,
-                        model,
-                        conversationId: currentConversationId,
-                        logDecision: true,
-                        ...anthropicWebSearchRuntime,
+                        signal: req?.signal,
                     });
 
                     if (clientAborted) {
@@ -493,9 +452,7 @@ export async function POST(req) {
                         return;
                     }
 
-                    const searchContextSection = searchContextText
-                        ? buildWebSearchContextBlock(searchContextText)
-                        : "";
+                    const searchContextSection = webBrowsingContextText || "";
                     if (searchContextSection) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });

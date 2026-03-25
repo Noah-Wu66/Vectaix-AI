@@ -69,6 +69,9 @@ function buildTimelineStep(step) {
     content: typeof step.content === "string" ? step.content : "",
     message: typeof step.message === "string" ? step.message : "",
     query: typeof step.query === "string" ? step.query : "",
+    url: typeof step.url === "string" ? step.url : "",
+    round: Number.isFinite(step.round) ? step.round : null,
+    resultCount: Number.isFinite(step.resultCount) ? step.resultCount : null,
   };
 }
 
@@ -304,6 +307,7 @@ export async function POST(req) {
               status: "done",
               query: payload.query || "",
               title: "联网搜索完成",
+              resultCount: Array.isArray(payload.results) ? payload.results.length : null,
               message: Array.isArray(payload.results) ? `共 ${payload.results.length} 条结果` : "",
             });
           } else if (payload?.type === "search_error") {
@@ -314,6 +318,24 @@ export async function POST(req) {
               query: payload.query || "",
               title: "联网搜索失败",
               message: payload.message || "联网搜索失败",
+            });
+          } else if (payload?.type === "page_fetch_start") {
+            timeline = upsertTimelineStep(timeline, {
+              id: `page_fetch_${payload.round || Date.now()}`,
+              kind: "reader",
+              status: "running",
+              title: "抓取网页中",
+              url: payload.url || "",
+            });
+          } else if (payload?.type === "page_fetch_result") {
+            timeline = upsertTimelineStep(timeline, {
+              id: `page_fetch_${payload.round || Date.now()}`,
+              kind: "reader",
+              status: "done",
+              title: "网页抓取完成",
+              url: payload.url || "",
+              resultCount: Array.isArray(payload.results) ? payload.results.length : null,
+              message: Array.isArray(payload.results) ? `共 ${payload.results.length} 页结果` : "",
             });
           }
 

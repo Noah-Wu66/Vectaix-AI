@@ -10,11 +10,8 @@ import {
     sanitizeStoredMessagesStrict,
     generateMessageId,
     injectCurrentTimeSystemReminder,
-    buildWebSearchContextBlock,
     estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
-import { GEMINI_PRO_MODEL } from '@/lib/shared/models';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
     buildConversationWriteCondition,
@@ -26,9 +23,7 @@ import {
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
 import {
-    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
-    getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
 import {
     parseGeminiThinkingLevel,
@@ -38,13 +33,13 @@ import {
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
 import { createGeminiClient, resolveGeminiApiModel } from '@/lib/server/chat/providerAdapters';
+import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
+import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const GEMINI_DECISION_MODEL = GEMINI_PRO_MODEL;
-const GEMINI_DECISION_THINKING_LEVEL = 'LOW';
 const MAX_REQUEST_BYTES = 2_000_000;
 
 async function storedPartToRequestPart(part) {
@@ -281,54 +276,16 @@ export async function POST(req) {
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
-        const extractGeminiDecisionText = (result) => {
-            const parts = Array.isArray(result?.candidates?.[0]?.content?.parts)
-                ? result.candidates[0].content.parts
-                : [];
-
-            return parts
-                .filter((part) => !part?.thought && typeof part?.text === 'string')
-                .map((part) => part.text)
-                .join('')
-                .trim();
-        };
-
-        const runGeminiDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
-            const { systemText, userText } = await buildWebSearchDecisionPrompts({
-                prompt: decisionPrompt,
-                historyMessages,
-                searchRounds,
-            });
-
-            const result = await ai.models.generateContent({
-                model: GEMINI_DECISION_MODEL,
-                contents: [{
-                    role: 'user',
-                    parts: [{ text: userText }]
-                }],
-                config: {
-                    systemInstruction: {
-                        parts: [{ text: systemText }]
-                    },
-                    maxOutputTokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
-                    temperature: 0.1,
-                    thinkingConfig: {
-                        thinkingLevel: GEMINI_DECISION_THINKING_LEVEL,
-                        includeThoughts: false
-                    }
-                }
-            });
-
-            const text = extractGeminiDecisionText(result);
-            if (!text) {
-                throw new Error('联网判断未返回有效内容');
-            }
-
-            return text;
-        };
+        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
+            maxTokens,
+            model,
+            req,
+            systemText,
+            thinkingLevel,
+            userId: user.userId,
+            userText,
+        });
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
-
-        const geminiWebSearchRuntime = getWebSearchProviderRuntimeOptions('gemini');
 
         if (user && !currentConversationId) {
             const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
@@ -443,13 +400,6 @@ export async function POST(req) {
                         controller.enqueue(encoder.encode(data));
                     };
 
-                    let searchErrorSent = false;
-                    const sendSearchError = (message, details = {}) => {
-                        if (searchErrorSent) return;
-                        searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message, ...details });
-                    };
-
                     const pushCitations = (items) => {
                         for (const item of items) {
                             if (!item?.url || seenUrls.has(item.url)) continue;
@@ -458,19 +408,16 @@ export async function POST(req) {
                         }
                     };
 
-                    const { searchContextText } = await runWebSearchOrchestration({
+                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
+                        actionRunner: runWebBrowsingAction,
                         enableWebSearch,
                         webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
-                        decisionRunner: runGeminiDecision,
                         sendEvent,
                         pushCitations,
-                        sendSearchError,
                         isClientAborted: () => clientAborted,
-                        model,
-                        conversationId: currentConversationId,
-                        ...geminiWebSearchRuntime,
+                        signal: req?.signal,
                     });
 
                     if (clientAborted) {
@@ -479,9 +426,7 @@ export async function POST(req) {
                         return;
                     }
 
-                    const searchContextSection = searchContextText
-                        ? buildWebSearchContextBlock(searchContextText)
-                        : "";
+                    const searchContextSection = webBrowsingContextText || "";
                     if (searchContextSection) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });

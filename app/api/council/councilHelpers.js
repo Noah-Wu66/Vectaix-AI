@@ -1,22 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
 import Anthropic from "@anthropic-ai/sdk";
 import {
-  buildWebSearchContextBlock,
   fetchImageAsBase64,
   getStoredPartsFromMessage,
   injectCurrentTimeSystemReminder,
 } from "@/app/api/chat/utils";
-import {
-  buildWebSearchDecisionPrompts,
-  runWebSearchOrchestration,
-} from "@/app/api/chat/webSearchOrchestrator";
 import { buildSeedMessageInput } from "@/app/api/bytedance/bytedanceHelpers";
 import { buildEconomySystemPrompt } from "@/lib/server/chat/economyModels";
-import { parseGeminiThinkingLevel } from "@/lib/server/chat/requestConfig";
 import {
-  WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
   buildWebSearchGuide,
-  getWebSearchProviderRuntimeOptions,
 } from "@/lib/server/chat/webSearchConfig";
 import {
   buildSeedRequestBody,
@@ -27,15 +19,14 @@ import {
 import {
   CLAUDE_OPUS_MODEL,
   DEFAULT_SEED_THINKING_LEVEL,
-  GEMINI_PRO_MODEL,
   getCouncilExpertConfigs,
   getCouncilExpertDisplayLabel,
   SEED_MODEL_ID,
 } from "@/lib/shared/models";
+import { runWebBrowsingSession } from "@/lib/server/webBrowsing/session";
+import { runWebBrowsingActionText } from "@/lib/server/webBrowsing/actionRunner";
 
 const ARK_API_KEY = process.env.ARK_API_KEY;
-const GEMINI_DECISION_MODEL = GEMINI_PRO_MODEL;
-const GEMINI_DECISION_THINKING_LEVEL = parseGeminiThinkingLevel("LOW");
 const FORMATTING_GUARD =
   "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
@@ -347,7 +338,7 @@ async function buildExpertSystemPrompt({ enableWebSearch, searchContextText, inc
   const basePrompt = includeEconomyPrefix ? buildEconomySystemPrompt() : "";
   const base = await injectCurrentTimeSystemReminder(basePrompt);
   const webSearchGuide = buildWebSearchGuide(enableWebSearch);
-  const searchContextSection = searchContextText ? buildWebSearchContextBlock(searchContextText) : "";
+  const searchContextSection = searchContextText || "";
   return `${base}\n\n${FORMATTING_GUARD}${webSearchGuide}${searchContextSection}`;
 }
 
@@ -423,53 +414,6 @@ function getGeminiModelId(expertModelId) {
   return expertModelId;
 }
 
-async function buildGeminiDecisionRunner(ai) {
-  return async ({ prompt, historyMessages, searchRounds }) => {
-    const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
-    const modelId = getGeminiModelId(GEMINI_DECISION_MODEL);
-    const result = await ai.models.generateContent({
-      model: modelId,
-      contents: [{ role: "user", parts: [{ text: userText }] }],
-      config: {
-        systemInstruction: { parts: [{ text: systemText }] },
-        maxOutputTokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
-        temperature: 0.1,
-        thinkingConfig: {
-          thinkingLevel: GEMINI_DECISION_THINKING_LEVEL,
-          includeThoughts: false,
-        },
-      },
-    });
-    const text = extractGeminiText(result);
-    if (!text) {
-      throw new Error("联网判断未返回有效内容");
-    }
-    return text;
-  };
-}
-
-function buildClaudeDecisionRunner(client, modelId) {
-  return async ({ prompt, historyMessages, searchRounds }) => {
-    const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
-    const response = await client.messages.create({
-      model: modelId,
-      max_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
-      system: systemText,
-      messages: [
-        {
-          role: "user",
-          content: [{ type: "text", text: userText }],
-        },
-      ],
-    });
-    const text = extractClaudeText(response);
-    if (!text) {
-      throw new Error("联网判断未返回有效内容");
-    }
-    return text;
-  };
-}
-
 async function consumeOpenAIStream(response) {
   if (!response.body) {
     throw new Error("OpenAI 返回了空响应体");
@@ -541,62 +485,19 @@ async function consumeOpenAIStream(response) {
   return fullText.trim();
 }
 
-function buildOpenAIDecisionRunner(modelId, providerConfig) {
-  return async ({ prompt, historyMessages, searchRounds }) => {
-    const { systemText, userText } = await buildWebSearchDecisionPrompts({ prompt, historyMessages, searchRounds });
-    const requestBody = {
-      model: modelId,
-      stream: true,
-      max_output_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
-      instructions: systemText,
-      input: [
-        {
-          role: "user",
-          content: [{ type: "input_text", text: userText }],
-        },
-      ],
-    };
-    const response = await fetch(`${providerConfig.baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${providerConfig.apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(extractUpstreamErrorMessage(response.status, errorText));
-    }
-    const text = await consumeOpenAIStream(response);
-    if (!text) {
-      throw new Error("联网判断未返回有效内容");
-    }
-    return text;
-  };
-}
-
 async function collectSearchContext({
   prompt,
   expert,
+  userId,
   conversationId,
   clientAborted,
   updateStatus,
-  providerRoutes,
   historyMessages,
   signal,
 }) {
   const citations = [];
   const pushCitations = (items) => {
     citations.push(...normalizeCitations(items));
-  };
-  const sendSearchError = (message) => {
-    updateStatus?.({
-      status: "error",
-      phase: "error",
-      message: message || "联网搜索失败",
-    });
-    throw new Error(message || "联网搜索失败");
   };
   const handleSearchEvent = (event) => {
     if (!isPlainObject(event)) return;
@@ -617,78 +518,41 @@ async function collectSearchContext({
         message: "思考中",
       });
     }
+    if (event.type === "page_fetch_start") {
+      updateStatus?.({
+        status: "running",
+        phase: "searching",
+        message: "抓取网页中",
+      });
+    }
+    if (event.type === "page_fetch_result") {
+      updateStatus?.({
+        status: "running",
+        phase: "thinking",
+        message: "思考中",
+      });
+    }
   };
 
-  if (expert.provider === "gemini") {
-    const geminiConfig = providerRoutes.gemini;
-    const ai = createGeminiClient(geminiConfig);
-    const decisionRunner = await buildGeminiDecisionRunner(ai);
-    const { searchContextText } = await raceWithSignal(runWebSearchOrchestration({
-      enableWebSearch: true,
-      prompt,
-      historyMessages,
-      decisionRunner,
-      sendEvent: handleSearchEvent,
-      pushCitations,
-      sendSearchError,
-      isClientAborted: () => clientAborted(),
+  const { contextText: searchContextText } = await raceWithSignal(runWebBrowsingSession({
+    actionRunner: ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
+      maxTokens,
       model: expert.modelId,
-      conversationId,
-      allowHeuristicFallback: false,
-      signal,
-      searchTimeoutMs: null,
-      ...getWebSearchProviderRuntimeOptions(expert.provider, { providerLabel: expert.label }),
-    }), signal);
-    return { searchContextText, citations: normalizeCitations(citations) };
-  }
-
-  if (expert.provider === "claude") {
-    const client = new Anthropic({
-      apiKey: providerRoutes.opus.apiKey,
-      baseURL: providerRoutes.opus.baseUrl,
-    });
-    const decisionRunner = buildClaudeDecisionRunner(client, CLAUDE_OPUS_MODEL);
-    const { searchContextText } = await raceWithSignal(runWebSearchOrchestration({
-      enableWebSearch: true,
-      prompt,
-      historyMessages,
-      decisionRunner,
-      sendEvent: handleSearchEvent,
-      pushCitations,
-      sendSearchError,
-      isClientAborted: () => clientAborted(),
-      model: expert.modelId,
-      conversationId,
-      allowHeuristicFallback: false,
-      signal,
-      searchTimeoutMs: null,
-      ...getWebSearchProviderRuntimeOptions(expert.provider, { providerLabel: expert.label }),
-    }), signal);
-    return { searchContextText, citations: normalizeCitations(citations) };
-  }
-
-  if (expert.provider === "openai") {
-    const decisionRunner = buildOpenAIDecisionRunner(expert.modelId, providerRoutes.openai);
-    const { searchContextText } = await raceWithSignal(runWebSearchOrchestration({
-      enableWebSearch: true,
-      prompt,
-      historyMessages,
-      decisionRunner,
-      sendEvent: handleSearchEvent,
-      pushCitations,
-      sendSearchError,
-      isClientAborted: () => clientAborted(),
-      model: expert.modelId,
-      conversationId,
-      allowHeuristicFallback: false,
-      signal,
-      searchTimeoutMs: null,
-      ...getWebSearchProviderRuntimeOptions(expert.provider, { providerLabel: expert.label }),
-    }), signal);
-    return { searchContextText, citations: normalizeCitations(citations) };
-  }
-
-  throw new Error(`未知专家 provider：${expert.provider}`);
+      req: { signal },
+      systemText,
+      thinkingLevel: expert.thinkingLevel,
+      userId,
+      userText,
+    }),
+    enableWebSearch: true,
+    prompt,
+    historyMessages,
+    sendEvent: handleSearchEvent,
+    pushCitations,
+    isClientAborted: () => clientAborted(),
+    signal,
+  }), signal);
+  return { searchContextText, citations: normalizeCitations(citations) };
 }
 
 async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
@@ -819,6 +683,7 @@ export async function runCouncilExpert({
   historyMemo,
   imagePayloads,
   expert,
+  userId,
   conversationId,
   clientAborted,
   updateStatus,
@@ -832,10 +697,10 @@ export async function runCouncilExpert({
     const { searchContextText, citations } = await collectSearchContext({
       prompt,
       expert,
+      userId,
       conversationId,
       clientAborted,
       updateStatus,
-      providerRoutes,
       historyMessages: history,
       signal,
     });

@@ -9,14 +9,10 @@ import {
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
     injectCurrentTimeSystemReminder,
-    buildWebSearchContextBlock,
     estimateTokens
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
 import {
-    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
-    getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
 import {
     parseMaxTokens,
@@ -39,6 +35,8 @@ import {
 } from '@/lib/server/conversations/blobReferences';
 
 import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
+import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
+import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -268,174 +266,15 @@ export async function POST(req) {
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const webSearchGuide = buildWebSearchGuide(enableWebSearch);
-        const normalizeDecisionText = (value) => {
-            if (typeof value === 'string') return value;
-            if (Array.isArray(value)) {
-                return value.map((item) => {
-                    if (typeof item === 'string') return item;
-                    if (item && typeof item.text === 'string') return item.text;
-                    if (item && typeof item.content === 'string') return item.content;
-                    return '';
-                }).join('');
-            }
-            if (value && typeof value === 'object') {
-                if (typeof value.text === 'string') return value.text;
-                if (typeof value.content === 'string') return value.content;
-            }
-            return '';
-        };
-
-        const extractDecisionOutputFromResponses = (payload) => {
-            if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
-                return payload.output_text.trim();
-            }
-
-            const outputs = Array.isArray(payload?.output) ? payload.output : [];
-            return outputs
-                .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
-                .map((item) => normalizeDecisionText(item?.text ?? item))
-                .join('')
-                .trim();
-        };
-
-        const extractJsonEventsFromSseText = (rawText) => {
-            if (typeof rawText !== 'string' || !rawText.trim()) return [];
-
-            const blocks = rawText.split(/\r?\n\r?\n/);
-            const events = [];
-
-            for (const block of blocks) {
-                const trimmedBlock = block.trim();
-                if (!trimmedBlock) continue;
-
-                const lines = trimmedBlock.split(/\r?\n/);
-                const dataLines = [];
-                for (const line of lines) {
-                    if (!line || line.startsWith(':') || line.startsWith('event:')) continue;
-                    if (line.startsWith('data:')) {
-                        dataLines.push(line.slice(5).replace(/^\s*/, ''));
-                    }
-                }
-
-                if (!dataLines.length) continue;
-
-                const dataStr = dataLines.join('\n').trim();
-                if (!dataStr || dataStr === '[DONE]') continue;
-
-                try {
-                    events.push(JSON.parse(dataStr));
-                } catch {
-                    // ignore invalid SSE chunks
-                }
-            }
-
-            return events;
-        };
-
-        const extractDecisionTextFromSse = (rawText) => {
-            const events = extractJsonEventsFromSseText(rawText);
-            if (!events.length) return '';
-
-            let outputText = '';
-
-            for (const event of events) {
-                if (typeof event?.output_text === 'string' && event.output_text.trim()) {
-                    outputText += event.output_text;
-                    continue;
-                }
-
-                if (event?.response) {
-                    const completedText = extractDecisionOutputFromResponses(event.response);
-                    if (completedText) {
-                        outputText = completedText;
-                    }
-                }
-
-                if (event.type === 'output.text.delta' || event.type === 'response.output_text.delta') {
-                    const deltaText = typeof event?.delta === 'string'
-                        ? event.delta
-                        : (typeof event?.text === 'string'
-                            ? event.text
-                            : (typeof event?.data?.text === 'string' ? event.data.text : ''));
-                    if (deltaText) outputText += deltaText;
-                    continue;
-                }
-
-                if (Array.isArray(event?.choices)) {
-                    const choice = event.choices[0] || null;
-                    const delta = choice?.delta;
-                    const text = typeof delta?.content === 'string'
-                        ? delta.content
-                        : normalizeDecisionText(delta?.content);
-                    if (text) outputText += text;
-                }
-            }
-
-            return outputText.trim();
-        };
-
-        const readDecisionResponseText = async (response) => {
-            const rawText = await response.text();
-            const trimmed = typeof rawText === 'string' ? rawText.trim() : '';
-            if (!trimmed) return '';
-
-            try {
-                const payload = JSON.parse(trimmed);
-                return extractDecisionOutputFromResponses(payload);
-            } catch {
-                const sseText = extractDecisionTextFromSse(trimmed);
-                if (sseText) return sseText;
-                throw new Error(`联网判断返回格式无法解析：${trimmed.slice(0, 120)}`);
-            }
-        };
-
-        const runOpenAIDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
-            const { systemText, userText } = await buildWebSearchDecisionPrompts({
-                prompt: decisionPrompt,
-                historyMessages,
-                searchRounds,
-            });
-
-            const requestBody = {
-                model: apiModel,
-                stream: false,
-                max_output_tokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
-                instructions: systemText,
-                input: [
-                    {
-                        role: 'user',
-                        content: [{ type: 'input_text', text: userText }]
-                    }
-                ],
-            };
-
-            const requestDecision = async () => fetch(`${apiBaseUrl}/responses`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            let response = await requestDecision();
-            if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
-                await new Promise((resolve) => setTimeout(resolve, 800));
-                response = await requestDecision();
-            }
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(extractUpstreamErrorMessage(response.status, errorText));
-            }
-
-            const text = await readDecisionResponseText(response);
-            if (!text) {
-                throw new Error('联网判断未返回有效内容');
-            }
-
-            return text;
-        };
+        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
+            maxTokens,
+            model,
+            req,
+            systemText,
+            thinkingLevel,
+            userId: user.userId,
+            userText,
+        });
 
         if (user && !currentConversationId) {
             const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
@@ -542,8 +381,6 @@ export async function POST(req) {
             return '';
         };
 
-        const openaiWebSearchRuntime = getWebSearchProviderRuntimeOptions('openai');
-
         const responseStream = new ReadableStream({
             async start(controller) {
                 let fullText = "";
@@ -583,13 +420,6 @@ export async function POST(req) {
                         controller.enqueue(encoder.encode(data));
                     };
 
-                    let searchErrorSent = false;
-                    const sendSearchError = (message, details = {}) => {
-                        if (searchErrorSent) return;
-                        searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message, ...details });
-                    };
-
                     const pushCitations = (items) => {
                         for (const item of items) {
                             if (!item?.url) continue;
@@ -599,19 +429,16 @@ export async function POST(req) {
                         }
                     };
 
-                    const { searchContextText } = await runWebSearchOrchestration({
+                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
+                        actionRunner: runWebBrowsingAction,
                         enableWebSearch,
                         webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
-                        decisionRunner: runOpenAIDecision,
                         sendEvent,
                         pushCitations,
-                        sendSearchError,
                         isClientAborted: () => clientAborted,
-                        model,
-                        conversationId: currentConversationId,
-                        ...openaiWebSearchRuntime,
+                        signal: req?.signal,
                     });
 
                     if (clientAborted) {
@@ -620,9 +447,7 @@ export async function POST(req) {
                         return;
                     }
 
-                    const searchContextSection = searchContextText
-                        ? buildWebSearchContextBlock(searchContextText)
-                        : "";
+                    const searchContextSection = webBrowsingContextText || "";
                     if (searchContextSection) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });

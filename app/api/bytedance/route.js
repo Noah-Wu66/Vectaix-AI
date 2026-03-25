@@ -5,14 +5,14 @@ import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
     fetchImageAsBase64,
-    buildWebSearchContextBlock,
     estimateTokens,
     generateMessageId,
     injectCurrentTimeSystemReminder,
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
 } from '@/app/api/chat/utils';
-import { buildWebSearchDecisionPrompts, runWebSearchOrchestration } from '@/app/api/chat/webSearchOrchestrator';
+import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
+import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
 import { buildBytedanceInputFromHistory, buildSeedMessageInput } from '@/app/api/bytedance/bytedanceHelpers';
 import {
     SEED_MODEL_ID,
@@ -22,9 +22,7 @@ import {
     resolveSeedRuntimeModelId,
 } from '@/lib/shared/models';
 import {
-    WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
     buildWebSearchGuide,
-    getWebSearchProviderRuntimeOptions,
 } from '@/lib/server/chat/webSearchConfig';
 import {
     parseMaxTokens,
@@ -305,43 +303,16 @@ export async function POST(req) {
         );
         const formattingGuard = 'Output formatting rules: Do not use Markdown horizontal rules or standalone lines of \'---\'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.';
         const webSearchGuard = buildWebSearchGuide(enableWebSearch).trim();
-        const seedWebSearchRuntime = getWebSearchProviderRuntimeOptions('seed');
-
-        const runSeedDecision = async ({ prompt: decisionPrompt, historyMessages, searchRounds }) => {
-            const { systemText, userText } = await buildWebSearchDecisionPrompts({
-                prompt: decisionPrompt,
-                historyMessages,
-                searchRounds,
-            });
-
-            const decisionRequestBody = buildSeedRequestBody({
-                model: apiModel || SEED_MODEL_ID,
-                stream: false,
-                input: [buildSeedMessageInput({
-                    role: 'user',
-                    content: [{
-                        type: 'input_text',
-                        text: userText,
-                    }],
-                })],
-                instructions: systemText,
-                maxTokens: WEB_SEARCH_DECISION_MAX_OUTPUT_TOKENS,
-                thinkingLevel: 'minimal',
-                temperature: 0.1,
-            });
-
-            const response = await requestSeedResponses({
-                apiKey,
-                requestBody: decisionRequestBody,
-                req,
-            });
-            const payload = await response.json();
-            const text = extractSeedResponseText(payload);
-            if (!text) {
-                throw new Error('联网判断未返回有效内容');
-            }
-            return text;
-        };
+        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
+            apiKey,
+            maxTokens,
+            model: conversationModel,
+            req,
+            systemText,
+            thinkingLevel,
+            userId: user.userId,
+            userText,
+        });
 
         if (user && !currentConversationId) {
             const titleSource = isNonEmptyString(prompt)
@@ -476,30 +447,20 @@ export async function POST(req) {
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}${padding}\n\n`));
                     };
 
-                    let searchErrorSent = false;
-                    const sendSearchError = (message, details = {}) => {
-                        if (searchErrorSent) return;
-                        searchErrorSent = true;
-                        sendEvent({ type: 'search_error', message, ...details });
-                    };
-
                     const pushCitations = (items) => {
                         pushUniqueCitations(citations, items);
                     };
 
-                    const { searchContextText } = await runWebSearchOrchestration({
+                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
+                        actionRunner: runWebBrowsingAction,
                         enableWebSearch,
                         webSearchOptions: webSearchConfig,
                         prompt,
                         historyMessages: effectiveHistoryMessages,
-                        decisionRunner: runSeedDecision,
                         sendEvent,
                         pushCitations,
-                        sendSearchError,
                         isClientAborted: () => clientAborted,
-                        model,
-                        conversationId: currentConversationId,
-                        ...seedWebSearchRuntime,
+                        signal: req?.signal,
                     });
 
                     if (clientAborted) {
@@ -508,9 +469,7 @@ export async function POST(req) {
                         return;
                     }
 
-                    const searchContextSection = searchContextText
-                        ? buildWebSearchContextBlock(searchContextText)
-                        : '';
+                    const searchContextSection = webBrowsingContextText || '';
                     if (searchContextSection) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
