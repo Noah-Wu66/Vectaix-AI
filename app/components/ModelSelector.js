@@ -55,7 +55,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 w-[min(80vw,240px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
+              className="absolute bottom-full left-0 mb-2 w-[min(80vw,200px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
             >
               <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 tracking-wider">
                 模型

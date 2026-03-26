@@ -313,7 +313,9 @@ export default function MessageList({
           const displayParts = Array.isArray(msg.parts) && msg.role === "model"
             ? msg.parts.filter((part) => !(typeof part?.text === "string" && isPendingRunText(part.text)))
             : msg.parts;
-          const hasParts = Array.isArray(displayParts) && displayParts.length > 0;
+          const hasParts = Array.isArray(displayParts) && displayParts.some((part) =>
+            part?.inlineData?.url || part?.fileData?.name || (typeof part?.text === "string" && part.text.trim().length > 0)
+          );
           const hasVisibleContent = typeof msg.content === "string" && msg.content.trim().length > 0 && !isPendingRunText(msg.content);
           const hasTableContent = (
             (hasVisibleContent && containsMarkdownTable(msg.content))
@@ -328,7 +330,7 @@ export default function MessageList({
           const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
           const hasToolRuns = Array.isArray(msg.tools) && msg.tools.length > 0;
           const hasArtifacts = Array.isArray(msg.artifacts) && msg.artifacts.length > 0;
-          const shouldRenderToolCards = msg.role === "model" && hasToolRuns && !hasThinkingTimeline;
+          const shouldRenderToolCards = msg.role === "model" && hasToolRuns && !hasThinkingTimeline && msg.tools.some((t) => t?.id);
           const shouldRenderBubble = hasParts || hasVisibleContent || shouldRenderToolCards || (msg.role === "model" && hasArtifacts);
           
           if (msg.role === "model" && !msg.thought && !hasVisibleContent && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && !hasToolRuns && !hasArtifacts && msg.isWaitingFirstChunk) {

@@ -146,13 +146,13 @@ export default function UserManagementModal({ open, onClose }) {
     setConfirmOpen(true);
   };
 
-  // 清除全部用户加密数据
+  // 清除全部用户旧版加密残留数据
   const requestCleanAllEncrypted = () => {
     confirmActionRef.current = async () => {
       setActionLoading("clean-all");
       try {
         const data = await apiJson("/api/admin/users", { method: "POST" });
-        toast.success(`已清除 ${data.deletedConversations || 0} 个加密会话、${data.deletedSettings || 0} 份加密设置`);
+        toast.success(`已清除 ${data.deletedConversations || 0} 个残留会话、${data.deletedSettings || 0} 份残留设置`);
         fetchUsers(page, search.trim());
       } catch (e) {
         toast.error(e?.message);
@@ -160,8 +160,8 @@ export default function UserManagementModal({ open, onClose }) {
         setActionLoading(null);
       }
     };
-    setConfirmTitle("一键清除全部加密数据");
-    setConfirmMessage("确定要清除所有用户的旧加密数据吗？将删除包含加密内容的会话（含侧边栏加密标题）和系统提示词，此操作不可撤销。");
+    setConfirmTitle("清除旧版残留数据");
+    setConfirmMessage("将删除所有用户残留的旧版加密会话（含侧边栏乱码标题）和系统提示词，此操作不可撤销。");
     setConfirmButtonText("清除");
     setConfirmDanger(true);
     setConfirmOpen(true);
@@ -243,7 +243,7 @@ export default function UserManagementModal({ open, onClose }) {
                   className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-400 transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-50"
                 >
                   <Eraser size={16} />
-                  一键清除全部用户加密数据（含侧边栏）
+                  清除旧版残留数据（乱码会话/提示词）
                 </button>
               </div>
 

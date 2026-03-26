@@ -120,14 +120,17 @@ export default function Sidebar({
         className={`fixed md:relative z-40 w-72 h-full glass-effect border-r border-zinc-200/50 flex-col transition-all duration-300 ${isOpen ? "translate-x-0 flex" : "-translate-x-full md:translate-x-0 hidden md:flex"
           }`}
       >
-        <div className="p-4 border-b border-zinc-200/50 dark:border-zinc-800/50 flex items-center justify-between">
+        <div className="p-3 border-b border-zinc-200/50 dark:border-zinc-800/50 flex items-center gap-2">
           <button
             onClick={onStartNewChat}
-            className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white py-2.5 rounded-xl text-sm font-semibold transition-all shadow-md active:scale-[0.98] group"
+            className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:scale-[0.97] group border border-zinc-200/70 dark:border-zinc-700/70 hover:border-primary/40"
           >
-            <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" /> 新建对话
+            <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all duration-200">
+              <Plus size={14} strokeWidth={2.5} className="group-hover:rotate-90 transition-transform duration-300" />
+            </span>
+            新建对话
           </button>
-          <button onClick={onClose} className="md:hidden p-2 text-zinc-400 ml-2 hover:bg-zinc-100 rounded-lg">
+          <button onClick={onClose} className="md:hidden p-2 text-zinc-400 hover:bg-zinc-100 rounded-lg">
             <X size={20} />
           </button>
         </div>
