@@ -416,7 +416,7 @@ export async function injectCurrentTimeSystemReminder(systemText) {
 }
 
 /**
- * 服务端估算文本的 token 数量（与前端 TokenCounter 使用相同算法）
+ * 服务端估算文本的 token 数量
  * 中文字符 ~1.5 token，ASCII ~0.25 token/字符，其他 ~0.5 token/字符
  */
 export function estimateTokens(text) {

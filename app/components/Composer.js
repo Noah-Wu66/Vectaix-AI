@@ -2,12 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertTriangle,
   FileText,
-  Loader2,
   Paperclip,
   Send,
-  Sparkles,
   Square,
   X,
 } from "lucide-react";
@@ -15,9 +12,7 @@ import { upload } from "@vercel/blob/client";
 import { useToast } from "./ToastProvider";
 import ModelSelector from "./ModelSelector";
 import SettingsMenu from "./SettingsMenu";
-import TokenCounter from "./TokenCounter";
 import {
-  AGENT_MODEL_ID,
   COUNCIL_MAX_ROUNDS,
   countCompletedCouncilRounds,
   getModelConfig,
@@ -48,20 +43,8 @@ export default function Composer({
   modelReady,
   onModelChange,
   messages,
-  contextWindow,
-  historyLimit,
-  agentModel,
-  setAgentModel,
   webSearch,
   setWebSearch,
-  systemPrompts,
-  activePromptIds,
-  setActivePromptIds,
-  activePromptId,
-  setActivePromptId,
-  onAddPrompt,
-  onDeletePrompt,
-  onUpdatePrompt,
   onSend,
   onStop,
   prefill,
@@ -69,21 +52,18 @@ export default function Composer({
   const toast = useToast();
   const [input, setInput] = useState("");
   const [selectedAttachments, setSelectedAttachments] = useState([]);
-  const [agentHintVisible, setAgentHintVisible] = useState(false);
   const [isMainInputFocused, setIsMainInputFocused] = useState(false);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const mountedRef = useRef(true);
   const modelConfig = getModelConfig(model);
+  const isCouncilSelected = isCouncilModel(model);
   const supportsImages = modelConfig?.supportsImages === true;
-  const supportsDocuments = modelConfig?.supportsDocuments === true;
+  const supportsDocuments = !isCouncilSelected;
   const supportsFilePicker = supportsImages || supportsDocuments;
   const attachmentAccept = getAttachmentAcceptForModel({ supportsDocuments, supportsImages });
-  const isCouncilSelected = isCouncilModel(model);
-  const isAgentSelected = model === AGENT_MODEL_ID;
   const completedCouncilRounds = isCouncilSelected ? countCompletedCouncilRounds(messages) : 0;
   const hasReachedCouncilRoundLimit = isCouncilSelected && completedCouncilRounds >= COUNCIL_MAX_ROUNDS;
-  const isAgentModelLocked = isAgentSelected && messages.some((message) => message?.role === "model");
 
   useEffect(() => {
     mountedRef.current = true;
@@ -140,17 +120,14 @@ export default function Composer({
       if (selectedAttachments.length > 0) {
         setSelectedAttachments([]);
       }
-      setAgentHintVisible(false);
       return;
     }
     if (supportsDocuments) {
-      setAgentHintVisible(false);
       return;
     }
     const next = selectedAttachments.filter((item) => isImageAttachment(item));
     if (next.length !== selectedAttachments.length) {
       setSelectedAttachments(next);
-      setAgentHintVisible(true);
     }
   }, [selectedAttachments, supportsDocuments, supportsFilePicker]);
 
@@ -244,8 +221,7 @@ export default function Composer({
       toast.warning(`以下文件类型不支持或读取失败，已跳过：${invalidFiles.join("、")}`);
     }
     if (blockedDocuments.length > 0) {
-      setAgentHintVisible(true);
-      toast.warning("这类文件目前仅 Agent 支持");
+      toast.warning("当前模型只支持图片，不支持这类文件");
     }
 
     if (nextAttachments.length > 0 && mountedRef.current) {
@@ -339,12 +315,6 @@ export default function Composer({
     onSend({ text, attachments: validAttachments });
     setInput("");
     clearAllAttachments();
-    setAgentHintVisible(false);
-  };
-
-  const handleSwitchToAgent = () => {
-    setAgentHintVisible(false);
-    onModelChange(AGENT_MODEL_ID);
   };
 
   return (
@@ -388,35 +358,14 @@ export default function Composer({
       <div className="relative flex flex-col glass-effect rounded-[24px] border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700">
         {/* Top toolbar */}
         <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-900/30 rounded-t-[24px]">
-          <ModelSelector model={model} agentModel={agentModel} onModelChange={onModelChange} ready={modelReady} />
+          <ModelSelector model={model} onModelChange={onModelChange} ready={modelReady} />
           {!isCouncilSelected && (
             <div className="flex items-center gap-1">
               <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700 mx-1" />
               <SettingsMenu
                 model={model}
-                agentModel={agentModel}
-                setAgentModel={setAgentModel}
-                agentModelLocked={isAgentModelLocked}
                 webSearch={webSearch}
                 setWebSearch={setWebSearch}
-                systemPrompts={systemPrompts}
-                activePromptIds={activePromptIds}
-                setActivePromptIds={setActivePromptIds}
-                activePromptId={activePromptId}
-                setActivePromptId={setActivePromptId}
-                onAddPrompt={onAddPrompt}
-                onDeletePrompt={onDeletePrompt}
-                onUpdatePrompt={onUpdatePrompt}
-              />
-              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700 mx-1" />
-              <TokenCounter
-                messages={messages}
-                systemPrompts={systemPrompts}
-                activePromptId={activePromptId}
-                historyLimit={historyLimit}
-                contextWindow={contextWindow}
-                model={model}
-                webSearch={webSearch}
               />
             </div>
           )}

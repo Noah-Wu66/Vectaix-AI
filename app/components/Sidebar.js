@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { Check, Copy, LogOut, Pencil, Pin, Plus, Trash2, X } from "lucide-react";
 import ConfirmModal from "./ConfirmModal";
 import { ModelGlyph } from "./ModelVisuals";
-import { AGENT_MODEL_ID, isCouncilModel } from "@/lib/shared/models";
+import { isCouncilModel } from "@/lib/shared/models";
 
 export default function Sidebar({
   isOpen,
@@ -87,10 +87,6 @@ export default function Sidebar({
     setEditingTitle("");
   };
 
-  const canDuplicateConversation = (conv) => {
-    return conv?.model !== AGENT_MODEL_ID && !isCouncilModel(conv?.model);
-  };
-
   const revealActions = (id) => {
     setActiveActionsId(id);
   };
@@ -170,7 +166,7 @@ export default function Sidebar({
                       }`}
                   >
                     <span className={`shrink-0 transition-transform duration-200 ${currentConversationId === conv._id ? "scale-110" : "group-hover:scale-105 opacity-70 group-hover:opacity-100"}`}>
-                      <ModelGlyph model={conv.model} agentModel={conv?.settings?.agentModel} size={18} />
+                      <ModelGlyph model={conv.model} size={18} />
                     </span>
                     <span className="truncate pr-8">{conv.title}</span>
                   </button>

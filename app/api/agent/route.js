@@ -3,7 +3,10 @@ import Conversation from "@/models/Conversation";
 import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { rateLimit, getClientIP } from "@/lib/rateLimit";
-import { AGENT_MODEL_ID, normalizeAgentDriverModelId } from "@/lib/shared/models";
+import {
+  isAgentBackedModelId,
+  isCouncilModel,
+} from "@/lib/shared/models";
 import { generateMessageId, isNonEmptyString } from "@/app/api/chat/utils";
 import {
   CONVERSATION_WRITE_CONFLICT_ERROR,
@@ -13,7 +16,7 @@ import {
 } from "@/app/api/chat/conversationState";
 import { runAgentRuntime } from "@/lib/server/agent/runtime";
 import { serializeRuntimeState } from "@/lib/server/agent/core/stateSerializer";
-import { parseSeedThinkingLevel, parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
+import { parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
 import { enrichConversationPartsWithBlobIds } from "@/lib/server/conversations/blobReferences";
 
 export const runtime = "nodejs";
@@ -82,13 +85,13 @@ export async function POST(req) {
       historyLimit,
       conversationId,
       mode,
-      settings,
       userMessageId,
       modelMessageId,
     } = body || {};
 
-    if (model !== AGENT_MODEL_ID) {
-      return Response.json({ error: "当前接口仅支持 Agent 模型" }, { status: 400 });
+    const requestedModel = typeof model === "string" ? model.trim() : "";
+    if (!isAgentBackedModelId(requestedModel) || isCouncilModel(requestedModel)) {
+      return Response.json({ error: "当前接口仅支持非 Council 模型" }, { status: 400 });
     }
     if (!Array.isArray(history)) {
       return Response.json({ error: "history must be an array" }, { status: 400 });
@@ -97,13 +100,7 @@ export async function POST(req) {
       return Response.json({ error: "Agent 模式已改为当前页同步执行，不再支持继续执行或后台恢复" }, { status: 400 });
     }
 
-    const driverModel = normalizeAgentDriverModelId(config?.agentModel ?? settings?.agentModel);
-
-    try {
-      parseSeedThinkingLevel(config?.thinkingLevel);
-    } catch (error) {
-      return Response.json({ error: error?.message || "thinkingLevel invalid" }, { status: 400 });
-    }
+    const driverModel = requestedModel;
 
     const auth = await getAuthPayload();
     if (!auth) {
@@ -158,6 +155,7 @@ export async function POST(req) {
       images: currentImages,
       attachments: currentAttachments,
     });
+    const parsedWebSearch = parseWebSearchConfig(config?.webSearch);
 
     if (userMessageParts.length === 0) {
       return Response.json({ error: "请至少输入内容或上传附件" }, { status: 400 });
@@ -166,26 +164,24 @@ export async function POST(req) {
     let currentConversation = await loadConversationForRoute({
       conversationId,
       userId: auth.userId,
-      expectedProvider: "vectaix",
     });
     let currentConversationId = conversationId;
     let createdConversationForRequest = false;
     let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
     let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
+    if (currentConversation) {
+      const currentConversationModel = currentConversation?.model;
+      if (isCouncilModel(currentConversationModel)) {
+        return Response.json({ error: "当前对话与所选模型不匹配" }, { status: 400 });
+      }
+    }
     if (!currentConversationId) {
-      const initialSettings = settings && typeof settings === "object"
-        ? { ...settings }
-        : {};
-      delete initialSettings.activePromptId;
-
       const newConv = await Conversation.create({
         userId: auth.userId,
         title: buildConversationTitle(prompt, currentAttachments),
-        model: AGENT_MODEL_ID,
+        model: requestedModel,
         settings: {
-          ...initialSettings,
-          agentModel: driverModel,
-          webSearch: parseWebSearchConfig(config?.webSearch),
+          webSearch: parsedWebSearch,
         },
         messages: [],
       });
@@ -215,7 +211,11 @@ export async function POST(req) {
       { _id: currentConversationId, userId: auth.userId },
       {
         $push: { messages: userMessage },
-        updatedAt: Date.now(),
+        $set: {
+          model: requestedModel,
+          "settings.webSearch": parsedWebSearch,
+          updatedAt: Date.now(),
+        },
       },
       { new: true }
     ).select("updatedAt");

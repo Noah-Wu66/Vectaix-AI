@@ -3,13 +3,15 @@ import { Download, ExternalLink, FileText, Globe, Search, Terminal, X } from "lu
 import { ModelAvatar } from "./ModelVisuals";
 import { formatAttachmentMeta } from "@/lib/shared/messageAttachments";
 
-export function AIAvatar({ model, agentModel, size = 24, animate = false, className = "" }) {
+const WEB_BROWSING_PREVIEW_LIMIT = 20;
+
+export function AIAvatar({ model, size = 24, animate = false, className = "" }) {
   return (
     <span
       className={`inline-flex items-center justify-center overflow-hidden rounded-md ${className}`.trim()}
       style={{ width: size, height: size }}
     >
-      <ModelAvatar model={model} agentModel={agentModel} size={size} animate={animate} />
+      <ModelAvatar model={model} size={size} animate={animate} />
     </span>
   );
 }
@@ -22,11 +24,11 @@ export function LoadingSweepText({ text = "加载中", className = "", ariaText 
   );
 }
 
-export function ResponsiveAIAvatar({ model, agentModel, mobileSize = 22, desktopSize = 26, animate = false }) {
+export function ResponsiveAIAvatar({ model, mobileSize = 22, desktopSize = 26, animate = false }) {
   return (
     <>
-      <span className="sm:hidden"><AIAvatar model={model} agentModel={agentModel} size={mobileSize} animate={animate} /></span>
-      <span className="hidden sm:inline"><AIAvatar model={model} agentModel={agentModel} size={desktopSize} animate={animate} /></span>
+      <span className="sm:hidden"><AIAvatar model={model} size={mobileSize} animate={animate} /></span>
+      <span className="hidden sm:inline"><AIAvatar model={model} size={desktopSize} animate={animate} /></span>
     </>
   );
 }
@@ -298,8 +300,8 @@ export function ToolRunPreview({ tool }) {
 
   if (tool.identifier === "lobe-web-browsing" && Array.isArray(tool.state?.results) && tool.state.results.length > 0) {
     return (
-      <div className="flex flex-col gap-1.5">
-        {tool.state.results.slice(0, 5).map((item, index) => {
+      <div className="flex max-h-[320px] flex-col gap-1.5 overflow-y-auto pr-1 mobile-scroll overscroll-contain custom-scrollbar">
+        {tool.state.results.slice(0, WEB_BROWSING_PREVIEW_LIMIT).map((item, index) => {
           const href = typeof item?.url === "string" ? item.url : "";
           const title = typeof item?.title === "string" && item.title ? item.title : href;
           if (!href) return null;

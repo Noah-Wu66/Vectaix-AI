@@ -37,7 +37,12 @@ import {
   ToolRunCards,
   ArtifactCards,
 } from "./MessageListHelpers";
-import { AGENT_MODEL_ID, CHAT_MODELS, getModelConfig, isCouncilModel } from "@/lib/shared/models";
+import {
+  CHAT_MODELS,
+  getModelConfig,
+  isAgentBackedModelId,
+  isCouncilModel,
+} from "@/lib/shared/models";
 
 const PENDING_RUN_TEXTS = new Set(["正在处理中...", "Council 正在处理中..."]);
 
@@ -70,7 +75,6 @@ export default function MessageList({
   editingImage,
   fontSizeClass,
   model,
-  agentModel,
   modelReady = true,
   onEditingContentChange,
   onEditingImageSelect,
@@ -95,7 +99,7 @@ export default function MessageList({
   const [openExportMenuIndex, setOpenExportMenuIndex] = useState(null);
   const prevMessagesRef = useRef([]);
   const isCouncilConversation = isCouncilModel(model);
-  const isAgentConversation = model === AGENT_MODEL_ID;
+  const isAgentConversation = isAgentBackedModelId(model);
   const canEditImages = getModelConfig(model)?.supportsImages === true;
   const toast = useToast();
   const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
@@ -274,14 +278,14 @@ export default function MessageList({
                 className="relative inline-block"
               >
                 <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
-                <AIAvatar model={model} agentModel={agentModel} size={72} animate={model === AGENT_MODEL_ID} className="relative z-10" />
+                <AIAvatar model={model} size={72} animate={isAgentConversation} className="relative z-10" />
               </motion.div>
               <div className="space-y-3 relative z-10">
                 <h2 className="text-3xl font-bold bg-gradient-to-b from-zinc-800 to-zinc-500 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent tracking-tight">
                   今天能帮您做点什么？
                 </h2>
                 <p className="text-zinc-400 dark:text-zinc-500 text-[15px] max-w-sm mx-auto leading-relaxed">
-                  选择一个模型开始对话，或者尝试使用 Agent 模式处理复杂任务。
+                  选择一个模型开始对话，复杂任务会自动按 Agent 流程处理。
                 </p>
               </div>
             </div>
@@ -324,6 +328,8 @@ export default function MessageList({
           const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
           const hasToolRuns = Array.isArray(msg.tools) && msg.tools.length > 0;
           const hasArtifacts = Array.isArray(msg.artifacts) && msg.artifacts.length > 0;
+          const shouldRenderToolCards = msg.role === "model" && hasToolRuns && !hasThinkingTimeline;
+          const shouldRenderBubble = hasParts || hasVisibleContent || shouldRenderToolCards || (msg.role === "model" && hasArtifacts);
           
           if (msg.role === "model" && !msg.thought && !hasVisibleContent && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && !hasToolRuns && !hasArtifacts && msg.isWaitingFirstChunk) {
             return null;
@@ -338,7 +344,7 @@ export default function MessageList({
             >
               {msg.role === "model" && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || hasToolRuns || hasArtifacts) && (
                 <div className="flex items-center gap-2 pl-1">
-                  <AIAvatar model={model} agentModel={agentModel} size={24} animate={msg.isStreaming} />
+                  <AIAvatar model={model} size={24} animate={msg.isStreaming} />
                   <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">
                     {CHAT_MODELS.find((m) => m.id === model)?.name}
                   </span>
@@ -363,7 +369,7 @@ export default function MessageList({
                   />
                 )}
 
-                {editingMsgIndex === i && msg.role === "user" && !isAgentConversation ? (
+                {editingMsgIndex === i && msg.role === "user" && isCouncilConversation ? (
                   <div className="w-full flex flex-col items-end gap-2">
                     <div className="msg-bubble-user w-full max-w-full glass-effect !bg-white dark:!bg-zinc-800 border-primary/20">
                       <textarea
@@ -380,7 +386,7 @@ export default function MessageList({
                   </div>
                 ) : (
                   <>
-                    {(hasParts || hasVisibleContent || (msg.role === "model" && (hasToolRuns || hasArtifacts))) && (
+                    {shouldRenderBubble && (
                       <div
                         className={`relative group/bubble px-4 py-3 sm:px-5 sm:py-4 transition-all duration-300 ${
                           msg.role === "user" ? "msg-bubble-user max-w-[85%] md:max-w-[75%]" : "msg-bubble-ai max-w-full md:max-w-[95%] w-full"
@@ -410,7 +416,7 @@ export default function MessageList({
                         ) : hasVisibleContent ? (
                           <Markdown enableHighlight={!msg.isStreaming} enableMath={true} className={msg.role === "user" ? "prose-invert" : ""}>{msg.content}</Markdown>
                         ) : null}
-                        {msg.role === "model" && hasToolRuns && !hasThinkingTimeline && <ToolRunCards tools={msg.tools} />}
+                        {shouldRenderToolCards && <ToolRunCards tools={msg.tools} />}
                         {msg.role === "model" && hasArtifacts && <ArtifactCards artifacts={msg.artifacts} />}
                         {msg.role === "model" && !msg.isStreaming && msg.citations && <Citations citations={msg.citations} />}
                       </div>
@@ -436,10 +442,10 @@ export default function MessageList({
                         )}
                         <button onClick={() => onCopy(buildCopyText(msg))} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Copy size={14} /></button>
                         <button onClick={() => handleDeleteClick(i, msg.role)} className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
-                        {msg.role === "user" && !isAgentConversation && (
+                        {msg.role === "user" && isCouncilConversation && (
                           <button onClick={() => onStartEdit(i, msg)} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Edit3 size={14} /></button>
                         )}
-                        {msg.role === "model" && !isAgentConversation && (
+                        {msg.role === "model" && isCouncilConversation && (
                           <button onClick={() => onRegenerateModelMessage(i)} disabled={loading || hasActiveConversationRun} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg disabled:opacity-30"><RotateCcw size={14} /></button>
                         )}
                       </div>
@@ -454,7 +460,7 @@ export default function MessageList({
 
       {messages.length > 0 && (loading || hasWaitingFirstChunk) && !hasStreamingContent && (
         <div className="flex gap-3 items-start max-w-4xl mx-auto w-full">
-          <ResponsiveAIAvatar model={model} agentModel={agentModel} desktopSize={24} animate />
+          <ResponsiveAIAvatar model={model} desktopSize={24} animate />
           <div className="px-5 py-3 glass-effect rounded-2xl shadow-sm">
             <LoadingSweepText text="..." className="loading-sweep-dots text-xl" />
           </div>

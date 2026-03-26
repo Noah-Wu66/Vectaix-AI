@@ -332,7 +332,7 @@ h1, h2, h3, h4, h5, h6 {
 .msg-bubble-user {
   background: var(--bg-secondary);
   color: var(--text-primary);
-  border-radius: 18px 18px 4px 18px;
+  border-radius: 18px;
   padding: 0.75rem 1rem;
   border: 1px solid var(--border-color);
 }
@@ -345,7 +345,7 @@ h1, h2, h3, h4, h5, h6 {
 .msg-bubble-ai {
   background: var(--bg-secondary);
   color: var(--text-primary);
-  border-radius: 18px 18px 18px 4px;
+  border-radius: 18px;
   padding: 0.75rem 1rem;
   border: 1px solid var(--border-color);
 }

@@ -16,10 +16,8 @@ import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner'
 import { buildBytedanceInputFromHistory, buildSeedMessageInput } from '@/app/api/bytedance/bytedanceHelpers';
 import {
     SEED_MODEL_ID,
-    AGENT_MODEL_ID,
     isSeedModel,
     normalizeModelId,
-    resolveSeedRuntimeModelId,
 } from '@/lib/shared/models';
 import {
     buildWebSearchGuide,
@@ -31,7 +29,6 @@ import {
     parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
-import { buildAttachmentTextBlock, getPreparedAttachmentTextsByUrls } from '@/lib/server/files/service';
 import {
     buildSeedRequestBody,
     extractSeedResponseText,
@@ -65,19 +62,6 @@ function pushUniqueCitations(target, items) {
     }
 }
 
-function collectFileUrlsFromMessages(messages) {
-    if (!Array.isArray(messages)) return [];
-    const urls = new Set();
-    for (const message of messages) {
-        const parts = Array.isArray(message?.parts) ? message.parts : [];
-        for (const part of parts) {
-            const url = typeof part?.fileData?.url === 'string' ? part.fileData.url : '';
-            if (url) urls.add(url);
-        }
-    }
-    return Array.from(urls);
-}
-
 
 export async function POST(req) {
     let writePermitTime = null;
@@ -104,7 +88,6 @@ export async function POST(req) {
             conversationId,
             mode,
             messages,
-            settings,
             userMessageId,
             modelMessageId,
         } = body;
@@ -160,7 +143,7 @@ export async function POST(req) {
         }
 
         const conversationModel = normalizeModelId(model);
-        const apiModel = resolveSeedRuntimeModelId(model);
+        const apiModel = conversationModel;
         if (!isSeedModel(apiModel)) {
             return Response.json({ error: '当前接口仅支持官方 Seed 模型' }, { status: 400 });
         }
@@ -169,7 +152,7 @@ export async function POST(req) {
         let currentConversation = await loadConversationForRoute({
             conversationId: currentConversationId,
             userId: user.userId,
-            expectedProvider: conversationModel === AGENT_MODEL_ID ? 'vectaix' : 'seed',
+            expectedProvider: 'seed',
         });
         let createdConversationForRequest = false;
         let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
@@ -177,7 +160,6 @@ export async function POST(req) {
 
         let seedInput = [];
         let effectiveHistoryMessages = [];
-        let fileTextMap = new Map();
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
@@ -226,26 +208,17 @@ export async function POST(req) {
             effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
                 ? historyBeforeCurrentPrompt.slice(-limit)
                 : historyBeforeCurrentPrompt;
-            if (conversationModel === AGENT_MODEL_ID) {
-                fileTextMap = await getPreparedAttachmentTextsByUrls(collectFileUrlsFromMessages(effectiveMessages), { userId: user.userId });
-            }
-            seedInput = await buildBytedanceInputFromHistory(effectiveMessages, { fileTextMap });
+            seedInput = await buildBytedanceInputFromHistory(effectiveMessages);
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
             const effectiveHistory = (limit > 0 && Number.isFinite(limit))
                 ? safeHistory.slice(-limit)
                 : safeHistory;
             effectiveHistoryMessages = effectiveHistory;
-            if (conversationModel === AGENT_MODEL_ID) {
-                fileTextMap = await getPreparedAttachmentTextsByUrls(collectFileUrlsFromMessages(effectiveHistory), { userId: user.userId });
-            }
-            seedInput = await buildBytedanceInputFromHistory(effectiveHistory, { fileTextMap });
+            seedInput = await buildBytedanceInputFromHistory(effectiveHistory);
         }
 
         const dbImageEntries = [];
-        const attachmentEntries = Array.isArray(config?.attachments) && conversationModel === AGENT_MODEL_ID
-            ? config.attachments.filter((item) => item && typeof item === 'object' && typeof item.url === 'string' && item.url)
-            : [];
         if (!isRegenerateMode) {
             const userContent = [];
             if (isNonEmptyString(prompt)) {
@@ -261,20 +234,6 @@ export async function POST(req) {
                         image_url: `data:${mimeType};base64,${base64Data}`,
                     });
                     dbImageEntries.push({ url: img.url, mimeType });
-                }
-            }
-
-            if (attachmentEntries.length > 0) {
-                const preparedCurrentFiles = await getPreparedAttachmentTextsByUrls(attachmentEntries.map((item) => item.url), { userId: user.userId });
-                for (const entry of attachmentEntries) {
-                    const prepared = preparedCurrentFiles.get(entry.url);
-                    if (!prepared?.extractedText) {
-                        return Response.json({ error: `附件解析未完成：${entry.name || entry.url}` }, { status: 400 });
-                    }
-                    userContent.push({
-                        type: 'input_text',
-                        text: buildAttachmentTextBlock(entry, prepared.extractedText),
-                    });
                 }
             }
 
@@ -326,7 +285,6 @@ export async function POST(req) {
                 title,
                 model: conversationModel,
                 settings: {
-                    ...(settings && typeof settings === 'object' ? settings : {}),
                     webSearch: parseWebSearchConfig(config?.webSearch),
                 },
                 messages: [],

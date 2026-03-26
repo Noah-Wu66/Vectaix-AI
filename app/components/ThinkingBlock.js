@@ -452,6 +452,54 @@ export default function ThinkingBlock({
       );
     }
 
+    if (step.kind === "planner" || step.kind === "writer") {
+      const detail = step.message || step.title || "";
+      const titleText = getTitle();
+      const canExpand = Boolean(step.content);
+      const isOpen = canExpand && isExpanded;
+      return (
+        <div key={step.id || `${step.kind}-${idx}`} className="w-full max-w-[760px]">
+          {canExpand ? (
+            <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
+              {icon}
+              <StepStatusText text={detail || titleText} active={isRunning} />
+              <div className="ml-auto flex items-center gap-1">
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
+            </button>
+          ) : (
+            <div className={capsuleClass}>
+              {icon}
+              <StepStatusText text={detail || titleText} active={isRunning} />
+            </div>
+          )}
+          <AnimatePresence>
+            {isOpen ? (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div
+                  className="thinking-content mt-2 ml-4 p-4 glass-effect border-zinc-200/50 rounded-2xl text-sm leading-relaxed"
+                  ref={containerRef}
+                >
+                  <Markdown
+                    enableHighlight={!isRunning}
+                    enableMath={true}
+                    className="prose-xs text-zinc-500 dark:text-zinc-400"
+                  >
+                    {step.content}
+                  </Markdown>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
+      );
+    }
+
     if (step.kind === "upload" || step.kind === "parse") {
       const detail = step.message || step.title || "";
       const titleText = getTitle();

@@ -79,7 +79,6 @@ export default function ChatLayout({
             editingImage={editingImage}
             fontSizeClass={fontSizeClass}
             model={composerProps?.model}
-            agentModel={composerProps?.agentModel}
             modelReady={isSettingsReady}
             onEditingContentChange={onEditingContentChange}
             onEditingImageSelect={onEditingImageSelect}
