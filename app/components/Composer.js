@@ -2,9 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  FileText,
+  ArrowUp,
   Paperclip,
-  Send,
   Square,
   X,
 } from "lucide-react";
@@ -413,17 +412,17 @@ export default function Composer({
             <button
               onClick={isStreaming || isWaitingForAI ? onStop : handleSend}
               disabled={!isStreaming && !isWaitingForAI && (hasReachedCouncilRoundLimit || isUploading || (!input.trim() && selectedAttachments.length === 0))}
-              className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all shadow-md active:scale-90 ${
+              className={`flex items-center justify-center w-9 h-9 rounded-full transition-all active:scale-90 ${
                 isStreaming || isWaitingForAI 
                   ? "bg-red-500 hover:bg-red-600 text-white" 
-                  : "bg-primary hover:bg-primary-hover text-white disabled:bg-zinc-200 dark:disabled:bg-zinc-800 disabled:shadow-none"
+                  : "bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-700 dark:hover:bg-zinc-300 text-white dark:text-zinc-900 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 disabled:text-zinc-400 dark:disabled:text-zinc-600"
               }`}
               type="button"
             >
               {isStreaming || isWaitingForAI ? (
                 <Square size={18} fill="currentColor" />
               ) : (
-                <Send size={18} className={input.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
+                <ArrowUp size={18} strokeWidth={2.5} />
               )}
             </button>
           </div>
