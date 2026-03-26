@@ -170,7 +170,7 @@ export default function Sidebar({
                       }`}
                   >
                     <span className={`shrink-0 transition-transform duration-200 ${currentConversationId === conv._id ? "scale-110" : "group-hover:scale-105 opacity-70 group-hover:opacity-100"}`}>
-                      <ModelGlyph model={conv.model} size={18} />
+                      <ModelGlyph model={conv.model} agentModel={conv?.settings?.agentModel} size={18} />
                     </span>
                     <span className="truncate pr-8">{conv.title}</span>
                   </button>

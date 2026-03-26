@@ -70,6 +70,7 @@ export default function MessageList({
   editingImage,
   fontSizeClass,
   model,
+  agentModel,
   modelReady = true,
   onEditingContentChange,
   onEditingImageSelect,
@@ -273,7 +274,7 @@ export default function MessageList({
                 className="relative inline-block"
               >
                 <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
-                <AIAvatar model={model} size={72} animate={model === AGENT_MODEL_ID} className="relative z-10" />
+                <AIAvatar model={model} agentModel={agentModel} size={72} animate={model === AGENT_MODEL_ID} className="relative z-10" />
               </motion.div>
               <div className="space-y-3 relative z-10">
                 <h2 className="text-3xl font-bold bg-gradient-to-b from-zinc-800 to-zinc-500 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent tracking-tight">
@@ -337,7 +338,7 @@ export default function MessageList({
             >
               {msg.role === "model" && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || hasToolRuns || hasArtifacts) && (
                 <div className="flex items-center gap-2 pl-1">
-                  <AIAvatar model={model} size={24} animate={msg.isStreaming} />
+                  <AIAvatar model={model} agentModel={agentModel} size={24} animate={msg.isStreaming} />
                   <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">
                     {CHAT_MODELS.find((m) => m.id === model)?.name}
                   </span>
@@ -453,7 +454,7 @@ export default function MessageList({
 
       {messages.length > 0 && (loading || hasWaitingFirstChunk) && !hasStreamingContent && (
         <div className="flex gap-3 items-start max-w-4xl mx-auto w-full">
-          <ResponsiveAIAvatar model={model} desktopSize={24} animate />
+          <ResponsiveAIAvatar model={model} agentModel={agentModel} desktopSize={24} animate />
           <div className="px-5 py-3 glass-effect rounded-2xl shadow-sm">
             <LoadingSweepText text="..." className="loading-sweep-dots text-xl" />
           </div>

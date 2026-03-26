@@ -12,8 +12,8 @@ import {
   getModelProvider,
   isCouncilModel,
   isSeedModel,
+  normalizeAgentDriverModelId,
 } from "@/lib/shared/models";
-import { CouncilAvatar, CouncilIcon } from "./CouncilIcon";
 
 const PROVIDER_VISUALS = {
   gemini: {
@@ -46,11 +46,20 @@ const PROVIDER_VISUALS = {
   },
 };
 
-function resolveProvider(model, provider) {
-  if (provider) return provider;
-  if (isCouncilModel(model)) return "council";
-  if (isSeedModel(model)) return "seed";
-  return getModelProvider(model);
+function resolveVisualModel(model, agentModel) {
+  if (model === AGENT_MODEL_ID) {
+    return normalizeAgentDriverModelId(agentModel);
+  }
+
+  return model;
+}
+
+function resolveProvider(model, provider, agentModel) {
+  const visualModel = resolveVisualModel(model, agentModel);
+  if (model !== AGENT_MODEL_ID && provider) return provider;
+  if (isCouncilModel(visualModel)) return "council";
+  if (isSeedModel(visualModel)) return "seed";
+  return getModelProvider(visualModel);
 }
 
 function ProviderGlyph({ provider, size }) {
@@ -65,45 +74,29 @@ function ProviderAvatar({ provider, size = 24 }) {
   return <Avatar size={size} shape="square" />;
 }
 
-export function ModelGlyph({ model, provider, size = 16, animate = false }) {
-  if (model === AGENT_MODEL_ID) {
-    return <CouncilIcon size={size} animate={animate} />;
-  }
-
+export function ModelGlyph({ model, provider, agentModel, size = 16 }) {
   if (model === COUNCIL_MODEL_ID) {
     return <Perplexity.Color size={size} />;
   }
 
-  const resolvedProvider = resolveProvider(model, provider);
+  const resolvedProvider = resolveProvider(model, provider, agentModel);
 
   if (resolvedProvider === "council") {
     return <Perplexity.Color size={size} />;
   }
 
-  if (resolvedProvider === "vectaix") {
-    return <CouncilIcon size={size} animate={animate} />;
-  }
-
   return <ProviderGlyph provider={resolvedProvider} size={size} />;
 }
 
-export function ModelAvatar({ model, size = 24, animate = false }) {
-  if (model === AGENT_MODEL_ID) {
-    return <CouncilAvatar size={size} animate={animate} />;
-  }
-
+export function ModelAvatar({ model, agentModel, size = 24 }) {
   if (model === COUNCIL_MODEL_ID) {
     return <Perplexity.Avatar size={size} shape="square" />;
   }
 
-  const provider = resolveProvider(model);
+  const provider = resolveProvider(model, undefined, agentModel);
 
   if (provider === "council") {
     return <Perplexity.Avatar size={size} shape="square" />;
-  }
-
-  if (provider === "vectaix") {
-    return <CouncilAvatar size={size} animate={animate} />;
   }
 
   return <ProviderAvatar provider={provider} size={size} />;

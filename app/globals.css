@@ -516,19 +516,19 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Shadows in dark mode */
 .dark-mode .shadow-lg {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: none !important;
 }
 
 .dark-mode .shadow-xl {
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3) !important;
+  box-shadow: none !important;
 }
 
 .dark-mode .shadow-2xl {
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: none !important;
 }
 
 .dark-mode .shadow-md {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -2px rgba(0, 0, 0, 0.25) !important;
+  box-shadow: none !important;
 }
 
 /* Dark mode prose/markdown */
@@ -724,7 +724,7 @@ h1, h2, h3, h4, h5, h6 {
   background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
-  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.55));
+  filter: none;
   animation: loadingSweep 1.2s linear infinite;
   pointer-events: none;
 }
@@ -734,7 +734,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .dark-mode .loading-sweep::after {
-  filter: drop-shadow(0 0 7px rgba(255, 255, 255, 0.7));
+  filter: none;
 }
 
 /* Mobile responsive adjustments */
@@ -764,7 +764,7 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   padding: 12px 14px;
   width: 240px;
   z-index: 60;
@@ -773,7 +773,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .dark-mode .token-counter-tooltip {
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.30), 0 1px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: none;
 }
 
 @keyframes tokenTooltipIn {
@@ -877,4 +877,11 @@ h1, h2, h3, h4, h5, h6 {
 
 @media (max-width: 768px) {
   .msg-bubble-user, .msg-bubble-ai { border-radius: 16px; }
+}
+
+/* Remove all UI shadow effects */
+body *,
+body *::before,
+body *::after {
+  box-shadow: none !important;
 }

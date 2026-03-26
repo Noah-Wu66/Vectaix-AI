@@ -1018,7 +1018,21 @@ export default function ChatApp() {
             setAgentModel: (nextValue) => {
               setAgentModel(nextValue);
               if (model === AGENT_MODEL_ID) {
-                syncConversationSettings({ agentModel: nextValue });
+                const normalizedNextAgentModel = normalizeAgentDriverModelId(nextValue);
+                if (currentConversationId) {
+                  setConversations((prev) => prev.map((conversation) => (
+                    conversation?._id === currentConversationId
+                      ? {
+                        ...conversation,
+                        settings: {
+                          ...(conversation?.settings && typeof conversation.settings === "object" ? conversation.settings : {}),
+                          agentModel: normalizedNextAgentModel,
+                        },
+                      }
+                      : conversation
+                  )));
+                }
+                syncConversationSettings({ agentModel: normalizedNextAgentModel });
               }
             },
             webSearch,

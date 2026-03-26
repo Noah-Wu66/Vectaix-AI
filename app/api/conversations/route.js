@@ -17,7 +17,7 @@ export async function GET() {
 
         const conversations = await Conversation.find({ userId: user.userId })
             .sort({ pinned: -1, updatedAt: -1 })
-            .select('title model updatedAt pinned')
+            .select('title model updatedAt pinned settings.agentModel')
             .lean();
 
         return Response.json({ conversations });

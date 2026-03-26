@@ -6,7 +6,7 @@ import { ChevronUp } from "lucide-react";
 import { CHAT_MODELS, PRIMARY_CHAT_MODELS } from "@/lib/shared/models";
 import { ModelGlyph } from "./ModelVisuals";
 
-export default function ModelSelector({ model, onModelChange, ready = true }) {
+export default function ModelSelector({ model, agentModel, onModelChange, ready = true }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const currentModel = ready ? CHAT_MODELS.find((item) => item.id === model) : null;
   const currentModelLabel = currentModel?.name || "模式";
@@ -24,7 +24,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
       >
         <span className="inline-flex h-3.5 w-3.5 items-center justify-center shrink-0">
           {currentModel ? (
-            <ModelGlyph model={currentModel.id} provider={currentModel.provider} size={14} />
+            <ModelGlyph model={currentModel.id} provider={currentModel.provider} agentModel={agentModel} size={14} />
           ) : (
             <span className="block h-3.5 w-3.5 rounded-sm bg-zinc-200" aria-hidden />
           )}
@@ -50,7 +50,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 w-[min(68vw,220px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
+              className="absolute bottom-full left-0 mb-2 w-[min(64vw,196px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
             >
               <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 tracking-wider">
                 主模式
@@ -70,7 +70,7 @@ export default function ModelSelector({ model, onModelChange, ready = true }) {
                   }`}
                   type="button"
                 >
-                  <ModelGlyph model={item.id} provider={item.provider} size={16} />
+                  <ModelGlyph model={item.id} provider={item.provider} agentModel={agentModel} size={16} />
                   <span className="leading-tight break-words text-left">{item.name}</span>
                 </button>
               ))}
