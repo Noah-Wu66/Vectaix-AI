@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Eraser, KeyRound, RefreshCw, Search, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Copy, Eraser, KeyRound, RefreshCw, Search, Trash2, Users, X } from "lucide-react";
 import { apiJson } from "@/lib/client/apiClient";
 import { useToast } from "./ToastProvider";
 import ConfirmModal from "./ConfirmModal";
@@ -115,44 +115,13 @@ export default function UserManagementModal({ open, onClose }) {
     setConfirmOpen(true);
   };
 
-  const requestToggleAdvancedUser = (user) => {
-    const nextIsAdvancedUser = !user.isAdvancedUser;
-    confirmActionRef.current = async () => {
-      setActionLoading(user.id);
-      try {
-        await apiJson(`/api/admin/users/${user.id}`, {
-          method: "PATCH",
-          body: {
-            action: "set-advanced-user",
-            isAdvancedUser: nextIsAdvancedUser,
-          },
-        });
-        toast.success(nextIsAdvancedUser ? "已升级为高级用户" : "已降为普通用户");
-        fetchUsers(page, search.trim());
-      } catch (e) {
-        toast.error(e?.message);
-      } finally {
-        setActionLoading(null);
-      }
-    };
-    setConfirmTitle(nextIsAdvancedUser ? "升级高级用户" : "降为普通用户");
-    setConfirmMessage(
-      nextIsAdvancedUser
-        ? `确定要把「${user.email}」升级为高级用户吗？升级后，这个用户可以自己切换线路，而且只影响自己的账号。`
-        : `确定要把「${user.email}」降为普通用户吗？降级后，这个用户将不能再切换线路，并恢复为普通线路。`
-    );
-    setConfirmButtonText(nextIsAdvancedUser ? "升级" : "降级");
-    setConfirmDanger(false);
-    setConfirmOpen(true);
-  };
-
-  // 清除全部用户加密数据
+  // 清除全部用户旧版加密残留数据
   const requestCleanAllEncrypted = () => {
     confirmActionRef.current = async () => {
       setActionLoading("clean-all");
       try {
         const data = await apiJson("/api/admin/users", { method: "POST" });
-        toast.success(`已清除 ${data.deletedConversations || 0} 个加密会话、${data.deletedSettings || 0} 份加密设置`);
+        toast.success(`已清除 ${data.deletedConversations || 0} 个残留会话、${data.deletedSettings || 0} 份残留设置`);
         fetchUsers(page, search.trim());
       } catch (e) {
         toast.error(e?.message);
@@ -160,8 +129,8 @@ export default function UserManagementModal({ open, onClose }) {
         setActionLoading(null);
       }
     };
-    setConfirmTitle("一键清除全部加密数据");
-    setConfirmMessage("确定要清除所有用户的旧加密数据吗？将删除包含加密内容的会话（含侧边栏加密标题）和系统提示词，此操作不可撤销。");
+    setConfirmTitle("清除旧版残留数据");
+    setConfirmMessage("将删除所有用户残留的旧版加密会话（含侧边栏乱码标题）和系统提示词，此操作不可撤销。");
     setConfirmButtonText("清除");
     setConfirmDanger(true);
     setConfirmOpen(true);
@@ -187,7 +156,6 @@ export default function UserManagementModal({ open, onClose }) {
 
   const getUserLevelLabel = (user) => {
     if (user?.isAdmin) return "超级管理员";
-    if (user?.isAdvancedUser) return "高级用户";
     return "普通用户";
   };
 
@@ -243,7 +211,7 @@ export default function UserManagementModal({ open, onClose }) {
                   className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-400 transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-50"
                 >
                   <Eraser size={16} />
-                  一键清除全部用户加密数据（含侧边栏）
+                  清除旧版残留数据（乱码会话/提示词）
                 </button>
               </div>
 
@@ -306,9 +274,7 @@ export default function UserManagementModal({ open, onClose }) {
                             <div className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{u.email}</div>
                             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${u.isAdmin
                               ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
-                              : u.isAdvancedUser
-                                ? "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400"
-                                : "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                              : "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
                               }`}>
                               {getUserLevelLabel(u)}
                             </span>
@@ -318,20 +284,6 @@ export default function UserManagementModal({ open, onClose }) {
                           </div>
                         </div>
                         <div className="flex items-center gap-1 ml-3">
-                            {!u.isAdmin && (
-                              <button
-                                onClick={() => requestToggleAdvancedUser(u)}
-                                disabled={actionLoading !== null}
-                                className={`p-2 rounded-lg transition-colors disabled:opacity-50 inline-flex items-center justify-center ${u.isAdvancedUser
-                                  ? "text-zinc-400 hover:text-amber-600 hover:bg-amber-50"
-                                  : "text-zinc-400 hover:text-sky-600 hover:bg-sky-50"
-                                  }`}
-                                title={u.isAdvancedUser ? "降为普通用户" : "升级为高级用户"}
-                                aria-label={u.isAdvancedUser ? "降为普通用户" : "升级为高级用户"}
-                              >
-                                <Sparkles size={15} className="shrink-0" />
-                              </button>
-                            )}
                             <button
                               onClick={() => requestResetPassword(u)}
                               disabled={actionLoading !== null}

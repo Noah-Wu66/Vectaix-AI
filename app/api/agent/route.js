@@ -3,7 +3,10 @@ import Conversation from "@/models/Conversation";
 import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { rateLimit, getClientIP } from "@/lib/rateLimit";
-import { AGENT_MODEL_ID, normalizeAgentDriverModelId } from "@/lib/shared/models";
+import {
+  isAgentBackedModelId,
+  isCouncilModel,
+} from "@/lib/shared/models";
 import { generateMessageId, isNonEmptyString } from "@/app/api/chat/utils";
 import {
   CONVERSATION_WRITE_CONFLICT_ERROR,
@@ -11,8 +14,9 @@ import {
   loadConversationForRoute,
   rollbackConversationTurn,
 } from "@/app/api/chat/conversationState";
-import { runAgentRuntimeV2 } from "@/lib/server/agent/runtimeV2";
-import { parseSeedThinkingLevel, parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
+import { runAgentRuntime } from "@/lib/server/agent/runtime";
+import { serializeRuntimeState } from "@/lib/server/agent/core/stateSerializer";
+import { parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
 import { enrichConversationPartsWithBlobIds } from "@/lib/server/conversations/blobReferences";
 
 export const runtime = "nodejs";
@@ -59,37 +63,6 @@ function buildConversationTitle(prompt, attachments) {
   return "New Chat";
 }
 
-function buildTimelineStep(step) {
-  if (!step || typeof step !== "object") return null;
-  return {
-    id: typeof step.id === "string" ? step.id : "",
-    kind: typeof step.kind === "string" ? step.kind : "thought",
-    status: typeof step.status === "string" ? step.status : "done",
-    title: typeof step.title === "string" ? step.title : "",
-    content: typeof step.content === "string" ? step.content : "",
-    message: typeof step.message === "string" ? step.message : "",
-    query: typeof step.query === "string" ? step.query : "",
-    url: typeof step.url === "string" ? step.url : "",
-    round: Number.isFinite(step.round) ? step.round : null,
-    resultCount: Number.isFinite(step.resultCount) ? step.resultCount : null,
-  };
-}
-
-function upsertTimelineStep(list, step) {
-  const next = Array.isArray(list) ? list.slice() : [];
-  if (!step?.id) {
-    next.push(step);
-    return next;
-  }
-  const index = next.findIndex((item) => item?.id === step.id);
-  if (index >= 0) {
-    next[index] = { ...next[index], ...step };
-    return next;
-  }
-  next.push(step);
-  return next;
-}
-
 export async function POST(req) {
   try {
     const contentLength = req.headers.get("content-length");
@@ -112,13 +85,13 @@ export async function POST(req) {
       historyLimit,
       conversationId,
       mode,
-      settings,
       userMessageId,
       modelMessageId,
     } = body || {};
 
-    if (model !== AGENT_MODEL_ID) {
-      return Response.json({ error: "当前接口仅支持 Agent 模型" }, { status: 400 });
+    const requestedModel = typeof model === "string" ? model.trim() : "";
+    if (!isAgentBackedModelId(requestedModel) || isCouncilModel(requestedModel)) {
+      return Response.json({ error: "当前接口仅支持非 Council 模型" }, { status: 400 });
     }
     if (!Array.isArray(history)) {
       return Response.json({ error: "history must be an array" }, { status: 400 });
@@ -127,13 +100,7 @@ export async function POST(req) {
       return Response.json({ error: "Agent 模式已改为当前页同步执行，不再支持继续执行或后台恢复" }, { status: 400 });
     }
 
-    const driverModel = normalizeAgentDriverModelId(config?.agentModel ?? settings?.agentModel);
-
-    try {
-      parseSeedThinkingLevel(config?.thinkingLevel);
-    } catch (error) {
-      return Response.json({ error: error?.message || "thinkingLevel invalid" }, { status: 400 });
-    }
+    const driverModel = requestedModel;
 
     const auth = await getAuthPayload();
     if (!auth) {
@@ -188,6 +155,7 @@ export async function POST(req) {
       images: currentImages,
       attachments: currentAttachments,
     });
+    const parsedWebSearch = parseWebSearchConfig(config?.webSearch);
 
     if (userMessageParts.length === 0) {
       return Response.json({ error: "请至少输入内容或上传附件" }, { status: 400 });
@@ -196,26 +164,24 @@ export async function POST(req) {
     let currentConversation = await loadConversationForRoute({
       conversationId,
       userId: auth.userId,
-      expectedProvider: "vectaix",
     });
     let currentConversationId = conversationId;
     let createdConversationForRequest = false;
     let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
     let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
+    if (currentConversation) {
+      const currentConversationModel = currentConversation?.model;
+      if (isCouncilModel(currentConversationModel)) {
+        return Response.json({ error: "当前对话与所选模型不匹配" }, { status: 400 });
+      }
+    }
     if (!currentConversationId) {
-      const initialSettings = settings && typeof settings === "object"
-        ? { ...settings }
-        : {};
-      delete initialSettings.activePromptId;
-
       const newConv = await Conversation.create({
         userId: auth.userId,
         title: buildConversationTitle(prompt, currentAttachments),
-        model: AGENT_MODEL_ID,
+        model: requestedModel,
         settings: {
-          ...initialSettings,
-          agentModel: driverModel,
-          webSearch: parseWebSearchConfig(config?.webSearch),
+          webSearch: parsedWebSearch,
         },
         messages: [],
       });
@@ -245,7 +211,11 @@ export async function POST(req) {
       { _id: currentConversationId, userId: auth.userId },
       {
         $push: { messages: userMessage },
-        updatedAt: Date.now(),
+        $set: {
+          model: requestedModel,
+          "settings.webSearch": parsedWebSearch,
+          updatedAt: Date.now(),
+        },
       },
       { new: true }
     ).select("updatedAt");
@@ -258,14 +228,10 @@ export async function POST(req) {
       .filter((message) => message?.role === "user" || message?.role === "model");
 
     const encoder = new TextEncoder();
-    let timeline = [];
-    let citations = [];
-    let fullText = "";
-    let fullThought = "";
-
     const responseStream = new ReadableStream({
       async start(controller) {
         let finalMessagePersisted = false;
+        let runtimeCompleted = false;
         const rollbackCurrentTurn = async () => {
           if (finalMessagePersisted) return;
           await rollbackConversationTurn({
@@ -281,69 +247,11 @@ export async function POST(req) {
         };
 
         const sendEvent = (payload) => {
-          if (payload?.type === "text" && typeof payload.content === "string") {
-            fullText += payload.content;
-          } else if (payload?.type === "thought" && typeof payload.content === "string") {
-            fullThought += payload.content;
-          } else if (payload?.type === "citations" && Array.isArray(payload.citations)) {
-            citations = payload.citations;
-          } else if (payload?.type === "agent_step") {
-            const step = buildTimelineStep(payload.step);
-            if (step) {
-              timeline = upsertTimelineStep(timeline, step);
-            }
-          } else if (payload?.type === "search_start") {
-            timeline = upsertTimelineStep(timeline, {
-              id: `search_${payload.round || Date.now()}`,
-              kind: "search",
-              status: "running",
-              query: payload.query || "",
-              title: "联网搜索中",
-            });
-          } else if (payload?.type === "search_result") {
-            timeline = upsertTimelineStep(timeline, {
-              id: `search_${payload.round || Date.now()}`,
-              kind: "search",
-              status: "done",
-              query: payload.query || "",
-              title: "联网搜索完成",
-              resultCount: Array.isArray(payload.results) ? payload.results.length : null,
-              message: Array.isArray(payload.results) ? `共 ${payload.results.length} 条结果` : "",
-            });
-          } else if (payload?.type === "search_error") {
-            timeline = upsertTimelineStep(timeline, {
-              id: `search_error_${payload.round || Date.now()}`,
-              kind: "search",
-              status: "error",
-              query: payload.query || "",
-              title: "联网搜索失败",
-              message: payload.message || "联网搜索失败",
-            });
-          } else if (payload?.type === "page_fetch_start") {
-            timeline = upsertTimelineStep(timeline, {
-              id: `page_fetch_${payload.round || Date.now()}`,
-              kind: "reader",
-              status: "running",
-              title: "抓取网页中",
-              url: payload.url || "",
-            });
-          } else if (payload?.type === "page_fetch_result") {
-            timeline = upsertTimelineStep(timeline, {
-              id: `page_fetch_${payload.round || Date.now()}`,
-              kind: "reader",
-              status: "done",
-              title: "网页抓取完成",
-              url: payload.url || "",
-              resultCount: Array.isArray(payload.results) ? payload.results.length : null,
-              message: Array.isArray(payload.results) ? `共 ${payload.results.length} 页结果` : "",
-            });
-          }
-
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
         };
 
         try {
-          const result = await runAgentRuntimeV2({
+          const result = await runAgentRuntime({
             apiKey,
             req,
             userId: auth.userId,
@@ -356,17 +264,21 @@ export async function POST(req) {
             images: currentImages,
             sendEvent,
           });
+          runtimeCompleted = true;
 
-          const content = result?.finalAnswer || fullText || "任务已完成。";
+          const serializedState = serializeRuntimeState(result?.state || {});
           const message = {
             id: resolvedModelMessageId,
             role: "model",
-            content,
+            content: serializedState.content,
             type: "text",
-            parts: [{ text: content }],
-            thought: fullThought || "",
-            citations: citations.length > 0 ? citations : null,
-            thinkingTimeline: timeline,
+            parts: [{ text: serializedState.content }],
+            thought: serializedState.thought || "",
+            citations: serializedState.citations.length > 0 ? serializedState.citations : null,
+            thinkingTimeline: serializedState.thinkingTimeline,
+            tools: serializedState.tools.length > 0 ? serializedState.tools : null,
+            artifacts: serializedState.artifacts.length > 0 ? serializedState.artifacts : null,
+            ...(Number.isFinite(serializedState.searchContextTokens) ? { searchContextTokens: serializedState.searchContextTokens } : {}),
           };
 
           const persistedConversation = await Conversation.findOneAndUpdate(
@@ -391,10 +303,17 @@ export async function POST(req) {
           try {
             await rollbackCurrentTurn();
           } catch { }
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: "stream_error",
-            message: error?.message || "Unknown error",
-          })}\n\n`));
+          if (runtimeCompleted) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              type: "error",
+              timestamp: new Date().toISOString(),
+              stepIndex: 0,
+              data: {
+                message: error?.message || "Unknown error",
+                phase: "persist",
+              },
+            })}\n\n`));
+          }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         }

@@ -1,0 +1,47 @@
+{
+  "name": "@lobechat/file-loaders",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Utilities for reading and processing various file types",
+  "keywords": [
+    "file",
+    "loader",
+    "parser",
+    "lobehub"
+  ],
+  "homepage": "https://github.com/lobehub/lobe-chat/tree/master/packages/file-loaders",
+  "bugs": {
+    "url": "https://github.com/lobehub/lobe-chat/issues/new"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lobehub/lobe-chat.git"
+  },
+  "author": "LobeHub <i@lobehub.com>",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.9.8",
+    "concat-stream": "^2.0.0",
+    "debug": "^4.4.3",
+    "mammoth": "^1.11.0",
+    "officeparser": "5.1.1",
+    "pdfjs-dist": "5.4.530",
+    "word-extractor": "^1.0.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "yauzl": "^3.2.0",
+    "@napi-rs/canvas": "^0.1.70"
+  },
+  "devDependencies": {
+    "@types/concat-stream": "^2.0.3",
+    "@types/yauzl": "^2.10.3",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "typescript": ">=5"
+  }
+}

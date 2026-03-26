@@ -7,13 +7,11 @@ import OpenAI from "@lobehub/icons/es/OpenAI";
 import Perplexity from "@lobehub/icons/es/Perplexity";
 import XiaomiMiMo from "./XiaomiMiMoIcon";
 import {
-  AGENT_MODEL_ID,
   COUNCIL_MODEL_ID,
   getModelProvider,
   isCouncilModel,
   isSeedModel,
 } from "@/lib/shared/models";
-import { CouncilAvatar, CouncilIcon } from "./CouncilIcon";
 
 const PROVIDER_VISUALS = {
   gemini: {
@@ -65,11 +63,7 @@ function ProviderAvatar({ provider, size = 24 }) {
   return <Avatar size={size} shape="square" />;
 }
 
-export function ModelGlyph({ model, provider, size = 16, animate = false }) {
-  if (model === AGENT_MODEL_ID) {
-    return <CouncilIcon size={size} animate={animate} />;
-  }
-
+export function ModelGlyph({ model, provider, size = 16 }) {
   if (model === COUNCIL_MODEL_ID) {
     return <Perplexity.Color size={size} />;
   }
@@ -80,18 +74,10 @@ export function ModelGlyph({ model, provider, size = 16, animate = false }) {
     return <Perplexity.Color size={size} />;
   }
 
-  if (resolvedProvider === "vectaix") {
-    return <CouncilIcon size={size} animate={animate} />;
-  }
-
   return <ProviderGlyph provider={resolvedProvider} size={size} />;
 }
 
-export function ModelAvatar({ model, size = 24, animate = false }) {
-  if (model === AGENT_MODEL_ID) {
-    return <CouncilAvatar size={size} animate={animate} />;
-  }
-
+export function ModelAvatar({ model, size = 24 }) {
   if (model === COUNCIL_MODEL_ID) {
     return <Perplexity.Avatar size={size} shape="square" />;
   }
@@ -100,10 +86,6 @@ export function ModelAvatar({ model, size = 24, animate = false }) {
 
   if (provider === "council") {
     return <Perplexity.Avatar size={size} shape="square" />;
-  }
-
-  if (provider === "vectaix") {
-    return <CouncilAvatar size={size} animate={animate} />;
   }
 
   return <ProviderAvatar provider={provider} size={size} />;

@@ -6,20 +6,10 @@ import { useThemeMode } from "@/lib/client/hooks/useThemeMode";
 import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
 import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
 import {
-  AGENT_MODEL_ID,
   CHAT_MODELS,
-  CLAUDE_OPUS_MODEL,
-  COUNCIL_MODEL_ID,
-  DEFAULT_AGENT_DRIVER_MODEL,
-  DEEPSEEK_REASONER_MODEL,
-  GEMINI_PRO_MODEL,
-  MINIMAX_M2_7_HIGHSPEED_MODEL,
-  MIMO_V2_PRO_MODEL,
-  OPENAI_PRIMARY_MODEL,
-  SEED_MODEL_ID,
+  DEFAULT_MODEL,
   isCouncilModel,
-  normalizeAgentDriverModelId,
-  normalizeModelId,
+  isPrimaryChatModelId,
 } from "@/lib/shared/models";
 import { useToast } from "./components/ToastProvider";
 import AuthModal from "./components/AuthModal";
@@ -201,9 +191,8 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, agentModel, isSettingsReady, setModel, setAgentModel, thinkingLevels, historyLimit, maxTokens, webSearch, setWebSearch, systemPrompts, activePromptIds, setActivePromptIds, activePromptId, setActivePromptId, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, addPrompt, deletePrompt, updatePrompt, avatar, setAvatar } = useUserSettings();
+  const { model, isSettingsReady, setModel, thinkingLevels, historyLimit, maxTokens, webSearch, setWebSearch, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, avatar, setAvatar } = useUserSettings();
   useThemeMode(themeMode);
-  const currentModelConfig = CHAT_MODELS.find((m) => m.id === model);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
   // 编辑并重新生成：图片编辑状态
@@ -228,7 +217,7 @@ export default function ChatApp() {
   const syncSettingsTimeoutRef = useRef(null);
   const pendingSettingsRef = useRef({});
   const pendingConversationIdRef = useRef(null);
-  const lastTextModelRef = useRef(GEMINI_PRO_MODEL);
+  const lastTextModelRef = useRef(DEFAULT_MODEL);
   const hasRestoredConversationRef = useRef(false);
   const currentConversationIdRef = useRef(null);
   const isStreamingRef = useRef(false);
@@ -424,11 +413,8 @@ export default function ChatApp() {
     loading,
     setLoading,
     model,
-    agentModel,
     thinkingLevels,
     mediaResolution,
-    systemPrompts,
-    activePromptId,
     maxTokens,
     webSearch,
     historyLimit,
@@ -613,33 +599,11 @@ export default function ChatApp() {
     setShowProfileModal(false);
   };
 
-  const applyConversationSettings = (conversationProvider, rawSettings) => {
-    if (conversationProvider === "council") {
-      setActivePromptId(null);
-      return;
-    }
-
+  const applyConversationSettings = (rawSettings) => {
     const settings = rawSettings && typeof rawSettings === "object"
       ? rawSettings
       : {};
-
     setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
-
-    if (conversationProvider === "vectaix") {
-      setAgentModel(normalizeAgentDriverModelId(settings.agentModel ?? DEFAULT_AGENT_DRIVER_MODEL));
-      setActivePromptId(null);
-      return;
-    }
-
-    if (settings.activePromptId !== undefined) {
-      const promptExists = systemPrompts.some(
-        (prompt) => String(prompt?._id) === String(settings.activePromptId)
-      );
-      setActivePromptId(promptExists ? settings.activePromptId : null);
-      return;
-    }
-
-    setActivePromptId(null);
   };
 
   const persistConversationModel = async (conversationIdToUpdate, nextModel) => {
@@ -689,21 +653,20 @@ export default function ChatApp() {
       }
       if (!res.ok) throw new Error(data?.error || "加载会话失败");
       if (data.conversation) {
+        const conversation = data.conversation;
         if (silent && currentConversationIdRef.current && currentConversationIdRef.current !== id) {
           return;
         }
         userInterruptedRef.current = false;
         setMessages((prev) => {
-          const serverMessages = Array.isArray(data.conversation.messages) ? data.conversation.messages : [];
+          const serverMessages = Array.isArray(conversation.messages) ? conversation.messages : [];
           return silent
             ? mergeConversationMessages(serverMessages, prev)
             : decorateConversationMessages(serverMessages);
         });
         setCurrentConversationId(id);
 
-        const conversationModel = normalizeModelId(data.conversation.model);
-        const conversationModelConfig = CHAT_MODELS.find((entry) => entry.id === conversationModel);
-        const conversationProvider = conversationModelConfig?.provider;
+        const conversationModelConfig = CHAT_MODELS.find((entry) => entry.id === conversation.model);
         const targetModel = conversationModelConfig?.id || model;
 
         if (targetModel !== model) {
@@ -711,7 +674,7 @@ export default function ChatApp() {
           lastTextModelRef.current = targetModel;
         }
 
-        applyConversationSettings(conversationProvider, data.conversation.settings);
+        applyConversationSettings(conversation.settings);
       }
     } catch (e) {
       if (!silent) {
@@ -772,31 +735,29 @@ export default function ChatApp() {
     stopOngoingChatWork();
     setCurrentConversationId(null);
     setMessages([]);
+    if (!isPrimaryChatModelId(model)) {
+      setModel(DEFAULT_MODEL);
+      lastTextModelRef.current = DEFAULT_MODEL;
+    }
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
   const requestModelChange = (nextModel) => {
     if (loading || messages.some((m) => m.isStreaming)) return;
 
-    const currentProvider = currentModelConfig?.provider;
+    const currentIsCouncil = isCouncilModel(model);
     const nextModelConfig = CHAT_MODELS.find((m) => m.id === nextModel);
-    const nextProvider = nextModelConfig?.provider;
+    const nextIsCouncil = isCouncilModel(nextModel);
 
-    // 如果有对话历史且 provider 不同，提示用户需要新建对话
-    if (messages.length > 0 && currentProvider && nextProvider && currentProvider !== nextProvider) {
-      const providerNames = { council: "Council", vectaix: "Vectaix", gemini: "Gemini", claude: "Claude", openai: "OpenAI", seed: "Seed", deepseek: "DeepSeek", xiaomi: "MiMo", minimax: "MiniMax" };
+    if (messages.length > 0 && currentIsCouncil !== nextIsCouncil) {
       setConfirmModalConfig({
         title: "切换模型",
-        message: `切换到 ${providerNames[nextProvider]} 模型需要新建对话。\n当前对话使用的是 ${providerNames[currentProvider]} 模型，无法在不同类型模型间继续对话。\n\n是否新建对话并切换模型？`,
+        message: `切换到 ${nextModelConfig?.name || "所选模型"} 需要新建对话。\nCouncil 和普通模型不能在同一个会话里混用。\n\n是否新建对话并切换模型？`,
         onConfirm: () => {
           userInterruptedRef.current = false;
           setCurrentConversationId(null);
           setMessages([]);
           setModel(nextModel);
-          const rememberedPromptId = nextModel === AGENT_MODEL_ID
-            ? null
-            : (activePromptIds?.[nextModel] ?? null);
-          setActivePromptId(rememberedPromptId);
           lastTextModelRef.current = nextModel;
         }
       });
@@ -805,12 +766,8 @@ export default function ChatApp() {
     }
 
     setModel(nextModel);
-    const rememberedPromptId = nextModel === AGENT_MODEL_ID
-      ? null
-      : (activePromptIds?.[nextModel] ?? null);
-    setActivePromptId(rememberedPromptId);
     lastTextModelRef.current = nextModel;
-    if (currentConversationId && currentProvider && nextProvider && currentProvider === nextProvider) {
+    if (currentConversationId && !currentIsCouncil && !nextIsCouncil) {
       persistConversationModel(currentConversationId, nextModel);
     }
   };
@@ -885,7 +842,7 @@ export default function ChatApp() {
         throw new Error("未找到要复制的话题");
       }
 
-      if (sourceConversation.model === AGENT_MODEL_ID || isCouncilModel(sourceConversation.model)) {
+      if (isCouncilModel(sourceConversation.model)) {
         return;
       }
 
@@ -927,14 +884,13 @@ export default function ChatApp() {
       setCurrentConversationId(duplicatedConversation._id);
       setMessages(Array.isArray(duplicatedConversation.messages) ? duplicatedConversation.messages : []);
 
-      const duplicatedModel = normalizeModelId(duplicatedConversation.model);
-      const duplicatedModelConfig = CHAT_MODELS.find((entry) => entry.id === duplicatedModel);
+      const duplicatedModelConfig = CHAT_MODELS.find((entry) => entry.id === duplicatedConversation.model);
       if (duplicatedModelConfig?.id) {
         setModel(duplicatedModelConfig.id);
         lastTextModelRef.current = duplicatedModelConfig.id;
       }
 
-      applyConversationSettings(duplicatedModelConfig?.provider, duplicatedConversation.settings);
+      applyConversationSettings(duplicatedConversation.settings);
 
       await fetchConversations();
       toast.success("已复制话题");
@@ -1013,28 +969,12 @@ export default function ChatApp() {
             modelReady: isSettingsReady,
             onModelChange: requestModelChange,
             messages,
-            contextWindow: currentModelConfig?.contextWindow,
             historyLimit,
-            agentModel,
-            setAgentModel: (nextValue) => {
-              setAgentModel(nextValue);
-              if (model === AGENT_MODEL_ID) {
-                syncConversationSettings({ agentModel: nextValue });
-              }
-            },
             webSearch,
             setWebSearch: (v) => {
               setWebSearch(v);
               syncConversationSettings({ webSearch: v });
             },
-            systemPrompts,
-            activePromptIds,
-            setActivePromptIds,
-            activePromptId,
-            setActivePromptId,
-            onAddPrompt: addPrompt,
-            onDeletePrompt: deletePrompt,
-            onUpdatePrompt: updatePrompt,
             onSend: actions.handleSendFromComposer,
             onStop: actions.stopStreaming,
             prefill: composerPrefill,

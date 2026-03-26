@@ -19,19 +19,23 @@ const UserSettingsSchema = new mongoose.Schema({
     modelRoutes: {
         openai: {
             type: String,
-            enum: ['default', 'zenmux'],
-            default: 'default',
+            enum: ['official', 'openrouter'],
+            default: 'official',
         },
-        opus: {
+        anthropic: {
             type: String,
-            enum: ['default', 'zenmux'],
-            default: 'default',
+            enum: ['official', 'openrouter'],
+            default: 'official',
         },
         gemini: {
             type: String,
-            enum: ['default', 'native'],
-            default: 'default',
+            enum: ['official', 'openrouter'],
+            default: 'official',
         },
+    },
+    modelRoutesVersion: {
+        type: Number,
+        default: 2,
     },
     systemPrompts: [SystemPromptSchema],
     updatedAt: {

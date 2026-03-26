@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Scale, Search, Terminal, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
-import { Citations, LoadingSweepText } from "./MessageListHelpers";
+import { Citations, LoadingSweepText, ToolRunPreview, hasToolRunPreview } from "./MessageListHelpers";
 import { getCouncilExpertDisplayLabel, SEED_MODEL_ID } from "@/lib/shared/models";
 
 function normalizeTimeline(timeline) {
@@ -25,7 +25,7 @@ function normalizeTimeline(timeline) {
       resultCount: Number.isFinite(step.resultCount) ? step.resultCount : null,
       synthetic: step.synthetic === true,
     }))
-    .filter((step) => step.kind === "thought" || step.kind === "search" || step.kind === "reader" || step.kind === "sandbox" || step.kind === "tool" || step.kind === "upload" || step.kind === "parse");
+    .filter((step) => step.kind === "thought" || step.kind === "search" || step.kind === "reader" || step.kind === "sandbox" || step.kind === "tool" || step.kind === "upload" || step.kind === "parse" || step.kind === "planner");
 
   return normalized.reduce((acc, step) => {
     const last = acc[acc.length - 1];
@@ -97,9 +97,9 @@ export default function ThinkingBlock({
   councilExpertStates,
   councilSummaryState,
   councilExperts,
+  tools,
   bodyText,
   showThoughtDetails = true,
-  isAgentMode = false,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
@@ -116,6 +116,11 @@ export default function ThinkingBlock({
   const normalizedCouncilSummaryState = normalizeCouncilSummaryState(councilSummaryState);
   const hasCouncilMode = normalizedCouncilExpertStates.length > 0 || normalizedCouncilSummaryState !== null;
   const hasTimeline = timelineItems.length > 0;
+  const toolsByTimelineId = new Map(
+    (Array.isArray(tools) ? tools : [])
+      .filter((tool) => tool && typeof tool === "object" && typeof tool.id === "string" && tool.id)
+      .map((tool) => [`timeline_${tool.id}`, tool])
+  );
 
   // 滚动到容器底部（仅简单模式的思考内容）
   useEffect(() => {
@@ -136,9 +141,9 @@ export default function ThinkingBlock({
     const timelineForExpand = normalizeTimeline(timeline);
     const lastStep = timelineForExpand[timelineForExpand.length - 1] || null;
     if (lastStep && lastStep.kind !== "thought") {
+      if (manualExpandedStepIdRef.current) return;
       setExpandedTimelineId((prev) => {
         if (prev === null) return prev;
-        manualExpandedStepIdRef.current = null;
         return null;
       });
       return;
@@ -149,9 +154,9 @@ export default function ThinkingBlock({
       .find((step) => step.kind === "thought");
 
     if (!lastThoughtStep?.id) return;
+    if (manualExpandedStepIdRef.current) return;
     setExpandedTimelineId((prev) => {
       if (prev === lastThoughtStep.id) return prev;
-      manualExpandedStepIdRef.current = null;
       return lastThoughtStep.id;
     });
   }, [hasCouncilMode, hasTimeline, timeline]);
@@ -187,6 +192,16 @@ export default function ThinkingBlock({
   // ── 外层图标（始终固定） ──
   const headerIcon = <Zap className="thinking-icon-header" />;
 
+  const activeThoughtLabel = "思考中";
+  const completedThoughtLabel = "已思考";
+  const toggleExpandedStep = (stepId) => {
+    setExpandedTimelineId((prev) => {
+      const nextId = prev === stepId ? null : stepId;
+      manualExpandedStepIdRef.current = nextId;
+      return nextId;
+    });
+  };
+
   // ── 渲染时间线内的单个步骤（第二层折叠项）──
   const renderTimelineStep = (step, idx) => {
     const isExpanded = expandedTimelineId === step.id;
@@ -210,6 +225,8 @@ export default function ThinkingBlock({
         if (isError) return `网页抓取失败${target}`;
         return `网页抓取完成${target}${countLabel}`;
       }
+      if (step.kind === "planner") return isRunning ? "正在制定计划" : (isError ? "制定计划失败" : "执行计划已确定");
+      if (step.kind === "writer") return isRunning ? "正在整理结果" : (isError ? "整理结果失败" : "最终结果已生成");
       if (step.kind === "sandbox") return isRunning ? "正在准备运行环境" : (isError ? "运行环境准备失败" : "运行环境已准备完成");
       if (step.kind === "upload") return isRunning ? "正在上传文件" : (isError ? "文件上传失败" : "文件已上传");
       if (step.kind === "parse") return isRunning ? "正在解析文件" : (isError ? "文件解析失败" : "文件已解析");
@@ -220,7 +237,9 @@ export default function ThinkingBlock({
       if (step.kind === "thought") return Boolean(step.content);
       if (step.kind === "search") return Boolean(step.query || Number.isFinite(step.resultCount) || (isError && step.message));
       if (step.kind === "reader") return Boolean(step.url || Number.isFinite(step.resultCount) || (isError && step.message));
-      if (step.kind === "sandbox") return Boolean(isError && (step.message || step.title));
+      if (step.kind === "planner") return false;
+      if (step.kind === "writer") return Boolean(step.content || step.message);
+      if (step.kind === "sandbox") return Boolean(step.content || (isError && (step.message || step.title)));
       if (step.kind === "upload" || step.kind === "parse") return false;
       return false;
     })();
@@ -228,18 +247,20 @@ export default function ThinkingBlock({
     const isManualExpanded = manualExpandedStepIdRef.current === step.id;
     const showThoughtDots = isThoughtStreaming && (!hasDetail || (isExpanded && !isManualExpanded));
 
-    const activeThoughtLabel = isAgentMode ? "决策中" : "思考中";
-    const completedThoughtLabel = isAgentMode ? "已决策" : "已思考";
-    const thoughtIcon = isAgentMode && isThoughtStreaming
-      ? <Scale className="thinking-icon-step" />
-      : <Lightbulb className="thinking-icon-step" />;
+    const thoughtIcon = <Lightbulb className="thinking-icon-step" />;
+    const linkedTool = step.id ? toolsByTimelineId.get(step.id) : null;
+    const hasLinkedToolPreview = hasToolRunPreview(linkedTool);
 
     const icon = step.kind === "search"
       ? <Search className="thinking-icon-step" />
       : step.kind === "reader"
-        ? <FileScan className="thinking-icon-step" />
+          ? <FileScan className="thinking-icon-step" />
       : step.kind === "sandbox"
         ? <Terminal className="thinking-icon-step" />
+        : step.kind === "planner"
+          ? <Scale className="thinking-icon-step" />
+          : step.kind === "writer"
+            ? <Zap className="thinking-icon-step" />
         : step.kind === "upload"
           ? <FileUp className="thinking-icon-step" />
           : step.kind === "parse"
@@ -258,13 +279,7 @@ export default function ThinkingBlock({
           {canExpandThought ? (
             <button
               type="button"
-              onClick={() => {
-                setExpandedTimelineId((prev) => {
-                  const nextId = prev === step.id ? null : step.id;
-                  manualExpandedStepIdRef.current = nextId;
-                  return nextId;
-                });
-              }}
+              onClick={() => toggleExpandedStep(step.id)}
               className={capsuleClass}
             >
               <div className={`p-1 rounded-md ${isThoughtStreaming ? "bg-primary/10 text-primary animate-pulse" : "bg-zinc-200 dark:bg-zinc-700"}`}>
@@ -272,7 +287,6 @@ export default function ThinkingBlock({
               </div>
               <StepStatusText text={isThoughtStreaming ? activeThoughtLabel : "思考过程"} active={showThoughtDots} />
               <div className="ml-auto flex items-center gap-1">
-                <span className="text-[10px] opacity-50 font-normal uppercase tracking-tighter">Details</span>
                 {isThoughtOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </div>
             </button>
@@ -313,32 +327,90 @@ export default function ThinkingBlock({
 
     if (step.kind === "search") {
       const querySuffix = step.query ? `「${step.query}」` : "";
+      const isOpen = hasLinkedToolPreview && isExpanded;
       return (
         <div key={step.id || `search-${idx}`} className="w-full max-w-[760px]">
-          <div className={capsuleClass}>
-            {icon}
-            {isRunning ? (
-              <SplitStatusText status="联网搜索中" suffix={querySuffix} active />
-            ) : (
-              <span>{isError ? `联网搜索失败${querySuffix}` : `联网搜索完成${querySuffix}`}</span>
-            )}
-          </div>
+          {hasLinkedToolPreview ? (
+            <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
+              {icon}
+              {isRunning ? (
+                <SplitStatusText status="联网搜索中" suffix={querySuffix} active />
+              ) : (
+                <span>{isError ? `联网搜索失败${querySuffix}` : `联网搜索完成${querySuffix}`}</span>
+              )}
+              <div className="ml-auto flex items-center gap-1">
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
+            </button>
+          ) : (
+            <div className={capsuleClass}>
+              {icon}
+              {isRunning ? (
+                <SplitStatusText status="联网搜索中" suffix={querySuffix} active />
+              ) : (
+                <span>{isError ? `联网搜索失败${querySuffix}` : `联网搜索完成${querySuffix}`}</span>
+              )}
+            </div>
+          )}
+          <AnimatePresence>
+            {isOpen && linkedTool ? (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 ml-4 w-full max-w-[720px]">
+                  <ToolRunPreview tool={linkedTool} />
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       );
     }
 
     if (step.kind === "reader") {
       const urlSuffix = step.url ? `「${step.url}」` : "";
+      const isOpen = hasLinkedToolPreview && isExpanded;
       return (
         <div key={step.id || `reader-${idx}`} className="w-full max-w-[760px]">
-          <div className={capsuleClass}>
-            {icon}
-            {isRunning ? (
-              <SplitStatusText status="抓取网页中" suffix={urlSuffix} active />
-            ) : (
-              <span>{isError ? `网页抓取失败${urlSuffix}` : `网页抓取完成${urlSuffix}`}</span>
-            )}
-          </div>
+          {hasLinkedToolPreview ? (
+            <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
+              {icon}
+              {isRunning ? (
+                <SplitStatusText status="抓取网页中" suffix={urlSuffix} active />
+              ) : (
+                <span>{isError ? `网页抓取失败${urlSuffix}` : `网页抓取完成${urlSuffix}`}</span>
+              )}
+              <div className="ml-auto flex items-center gap-1">
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
+            </button>
+          ) : (
+            <div className={capsuleClass}>
+              {icon}
+              {isRunning ? (
+                <SplitStatusText status="抓取网页中" suffix={urlSuffix} active />
+              ) : (
+                <span>{isError ? `网页抓取失败${urlSuffix}` : `网页抓取完成${urlSuffix}`}</span>
+              )}
+            </div>
+          )}
+          <AnimatePresence>
+            {isOpen && linkedTool ? (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 ml-4 w-full max-w-[720px]">
+                  <ToolRunPreview tool={linkedTool} />
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       );
     }
@@ -346,12 +418,97 @@ export default function ThinkingBlock({
     if (step.kind === "sandbox") {
       const detail = isError ? (step.message || step.title || "") : "";
       const titleText = getTitle();
+      const isOpen = hasLinkedToolPreview && isExpanded;
       return (
         <div key={step.id || `sandbox-${idx}`} className="w-full max-w-[760px]">
+          {hasLinkedToolPreview ? (
+            <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
+              {icon}
+              <StepStatusText text={detail || titleText} active={isRunning} />
+              <div className="ml-auto flex items-center gap-1">
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
+            </button>
+          ) : (
+            <div className={capsuleClass}>
+              {icon}
+              <StepStatusText text={detail || titleText} active={isRunning} />
+            </div>
+          )}
+          <AnimatePresence>
+            {isOpen && linkedTool ? (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 ml-4 w-full max-w-[720px]">
+                  <ToolRunPreview tool={linkedTool} />
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </div>
+      );
+    }
+
+    if (step.kind === "planner") {
+      const titleText = getTitle();
+      return (
+        <div key={step.id || `planner-${idx}`} className="w-full max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
-            <StepStatusText text={detail || titleText} active={isRunning} />
+            <StepStatusText text={titleText} active={isRunning} />
           </div>
+        </div>
+      );
+    }
+
+    if (step.kind === "writer") {
+      const detail = step.message || step.title || "";
+      const titleText = getTitle();
+      const canExpand = Boolean(step.content);
+      const isOpen = canExpand && isExpanded;
+      return (
+        <div key={step.id || `${step.kind}-${idx}`} className="w-full max-w-[760px]">
+          {canExpand ? (
+            <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
+              {icon}
+              <StepStatusText text={detail || titleText} active={isRunning} />
+              <div className="ml-auto flex items-center gap-1">
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
+            </button>
+          ) : (
+            <div className={capsuleClass}>
+              {icon}
+              <StepStatusText text={detail || titleText} active={isRunning} />
+            </div>
+          )}
+          <AnimatePresence>
+            {isOpen ? (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div
+                  className="thinking-content mt-2 ml-4 p-4 glass-effect border-zinc-200/50 rounded-2xl text-sm leading-relaxed"
+                  ref={containerRef}
+                >
+                  <Markdown
+                    enableHighlight={!isRunning}
+                    enableMath={true}
+                    className="prose-xs text-zinc-500 dark:text-zinc-400"
+                  >
+                    {step.content}
+                  </Markdown>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       );
     }
@@ -371,12 +528,37 @@ export default function ThinkingBlock({
 
     if (step.kind === "tool") {
       const label = step.content || step.message || step.title || "沙箱执行";
+      const isOpen = hasLinkedToolPreview && isExpanded;
       return (
         <div key={step.id || `tool-${idx}`} className="w-full max-w-[760px]">
-          <div className={capsuleClass}>
-            {icon}
-            <StepStatusText text={label} active={isRunning} />
-          </div>
+          {hasLinkedToolPreview ? (
+            <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
+              {icon}
+              <StepStatusText text={label} active={isRunning} />
+              <div className="ml-auto flex items-center gap-1">
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
+            </button>
+          ) : (
+            <div className={capsuleClass}>
+              {icon}
+              <StepStatusText text={label} active={isRunning} />
+            </div>
+          )}
+          <AnimatePresence>
+            {isOpen && linkedTool ? (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 ml-4 w-full max-w-[720px]">
+                  <ToolRunPreview tool={linkedTool} />
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       );
     }
@@ -510,7 +692,7 @@ export default function ThinkingBlock({
                           }}
                           className="thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors text-zinc-500 cursor-pointer"
                         >
-                          {isAgentMode && isStreaming ? <Scale className="thinking-icon-step" /> : <Lightbulb className="thinking-icon-step" />}
+                          <Lightbulb className="thinking-icon-step" />
                           <StepStatusText text={isStreaming ? activeThoughtLabel : "思考过程"} active={isStreaming && expandedTimelineId !== "__simple__"} />
                           {expandedTimelineId === "__simple__" ? <ChevronUp className="thinking-icon-chevron" /> : <ChevronDown className="thinking-icon-chevron" />}
                         </button>
@@ -528,6 +710,14 @@ export default function ThinkingBlock({
                             </Markdown>
                           </div>
                         ) : null}
+                      </div>
+                    </div>
+                  ) : isStreaming ? (
+                    <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80 dark:border-zinc-700/80">
+                      <div className="w-full max-w-[760px]">
+                        <div className="thinking-capsule inline-flex w-fit max-w-full items-center font-medium text-zinc-500">
+                          <LoadingSweepText text="···" className="loading-sweep-dots" />
+                        </div>
                       </div>
                     </div>
                   ) : null

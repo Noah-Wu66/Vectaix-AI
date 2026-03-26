@@ -1,12 +1,36 @@
 import { useState } from "react";
-import { Download, ExternalLink, FileText, Globe, X } from "lucide-react";
+import { Download, ExternalLink, FileText, Globe, Search, Terminal, X } from "lucide-react";
 import { ModelAvatar } from "./ModelVisuals";
 import { formatAttachmentMeta } from "@/lib/shared/messageAttachments";
 
-export function AIAvatar({ model, size = 24, animate = false }) {
+const WEB_BROWSING_PREVIEW_LIMIT = 20;
+
+function getDomainFromUrl(url) {
+  try { return new URL(url).hostname.replace("www.", ""); } catch { return ""; }
+}
+
+function WebFavicon({ url, size = 12, className = "" }) {
+  const [failed, setFailed] = useState(false);
+  const domain = getDomainFromUrl(url);
+  if (!domain || failed) return <Globe size={size} className={className} />;
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=${size * 2}`}
+      alt=""
+      width={size}
+      height={size}
+      className={`${className} rounded-sm`}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+export function AIAvatar({ model, size = 24, animate = false, className = "" }) {
   return (
     <span
-      className="inline-flex items-center justify-center overflow-hidden rounded-md"
+      className={`inline-flex items-center justify-center overflow-hidden rounded-md ${className}`.trim()}
       style={{ width: size, height: size }}
     >
       <ModelAvatar model={model} size={size} animate={animate} />
@@ -175,13 +199,6 @@ export function Citations({ citations }) {
 
   const previewCount = Math.min(5, uniqueCitations.length);
   const previewItems = uniqueCitations.slice(0, previewCount);
-  const getDomain = (url) => {
-    try {
-      return new URL(url).hostname.replace('www.', '');
-    } catch {
-      return url;
-    }
-  };
 
   return (
     <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700">
@@ -194,20 +211,11 @@ export function Citations({ citations }) {
         <Globe size={12} className="text-zinc-500" />
         <span>信息来源</span>
         <span className="flex -space-x-1.5">
-          {previewItems.map((citation, idx) => {
-            const domain = getDomain(citation.url);
-            const iconUrl = `https://${domain}/favicon.ico`;
-            return (
-              <img
-                key={idx}
-                src={iconUrl}
-                alt=""
-                className="w-4 h-4 rounded-full border border-white dark:border-zinc-700 bg-white dark:bg-zinc-800"
-                loading="lazy"
-                decoding="async"
-              />
-            );
-          })}
+          {previewItems.map((citation, idx) => (
+            <span key={idx} className="inline-flex w-4 h-4 rounded-full border border-white dark:border-zinc-700 bg-white dark:bg-zinc-800 items-center justify-center overflow-hidden">
+              <WebFavicon url={citation.url} size={12} />
+            </span>
+          ))}
         </span>
         {uniqueCitations.length > previewCount && (
           <span className="text-zinc-500">+{uniqueCitations.length - previewCount}</span>
@@ -239,8 +247,7 @@ export function Citations({ citations }) {
             <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
               <div className="flex flex-col gap-2">
                 {uniqueCitations.map((citation, idx) => {
-                  const domain = getDomain(citation.url);
-                  const iconUrl = `https://${domain}/favicon.ico`;
+                  const domain = getDomainFromUrl(citation.url) || citation.url;
                   return (
                     <a
                       key={idx}
@@ -250,13 +257,7 @@ export function Citations({ citations }) {
                       className="flex items-center gap-2 px-2.5 py-2 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-700 dark:text-zinc-300 transition-colors"
                       title={citation.title || citation.url}
                     >
-                      <img
-                        src={iconUrl}
-                        alt=""
-                        className="w-5 h-5 rounded-full border border-white dark:border-zinc-700 bg-white dark:bg-zinc-800 flex-shrink-0"
-                        loading="lazy"
-                        decoding="async"
-                      />
+                      <WebFavicon url={citation.url} size={16} className="flex-shrink-0" />
                       <span className="truncate flex-1">
                         {citation.title || domain}
                       </span>
@@ -269,6 +270,143 @@ export function Citations({ citations }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function buildArtifactDownloadUrl(artifact) {
+  if (typeof artifact?.url !== "string" || !/^https?:\/\//i.test(artifact.url)) return null;
+  const title = typeof artifact?.title === "string" && artifact.title ? artifact.title : "artifact";
+  const extension = typeof artifact?.extension === "string" && artifact.extension ? artifact.extension : "txt";
+  return `/api/files/download?url=${encodeURIComponent(artifact.url)}&name=${encodeURIComponent(`${title}.${extension}`)}`;
+}
+
+export function hasToolRunPreview(tool) {
+  if (!tool || typeof tool !== "object") return false;
+
+  if (tool.identifier === "lobe-web-browsing" && Array.isArray(tool.state?.results) && tool.state.results.length > 0) {
+    return true;
+  }
+
+  return Boolean(
+    (typeof tool.summary === "string" && tool.summary)
+    || (typeof tool.content === "string" && tool.content)
+  );
+}
+
+export function ToolRunPreview({ tool }) {
+  if (!hasToolRunPreview(tool)) return null;
+
+  if (tool.identifier === "lobe-web-browsing" && Array.isArray(tool.state?.results) && tool.state.results.length > 0) {
+    return (
+      <div className="flex max-h-[320px] flex-col gap-1.5 overflow-y-auto pr-1 mobile-scroll overscroll-contain custom-scrollbar">
+        {tool.state.results.slice(0, WEB_BROWSING_PREVIEW_LIMIT).map((item, index) => {
+          const href = typeof item?.url === "string" ? item.url : "";
+          const title = typeof item?.title === "string" && item.title ? item.title : href;
+          if (!href) return null;
+          return (
+            <a
+              key={`${tool.id}-${index}`}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/70 dark:bg-zinc-900/40 px-2.5 py-2 text-xs text-zinc-600 dark:text-zinc-300 hover:border-primary/40 hover:text-primary transition-colors"
+            >
+              <WebFavicon url={href} size={14} className="shrink-0" />
+              <span className="truncate flex-1">{title}</span>
+              <ExternalLink size={12} className="shrink-0 opacity-60" />
+            </a>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const previewText = typeof tool.summary === "string" && tool.summary
+    ? tool.summary
+    : (typeof tool.content === "string" ? tool.content : "");
+  if (!previewText) return null;
+
+  return (
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/70 dark:bg-zinc-900/40 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap break-words">
+      {previewText}
+    </div>
+  );
+}
+
+export function ToolRunCards({ tools }) {
+  if (!Array.isArray(tools) || tools.length === 0) return null;
+
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      {tools.map((tool) => {
+        if (!tool?.id) return null;
+        const isWeb = tool.identifier === "lobe-web-browsing";
+        const icon = isWeb ? <Search size={13} /> : <Terminal size={13} />;
+        const title = typeof tool.title === "string" && tool.title
+          ? tool.title
+          : `${tool.identifier || "tool"}.${tool.apiName || "run"}`;
+        const statusText = tool.status === "error" ? "失败" : (tool.status === "running" ? "运行中" : "完成");
+
+        return (
+          <div
+            key={tool.id}
+            className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-900/50 px-3 py-3"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <div className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                {icon}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{title}</div>
+                <div className="text-[11px] text-zinc-400">{statusText}</div>
+              </div>
+            </div>
+            <ToolRunPreview tool={tool} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function ArtifactCards({ artifacts }) {
+  if (!Array.isArray(artifacts) || artifacts.length === 0) return null;
+
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      {artifacts.map((artifact, index) => {
+        const downloadUrl = buildArtifactDownloadUrl(artifact);
+        const title = typeof artifact?.title === "string" && artifact.title ? artifact.title : `产物 ${index + 1}`;
+        const meta = [
+          typeof artifact?.extension === "string" && artifact.extension ? artifact.extension.toUpperCase() : "",
+          Number.isFinite(artifact?.size) && artifact.size > 0 ? formatAttachmentMeta({ size: artifact.size }) : "",
+        ].filter(Boolean).join(" · ");
+
+        return (
+          <div
+            key={`${artifact?.url || title}-${index}`}
+            className="flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-900/50 px-3 py-3"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 shrink-0">
+              <FileText size={18} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium text-zinc-700 dark:text-zinc-200">{title}</div>
+              <div className="truncate text-xs text-zinc-400">{meta || "沙盒导出产物"}</div>
+            </div>
+            {downloadUrl ? (
+              <a
+                href={downloadUrl}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+                title="下载产物"
+              >
+                <Download size={15} />
+              </a>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

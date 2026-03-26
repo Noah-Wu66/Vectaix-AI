@@ -8,17 +8,6 @@ export const dynamic = 'force-dynamic';
 
 const ENCRYPTION_PREFIX = 'enc:v1:';
 
-function hasEncryptedData(obj) {
-  if (typeof obj === 'string') {
-    return obj.startsWith(ENCRYPTION_PREFIX);
-  }
-  if (!obj || typeof obj !== 'object') return false;
-  if (Array.isArray(obj)) {
-    return obj.some(item => hasEncryptedData(item));
-  }
-  return Object.values(obj).some(val => hasEncryptedData(val));
-}
-
 function escapeRegex(input) {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -47,7 +36,7 @@ export async function GET(req) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .select('email createdAt isAdvancedUser')
+      .select('email createdAt')
       .lean(),
     User.countDocuments(filter),
   ]);
@@ -88,58 +77,49 @@ export async function POST() {
 
   await dbConnect();
 
-  const encryptedConversationIds = [];
+  const encRegex = new RegExp('^' + escapeRegex(ENCRYPTION_PREFIX));
+
+  // 用 MongoDB $regex 直接在数据库层面筛选，避免全量加载到内存
+  const convFilter = {
+    $or: [
+      { title: { $regex: encRegex } },
+      { 'messages.content': { $regex: encRegex } },
+      { 'messages.parts.text': { $regex: encRegex } },
+      { 'messages.thought': { $regex: encRegex } },
+    ],
+  };
+
+  const settingsFilter = {
+    $or: [
+      { 'systemPrompts.name': { $regex: encRegex } },
+      { 'systemPrompts.content': { $regex: encRegex } },
+    ],
+  };
+
+  // 先查受影响的用户 ID（只取 userId，不加载内容）
+  const [affectedConvs, affectedSettings] = await Promise.all([
+    Conversation.find(convFilter).select('userId').lean(),
+    UserSettings.find(settingsFilter).select('userId').lean(),
+  ]);
+
   const encryptedUserIds = new Set();
-
-  const conversations = await Conversation.find({})
-    .select('_id userId title messages settings')
-    .lean();
-
-  for (const conv of conversations) {
-    const shouldDelete = hasEncryptedData({
-      title: conv.title,
-      messages: conv.messages,
-      settings: conv.settings,
-    });
-
-    if (shouldDelete) {
-      encryptedConversationIds.push(conv._id);
-      if (conv.userId) {
-        encryptedUserIds.add(conv.userId.toString());
-      }
-    }
+  for (const c of affectedConvs) {
+    if (c.userId) encryptedUserIds.add(c.userId.toString());
+  }
+  for (const s of affectedSettings) {
+    if (s.userId) encryptedUserIds.add(s.userId.toString());
   }
 
-  let deletedConversations = 0;
-  if (encryptedConversationIds.length > 0) {
-    const result = await Conversation.deleteMany({ _id: { $in: encryptedConversationIds } });
-    deletedConversations = result.deletedCount || 0;
-  }
-
-  const encryptedSettingIds = [];
-  const settings = await UserSettings.find({})
-    .select('_id userId systemPrompts')
-    .lean();
-
-  for (const setting of settings) {
-    if (hasEncryptedData(setting.systemPrompts)) {
-      encryptedSettingIds.push(setting._id);
-      if (setting.userId) {
-        encryptedUserIds.add(setting.userId.toString());
-      }
-    }
-  }
-
-  let deletedSettings = 0;
-  if (encryptedSettingIds.length > 0) {
-    const result = await UserSettings.deleteMany({ _id: { $in: encryptedSettingIds } });
-    deletedSettings = result.deletedCount || 0;
-  }
+  // 批量删除
+  const [convResult, settingsResult] = await Promise.all([
+    affectedConvs.length > 0 ? Conversation.deleteMany(convFilter) : { deletedCount: 0 },
+    affectedSettings.length > 0 ? UserSettings.deleteMany(settingsFilter) : { deletedCount: 0 },
+  ]);
 
   return Response.json({
     success: true,
-    deletedConversations,
-    deletedSettings,
+    deletedConversations: convResult.deletedCount || 0,
+    deletedSettings: settingsResult.deletedCount || 0,
     affectedUsers: encryptedUserIds.size,
   });
 }

@@ -3,13 +3,14 @@ import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
 import { GEMINI_PRO_MODEL } from '@/lib/shared/models';
+import { getModelRoutes, resolveGeminiProviderConfig } from '@/lib/modelRoutes';
 import { createGeminiClient, resolveGeminiApiModel } from '@/lib/server/chat/providerAdapters';
+import { extractOpenRouterResponseText, requestOpenRouterChatCompletion } from '@/lib/server/chat/openRouter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const COMPRESS_RATE_LIMIT = { limit: 10, windowMs: 60 * 1000 };
-const COMPRESS_MODEL = resolveGeminiApiModel(GEMINI_PRO_MODEL);
 
 const COMPRESS_SYSTEM_PROMPT = `你是一个对话历史压缩器。你的任务是将一段多轮对话压缩成一份简洁的摘要，保留所有关键信息。
 
@@ -78,23 +79,40 @@ export async function POST(req) {
             return Response.json({ error: 'No valid messages to compress' }, { status: 400 });
         }
 
-        const ai = await createGeminiClient(auth.userId);
+        const modelRoutes = await getModelRoutes(auth.userId);
+        const providerConfig = resolveGeminiProviderConfig(modelRoutes);
+        let summary = '';
 
-        const result = await ai.models.generateContent({
-            model: COMPRESS_MODEL,
-            contents: [{
-                role: "user",
-                parts: [{ text: `请将以下对话历史压缩成一份摘要：\n\n${conversationText}` }]
-            }],
-            config: {
-                systemInstruction: { parts: [{ text: COMPRESS_SYSTEM_PROMPT }] }
-            }
-        });
+        if (providerConfig.transport === 'openrouter-chat') {
+            const response = await requestOpenRouterChatCompletion({
+                apiKey: providerConfig.apiKey,
+                model: resolveGeminiApiModel(GEMINI_PRO_MODEL, providerConfig),
+                messages: [
+                    { role: 'system', content: COMPRESS_SYSTEM_PROMPT },
+                    { role: 'user', content: `请将以下对话历史压缩成一份摘要：\n\n${conversationText}` },
+                ],
+                stream: false,
+                signal: req.signal,
+            });
+            summary = extractOpenRouterResponseText(await response.json());
+        } else {
+            const ai = await createGeminiClient(auth.userId);
+            const result = await ai.models.generateContent({
+                model: resolveGeminiApiModel(GEMINI_PRO_MODEL, providerConfig),
+                contents: [{
+                    role: "user",
+                    parts: [{ text: `请将以下对话历史压缩成一份摘要：\n\n${conversationText}` }]
+                }],
+                config: {
+                    systemInstruction: { parts: [{ text: COMPRESS_SYSTEM_PROMPT }] }
+                }
+            });
 
-        const summary = result?.candidates?.[0]?.content?.parts
-            ?.filter(p => !p.thought && p.text)
-            ?.map(p => p.text)
-            ?.join('') || '';
+            summary = result?.candidates?.[0]?.content?.parts
+                ?.filter(p => !p.thought && p.text)
+                ?.map(p => p.text)
+                ?.join('') || '';
+        }
 
         if (!summary.trim()) {
             return Response.json({ error: '压缩失败，未生成摘要' }, { status: 500 });

@@ -13,9 +13,11 @@ export default function ChatHeader({ onToggleSidebar }) {
           <Menu size={22} />
         </button>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-            <span className="text-white font-black text-xs">V</span>
-          </div>
+          <img
+            src="/icon"
+            alt="Vectaix Logo"
+            className="w-8 h-8 object-contain"
+          />
           <h1 className="font-bold tracking-tight text-zinc-900 dark:text-white text-[17px] md:text-lg whitespace-nowrap">
             Vectaix AI
           </h1>

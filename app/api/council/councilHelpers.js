@@ -21,8 +21,17 @@ import {
   DEFAULT_SEED_THINKING_LEVEL,
   getCouncilExpertConfigs,
   getCouncilExpertDisplayLabel,
+  getOpenRouterModelId,
   SEED_MODEL_ID,
 } from "@/lib/shared/models";
+import {
+  resolveAnthropicApiModel,
+  resolveGeminiApiModel,
+} from "@/lib/server/chat/providerAdapters";
+import {
+  extractOpenRouterResponseText,
+  requestOpenRouterChatCompletion,
+} from "@/lib/server/chat/openRouter";
 import { runWebBrowsingSession } from "@/lib/server/webBrowsing/session";
 import { runWebBrowsingActionText } from "@/lib/server/webBrowsing/actionRunner";
 
@@ -395,23 +404,21 @@ function extractUpstreamErrorMessage(status, rawText) {
   return text.length > 600 ? `${text.slice(0, 600)}...` : text;
 }
 
+function mapOpenRouterReasoningEffort(value) {
+  const normalized = typeof value === "string" && value ? value.trim().toLowerCase() : "";
+  if (normalized === "minimal" || normalized === "none" || normalized === "low") return "low";
+  if (normalized === "medium") return "medium";
+  return "high";
+}
+
 function createGeminiClient(providerConfig) {
   if (!providerConfig?.apiKey) {
     throw new Error("Gemini provider apiKey is not set");
   }
-  if (providerConfig?.baseUrl) {
-    return new GoogleGenAI({
-      apiKey: providerConfig.apiKey,
-      httpOptions: {
-        baseUrl: providerConfig.baseUrl,
-      },
-    });
+  if (providerConfig?.route !== "official") {
+    throw new Error("Gemini OpenRouter 模式不能使用 Google 官方客户端");
   }
   return new GoogleGenAI({ apiKey: providerConfig.apiKey });
-}
-
-function getGeminiModelId(expertModelId) {
-  return expertModelId;
 }
 
 async function consumeOpenAIStream(response) {
@@ -556,8 +563,6 @@ async function collectSearchContext({
 }
 
 async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
-  const ai = createGeminiClient(providerConfig);
-  const modelId = getGeminiModelId(expert.modelId);
   const parts = [{ text: prompt }];
   for (const image of imagePayloads) {
     parts.push({
@@ -572,8 +577,34 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
     includeEconomyPrefix: false,
     searchContextText,
   });
+  if (providerConfig.transport === "openrouter-chat") {
+    const response = await requestOpenRouterChatCompletion({
+      apiKey: providerConfig.apiKey,
+      model: resolveGeminiApiModel(expert.modelId, providerConfig),
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: [
+          { type: "text", text: prompt },
+          ...imagePayloads.map((image) => ({
+            type: "image_url",
+            image_url: {
+              url: image.dataUrl,
+            },
+          })),
+        ] },
+      ],
+      stream: false,
+      maxTokens: EXPERT_MAX_OUTPUT_TOKENS,
+      temperature: 1,
+      reasoningEffort: mapOpenRouterReasoningEffort(expert.thinkingLevel),
+      signal,
+    });
+    return extractOpenRouterResponseText(await response.json());
+  }
+
+  const ai = createGeminiClient(providerConfig);
   const result = await raceWithSignal(ai.models.generateContent({
-    model: modelId,
+    model: resolveGeminiApiModel(expert.modelId, providerConfig),
     contents: [{ role: "user", parts }],
     config: {
       systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -589,6 +620,38 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
 }
 
 async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
+  const systemPrompt = await buildExpertSystemPrompt({
+    enableWebSearch: true,
+    includeEconomyPrefix: true,
+    searchContextText,
+  });
+  if (providerConfig.transport === "openrouter-chat") {
+    const response = await requestOpenRouterChatCompletion({
+      apiKey: providerConfig.apiKey,
+      model: resolveAnthropicApiModel(expert.modelId, providerConfig),
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            ...imagePayloads.map((image) => ({
+              type: "image_url",
+              image_url: {
+                url: image.dataUrl,
+              },
+            })),
+          ],
+        },
+      ],
+      stream: false,
+      maxTokens: EXPERT_MAX_OUTPUT_TOKENS,
+      reasoningEffort: mapOpenRouterReasoningEffort(expert.thinkingLevel),
+      signal,
+    });
+    return extractOpenRouterResponseText(await response.json());
+  }
+
   const client = new Anthropic({
     apiKey: providerConfig.apiKey,
     baseURL: providerConfig.baseUrl,
@@ -604,13 +667,8 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
       },
     });
   }
-  const systemPrompt = await buildExpertSystemPrompt({
-    enableWebSearch: true,
-    includeEconomyPrefix: true,
-    searchContextText,
-  });
   const response = await raceWithSignal(client.messages.create({
-    model: CLAUDE_OPUS_MODEL,
+    model: resolveAnthropicApiModel(expert.modelId, providerConfig) || CLAUDE_OPUS_MODEL,
     max_tokens: EXPERT_MAX_OUTPUT_TOKENS,
     system: [
       {
@@ -639,6 +697,32 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
       type: "input_image",
       image_url: image.dataUrl,
     });
+  }
+  if (providerConfig.transport === "openrouter-chat") {
+    const response = await requestOpenRouterChatCompletion({
+      apiKey: providerConfig.apiKey,
+      model: getOpenRouterModelId(expert.modelId) || expert.modelId,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            ...imagePayloads.map((image) => ({
+              type: "image_url",
+              image_url: {
+                url: image.dataUrl,
+              },
+            })),
+          ],
+        },
+      ],
+      stream: false,
+      maxTokens: EXPERT_MAX_OUTPUT_TOKENS,
+      reasoningEffort: mapOpenRouterReasoningEffort(expert.thinkingLevel),
+      signal,
+    });
+    return extractOpenRouterResponseText(await response.json());
   }
   const response = await fetch(`${providerConfig.baseUrl}/responses`, {
     method: "POST",
@@ -730,7 +814,7 @@ export async function runCouncilExpert({
         imagePayloads,
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
         searchContextText,
-        providerConfig: providerRoutes.opus,
+        providerConfig: providerRoutes.anthropic,
         signal,
       });
     } else if (expert.provider === "openai") {

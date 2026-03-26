@@ -13,19 +13,12 @@ function buildUnauthorizedResponse() {
   return Response.json({ error: "Unauthorized" }, { status: 401 });
 }
 
-function buildForbiddenResponse() {
-  return Response.json({ error: "仅高级用户和超级管理员可以切换线路" }, { status: 403 });
-}
-
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const user = await getCurrentUserWithAccess();
   if (!user) {
     return buildUnauthorizedResponse();
-  }
-  if (!user.canSwitchRoutes) {
-    return buildForbiddenResponse();
   }
 
   const routes = await getModelRoutes(user.userId);
@@ -36,9 +29,6 @@ export async function PATCH(req) {
   const user = await getCurrentUserWithAccess();
   if (!user) {
     return buildUnauthorizedResponse();
-  }
-  if (!user.canSwitchRoutes) {
-    return buildForbiddenResponse();
   }
 
   let body;
@@ -55,7 +45,7 @@ export async function PATCH(req) {
   const normalizedRoutes = normalizeModelRoutes(body);
   if (
     normalizedRoutes.openai !== body.openai ||
-    normalizedRoutes.opus !== body.opus ||
+    normalizedRoutes.anthropic !== body.anthropic ||
     normalizedRoutes.gemini !== body.gemini
   ) {
     return Response.json({ error: "线路值无效" }, { status: 400 });

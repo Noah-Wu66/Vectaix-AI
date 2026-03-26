@@ -13,7 +13,7 @@ import {
     isSupportedUploadExtension,
     normalizeMimeType,
 } from '@/lib/shared/attachments';
-import { AGENT_MODEL_ID } from '@/lib/shared/models';
+import { isAgentBackedModelId } from '@/lib/shared/models';
 
 const UPLOAD_RATE_LIMIT = { limit: 30, windowMs: 10 * 60 * 1000 };
 
@@ -93,8 +93,8 @@ export async function POST(request) {
                     throw new Error('头像仅支持图片文件');
                 }
 
-                if (kind === 'chat' && isDocumentAttachment({ extension, mimeType: declaredMimeType }) && model !== AGENT_MODEL_ID) {
-                    throw new Error('这类文件目前仅 Agent 支持');
+                if (kind === 'chat' && isDocumentAttachment({ extension, mimeType: declaredMimeType }) && !isAgentBackedModelId(model)) {
+                    throw new Error('当前模式不支持这类文件');
                 }
 
                 const allowedContentTypes = declaredMimeType
