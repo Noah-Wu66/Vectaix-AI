@@ -238,7 +238,7 @@ export default function ThinkingBlock({
       if (step.kind === "search") return Boolean(step.query || Number.isFinite(step.resultCount) || (isError && step.message));
       if (step.kind === "reader") return Boolean(step.url || Number.isFinite(step.resultCount) || (isError && step.message));
       if (step.kind === "planner") return false;
-      if (step.kind === "planner" || step.kind === "writer") return Boolean(step.content || step.message);
+      if (step.kind === "writer") return Boolean(step.content || step.message);
       if (step.kind === "sandbox") return Boolean(step.content || (isError && (step.message || step.title)));
       if (step.kind === "upload" || step.kind === "parse") return false;
       return false;
@@ -453,7 +453,19 @@ export default function ThinkingBlock({
       );
     }
 
-    if (step.kind === "planner" || step.kind === "writer") {
+    if (step.kind === "planner") {
+      const titleText = getTitle();
+      return (
+        <div key={step.id || `planner-${idx}`} className="w-full max-w-[760px]">
+          <div className={capsuleClass}>
+            {icon}
+            <StepStatusText text={titleText} active={isRunning} />
+          </div>
+        </div>
+      );
+    }
+
+    if (step.kind === "writer") {
       const detail = step.message || step.title || "";
       const titleText = getTitle();
       const canExpand = Boolean(step.content);
