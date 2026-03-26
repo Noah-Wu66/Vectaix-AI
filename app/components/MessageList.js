@@ -426,7 +426,7 @@ export default function MessageList({
 
                     {!msg.isStreaming && (
                       <div className={`flex flex-wrap gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                        {(hasParts || hasVisibleContent) && (
+                        {msg.role === "model" && (hasParts || hasVisibleContent) && (
                           <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
                             <button onClick={() => setOpenExportMenuIndex(prev => prev === i ? null : i)} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg">
                               <Download size={14} />
