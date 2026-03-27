@@ -11,8 +11,6 @@
   "dependencies": {
     "@vercel/sandbox": "^0.0.18",
     "@anthropic-ai/sdk": "^0.53.0",
-    "@google/genai": "^1.0.0",
-    "@lobehub/icons": "^1.97.2",
     "@vercel/blob": "^0.19.0",
     "antd": "^5.29.3",
     "bcryptjs": "^2.4.3",

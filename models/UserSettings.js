@@ -16,27 +16,6 @@ const UserSettingsSchema = new mongoose.Schema({
         type: String,
         default: null
     },
-    modelRoutes: {
-        openai: {
-            type: String,
-            enum: ['official', 'openrouter'],
-            default: 'official',
-        },
-        anthropic: {
-            type: String,
-            enum: ['official', 'openrouter'],
-            default: 'official',
-        },
-        gemini: {
-            type: String,
-            enum: ['official', 'openrouter'],
-            default: 'official',
-        },
-    },
-    modelRoutesVersion: {
-        type: Number,
-        default: 2,
-    },
     systemPrompts: [SystemPromptSchema],
     updatedAt: {
         type: Date,

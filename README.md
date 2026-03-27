@@ -26,7 +26,6 @@
 <img src="https://img.shields.io/badge/Gemini_2.5_Pro-4285F4?style=flat-square&logo=google&logoColor=white" alt="Gemini" />
 <img src="https://img.shields.io/badge/DeepSeek_V3.2-0A0A0A?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48L3N2Zz4=&logoColor=white" alt="DeepSeek" />
 <img src="https://img.shields.io/badge/Seed_2.0_Pro-FF6A00?style=flat-square&logoColor=white" alt="Seed" />
-<img src="https://img.shields.io/badge/OpenRouter-8B5CF6?style=flat-square&logoColor=white" alt="OpenRouter" />
 
 </div>
 
@@ -34,7 +33,7 @@
 
 ## ✨ What is Vectaix AI?
 
-Vectaix AI is an **open-source AI workspace** designed for cloud-native deployment on Vercel. It brings together the world's leading AI models under one unified interface — with official API support, intelligent routing, and a unique multi-expert collaboration system.
+Vectaix AI is an **open-source AI workspace** designed for cloud-native deployment on Vercel. It brings together the world's leading AI models under one unified interface — with official API support and a unique multi-expert collaboration system.
 
 Whether you need a quick answer from GPT-5.4, deep reasoning from Claude Opus 4.6, or want multiple AI experts to debate and synthesize — Vectaix AI has you covered.
 
@@ -52,8 +51,8 @@ Switch freely between 8 AI models in a single workspace. Each conversation can b
 ### 🧠 Council Workflow
 A unique multi-expert collaboration mode: GPT-5.4, Claude Opus 4.6, and Gemini 2.5 Pro answer as parallel experts, then Seed 2.0 Pro synthesizes the final response.
 
-### 🔀 Smart Model Routing
-User-level route switching between Official APIs and OpenRouter for OpenAI, Claude, and Gemini — giving you flexibility and cost control.
+### 🔌 Official Access
+All models now use official APIs or official deployments only. Route switching has been removed for a simpler setup.
 
 </td>
 <td width="50%">
@@ -98,15 +97,15 @@ Web App Manifest with mobile-optimized UI. Dark/Light/System theme support.
 
 ## 🧩 Supported Models
 
-| Model | Provider | Routing | Specialty |
+| Model | Provider | Access | Specialty |
 |:------|:---------|:--------|:----------|
-| **GPT-5.4** | OpenAI | Official / OpenRouter | General intelligence, coding, analysis |
-| **Claude Opus 4.6** | Anthropic | Official / OpenRouter | Deep reasoning, writing, safety |
-| **Gemini 2.5 Pro** | Google | Official / OpenRouter | Multimodal, long context |
-| **DeepSeek V3.2** | DeepSeek | Official only | Reasoning, math, code |
-| **Seed 2.0 Pro** | ByteDance | Official only | Chinese language, summarization |
-| **MiMo V2 Flash** | Xiaomi | OpenRouter only | Fast inference |
-| **MiniMax M2.5** | MiniMax | OpenRouter only | Multilingual generation |
+| **GPT-5.4** | OpenAI | Official API | General intelligence, coding, analysis |
+| **Claude Opus 4.6** | Anthropic | Official API | Deep reasoning, writing, safety |
+| **Gemini 2.5 Pro** | Google | Official API | Multimodal, long context |
+| **DeepSeek V3.2** | DeepSeek | Official API | Reasoning, math, code |
+| **Seed 2.0 Pro** | ByteDance | Official API | Chinese language, summarization |
+| **MiMo** | Xiaomi | Official deployment | Reasoning, compact-model performance |
+| **MiniMax M2.5** | MiniMax | Official API | Multilingual generation, coding |
 | **Council** | Multi-model | GPT + Claude + Gemini + Seed | Expert consensus synthesis |
 
 ---
@@ -133,7 +132,7 @@ Web App Manifest with mobile-optimized UI. Dark/Light/System theme support.
 | Auth | JWT (jose), bcryptjs, HttpOnly Cookie |
 | File Storage | Vercel Blob |
 | Sandbox | @vercel/sandbox (Node 24 + Python 3.13) |
-| AI SDKs | @anthropic-ai/sdk, @google/genai, OpenAI REST, Volcengine Seed |
+| AI SDKs | @anthropic-ai/sdk, Gemini REST, OpenAI REST, Volcengine Seed |
 | Markdown | react-markdown + remark-gfm + remark-math + rehype-katex |
 | Doc Parsing | pdf-parse, mammoth, word-extractor, xlsx |
 
@@ -161,7 +160,11 @@ Vectaix AI is designed for **Vercel Pro** deployment. No local runtime is provid
 | `GEMINI_API_KEY` | ✅ | Official Google Gemini access |
 | `DEEPSEEK_API_KEY` | ✅ | Official DeepSeek access |
 | `ARK_API_KEY` | ✅ | Official ByteDance Seed access |
-| `OPENROUTER_API_KEY` | ✅ | OpenRouter gateway access |
+| `MINIMAX_API_KEY` | ✅ | Official MiniMax access |
+| `MINIMAX_MODEL_ID` | ❌ | MiniMax model id, defaults to `MiniMax-M2.5` |
+| `MIMO_API_BASE_URL` | ✅ | MiMo deployment base URL, for example `https://your-mimo-server/v1` |
+| `MIMO_API_KEY` | ❌ | MiMo deployment API key |
+| `MIMO_MODEL_ID` | ❌ | MiMo deployment model id, defaults to `XiaomiMiMo/MiMo-7B-RL-0530` |
 | `VOLCENGINE_WEB_SEARCH_API_KEY` | ⬚ | Web search (optional for now) |
 
 > **Note:** No `.env.example` file is provided. This README is the single source of truth for environment configuration.
@@ -174,7 +177,7 @@ Vectaix AI is designed for **Vercel Pro** deployment. No local runtime is provid
 vectaix-ai/
 ├── app/
 │   ├── api/                  # 19 API route groups
-│   │   ├── admin/            # User management, model routing
+│   │   ├── admin/            # User management
 │   │   ├── agent/            # Agent runtime entry
 │   │   ├── anthropic/        # Claude direct
 │   │   ├── auth/             # Login / Register / Password
@@ -192,7 +195,7 @@ vectaix-ai/
 ├── lib/
 │   ├── server/               # Server-side logic
 │   │   ├── agent/            # Agent framework (orchestrator, tools, state)
-│   │   ├── chat/             # Provider adapters, OpenRouter
+│   │   ├── chat/             # Provider adapters, official APIs
 │   │   ├── search/           # Web search providers
 │   │   ├── webBrowsing/      # Web browsing system
 │   │   └── sandbox/          # Vercel Sandbox integration
@@ -210,7 +213,7 @@ vectaix-ai/
 
 - [x] Multi-model chat with 8 AI models
 - [x] Council multi-expert workflow
-- [x] Smart model routing (Official / OpenRouter)
+- [x] Official access
 - [x] Web search & browsing
 - [x] File upload & document parsing
 - [x] Agent runtime framework

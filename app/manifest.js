@@ -2,7 +2,7 @@ export default function manifest() {
     return {
         name: 'Vectaix AI',
         short_name: 'Vectaix AI',
-        description: 'Open-source AI workspace with official OpenAI, Anthropic, Gemini, DeepSeek, Seed, and OpenRouter-routed third-party models.',
+        description: 'Open-source AI workspace with official OpenAI, Anthropic, Gemini, DeepSeek, Seed, MiniMax, and Xiaomi MiMo access.',
         start_url: '/',
         display: 'standalone',
         background_color: '#f8fafc',
@@ -21,8 +21,6 @@ export default function manifest() {
         ],
     };
 }
-
-
 
 
 

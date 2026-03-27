@@ -7,7 +7,7 @@ import { UI_THEME_MODE_KEY } from '@/lib/shared/storageKeys';
 
 export const metadata = {
     title: 'Vectaix AI',
-    description: 'Open-source AI workspace with official OpenAI, Anthropic, Gemini, DeepSeek, Seed, and OpenRouter-routed third-party models.',
+    description: 'Open-source AI workspace with official OpenAI, Anthropic, Gemini, DeepSeek, Seed, MiniMax, and Xiaomi MiMo access.',
     manifest: '/manifest.webmanifest',
     icons: {
         shortcut: '/favicon.ico',

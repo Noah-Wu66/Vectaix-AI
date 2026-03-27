@@ -6,7 +6,7 @@ import { getAuthPayload } from "@/lib/auth";
 import { getClientIP, rateLimit } from "@/lib/rateLimit";
 import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
 import { COUNCIL_MAX_ROUNDS, COUNCIL_MODEL_ID, countCompletedCouncilRounds } from "@/lib/shared/models";
-import { resolveCouncilProviderRoutes } from "@/lib/modelRoutes";
+import { resolveCouncilProviderConfigs } from "@/lib/providerConfigs";
 import {
   buildCouncilExpertState,
   buildCouncilFinalMessage,
@@ -20,7 +20,6 @@ import {
   runSeedCouncilSummary,
   runSeedTriage,
 } from "./councilHelpers";
-import { getModelRoutes } from "@/lib/modelRoutes";
 import {
   enrichConversationPartsWithBlobIds,
   enrichStoredMessagesWithBlobIds,
@@ -185,10 +184,9 @@ export async function POST(req) {
 
   let providerRoutes;
   try {
-    const savedRoutes = await getModelRoutes(auth.userId);
-    providerRoutes = resolveCouncilProviderRoutes(savedRoutes);
+    providerRoutes = resolveCouncilProviderConfigs();
   } catch (error) {
-    return Response.json({ error: error?.message || "模型线路配置错误" }, { status: 500 });
+    return Response.json({ error: error?.message || "模型接口未配置" }, { status: 500 });
   }
 
   let promptText = typeof prompt === "string" ? prompt : "";
