@@ -49,7 +49,7 @@ Whether you need a quick answer from GPT-5.4, deep reasoning from Claude Opus 4.
 Switch freely between 8 AI models in a single workspace. Each conversation can be bound to a different model.
 
 ### 🧠 Council Workflow
-A unique multi-expert collaboration mode: GPT-5.4, Claude Opus 4.6, and Gemini 2.5 Pro answer as parallel experts, then Seed 2.0 Pro synthesizes the final response.
+A unique multi-expert collaboration mode: GPT-5.4, Claude Opus 4.6, and Gemini 3.1 Pro Preview answer as parallel experts, then Seed 2.0 Pro synthesizes the final response.
 
 ### 🔌 Official Access
 All models now use official APIs or official deployments only. Route switching has been removed for a simpler setup.
@@ -101,7 +101,7 @@ Web App Manifest with mobile-optimized UI. Dark/Light/System theme support.
 |:------|:---------|:--------|:----------|
 | **GPT-5.4** | OpenAI | Official API | General intelligence, coding, analysis |
 | **Claude Opus 4.6** | Anthropic | Official API | Deep reasoning, writing, safety |
-| **Gemini 2.5 Pro** | Google | Official API | Multimodal, long context |
+| **Gemini 3.1 Pro Preview** | Google | Official API | Multimodal, long context |
 | **DeepSeek V3.2** | DeepSeek | Official API | Reasoning, math, code |
 | **Seed 2.0 Pro** | ByteDance | Official API | Chinese language, summarization |
 | **MiMo** | Xiaomi | Official deployment | Reasoning, compact-model performance |
