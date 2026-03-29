@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 320" width="100%" height="100%">
+    <defs>
+        <style>
+            .box { fill: #ffffff; stroke: #333333; stroke-width: 1.5; rx: 6; ry: 6; }
+            .box-council { fill: #e3f2fd; stroke: #1565c0; stroke-width: 1.5; rx: 8; ry: 8; }
+            .box-agent { fill: #fff3e0; stroke: #e65100; stroke-width: 1.5; rx: 8; ry: 8; }
+            .box-db { fill: #e8f5e9; stroke: #2e7d32; stroke-width: 1.5; rx: 6; ry: 6; }
+            .box-tool { fill: #f3e5f5; stroke: #7b1fa2; stroke-width: 1.5; rx: 6; ry: 6; }
+            .box-triage { fill: #fff8e1; stroke: #f9a825; stroke-width: 1.5; rx: 6; ry: 6; }
+            .text-main { font-family: "Times New Roman", Times, serif; font-size: 14px; font-weight: bold; text-anchor: middle; dominant-baseline: central; fill: #111; }
+            .text-sub { font-family: Arial, sans-serif; font-size: 12px; text-anchor: middle; dominant-baseline: central; fill: #333; }
+            .text-sm { font-family: Arial, sans-serif; font-size: 10px; font-style: italic; text-anchor: middle; dominant-baseline: central; fill: #555; }
+            .line { stroke: #555; stroke-width: 1.5; fill: none; }
+            .line-dash { stroke: #555; stroke-width: 1.5; fill: none; stroke-dasharray: 4,4; }
+        </style>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0,0 L0,8 L8,4 z" fill="#555" />
+        </marker>
+    </defs>
+    <rect width="100%" height="100%" fill="white"/>
+    <rect x="20" y="140" width="100" height="40" class="box" />
+<text x="70" y="160" class="text-main">User Query Q</text>
+<rect x="160" y="120" width="160" height="80" class="box-triage" />
+<text x="240" y="140" class="text-main">Phase 1: Seed Triage</text>
+<text x="240" y="160" class="text-sm">Seed 2.0 Pro (minimal)</text>
+<text x="240" y="175" class="text-sm">Output: {needCouncil}</text>
+<rect x="160" y="240" width="160" height="40" class="box" stroke="#c62828" />
+<text x="240" y="260" class="text-main">Direct Answer</text>
+<rect x="360" y="40" width="220" height="240" class="box-council" />
+<text x="470" y="60" class="text-main">Phase 2: Parallel Experts</text>
+<rect x="380" y="80" width="180" height="50" class="box" />
+<text x="470" y="95" class="text-sub">Expert 1: GPT-5.4</text>
+<text x="470" y="115" class="text-sm">Web Search → CoT → R₁</text>
+<rect x="380" y="140" width="180" height="50" class="box" />
+<text x="470" y="155" class="text-sub">Expert 2: Claude Opus 4.6</text>
+<text x="470" y="175" class="text-sm">Web Search → CoT → R₂</text>
+<rect x="380" y="200" width="180" height="50" class="box" />
+<text x="470" y="215" class="text-sub">Expert 3: Gemini 3.1 Pro</text>
+<text x="470" y="235" class="text-sm">Web Search → CoT → R₃</text>
+<rect x="620" y="110" width="200" height="100" class="box-db" />
+<text x="720" y="130" class="text-main">Phase 3: Seed Synthesis</text>
+<text x="720" y="150" class="text-sm">Seed 2.0 Pro (high)</text>
+<text x="720" y="170" class="text-sm">Payload: Prompt + R₁ + R₂ + R₃</text>
+<text x="720" y="190" class="text-sm">Output: 4-Section Consensus</text>
+<rect x="640" y="250" width="160" height="40" class="box" stroke="#1b5e20" stroke-width="2" />
+<text x="720" y="270" class="text-main">Consensus Response A</text>
+<path d="M 120,160 L 160,160" class="line" marker-end="url(#arrow)" />
+<path d="M 240,200 L 240,240" class="line-dash" marker-end="url(#arrow)" />
+<text x="245" y="220" class="text-sm" text-anchor="start">needCouncil=false</text>
+<path d="M 320,160 L 360,160" class="line" marker-end="url(#arrow)" />
+<text x="340" y="150" class="text-sm">true</text>
+<path d="M 560,105 L 620,130" class="line" marker-end="url(#arrow)" />
+<path d="M 560,165 L 620,165" class="line" marker-end="url(#arrow)" />
+<path d="M 560,225 L 620,200" class="line" marker-end="url(#arrow)" />
+<path d="M 720,210 L 720,250" class="line" marker-end="url(#arrow)" />
+    </svg>

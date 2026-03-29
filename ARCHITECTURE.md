@@ -16,36 +16,7 @@ We present the technical architecture of **Vectaix AI**, an open-source AI works
 
 ## 1. System Overview
 
-```mermaid
-graph TB
-    Client["Client (React 19 + SSE)"] -->|POST /api/council| Council["Council Engine"]
-    Client -->|POST /api/agent| Agent["Agent Engine"]
-
-    subgraph CouncilEngine["Council Engine"]
-        direction TB
-        CT["Seed Triage"] --> EX["Parallel Experts (×3)"]
-        EX --> SS["Seed Synthesis"]
-    end
-
-    subgraph AgentEngine["Agent Engine"]
-        direction TB
-        PL["Planner"] --> RD["Attachment Reader"]
-        RD --> TL["Tool Loop (ReAct)"]
-        TL --> WR["Answer Writer"]
-    end
-
-    Council --> DB[(MongoDB)]
-    Agent --> DB
-    Agent --> Tools["Tool Registry"]
-    Tools --> WB["Web Browsing"]
-    Tools --> SB["Vercel Sandbox"]
-
-    style Client fill:#fff,stroke:#333,stroke-width:2px
-    style CouncilEngine fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,rx:8
-    style AgentEngine fill:#fff3e0,stroke:#e65100,stroke-width:2px,rx:8
-    style DB fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
-    style Tools fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-```
+<img src="./public/images/architecture/fig1_system_overview.svg" width="100%" alt="System-level architecture" />
 
 <div align="center">
   <em>Figure 1 | System-level architecture. The client communicates with two independent engines via distinct SSE endpoints. Both engines share a MongoDB persistence layer.</em>
@@ -73,45 +44,7 @@ The synthesis model is **Seed 2.0 Pro** (`doubao-seed-2-0-pro-260215`) from Byte
 
 ### 2.3 Pipeline Architecture
 
-```mermaid
-graph TB
-    Q["User Query Q"] --> TR
-
-    subgraph Phase1["Phase 1 · Seed Triage"]
-        TR["Seed 2.0 Pro<br/>──────────<br/>thinkingLevel: minimal<br/>temperature: 0.3<br/>maxTokens: 1200<br/>──────────<br/>Output: JSON<br/>{needCouncil, directAnswer}"]
-    end
-
-    TR -->|"needCouncil = false"| DA["Direct Answer<br/>(simulated streaming)"]
-    TR -->|"needCouncil = true"| PAR
-
-    subgraph Phase2["Phase 2 · Parallel Expert Generation (Promise.all)"]
-        direction LR
-        PAR[" "] --> E1
-        PAR --> E2
-        PAR --> E3
-
-        E1["GPT-5.4<br/>──────────<br/>1. Web Search<br/>2. Chain-of-Thought<br/>3. Response R₁"]
-        E2["Claude Opus 4.6<br/>──────────<br/>1. Web Search<br/>2. Chain-of-Thought<br/>3. Response R₂"]
-        E3["Gemini 3.1 Pro<br/>──────────<br/>1. Web Search<br/>2. Chain-of-Thought<br/>3. Response R₃"]
-    end
-
-    E1 --> AGG
-    E2 --> AGG
-    E3 --> AGG
-
-    subgraph Phase3["Phase 3 · Seed Consensus Synthesis (Streaming)"]
-        AGG["Build Payload<br/>──────────<br/>History Memo<br/>+ User Prompt<br/>+ R₁ + R₂ + R₃<br/>+ All Citations"] --> SEED["Seed 2.0 Pro<br/>──────────<br/>thinkingLevel: high<br/>temperature: 1<br/>maxTokens: 8000<br/>──────────<br/>4-Section Output:<br/>① Consensus Table<br/>② Disagreement Table<br/>③ Unique Findings<br/>④ Comprehensive Analysis"]
-    end
-
-    SEED --> OUT["Consensus Response A"]
-
-    style Phase1 fill:#fff8e1,stroke:#f9a825,stroke-width:2px,rx:8
-    style Phase2 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,rx:8
-    style Phase3 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,rx:8
-    style Q fill:#fff,stroke:#333,stroke-width:2px
-    style DA fill:#fce4ec,stroke:#c62828,stroke-width:1px
-    style OUT fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
-```
+<img src="./public/images/architecture/fig2_pipeline_arch.svg" width="100%" alt="Council Pipeline Architecture" />
 
 <div align="center">
   <em>Figure 2 | Council pipeline. Phase 1 uses Seed as a lightweight triage classifier. If the query is non-trivial, Phase 2 dispatches all three experts in parallel via <code>Promise.all</code>, each independently performing web search and reasoning. Phase 3 streams the final synthesis through Seed with a structured 4-section output format.</em>
@@ -207,48 +140,7 @@ The Agent Runtime is formalized as a tuple $\mathcal{A} = \langle \mathcal{I}, \
 
 The Agent operates in a 4-phase pipeline. Each phase is managed by the Coordinator, which broadcasts state transitions as SSE events.
 
-```mermaid
-graph TB
-    IN["POST /api/agent"] --> AUTH["Auth + Rate Limit<br/>(20 req/min)"]
-    AUTH --> RT["runAgentRuntime"]
-    RT --> COORD["Coordinator.init()"]
-
-    subgraph IE["Instruction Engine — 4 Phases"]
-        direction TB
-
-        subgraph P1["Phase 1 · Planner (Regex-based, no LLM)"]
-            PLAN["Keyword Matching<br/>──────────<br/>shouldSearch: 搜索/最新/官网...<br/>shouldUseMemory: 继续/上次...<br/>shouldUseSandbox: 代码/运行...<br/>shouldReadAttachments: has files"]
-        end
-
-        subgraph P2["Phase 2 · Attachment Reader"]
-            READ["For each attachment:<br/>prepareDocumentAttachment()<br/>──────────<br/>Text/Code → direct read<br/>PDF/DOCX/XLSX → Vercel Sandbox<br/>(Python 3.13, network: deny-all)"]
-        end
-
-        subgraph P3["Phase 3 · Tool Loop (ReAct, max 4 rounds)"]
-            CTRL["runAgentControlText<br/>──────────<br/>Non-streaming LLM call<br/>maxTokens: 900<br/>temperature: 0.1"] --> PARSE["normalizeInstruction<br/>──────────<br/>Parse JSON response"]
-            PARSE -->|"call_tool"| EXEC["ToolRegistry.execute()<br/>──────────<br/>Whitelist validation<br/>→ invoke tool API"]
-            EXEC --> RES["Collect result<br/>→ append to toolResults"]
-            RES -->|"round < 4"| CTRL
-            PARSE -->|"finish"| EXIT["Exit loop"]
-        end
-
-        subgraph P4["Phase 4 · Answer Writer"]
-            WRITE["buildFinalPrompt<br/>──────────<br/>Goal + Plan + Memory<br/>+ Attachments + Search Context<br/>+ Tool Results<br/>──────────<br/>streamAgentFinalAnswer<br/>maxTokens: 32,000<br/>Streaming with thinking"]
-        end
-
-        P1 --> P2 --> P3 --> P4
-    end
-
-    COORD --> IE
-    P4 --> MEM["appendMemoryEntry<br/>(MongoDB, max 5 recent)"]
-    P4 --> SER["serializeRuntimeState<br/>→ persist to Conversation"]
-
-    style IE fill:#fff8e1,stroke:#f57f17,stroke-width:2px,rx:8
-    style P1 fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,rx:6
-    style P2 fill:#e3f2fd,stroke:#1565c0,stroke-width:1px,rx:6
-    style P3 fill:#fce4ec,stroke:#c62828,stroke-width:1px,rx:6
-    style P4 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px,rx:6
-```
+<img src="./public/images/architecture/fig5_agent_pipeline.svg" width="100%" alt="Agent Execution Pipeline" />
 
 <div align="center">
   <em>Figure 5 | Agent execution pipeline. Phase 1 uses regex-based keyword matching (no LLM call) to determine which capabilities to enable. Phase 3 implements a ReAct-style tool loop where the LLM outputs structured JSON instructions. Phase 4 streams the final answer with full context injection.</em>
@@ -335,21 +227,7 @@ xychart-beta
 
 The web browsing subsystem is itself a **mini agent loop** (up to 5 rounds) orchestrated by `session.js`. The LLM decides which browsing actions to take at each step.
 
-```mermaid
-graph LR
-    subgraph BrowsingLoop["Web Browsing Session (max 5 rounds)"]
-        direction TB
-        LLM["LLM Action Decision<br/>(via actionRunner)"] --> |"search"| WS["Volcengine Search<br/>──────────<br/>Max 20 results<br/>5 QPS rate limit<br/>3× retry with backoff"]
-        LLM --> |"crawlSinglePage"| CS["Fetch Single URL<br/>──────────<br/>UA: Vectaix-AI-WebBrowsing/1.0<br/>20s timeout<br/>25K char limit"]
-        LLM --> |"crawlMultiPages"| CM["Batch Fetch URLs<br/>──────────<br/>3 concurrent<br/>Same limits"]
-        LLM --> |"final_answer"| FA["Exit Loop"]
-        WS --> LLM
-        CS --> LLM
-        CM --> LLM
-    end
-
-    style BrowsingLoop fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,rx:8
-```
+<img src="./public/images/architecture/fig7_browsing_loop.svg" width="100%" alt="Web Browsing Session Loop" />
 
 <div align="center">
   <em>Figure 7 | Web browsing session loop. The Volcengine API supports <code>web</code>, <code>web_summary</code>, and <code>image</code> search types with time range, site, and industry filtering.</em>

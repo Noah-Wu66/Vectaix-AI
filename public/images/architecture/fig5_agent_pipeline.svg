@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 380" width="100%" height="100%">
+    <defs>
+        <style>
+            .box { fill: #ffffff; stroke: #333333; stroke-width: 1.5; rx: 6; ry: 6; }
+            .box-council { fill: #e3f2fd; stroke: #1565c0; stroke-width: 1.5; rx: 8; ry: 8; }
+            .box-agent { fill: #fff3e0; stroke: #e65100; stroke-width: 1.5; rx: 8; ry: 8; }
+            .box-db { fill: #e8f5e9; stroke: #2e7d32; stroke-width: 1.5; rx: 6; ry: 6; }
+            .box-tool { fill: #f3e5f5; stroke: #7b1fa2; stroke-width: 1.5; rx: 6; ry: 6; }
+            .box-triage { fill: #fff8e1; stroke: #f9a825; stroke-width: 1.5; rx: 6; ry: 6; }
+            .text-main { font-family: "Times New Roman", Times, serif; font-size: 14px; font-weight: bold; text-anchor: middle; dominant-baseline: central; fill: #111; }
+            .text-sub { font-family: Arial, sans-serif; font-size: 12px; text-anchor: middle; dominant-baseline: central; fill: #333; }
+            .text-sm { font-family: Arial, sans-serif; font-size: 10px; font-style: italic; text-anchor: middle; dominant-baseline: central; fill: #555; }
+            .line { stroke: #555; stroke-width: 1.5; fill: none; }
+            .line-dash { stroke: #555; stroke-width: 1.5; fill: none; stroke-dasharray: 4,4; }
+        </style>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0,0 L0,8 L8,4 z" fill="#555" />
+        </marker>
+    </defs>
+    <rect width="100%" height="100%" fill="white"/>
+    <rect x="20" y="140" width="120" height="40" class="box" />
+<text x="80" y="160" class="text-main">POST /api/agent</text>
+<rect x="180" y="140" width="120" height="40" class="box" />
+<text x="240" y="152" class="text-main">Auth + Rate Limit</text>
+<text x="240" y="168" class="text-sm">(20 req/min)</text>
+<rect x="340" y="140" width="120" height="40" class="box" />
+<text x="400" y="160" class="text-main">Coordinator.init()</text>
+<rect x="500" y="40" width="320" height="240" class="box-agent" />
+<text x="660" y="60" class="text-main">Instruction Engine — 4 Phases</text>
+<rect x="520" y="80" width="120" height="40" class="box" stroke="#2e7d32" />
+<text x="580" y="100" class="text-sub">P1: Planner (Regex)</text>
+<rect x="680" y="80" width="120" height="40" class="box" stroke="#1565c0" />
+<text x="740" y="100" class="text-sub">P2: Attach. Reader</text>
+<rect x="520" y="160" width="280" height="40" class="box" stroke="#c62828" />
+<text x="660" y="180" class="text-sub">P3: Tool Loop (ReAct, max 4 rounds)</text>
+<rect x="520" y="220" width="280" height="40" class="box" stroke="#7b1fa2" />
+<text x="660" y="240" class="text-sub">P4: Answer Writer (Streaming)</text>
+<rect x="540" y="310" width="240" height="40" class="box-db" />
+<text x="660" y="330" class="text-main">MongoDB (Memory & State Serialize)</text>
+<path d="M 140,160 L 180,160" class="line" marker-end="url(#arrow)" />
+<path d="M 300,160 L 340,160" class="line" marker-end="url(#arrow)" />
+<path d="M 460,160 L 500,160" class="line" marker-end="url(#arrow)" />
+<path d="M 640,100 L 680,100" class="line" marker-end="url(#arrow)" />
+<path d="M 740,120 L 740,140 L 660,140 L 660,160" class="line" marker-end="url(#arrow)" />
+<path d="M 660,200 L 660,220" class="line" marker-end="url(#arrow)" />
+<path d="M 660,260 L 660,310" class="line-dash" marker-end="url(#arrow)" />
+    </svg>

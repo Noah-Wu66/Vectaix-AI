@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 240" width="100%" height="100%">
+    <defs>
+        <style>
+            .box { fill: #ffffff; stroke: #333333; stroke-width: 1.5; rx: 6; ry: 6; }
+            .box-council { fill: #e3f2fd; stroke: #1565c0; stroke-width: 1.5; rx: 8; ry: 8; }
+            .box-agent { fill: #fff3e0; stroke: #e65100; stroke-width: 1.5; rx: 8; ry: 8; }
+            .box-db { fill: #e8f5e9; stroke: #2e7d32; stroke-width: 1.5; rx: 6; ry: 6; }
+            .box-tool { fill: #f3e5f5; stroke: #7b1fa2; stroke-width: 1.5; rx: 6; ry: 6; }
+            .box-triage { fill: #fff8e1; stroke: #f9a825; stroke-width: 1.5; rx: 6; ry: 6; }
+            .text-main { font-family: "Times New Roman", Times, serif; font-size: 14px; font-weight: bold; text-anchor: middle; dominant-baseline: central; fill: #111; }
+            .text-sub { font-family: Arial, sans-serif; font-size: 12px; text-anchor: middle; dominant-baseline: central; fill: #333; }
+            .text-sm { font-family: Arial, sans-serif; font-size: 10px; font-style: italic; text-anchor: middle; dominant-baseline: central; fill: #555; }
+            .line { stroke: #555; stroke-width: 1.5; fill: none; }
+            .line-dash { stroke: #555; stroke-width: 1.5; fill: none; stroke-dasharray: 4,4; }
+        </style>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M0,0 L0,8 L8,4 z" fill="#555" />
+        </marker>
+    </defs>
+    <rect width="100%" height="100%" fill="white"/>
+    <rect x="20" y="20" width="800" height="200" class="box-council" />
+<text x="420" y="40" class="text-main">Web Browsing Session (max 5 rounds)</text>
+<rect x="50" y="80" width="160" height="80" class="box" />
+<text x="130" y="110" class="text-main">LLM Action Decision</text>
+<text x="130" y="130" class="text-sub">(via actionRunner)</text>
+<rect x="300" y="60" width="200" height="40" class="box" />
+<text x="400" y="80" class="text-sub">Volcengine Search (Max 20)</text>
+<rect x="300" y="110" width="200" height="40" class="box" />
+<text x="400" y="130" class="text-sub">Fetch Single URL (20s limit)</text>
+<rect x="300" y="160" width="200" height="40" class="box" />
+<text x="400" y="180" class="text-sub">Batch Fetch URLs (3 conc)</text>
+<rect x="620" y="110" width="120" height="40" class="box" stroke="#1b5e20" stroke-width="2" />
+<text x="680" y="130" class="text-main">Exit Loop</text>
+<path d="M 210,90 L 300,80" class="line" marker-end="url(#arrow)" />
+<text x="250" y="75" class="text-sm">"search"</text>
+<path d="M 210,120 L 300,130" class="line" marker-end="url(#arrow)" />
+<text x="250" y="115" class="text-sm">"crawlSinglePage"</text>
+<path d="M 210,150 L 300,180" class="line" marker-end="url(#arrow)" />
+<text x="250" y="175" class="text-sm">"crawlMultiPages"</text>
+<path d="M 500,80 L 540,80 L 540,45 L 130,45 L 130,80" class="line-dash" marker-end="url(#arrow)" />
+<path d="M 500,130 L 520,130 L 520,45" class="line-dash" />
+<path d="M 500,180 L 530,180 L 530,45" class="line-dash" />
+<path d="M 210,180 L 620,130" class="line" marker-end="url(#arrow)" />
+<text x="420" y="210" class="text-sm">"final_answer"</text>
+    </svg>
