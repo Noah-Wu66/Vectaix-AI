@@ -5,33 +5,22 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp } from "lucide-react";
 import {
   CHAT_MODELS,
-  getModelAvailableInputs,
   getSelectableChatModels,
-  MODEL_NATIVE_INPUT_LABELS,
+  isCouncilModel,
 } from "@/lib/shared/models";
 import { ModelGlyph } from "./ModelVisuals";
 
-const SELECTABLE_MODELS = getSelectableChatModels();
-
-function renderInputBadges(modelId, chatMode, active = false) {
-  return getModelAvailableInputs(modelId, chatMode).map((input) => (
-    <span
-      key={`${modelId}-${input}`}
-      className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-        active
-          ? "border-white/20 text-white/80"
-          : "border-zinc-200/80 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400"
-      }`}
-    >
-      {MODEL_NATIVE_INPUT_LABELS[input] || input}
-    </span>
-  ));
-}
-
-export default function ModelSelector({ model, chatMode, onModelChange, ready = true }) {
+export default function ModelSelector({
+  model,
+  onModelChange,
+  ready = true,
+  includeCouncil = true,
+  fullWidth = false,
+}) {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const currentModel = ready ? CHAT_MODELS.find((item) => item.id === model) : null;
   const currentModelLabel = currentModel?.name || "模型";
+  const selectableModels = getSelectableChatModels().filter((item) => includeCouncil || !isCouncilModel(item.id));
 
   return (
     <div className="relative">
@@ -40,7 +29,7 @@ export default function ModelSelector({ model, chatMode, onModelChange, ready = 
           if (!ready) return;
           setShowModelMenu((value) => !value);
         }}
-        className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-sm"
+        className={`px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-sm ${fullWidth ? "w-full justify-between" : ""}`}
         type="button"
         disabled={!ready}
       >
@@ -51,7 +40,7 @@ export default function ModelSelector({ model, chatMode, onModelChange, ready = 
             <span className="block h-3.5 w-3.5 rounded-sm bg-zinc-200" aria-hidden />
           )}
         </span>
-        <span className="hidden truncate max-w-[160px] sm:inline-block">{currentModelLabel}</span>
+        <span className={fullWidth ? "truncate max-w-[180px]" : "hidden truncate max-w-[160px] sm:inline-block"}>{currentModelLabel}</span>
         <ChevronUp
           size={12}
           className={`transition-transform ${showModelMenu ? "rotate-180" : ""} ${ready ? "" : "opacity-40"}`}
@@ -78,7 +67,7 @@ export default function ModelSelector({ model, chatMode, onModelChange, ready = 
                 模型
               </div>
               <div className="max-h-[320px] overflow-y-auto pr-1 mobile-scroll custom-scrollbar">
-                {SELECTABLE_MODELS.map((item) => (
+                {selectableModels.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => {
@@ -94,12 +83,7 @@ export default function ModelSelector({ model, chatMode, onModelChange, ready = 
                     type="button"
                   >
                     <ModelGlyph model={item.id} provider={item.provider} size={16} />
-                    <div className="min-w-0 flex-1 text-left">
-                      <div className="leading-tight break-words">{item.name}</div>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {renderInputBadges(item.id, chatMode, model === item.id)}
-                      </div>
-                    </div>
+                    <div className="min-w-0 flex-1 text-left leading-tight break-words">{item.name}</div>
                   </button>
                 ))}
               </div>

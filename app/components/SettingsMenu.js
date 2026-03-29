@@ -5,9 +5,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Globe, Settings2, X } from "lucide-react";
 import { getModelConfig } from "@/lib/shared/models";
 import { DEFAULT_WEB_SEARCH_SETTINGS } from "@/lib/shared/webSearch";
+import ModelSelector from "./ModelSelector";
 
 export default function SettingsMenu({
   model,
+  onModelChange,
+  ready = true,
   webSearch,
   setWebSearch,
 }) {
@@ -24,8 +27,6 @@ export default function SettingsMenu({
       ...patch,
     }));
   };
-
-  if (!supportsWebSearch) return null;
 
   return (
     <div className="relative">
@@ -55,7 +56,7 @@ export default function SettingsMenu({
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-4 z-50 w-[min(92vw,220px)] max-w-[calc(100vw-2rem)]"
+              className="absolute bottom-full left-0 mb-2 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-4 z-50 w-[min(92vw,300px)] max-w-[calc(100vw-2rem)]"
             >
               <div className="flex justify-between items-center mb-3">
                 <span className="font-medium text-zinc-900 dark:text-zinc-100 text-sm">设置</span>
@@ -68,21 +69,38 @@ export default function SettingsMenu({
                 </button>
               </div>
 
-              <div>
-                <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                  联网搜索
-                </label>
-                <button
-                  onClick={() => updateWebSearch({ enabled: !webSearchSettings.enabled })}
-                  type="button"
-                  className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearchSettings.enabled
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                    }`}
-                >
-                  <Globe size={14} />
-                  {webSearchSettings.enabled ? "开" : "关"}
-                </button>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                    模型
+                  </label>
+                  <ModelSelector
+                    model={model}
+                    onModelChange={onModelChange}
+                    ready={ready}
+                    includeCouncil={false}
+                    fullWidth
+                  />
+                </div>
+
+                {supportsWebSearch ? (
+                  <div>
+                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                      联网搜索
+                    </label>
+                    <button
+                      onClick={() => updateWebSearch({ enabled: !webSearchSettings.enabled })}
+                      type="button"
+                      className={`px-3 py-1 rounded-lg border transition-colors text-sm flex items-center gap-1.5 ${webSearchSettings.enabled
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                        }`}
+                    >
+                      <Globe size={14} />
+                      {webSearchSettings.enabled ? "开" : "关"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </motion.div>
           </>

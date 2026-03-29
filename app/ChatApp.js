@@ -7,6 +7,7 @@ import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
 import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
 import {
   CHAT_MODELS,
+  COUNCIL_MODEL_ID,
   DEFAULT_MODEL,
   normalizeChatRuntimeMode,
   isCouncilModel,
@@ -696,7 +697,9 @@ export default function ChatApp() {
 
         if (targetModel !== model) {
           setModel(targetModel);
-          lastTextModelRef.current = targetModel;
+          if (!isCouncilModel(targetModel)) {
+            lastTextModelRef.current = targetModel;
+          }
         }
 
         applyConversationSettings(conversation.settings);
@@ -767,9 +770,71 @@ export default function ChatApp() {
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
-  const requestChatModeChange = (nextMode) => {
-    if (loading || messages.some((m) => m.isStreaming) || isCouncilModel(model)) return;
+  const getLastStandardModel = () => {
+    const candidate = lastTextModelRef.current;
+    if (isPrimaryChatModelId(candidate) && !isCouncilModel(candidate)) {
+      return candidate;
+    }
+    return DEFAULT_MODEL;
+  };
+
+  const requestModeChange = (nextMode) => {
+    if (loading || messages.some((m) => m.isStreaming)) return;
+
+    if (nextMode === COUNCIL_MODEL_ID) {
+      if (isCouncilModel(model)) return;
+
+      const applyCouncilMode = () => {
+        userInterruptedRef.current = false;
+        setCurrentConversationId(null);
+        setMessages([]);
+        setModel(COUNCIL_MODEL_ID);
+      };
+
+      if (messages.length > 0) {
+        setConfirmModalConfig({
+          title: "切换模式",
+          message: "切换到 Council 需要新建对话。Council 和普通模型不能在同一个会话里混用。\n\n是否新建对话并切换？",
+          onConfirm: applyCouncilMode,
+        });
+        setShowConfirmModal(true);
+        return;
+      }
+
+      applyCouncilMode();
+      return;
+    }
+
     const normalizedMode = normalizeChatRuntimeMode(nextMode);
+
+    if (isCouncilModel(model)) {
+      const fallbackModel = getLastStandardModel();
+      const nextModeLabel = normalizedMode === "agent" ? "Agent" : "Chat";
+      const applyStandardMode = () => {
+        userInterruptedRef.current = false;
+        setCurrentConversationId(null);
+        setMessages([]);
+        setModel(fallbackModel);
+        lastTextModelRef.current = fallbackModel;
+        setChatMode(normalizedMode);
+      };
+
+      if (messages.length > 0) {
+        setConfirmModalConfig({
+          title: "切换模式",
+          message: `切换到 ${nextModeLabel} 需要新建对话。Council 和普通模型不能在同一个会话里混用。\n\n是否新建对话并切换？`,
+          onConfirm: applyStandardMode,
+        });
+        setShowConfirmModal(true);
+        return;
+      }
+
+      applyStandardMode();
+      return;
+    }
+
+    if (normalizedMode === chatMode) return;
+
     setChatMode(normalizedMode);
     syncConversationSettings({ mode: normalizedMode });
   };
@@ -790,7 +855,9 @@ export default function ChatApp() {
           setCurrentConversationId(null);
           setMessages([]);
           setModel(nextModel);
-          lastTextModelRef.current = nextModel;
+          if (!nextIsCouncil) {
+            lastTextModelRef.current = nextModel;
+          }
         }
       });
       setShowConfirmModal(true);
@@ -798,7 +865,9 @@ export default function ChatApp() {
     }
 
     setModel(nextModel);
-    lastTextModelRef.current = nextModel;
+    if (!nextIsCouncil) {
+      lastTextModelRef.current = nextModel;
+    }
     if (currentConversationId && !currentIsCouncil && !nextIsCouncil) {
       persistConversationModel(currentConversationId, nextModel);
     }
@@ -1001,7 +1070,7 @@ export default function ChatApp() {
             chatMode,
             modelReady: isSettingsReady,
             onModelChange: requestModelChange,
-            onChatModeChange: requestChatModeChange,
+            onModeChange: requestModeChange,
             messages,
             historyLimit,
             webSearch,

@@ -11,7 +11,6 @@ import {
 import { upload } from "@vercel/blob/client";
 import { useToast } from "./ToastProvider";
 import ModeSwitcher from "./ModeSwitcher";
-import ModelSelector from "./ModelSelector";
 import SettingsMenu from "./SettingsMenu";
 import {
   CHAT_RUNTIME_MODE_AGENT,
@@ -46,7 +45,7 @@ export default function Composer({
   chatMode,
   modelReady,
   onModelChange,
-  onChatModeChange,
+  onModeChange,
   messages,
   webSearch,
   setWebSearch,
@@ -387,20 +386,16 @@ export default function Composer({
           <ModeSwitcher
             model={model}
             chatMode={chatMode}
-            onChatModeChange={onChatModeChange}
+            onModeChange={onModeChange}
             ready={modelReady}
           />
-          <ModelSelector model={model} chatMode={chatMode} onModelChange={onModelChange} ready={modelReady} />
-          {!isCouncilSelected && (
-            <div className="flex items-center gap-1">
-              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700 mx-1" />
-              <SettingsMenu
-                model={model}
-                webSearch={webSearch}
-                setWebSearch={setWebSearch}
-              />
-            </div>
-          )}
+          <SettingsMenu
+            model={model}
+            onModelChange={onModelChange}
+            ready={modelReady}
+            webSearch={webSearch}
+            setWebSearch={setWebSearch}
+          />
         </div>
 
         {/* Text area and main actions */}
