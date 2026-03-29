@@ -179,8 +179,8 @@ create_svg("public/images/architecture/fig5_agent_pipeline.svg", "\n".join(c3), 
 
 # Fig 7: Web Browsing Loop
 c4 = []
-c4.append('<rect x="20" y="20" width="800" height="200" class="box-council" />')
-c4.append('<text x="420" y="40" class="text-main">Web Browsing Session (max 5 rounds)</text>')
+c4.append('<rect x="20" y="20" width="800" height="235" class="box-council" />')
+c4.append('<text x="420" y="32" class="text-main">Web Browsing Session (max 5 rounds)</text>')
 
 c4.append('<rect x="50" y="80" width="160" height="80" class="box" />')
 c4.append('<text x="130" y="110" class="text-main">LLM Action Decision</text>')
@@ -201,17 +201,17 @@ c4.append('<text x="680" y="130" class="text-main">Exit Loop</text>')
 c4.append('<path d="M 210,90 L 300,80" class="line" marker-end="url(#arrow)" />')
 c4.append('<text x="250" y="75" class="text-sm">"search"</text>')
 c4.append('<path d="M 210,120 L 300,130" class="line" marker-end="url(#arrow)" />')
-c4.append('<text x="250" y="115" class="text-sm">"crawlSinglePage"</text>')
+c4.append('<text x="255" y="115" class="text-sm">"crawlSingle"</text>')
 c4.append('<path d="M 210,150 L 300,180" class="line" marker-end="url(#arrow)" />')
-c4.append('<text x="250" y="175" class="text-sm">"crawlMultiPages"</text>')
+c4.append('<text x="260" y="148" class="text-sm">"crawlMulti"</text>')
 
 c4.append('<path d="M 500,80 L 540,80 L 540,45 L 130,45 L 130,80" class="line-dash" marker-end="url(#arrow)" />')
 c4.append('<path d="M 500,130 L 520,130 L 520,45" class="line-dash" />')
 c4.append('<path d="M 500,180 L 530,180 L 530,45" class="line-dash" />')
 
-c4.append('<path d="M 210,180 L 620,130" class="line" marker-end="url(#arrow)" />')
-c4.append('<text x="420" y="210" class="text-sm">"final_answer"</text>')
+c4.append('<path d="M 130,160 L 130,235 L 680,235 L 680,150" class="line" marker-end="url(#arrow)" />')
+c4.append('<text x="420" y="215" class="text-sm">"final_answer"</text>')
 
-create_svg("public/images/architecture/fig7_browsing_loop.svg", "\n".join(c4), 840, 240)
+create_svg("public/images/architecture/fig7_browsing_loop.svg", "\n".join(c4), 840, 260)
 
 print("Flow SVGs generated.")

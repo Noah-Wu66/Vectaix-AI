@@ -2,7 +2,7 @@
 
 # Vectaix AI: A Dual-Engine Architecture for Multi-Expert Council and Autonomous Agent Runtime
 
-**Vectaix AI Team**
+**By Noah Wu**
 
 </div>
 
