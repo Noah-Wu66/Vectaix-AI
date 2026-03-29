@@ -109,8 +109,8 @@ def build():
     c.append(txt(ox+192, 332, 'apply RoPE', cls="tl"))
     
     # W^UK and W^UV labels (placed clearly to the side)
-    c.append(txt(ox+275, 310, 'W<tspan dy="-5" font-size="9">UK</tspan><tspan dy="5">c</tspan><tspan dy="-4" font-size="8">KV</tspan><tspan dy="4" font-size="9">t</tspan>', fill="#00A2E8", anchor="start"))
-    c.append(txt(ox+395, 310, 'W<tspan dy="-5" font-size="9">UV</tspan><tspan dy="5">c</tspan><tspan dy="-4" font-size="8">KV</tspan><tspan dy="4" font-size="9">t</tspan>', fill="#F26522", anchor="start"))
+    c.append(txt(ox+305, 310, 'W<tspan dy="-5" font-size="9">UK</tspan><tspan dy="5">c</tspan><tspan dy="-4" font-size="8">KV</tspan><tspan dy="4" font-size="9">t</tspan>', fill="#00A2E8", anchor="end"))
+    c.append(txt(ox+405, 310, 'W<tspan dy="-5" font-size="9">UV</tspan><tspan dy="5">c</tspan><tspan dy="-4" font-size="8">KV</tspan><tspan dy="4" font-size="9">t</tspan>', fill="#F26522", anchor="start"))
     
     # --- ROW 6: c^Q_t and c^KV_t (y=370) ---
     c.append(pill(ox+100, 370, 90, 22, 'c<tspan dy="-5" font-size="9">Q</tspan><tspan dy="5" font-size="9">t</tspan>'))
@@ -204,7 +204,7 @@ def build():
     c.append(rope_box(ox2+230, 305))
     c.append(txt(ox2+192, 332, 'apply RoPE', cls="tl"))
     
-    c.append(txt(ox2+40, 310, 'W<tspan dy="-5" font-size="9">UQ</tspan><tspan dy="5">c</tspan><tspan dy="-4" font-size="8">Q</tspan><tspan dy="4" font-size="9">t</tspan>', fill="#00A2E8", anchor="end"))
+    c.append(txt(ox2+45, 310, 'W<tspan dy="-5" font-size="9">UQ</tspan><tspan dy="5">c</tspan><tspan dy="-4" font-size="8">Q</tspan><tspan dy="4" font-size="9">t</tspan>', fill="#00A2E8", anchor="end"))
     
     # --- ROW 6: c^Q_t and c^KV_t ---
     c.append(pill(ox2+100, 370, 90, 22, 'c<tspan dy="-5" font-size="9">Q</tspan><tspan dy="5" font-size="9">t</tspan>'))
