@@ -86,9 +86,6 @@ export default function ModeSwitcher({
                       title={item.description}
                     >
                       <div>{item.label}</div>
-                      <div className={`mt-1 text-xs ${active ? "text-white/70" : "text-zinc-400 dark:text-zinc-500"}`}>
-                        {item.description}
-                      </div>
                     </button>
                   );
                 })}

@@ -8,7 +8,6 @@ import {
   Download,
   Edit3,
   Paperclip,
-  RotateCcw,
   Trash2,
   Type,
   User,
@@ -38,6 +37,7 @@ import {
   ArtifactCards,
 } from "./MessageListHelpers";
 import {
+  CHAT_RUNTIME_MODE_CHAT,
   CHAT_RUNTIME_MODE_AGENT,
   CHAT_MODELS,
   modelSupportsAvailableInput,
@@ -101,6 +101,7 @@ export default function MessageList({
   const prevMessagesRef = useRef([]);
   const isCouncilConversation = isCouncilModel(model);
   const isAgentConversation = !isCouncilConversation && chatMode === CHAT_RUNTIME_MODE_AGENT;
+  const canEditUserMessage = chatMode === CHAT_RUNTIME_MODE_CHAT;
   const canEditImages = modelSupportsAvailableInput(model, "image", chatMode);
   const toast = useToast();
   const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
@@ -374,7 +375,7 @@ export default function MessageList({
                   />
                 )}
 
-                {editingMsgIndex === i && msg.role === "user" && isCouncilConversation ? (
+                {editingMsgIndex === i && msg.role === "user" && canEditUserMessage ? (
                   <div className="w-full flex flex-col items-end gap-2">
                     <div className="msg-bubble-user w-full max-w-full glass-effect !bg-white dark:!bg-zinc-800 border-primary/20">
                       <textarea
@@ -447,11 +448,8 @@ export default function MessageList({
                         )}
                         <button onClick={() => onCopy(buildCopyText(msg))} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Copy size={14} /></button>
                         <button onClick={() => handleDeleteClick(i, msg.role)} className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
-                        {msg.role === "user" && isCouncilConversation && (
+                        {msg.role === "user" && canEditUserMessage && (
                           <button onClick={() => onStartEdit(i, msg)} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Edit3 size={14} /></button>
-                        )}
-                        {msg.role === "model" && isCouncilConversation && (
-                          <button onClick={() => onRegenerateModelMessage(i)} disabled={loading || hasActiveConversationRun} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg disabled:opacity-30"><RotateCcw size={14} /></button>
                         )}
                       </div>
                     )}

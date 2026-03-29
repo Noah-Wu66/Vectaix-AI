@@ -40,7 +40,7 @@ export default function ModelSelector({
             <span className="block h-3.5 w-3.5 rounded-sm bg-zinc-200" aria-hidden />
           )}
         </span>
-        <span className={fullWidth ? "truncate max-w-[180px]" : "hidden truncate max-w-[160px] sm:inline-block"}>{currentModelLabel}</span>
+        <span className={fullWidth ? "truncate max-w-[148px]" : "hidden truncate max-w-[160px] sm:inline-block"}>{currentModelLabel}</span>
         <ChevronUp
           size={12}
           className={`transition-transform ${showModelMenu ? "rotate-180" : ""} ${ready ? "" : "opacity-40"}`}
@@ -61,7 +61,7 @@ export default function ModelSelector({
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 w-[min(90vw,280px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
+              className="absolute bottom-full left-0 mb-2 w-[min(88vw,248px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
             >
               <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 tracking-wider">
                 模型
