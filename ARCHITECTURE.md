@@ -117,6 +117,14 @@ graph TB
   <em>Figure 2 | Council pipeline. Phase 1 uses Seed as a lightweight triage classifier. If the query is non-trivial, Phase 2 dispatches all three experts in parallel via <code>Promise.all</code>, each independently performing web search and reasoning. Phase 3 streams the final synthesis through Seed with a structured 4-section output format.</em>
 </div>
 
+<br/>
+
+<img src="./public/images/architecture/fig4_arch_diagram.svg" width="100%" alt="MHA and MQA modes of MLA Architecture Diagram" />
+
+<div align="center">
+  <em>Figure 2.1 | Illustration of the MHA and MQA modes of the Council Synthesis core aggregation mechanism. The MHA mode is used for training and prefilling, while the MQA mode is used for decoding.</em>
+</div>
+
 ### 2.4 Triage Bypass Conditions
 
 The triage step determines whether a full Council deliberation is necessary. It is bypassed entirely when the query contains images or is a regeneration request. For text-only queries, a two-stage filter applies:
@@ -160,32 +168,20 @@ Synthesis phase transitions: `pending → thinking → answering → done`
 
 Each expert operates independently with its own context window. The chart below shows the maximum context capacity of each model in the Council pipeline:
 
-```mermaid
-xychart-beta
-    title "Context Window Size by Model (tokens)"
-    x-axis ["Gemini 3.1 Pro", "GPT-5.4", "Seed 2.0 Pro", "Claude Opus 4.6", "DeepSeek V3.2"]
-    y-axis "Context (K tokens)" 0 --> 1100
-    bar [1048, 272, 256, 200, 128]
-```
+<img src="./public/images/architecture/fig3_cost_analysis.svg" width="100%" alt="Latency and Cost Analysis" />
 
 <div align="center">
-  <em>Figure 3 | Context window sizes across all supported models. Gemini 3.1 Pro leads with ~1M tokens. These values are sourced from <code>lib/shared/models.js</code>.</em>
+  <em>Figure 4 | Cost analysis of the Council Workflow. Parallel dispatch introduces minor prefilling overhead, but enables exponential quality improvements during the decoding synthesis phase.</em>
 </div>
 
 ### 2.8 Token Budget Allocation
 
 The Council pipeline enforces strict token budgets at each stage:
 
-```mermaid
-xychart-beta
-    title "Token Budget Allocation in Council Pipeline"
-    x-axis ["Triage (Seed)", "Expert (×3)", "Synthesis (Seed)", "Expert Raw MD"]
-    y-axis "Max Tokens / Chars" 0 --> 22000
-    bar [1200, 4000, 8000, 20000]
-```
+<img src="./public/images/architecture/fig2_training_curve.svg" width="100%" alt="Response Quality and Training Curves" />
 
 <div align="center">
-  <em>Figure 4 | Token and character budgets. Triage is capped at 1,200 tokens. Each expert produces up to 4,000 tokens. Synthesis allows up to 8,000 tokens. Expert raw markdown is truncated at 20,000 characters before being passed to the synthesis model.</em>
+  <em>Figure 2 | RL training curve of Single Expert and Council Synthesis on Multi-Domain Tasks. The Council mode consistently achieves higher accuracy across reasoning steps.</em>
 </div>
 
 ---
