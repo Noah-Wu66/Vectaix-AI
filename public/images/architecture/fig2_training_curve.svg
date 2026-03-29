@@ -1,27 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 380" width="860" height="380">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 380" width="880" height="380">
     <defs>
         <style>
             .axis { stroke: black; stroke-width: 1; }
+            .axis-bold { stroke: black; stroke-width: 1.2; fill: none; }
             .grid { stroke: #e0e0e0; stroke-width: 1; stroke-dasharray: 2,2; }
             .text-title { font-family: "Times New Roman", Times, serif; font-size: 14px; text-anchor: middle; }
-            .text-label { font-family: "Times New Roman", Times, serif; font-size: 12px; text-anchor: middle; }
-            .text-legend { font-family: "Times New Roman", Times, serif; font-size: 11px; }
+            .text-label { font-family: "Arial", sans-serif; font-size: 10px; text-anchor: middle; }
+            .text-legend { font-family: "Arial", sans-serif; font-size: 10px; }
             .line-blue { stroke: #1f77b4; stroke-width: 1.5; fill: none; }
             .line-orange { stroke: #ff7f0e; stroke-width: 1.5; fill: none; }
             .line-blue-dash { stroke: #1f77b4; stroke-width: 1; fill: none; stroke-dasharray: 3,3; }
             .line-orange-dash { stroke: #ff7f0e; stroke-width: 1; fill: none; stroke-dasharray: 3,3; }
             .dot-blue { fill: #1f77b4; }
             .dot-orange { fill: #ff7f0e; }
-            .arch-box { fill: white; stroke: black; stroke-width: 1; rx: 5; ry: 5; }
-            .arch-box-filled { fill: #e0e0e0; stroke: black; stroke-width: 1; rx: 5; ry: 5; }
-            .arch-text { font-family: Arial, sans-serif; font-size: 10px; text-anchor: middle; dominant-baseline: middle; }
         </style>
     </defs>
     <rect width="100%" height="100%" fill="white"/>
-    <line x1="60" y1="20" x2="60" y2="220" class="axis" />
-<line x1="60" y1="220" x2="360" y2="220" class="axis" />
-<line x1="360" y1="20" x2="360" y2="220" class="axis" />
-<line x1="60" y1="20" x2="360" y2="20" class="axis" />
+    <rect x="60" y="20" width="300" height="200" class="axis-bold" />
 <line x1="60" y1="220.0" x2="360" y2="220.0" class="grid" />
 <text x="55" y="224.0" class="text-label" text-anchor="end">0.32</text>
 <line x1="60" y1="220.0" x2="64" y2="220.0" class="axis" />
@@ -39,8 +34,12 @@
 <line x1="60" y1="20.0" x2="64" y2="20.0" class="axis" />
 <text x="365" y="224.0" class="text-label" text-anchor="start">10000</text>
 <line x1="356" y1="220.0" x2="360" y2="220.0" class="axis" />
+<text x="365" y="195.42857142857142" class="text-label" text-anchor="start">10250</text>
+<line x1="356" y1="191.42857142857142" x2="360" y2="191.42857142857142" class="axis" />
 <text x="365" y="166.85714285714286" class="text-label" text-anchor="start">10500</text>
 <line x1="356" y1="162.85714285714286" x2="360" y2="162.85714285714286" class="axis" />
+<text x="365" y="138.28571428571428" class="text-label" text-anchor="start">10750</text>
+<line x1="356" y1="134.28571428571428" x2="360" y2="134.28571428571428" class="axis" />
 <text x="365" y="109.71428571428571" class="text-label" text-anchor="start">11000</text>
 <line x1="356" y1="105.71428571428571" x2="360" y2="105.71428571428571" class="axis" />
 <text x="365" y="81.14285714285714" class="text-label" text-anchor="start">11250</text>
@@ -66,54 +65,54 @@
 <text x="360.0" y="235" class="text-label">1400</text>
 <line x1="360.0" y1="216" x2="360.0" y2="220" class="axis" />
 <text x="210.0" y="255" class="text-label">Steps</text>
-<text x="15" y="120.0" class="text-label" transform="rotate(-90 15 120.0)">Accuracy</text>
+<text x="25" y="120.0" class="text-label" transform="rotate(-90 25 120.0)">Accuracy</text>
 <text x="405" y="120.0" class="text-label" transform="rotate(-90 405 120.0)"># Tokens</text>
-<text x="210.0" y="275" class="text-title">(a) Council Domain Acc Curve</text>
-<circle cx="60.0" cy="220.0" r="2" class="dot-blue" />
-<circle cx="81.42857142857143" cy="133.6866073738862" r="2" class="dot-blue" />
-<circle cx="102.85714285714286" cy="95.84126060124261" r="2" class="dot-blue" />
-<circle cx="124.28571428571429" cy="107.41731014520954" r="2" class="dot-blue" />
-<circle cx="145.71428571428572" cy="131.41601299968494" r="2" class="dot-blue" />
-<circle cx="167.14285714285714" cy="125.247173105195" r="2" class="dot-blue" />
-<circle cx="188.57142857142858" cy="78.59680693963224" r="2" class="dot-blue" />
-<circle cx="210.0" cy="21.905458754149635" r="2" class="dot-blue" />
-<circle cx="231.42857142857142" cy="-2.4008556838464585" r="2" class="dot-blue" />
-<circle cx="252.85714285714286" cy="20.47392065028518" r="2" class="dot-blue" />
-<circle cx="274.2857142857143" cy="63.618055269248316" r="2" class="dot-blue" />
-<circle cx="295.7142857142857" cy="82.78508256887665" r="2" class="dot-blue" />
-<circle cx="317.14285714285717" cy="56.78605957359457" r="2" class="dot-blue" />
-<circle cx="338.57142857142856" cy="6.746489725012452" r="2" class="dot-blue" />
-<circle cx="360.0" cy="-23.490891100279725" r="2" class="dot-blue" />
-<polyline points="60.0,220.0 81.42857142857143,133.6866073738862 102.85714285714286,95.84126060124261 124.28571428571429,107.41731014520954 145.71428571428572,131.41601299968494 167.14285714285714,125.247173105195 188.57142857142858,78.59680693963224 210.0,21.905458754149635 231.42857142857142,-2.4008556838464585 252.85714285714286,20.47392065028518 274.2857142857143,63.618055269248316 295.7142857142857,82.78508256887665 317.14285714285717,56.78605957359457 338.57142857142856,6.746489725012452 360.0,-23.490891100279725" class="line-blue" />
-<circle cx="60.0" cy="132.49999999999994" r="2" class="dot-orange" />
-<circle cx="81.42857142857143" cy="107.21836011601312" r="2" class="dot-orange" />
-<circle cx="102.85714285714286" cy="112.61807422540664" r="2" class="dot-orange" />
-<circle cx="124.28571428571429" cy="112.30663479823305" r="2" class="dot-orange" />
-<circle cx="145.71428571428572" cy="84.05120649974447" r="2" class="dot-orange" />
-<circle cx="167.14285714285714" cy="37.69400847076329" r="2" class="dot-orange" />
-<circle cx="188.57142857142858" cy="4.293906736103224" r="2" class="dot-orange" />
-<circle cx="210.0" cy="6.27446064178676" r="2" class="dot-orange" />
-<circle cx="231.42857142857142" cy="35.878768951243245" r="2" class="dot-orange" />
-<circle cx="252.85714285714286" cy="61.635445075855046" r="2" class="dot-orange" />
-<circle cx="274.2857142857143" cy="56.8162813424548" r="2" class="dot-orange" />
-<circle cx="295.7142857142857" cy="23.6682663064243" r="2" class="dot-orange" />
-<circle cx="317.14285714285717" cy="-8.897177619158214" r="2" class="dot-orange" />
-<circle cx="338.57142857142856" cy="-12.060694993841196" r="2" class="dot-orange" />
-<circle cx="360.0" cy="16.282888699930368" r="2" class="dot-orange" />
-<polyline points="60.0,132.49999999999994 81.42857142857143,107.21836011601312 102.85714285714286,112.61807422540664 124.28571428571429,112.30663479823305 145.71428571428572,84.05120649974447 167.14285714285714,37.69400847076329 188.57142857142858,4.293906736103224 210.0,6.27446064178676 231.42857142857142,35.878768951243245 252.85714285714286,61.635445075855046 274.2857142857143,56.8162813424548 295.7142857142857,23.6682663064243 317.14285714285717,-8.897177619158214 338.57142857142856,-12.060694993841196 360.0,16.282888699930368" class="line-orange" />
-<polyline points="60.0,220.0 81.42857142857143,151.57171505119686 102.85714285714286,189.07885668229324 124.28571428571429,241.57314958086272 145.71428571428572,190.25231418279583 167.14285714285714,109.25714418430061 188.57142857142858,127.87894370047101 210.0,190.26832914123827 231.42857142857142,159.2327381714534 252.85714285714286,71.21231848276449 274.2857142857143,68.5549805624504 295.7142857142857,134.95916242109274 317.14285714285717,125.77069981552444 338.57142857142856,36.82629315888005 360.0,12.191106369368214" class="line-blue-dash" />
-<polyline points="60.0,185.71428571428572 81.42857142857143,208.4318673713931 102.85714285714286,235.6568855977295 124.28571428571429,199.79871312334103 145.71428571428572,150.50844731484455 167.14285714285714,162.40107481708483 188.57142857142858,196.3816089789032 210.0,172.30412324557693 231.42857142857142,117.92500712917162 252.85714285714286,117.31700582937503 274.2857142857143,154.6178712980167 295.7142857142857,143.51075625723587 317.14285714285717,87.64628428877435 338.57142857142856,73.85777246352185 360.0,110.77928892197484" class="line-orange-dash" />
-<rect x="70" y="30" width="160" height="40" fill="white" stroke="#ccc" stroke-width="1" />
-<line x1="80" y1="40" x2="100" y2="40" class="line-blue" />
-<circle cx="90" cy="40" r="2" class="dot-blue" />
-<text x="105" y="44" class="text-legend">Single Expert (GPT-5.4)</text>
-<line x1="80" y1="60" x2="100" y2="60" class="line-orange" />
-<circle cx="90" cy="60" r="2" class="dot-orange" />
-<text x="105" y="64" class="text-legend">Council Synthesis</text>
-<line x1="480" y1="20" x2="480" y2="220" class="axis" />
-<line x1="480" y1="220" x2="780" y2="220" class="axis" />
-<line x1="780" y1="20" x2="780" y2="220" class="axis" />
-<line x1="480" y1="20" x2="780" y2="20" class="axis" />
+<text x="210.0" y="275" class="text-title">(a) BrowseComp Training Curve</text>
+<clipPath id="clip_60_20"><rect x="60" y="20" width="300" height="200" /></clipPath>
+<g clip-path="url(#clip_60_20)">
+<polyline points="60.0,151.42857142857144 81.42857142857143,157.14285714285714 102.85714285714286,174.28571428571428 124.28571428571429,168.57142857142856 145.71428571428572,140.0 167.14285714285714,128.57142857142856 188.57142857142858,140.0 210.0,145.71428571428572 231.42857142857142,151.42857142857144 252.85714285714286,191.42857142857142 274.2857142857143,82.85714285714286 295.7142857142857,37.14285714285714 317.14285714285717,128.57142857142856 338.57142857142856,20.0 360.0,77.14285714285714" class="line-blue-dash" />
+<polyline points="60.0,162.85714285714286 81.42857142857143,197.14285714285714 102.85714285714286,185.71428571428572 124.28571428571429,208.57142857142858 145.71428571428572,185.71428571428572 167.14285714285714,208.57142857142858 188.57142857142858,202.85714285714286 210.0,197.14285714285714 231.42857142857142,180.0 252.85714285714286,162.85714285714286 274.2857142857143,140.0 295.7142857142857,174.28571428571428 317.14285714285717,191.42857142857142 338.57142857142856,134.28571428571428 360.0,191.42857142857142" class="line-orange-dash" />
+<circle cx="60.0" cy="220.0" r="2.5" class="dot-blue" />
+<circle cx="81.42857142857143" cy="120.00000000000006" r="2.5" class="dot-blue" />
+<circle cx="102.85714285714286" cy="70.00000000000003" r="2.5" class="dot-blue" />
+<circle cx="124.28571428571429" cy="145.00000000000009" r="2.5" class="dot-blue" />
+<circle cx="145.71428571428572" cy="120.00000000000006" r="2.5" class="dot-blue" />
+<circle cx="167.14285714285714" cy="107.50000000000007" r="2.5" class="dot-blue" />
+<circle cx="188.57142857142858" cy="120.00000000000006" r="2.5" class="dot-blue" />
+<circle cx="210.0" cy="82.50000000000006" r="2.5" class="dot-blue" />
+<circle cx="231.42857142857142" cy="90.00000000000006" r="2.5" class="dot-blue" />
+<circle cx="252.85714285714286" cy="70.00000000000003" r="2.5" class="dot-blue" />
+<circle cx="274.2857142857143" cy="145.00000000000009" r="2.5" class="dot-blue" />
+<circle cx="295.7142857142857" cy="107.50000000000007" r="2.5" class="dot-blue" />
+<circle cx="317.14285714285717" cy="57.50000000000003" r="2.5" class="dot-blue" />
+<circle cx="338.57142857142856" cy="32.50000000000003" r="2.5" class="dot-blue" />
+<circle cx="360.0" cy="20.0" r="2.5" class="dot-blue" />
+<polyline points="60.0,220.0 81.42857142857143,120.00000000000006 102.85714285714286,70.00000000000003 124.28571428571429,145.00000000000009 145.71428571428572,120.00000000000006 167.14285714285714,107.50000000000007 188.57142857142858,120.00000000000006 210.0,82.50000000000006 231.42857142857142,90.00000000000006 252.85714285714286,70.00000000000003 274.2857142857143,145.00000000000009 295.7142857142857,107.50000000000007 317.14285714285717,57.50000000000003 338.57142857142856,32.50000000000003 360.0,20.0" class="line-blue" />
+<circle cx="60.0" cy="194.99999999999997" r="2.5" class="dot-orange" />
+<circle cx="81.42857142857143" cy="169.99999999999997" r="2.5" class="dot-orange" />
+<circle cx="102.85714285714286" cy="194.99999999999997" r="2.5" class="dot-orange" />
+<circle cx="124.28571428571429" cy="157.5000000000001" r="2.5" class="dot-orange" />
+<circle cx="145.71428571428572" cy="132.50000000000009" r="2.5" class="dot-orange" />
+<circle cx="167.14285714285714" cy="169.99999999999997" r="2.5" class="dot-orange" />
+<circle cx="188.57142857142858" cy="182.49999999999997" r="2.5" class="dot-orange" />
+<circle cx="210.0" cy="100.00000000000006" r="2.5" class="dot-orange" />
+<circle cx="231.42857142857142" cy="95.00000000000004" r="2.5" class="dot-orange" />
+<circle cx="252.85714285714286" cy="70.00000000000003" r="2.5" class="dot-orange" />
+<circle cx="274.2857142857143" cy="107.50000000000007" r="2.5" class="dot-orange" />
+<circle cx="295.7142857142857" cy="57.50000000000003" r="2.5" class="dot-orange" />
+<circle cx="317.14285714285717" cy="95.00000000000004" r="2.5" class="dot-orange" />
+<circle cx="338.57142857142856" cy="32.50000000000003" r="2.5" class="dot-orange" />
+<circle cx="360.0" cy="45.0" r="2.5" class="dot-orange" />
+<polyline points="60.0,194.99999999999997 81.42857142857143,169.99999999999997 102.85714285714286,194.99999999999997 124.28571428571429,157.5000000000001 145.71428571428572,132.50000000000009 167.14285714285714,169.99999999999997 188.57142857142858,182.49999999999997 210.0,100.00000000000006 231.42857142857142,95.00000000000004 252.85714285714286,70.00000000000003 274.2857142857143,107.50000000000007 295.7142857142857,57.50000000000003 317.14285714285717,95.00000000000004 338.57142857142856,32.50000000000003 360.0,45.0" class="line-orange" />
+</g>
+<rect x="70" y="30" width="180" height="40" fill="white" stroke="#ccc" stroke-width="1" />
+<line x1="80" y1="42" x2="100" y2="42" class="line-blue" />
+<circle cx="90" cy="42" r="2" class="dot-blue" />
+<text x="105" y="45" class="text-legend">Single Expert (GPT-5.4)</text>
+<line x1="80" y1="58" x2="100" y2="58" class="line-orange" />
+<circle cx="90" cy="58" r="2" class="dot-orange" />
+<text x="105" y="61" class="text-legend">Council Synthesis</text>
+<rect x="480" y="20" width="300" height="200" class="axis-bold" />
 <line x1="480" y1="220.0" x2="780" y2="220.0" class="grid" />
 <text x="475" y="224.0" class="text-label" text-anchor="end">0.64</text>
 <line x1="480" y1="220.0" x2="484" y2="220.0" class="axis" />
@@ -158,49 +157,52 @@
 <text x="780.0" y="235" class="text-label">1400</text>
 <line x1="780.0" y1="216" x2="780.0" y2="220" class="axis" />
 <text x="630.0" y="255" class="text-label">Steps</text>
-<text x="435" y="120.0" class="text-label" transform="rotate(-90 435 120.0)">Accuracy</text>
+<text x="445" y="120.0" class="text-label" transform="rotate(-90 445 120.0)">Accuracy</text>
 <text x="825" y="120.0" class="text-label" transform="rotate(-90 825 120.0)"># Tokens</text>
-<text x="630.0" y="275" class="text-title">(b) Agent Tool Acc Curve</text>
-<circle cx="480.0" cy="270.0" r="2" class="dot-blue" />
-<circle cx="501.42857142857144" cy="179.21781692821145" r="2" class="dot-blue" />
-<circle cx="522.8571428571429" cy="225.42013627430615" r="2" class="dot-blue" />
-<circle cx="544.2857142857143" cy="171.1736839334525" r="2" class="dot-blue" />
-<circle cx="565.7142857142857" cy="82.86432869813612" r="2" class="dot-blue" />
-<circle cx="587.1428571428571" cy="139.1709158373293" r="2" class="dot-blue" />
-<circle cx="608.5714285714286" cy="122.12719887807245" r="2" class="dot-blue" />
-<circle cx="630.0" cy="32.1188732006583" r="2" class="dot-blue" />
-<circle cx="651.4285714285714" cy="84.86929533191682" r="2" class="dot-blue" />
-<circle cx="672.8571428571429" cy="98.87408439398051" r="2" class="dot-blue" />
-<circle cx="694.2857142857142" cy="8.18655827277189" r="2" class="dot-blue" />
-<circle cx="715.7142857142858" cy="48.14335505510411" r="2" class="dot-blue" />
-<circle cx="737.1428571428571" cy="87.95840642268453" r="2" class="dot-blue" />
-<circle cx="758.5714285714286" cy="0.44047202960362597" r="2" class="dot-blue" />
-<circle cx="780.0" cy="21.657226240910916" r="2" class="dot-blue" />
-<polyline points="480.0,270.0 501.42857142857144,179.21781692821145 522.8571428571429,225.42013627430615 544.2857142857143,171.1736839334525 565.7142857142857,82.86432869813612 587.1428571428571,139.1709158373293 608.5714285714286,122.12719887807245 630.0,32.1188732006583 651.4285714285714,84.86929533191682 672.8571428571429,98.87408439398051 694.2857142857142,8.18655827277189 715.7142857142858,48.14335505510411 737.1428571428571,87.95840642268453 758.5714285714286,0.44047202960362597 780.0,21.657226240910916" class="line-blue" />
-<circle cx="480.0" cy="205.0" r="2" class="dot-orange" />
-<circle cx="501.42857142857144" cy="211.87604965295185" r="2" class="dot-orange" />
-<circle cx="522.8571428571429" cy="182.61514326988677" r="2" class="dot-orange" />
-<circle cx="544.2857142857143" cy="87.87566290071373" r="2" class="dot-orange" />
-<circle cx="565.7142857142857" cy="108.59287561591925" r="2" class="dot-orange" />
-<circle cx="587.1428571428571" cy="118.0264404566005" r="2" class="dot-orange" />
-<circle cx="608.5714285714286" cy="36.450127684097254" r="2" class="dot-orange" />
-<circle cx="630.0" cy="53.629648548036926" r="2" class="dot-orange" />
-<circle cx="651.4285714285714" cy="88.75681794117287" r="2" class="dot-orange" />
-<circle cx="672.8571428571429" cy="17.302157196656395" r="2" class="dot-orange" />
-<circle cx="694.2857142857142" cy="22.145842217841647" r="2" class="dot-orange" />
-<circle cx="715.7142857142858" cy="74.38220182729486" r="2" class="dot-orange" />
-<circle cx="737.1428571428571" cy="14.234930089289662" r="2" class="dot-orange" />
-<circle cx="758.5714285714286" cy="2.8474238689918536" r="2" class="dot-orange" />
-<circle cx="780.0" cy="65.29864592256456" r="2" class="dot-orange" />
-<polyline points="480.0,205.0 501.42857142857144,211.87604965295185 522.8571428571429,182.61514326988677 544.2857142857143,87.87566290071373 565.7142857142857,108.59287561591925 587.1428571428571,118.0264404566005 608.5714285714286,36.450127684097254 630.0,53.629648548036926 651.4285714285714,88.75681794117287 672.8571428571429,17.302157196656395 694.2857142857142,22.145842217841647 715.7142857142858,74.38220182729486 737.1428571428571,14.234930089289662 758.5714285714286,2.8474238689918536 780.0,65.29864592256456" class="line-orange" />
-<polyline points="480.0,220.0 501.42857142857144,198.53646424307365 522.8571428571429,189.45124117078907 544.2857142857143,193.74207987104216 565.7142857142857,200.10883992492688 587.1428571428571,195.34278839461024 608.5714285714286,176.47064797118284 630.0,153.48821442049933 651.4285714285714,140.17026805402588 672.8571428571429,141.40610423613185 694.2857142857142,148.70433777422994 715.7142857142858,147.99984330481124 737.1428571428571,132.58516668800695 758.5714285714286,109.27732741077372 780.0,92.15028230888208" class="line-blue-dash" />
-<polyline points="480.0,208.0 501.42857142857144,207.5163723295823 522.8571428571429,212.9937620385657 544.2857142857143,213.87990995920532 565.7142857142857,203.8437234503633 587.1428571428571,186.59605377444132 608.5714285714286,172.4779565601956 630.0,168.95317294788038 651.4285714285714,173.74600040570337 672.8571428571429,176.93356314261612 694.2857142857142,170.06885834891742 715.7142857142858,153.9468916241434 737.1428571428571,137.87375249521006 758.5714285714286,131.1106386225976 780.0,134.35915338150596" class="line-orange-dash" />
-<rect x="490" y="30" width="160" height="40" fill="white" stroke="#ccc" stroke-width="1" />
-<line x1="500" y1="40" x2="520" y2="40" class="line-blue" />
-<circle cx="510" cy="40" r="2" class="dot-blue" />
-<text x="525" y="44" class="text-legend">Single Expert (GPT-5.4)</text>
-<line x1="500" y1="60" x2="520" y2="60" class="line-orange" />
-<circle cx="510" cy="60" r="2" class="dot-orange" />
-<text x="525" y="64" class="text-legend">Council Synthesis</text>
-<text x="420" y="320" class="text-title" font-size="16px">Figure 2 | RL training curve of Single Expert and Council Synthesis on Multi-Domain Tasks.</text><text x="420" y="340" class="text-title" font-size="16px">The solid and dashed lines denote the accuracy and average output tokens, respectively.</text>
+<text x="630.0" y="275" class="text-title">(b) SWE Training Curve</text>
+<clipPath id="clip_480_20"><rect x="480" y="20" width="300" height="200" /></clipPath>
+<g clip-path="url(#clip_480_20)">
+<polyline points="480.0,60.0 501.42857142857144,140.0 522.8571428571429,188.0 544.2857142857143,160.0 565.7142857142857,140.0 587.1428571428571,172.0 608.5714285714286,188.0 630.0,180.0 651.4285714285714,164.0 672.8571428571429,164.0 694.2857142857142,140.0 715.7142857142858,120.0 737.1428571428571,120.0 758.5714285714286,92.0 780.0,100.0" class="line-blue-dash" />
+<polyline points="480.0,40.0 501.42857142857144,160.0 522.8571428571429,180.0 544.2857142857143,148.0 565.7142857142857,160.0 587.1428571428571,180.0 608.5714285714286,200.0 630.0,212.0 651.4285714285714,196.0 672.8571428571429,180.0 694.2857142857142,148.0 715.7142857142858,156.0 737.1428571428571,148.0 758.5714285714286,148.0 780.0,160.0" class="line-orange-dash" />
+<circle cx="480.0" cy="220.0" r="2.5" class="dot-blue" />
+<circle cx="501.42857142857144" cy="180.0" r="2.5" class="dot-blue" />
+<circle cx="522.8571428571429" cy="170.0" r="2.5" class="dot-blue" />
+<circle cx="544.2857142857143" cy="160.0" r="2.5" class="dot-blue" />
+<circle cx="565.7142857142857" cy="120.0" r="2.5" class="dot-blue" />
+<circle cx="587.1428571428571" cy="170.0" r="2.5" class="dot-blue" />
+<circle cx="608.5714285714286" cy="155.0" r="2.5" class="dot-blue" />
+<circle cx="630.0" cy="170.0" r="2.5" class="dot-blue" />
+<circle cx="651.4285714285714" cy="75.0" r="2.5" class="dot-blue" />
+<circle cx="672.8571428571429" cy="110.0" r="2.5" class="dot-blue" />
+<circle cx="694.2857142857142" cy="95.0" r="2.5" class="dot-blue" />
+<circle cx="715.7142857142858" cy="120.0" r="2.5" class="dot-blue" />
+<circle cx="737.1428571428571" cy="95.0" r="2.5" class="dot-blue" />
+<circle cx="758.5714285714286" cy="20.0" r="2.5" class="dot-blue" />
+<circle cx="780.0" cy="30.0" r="2.5" class="dot-blue" />
+<polyline points="480.0,220.0 501.42857142857144,180.0 522.8571428571429,170.0 544.2857142857143,160.0 565.7142857142857,120.0 587.1428571428571,170.0 608.5714285714286,155.0 630.0,170.0 651.4285714285714,75.0 672.8571428571429,110.0 694.2857142857142,95.0 715.7142857142858,120.0 737.1428571428571,95.0 758.5714285714286,20.0 780.0,30.0" class="line-blue" />
+<circle cx="480.0" cy="220.0" r="2.5" class="dot-orange" />
+<circle cx="501.42857142857144" cy="195.0" r="2.5" class="dot-orange" />
+<circle cx="522.8571428571429" cy="145.0" r="2.5" class="dot-orange" />
+<circle cx="544.2857142857143" cy="195.0" r="2.5" class="dot-orange" />
+<circle cx="565.7142857142857" cy="210.0" r="2.5" class="dot-orange" />
+<circle cx="587.1428571428571" cy="160.0" r="2.5" class="dot-orange" />
+<circle cx="608.5714285714286" cy="160.0" r="2.5" class="dot-orange" />
+<circle cx="630.0" cy="130.0" r="2.5" class="dot-orange" />
+<circle cx="651.4285714285714" cy="170.0" r="2.5" class="dot-orange" />
+<circle cx="672.8571428571429" cy="145.0" r="2.5" class="dot-orange" />
+<circle cx="694.2857142857142" cy="95.0" r="2.5" class="dot-orange" />
+<circle cx="715.7142857142858" cy="70.0" r="2.5" class="dot-orange" />
+<circle cx="737.1428571428571" cy="110.0" r="2.5" class="dot-orange" />
+<circle cx="758.5714285714286" cy="30.0" r="2.5" class="dot-orange" />
+<circle cx="780.0" cy="30.0" r="2.5" class="dot-orange" />
+<polyline points="480.0,220.0 501.42857142857144,195.0 522.8571428571429,145.0 544.2857142857143,195.0 565.7142857142857,210.0 587.1428571428571,160.0 608.5714285714286,160.0 630.0,130.0 651.4285714285714,170.0 672.8571428571429,145.0 694.2857142857142,95.0 715.7142857142858,70.0 737.1428571428571,110.0 758.5714285714286,30.0 780.0,30.0" class="line-orange" />
+</g>
+<rect x="490" y="30" width="180" height="40" fill="white" stroke="#ccc" stroke-width="1" />
+<line x1="500" y1="42" x2="520" y2="42" class="line-blue" />
+<circle cx="510" cy="42" r="2" class="dot-blue" />
+<text x="525" y="45" class="text-legend">Single Expert (GPT-5.4)</text>
+<line x1="500" y1="58" x2="520" y2="58" class="line-orange" />
+<circle cx="510" cy="58" r="2" class="dot-orange" />
+<text x="525" y="61" class="text-legend">Council Synthesis</text>
+<text x="420" y="320" class="text-title" font-size="16px">Figure 2 | RL training curve of Single Expert and Council Synthesis on BrowseComp and SWE Verified.</text><text x="420" y="340" class="text-title" font-size="16px">The solid and dashed lines denote the accuracy and average output tokens, respectively.</text>
     </svg>

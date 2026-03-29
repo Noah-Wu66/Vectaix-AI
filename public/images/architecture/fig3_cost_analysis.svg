@@ -1,27 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 320" width="860" height="320">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320">
     <defs>
         <style>
             .axis { stroke: black; stroke-width: 1; }
+            .axis-bold { stroke: black; stroke-width: 1.2; fill: none; }
             .grid { stroke: #e0e0e0; stroke-width: 1; stroke-dasharray: 2,2; }
             .text-title { font-family: "Times New Roman", Times, serif; font-size: 14px; text-anchor: middle; }
-            .text-label { font-family: "Times New Roman", Times, serif; font-size: 12px; text-anchor: middle; }
-            .text-legend { font-family: "Times New Roman", Times, serif; font-size: 11px; }
+            .text-label { font-family: "Arial", sans-serif; font-size: 10px; text-anchor: middle; }
+            .text-legend { font-family: "Arial", sans-serif; font-size: 10px; }
             .line-blue { stroke: #1f77b4; stroke-width: 1.5; fill: none; }
             .line-orange { stroke: #ff7f0e; stroke-width: 1.5; fill: none; }
             .line-blue-dash { stroke: #1f77b4; stroke-width: 1; fill: none; stroke-dasharray: 3,3; }
             .line-orange-dash { stroke: #ff7f0e; stroke-width: 1; fill: none; stroke-dasharray: 3,3; }
             .dot-blue { fill: #1f77b4; }
             .dot-orange { fill: #ff7f0e; }
-            .arch-box { fill: white; stroke: black; stroke-width: 1; rx: 5; ry: 5; }
-            .arch-box-filled { fill: #e0e0e0; stroke: black; stroke-width: 1; rx: 5; ry: 5; }
-            .arch-text { font-family: Arial, sans-serif; font-size: 10px; text-anchor: middle; dominant-baseline: middle; }
         </style>
     </defs>
     <rect width="100%" height="100%" fill="white"/>
-    <line x1="60" y1="20" x2="60" y2="220" class="axis" />
-<line x1="60" y1="220" x2="360" y2="220" class="axis" />
-<line x1="360" y1="20" x2="360" y2="220" class="axis" />
-<line x1="60" y1="20" x2="360" y2="20" class="axis" />
+    <rect x="60" y="20" width="300" height="200" class="axis-bold" />
 <line x1="60" y1="220.0" x2="360" y2="220.0" class="grid" />
 <text x="55" y="224.0" class="text-label" text-anchor="end">0K</text>
 <line x1="60" y1="220.0" x2="64" y2="220.0" class="axis" />
@@ -57,31 +52,31 @@
 <text x="360.0" y="235" class="text-label">128K</text>
 <line x1="360.0" y1="216" x2="360.0" y2="220" class="axis" />
 <text x="210.0" y="255" class="text-label">Token Position</text>
-<text x="15" y="120.0" class="text-label" transform="rotate(-90 15 120.0)">Cost Per Million Tokens ($)</text>
-<text x="210.0" y="275" class="text-title">(a) Parallel Prefilling</text>
-<circle cx="60.0" cy="205.71428571428572" r="2" class="dot-blue" />
-<circle cx="135.0" cy="162.85714285714286" r="2" class="dot-blue" />
-<circle cx="210.0" cy="120.0" r="2" class="dot-blue" />
-<circle cx="285.0" cy="77.14285714285717" r="2" class="dot-blue" />
-<circle cx="360.0" cy="34.28571428571428" r="2" class="dot-blue" />
-<polyline points="60.0,205.71428571428572 135.0,162.85714285714286 210.0,120.0 285.0,77.14285714285717 360.0,34.28571428571428" class="line-blue" />
-<circle cx="60.0" cy="205.71428571428572" r="2" class="dot-orange" />
-<circle cx="135.0" cy="197.14285714285714" r="2" class="dot-orange" />
-<circle cx="210.0" cy="188.57142857142856" r="2" class="dot-orange" />
-<circle cx="285.0" cy="180.0" r="2" class="dot-orange" />
-<circle cx="360.0" cy="171.42857142857142" r="2" class="dot-orange" />
+<text x="25" y="120.0" class="text-label" transform="rotate(-90 25 120.0)">Cost Per Million Tokens ($)</text>
+<text x="210.0" y="275" class="text-title">(a) Prefilling</text>
+<clipPath id="clip_60_20"><rect x="60" y="20" width="300" height="200" /></clipPath>
+<g clip-path="url(#clip_60_20)">
+<circle cx="60.0" cy="205.71428571428572" r="2.5" class="dot-blue" />
+<circle cx="135.0" cy="162.85714285714286" r="2.5" class="dot-blue" />
+<circle cx="210.0" cy="120.0" r="2.5" class="dot-blue" />
+<circle cx="285.0" cy="77.14285714285714" r="2.5" class="dot-blue" />
+<circle cx="360.0" cy="34.28571428571428" r="2.5" class="dot-blue" />
+<polyline points="60.0,205.71428571428572 135.0,162.85714285714286 210.0,120.0 285.0,77.14285714285714 360.0,34.28571428571428" class="line-blue" />
+<circle cx="60.0" cy="205.71428571428572" r="2.5" class="dot-orange" />
+<circle cx="135.0" cy="197.14285714285714" r="2.5" class="dot-orange" />
+<circle cx="210.0" cy="188.57142857142856" r="2.5" class="dot-orange" />
+<circle cx="285.0" cy="180.0" r="2.5" class="dot-orange" />
+<circle cx="360.0" cy="171.42857142857142" r="2.5" class="dot-orange" />
 <polyline points="60.0,205.71428571428572 135.0,197.14285714285714 210.0,188.57142857142856 285.0,180.0 360.0,171.42857142857142" class="line-orange" />
-<rect x="70" y="30" width="160" height="40" fill="white" stroke="#ccc" stroke-width="1" />
-<line x1="80" y1="40" x2="100" y2="40" class="line-blue" />
-<circle cx="90" cy="40" r="2" class="dot-blue" />
-<text x="105" y="44" class="text-legend">Single Expert</text>
-<line x1="80" y1="60" x2="100" y2="60" class="line-orange" />
-<circle cx="90" cy="60" r="2" class="dot-orange" />
-<text x="105" y="64" class="text-legend">Council Workflow</text>
-<line x1="480" y1="20" x2="480" y2="220" class="axis" />
-<line x1="480" y1="220" x2="780" y2="220" class="axis" />
-<line x1="780" y1="20" x2="780" y2="220" class="axis" />
-<line x1="480" y1="20" x2="780" y2="20" class="axis" />
+</g>
+<rect x="70" y="30" width="180" height="40" fill="white" stroke="#ccc" stroke-width="1" />
+<line x1="80" y1="42" x2="100" y2="42" class="line-blue" />
+<circle cx="90" cy="42" r="2" class="dot-blue" />
+<text x="105" y="45" class="text-legend">Single Expert</text>
+<line x1="80" y1="58" x2="100" y2="58" class="line-orange" />
+<circle cx="90" cy="58" r="2" class="dot-orange" />
+<text x="105" y="61" class="text-legend">Council Workflow</text>
+<rect x="480" y="20" width="300" height="200" class="axis-bold" />
 <line x1="480" y1="220.0" x2="780" y2="220.0" class="grid" />
 <text x="475" y="224.0" class="text-label" text-anchor="end">0K</text>
 <line x1="480" y1="220.0" x2="484" y2="220.0" class="axis" />
@@ -114,25 +109,28 @@
 <text x="780.0" y="235" class="text-label">128K</text>
 <line x1="780.0" y1="216" x2="780.0" y2="220" class="axis" />
 <text x="630.0" y="255" class="text-label">Token Position</text>
-<text x="435" y="120.0" class="text-label" transform="rotate(-90 435 120.0)">Cost Per Million Tokens ($)</text>
+<text x="445" y="120.0" class="text-label" transform="rotate(-90 445 120.0)">Cost Per Million Tokens ($)</text>
 <text x="630.0" y="275" class="text-title">(b) Decoding</text>
-<circle cx="480.0" cy="211.66666666666666" r="2" class="dot-blue" />
-<circle cx="555.0" cy="170.0" r="2" class="dot-blue" />
-<circle cx="630.0" cy="128.33333333333331" r="2" class="dot-blue" />
-<circle cx="705.0" cy="86.66666666666666" r="2" class="dot-blue" />
-<circle cx="780.0" cy="45.0" r="2" class="dot-blue" />
+<clipPath id="clip_480_20"><rect x="480" y="20" width="300" height="200" /></clipPath>
+<g clip-path="url(#clip_480_20)">
+<circle cx="480.0" cy="211.66666666666666" r="2.5" class="dot-blue" />
+<circle cx="555.0" cy="170.0" r="2.5" class="dot-blue" />
+<circle cx="630.0" cy="128.33333333333331" r="2.5" class="dot-blue" />
+<circle cx="705.0" cy="86.66666666666666" r="2.5" class="dot-blue" />
+<circle cx="780.0" cy="45.0" r="2.5" class="dot-blue" />
 <polyline points="480.0,211.66666666666666 555.0,170.0 630.0,128.33333333333331 705.0,86.66666666666666 780.0,45.0" class="line-blue" />
-<circle cx="480.0" cy="211.66666666666666" r="2" class="dot-orange" />
-<circle cx="555.0" cy="209.16666666666666" r="2" class="dot-orange" />
-<circle cx="630.0" cy="206.66666666666666" r="2" class="dot-orange" />
-<circle cx="705.0" cy="204.16666666666666" r="2" class="dot-orange" />
-<circle cx="780.0" cy="201.66666666666666" r="2" class="dot-orange" />
+<circle cx="480.0" cy="211.66666666666666" r="2.5" class="dot-orange" />
+<circle cx="555.0" cy="209.16666666666666" r="2.5" class="dot-orange" />
+<circle cx="630.0" cy="206.66666666666666" r="2.5" class="dot-orange" />
+<circle cx="705.0" cy="204.16666666666666" r="2.5" class="dot-orange" />
+<circle cx="780.0" cy="201.66666666666666" r="2.5" class="dot-orange" />
 <polyline points="480.0,211.66666666666666 555.0,209.16666666666666 630.0,206.66666666666666 705.0,204.16666666666666 780.0,201.66666666666666" class="line-orange" />
-<rect x="490" y="30" width="160" height="40" fill="white" stroke="#ccc" stroke-width="1" />
-<line x1="500" y1="40" x2="520" y2="40" class="line-blue" />
-<circle cx="510" cy="40" r="2" class="dot-blue" />
-<text x="525" y="44" class="text-legend">Single Expert</text>
-<line x1="500" y1="60" x2="520" y2="60" class="line-orange" />
-<circle cx="510" cy="60" r="2" class="dot-orange" />
-<text x="525" y="64" class="text-legend">Council Workflow</text>
+</g>
+<rect x="490" y="30" width="180" height="40" fill="white" stroke="#ccc" stroke-width="1" />
+<line x1="500" y1="42" x2="520" y2="42" class="line-blue" />
+<circle cx="510" cy="42" r="2" class="dot-blue" />
+<text x="525" y="45" class="text-legend">Single Expert</text>
+<line x1="500" y1="58" x2="520" y2="58" class="line-orange" />
+<circle cx="510" cy="58" r="2" class="dot-orange" />
+<text x="525" y="61" class="text-legend">Council Workflow</text>
     </svg>
