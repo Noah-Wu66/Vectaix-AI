@@ -26,6 +26,7 @@
 <img src="https://img.shields.io/badge/Gemini_3.1_Pro_Preview-4285F4?style=flat-square&logo=google&logoColor=white" alt="Gemini" />
 <img src="https://img.shields.io/badge/DeepSeek_V3.2-0A0A0A?style=flat-square&logoColor=white" alt="DeepSeek" />
 <img src="https://img.shields.io/badge/Seed_2.0_Pro-FF6A00?style=flat-square&logoColor=white" alt="Seed" />
+<img src="https://img.shields.io/badge/MiniMax_M2.5-D01D24?style=flat-square&logoColor=white" alt="MiniMax" />
 
 </div>
 
@@ -35,7 +36,7 @@
 
 Vectaix AI is an **open-source AI workspace** designed for cloud-native deployment on Vercel. It brings together the world's leading AI models under one unified interface, powered by a rigorous [Dual-Engine Architecture](./ARCHITECTURE.md). 
 
-Whether you need a quick answer from GPT-5.4, deep reasoning from Claude Opus 4.6, or want multiple AI experts to debate and synthesize a final response, Vectaix AI delivers a highly polished and professional experience.
+Whether you need a quick answer from DeepSeek V3.2, deep reasoning from Claude Opus 4.6, or want multiple AI experts to debate and synthesize a final response, Vectaix AI delivers a highly polished and professional experience.
 
 ### 🖼️ Interface Preview
 
@@ -50,27 +51,27 @@ Whether you need a quick answer from GPT-5.4, deep reasoning from Claude Opus 4.
 <td width="50%">
 
 ### 🧠 Council Workflow (Multi-Expert)
-A unique collaborative mode where multiple models (e.g., GPT, Claude, Gemini) act as parallel experts to reason about a query, and a final model synthesizes the consensus. 
-[Read the math & architecture](./ARCHITECTURE.md#11-the-council-module-multi-expert-consensus)
+A unique collaborative mode where multiple models (**GPT-5.4, Claude Opus 4.6, Gemini 3.1 Pro**) act as parallel experts to reason about a query, and a final model (**Seed 2.0 Pro**) synthesizes the consensus. It automatically bypasses trivial questions via an AI triage layer.
+[Read the math & architecture](./ARCHITECTURE.md#2-the-council-module)
 
 ### 🤖 Agent Runtime
-A fully isolated orchestration layer featuring an instruction engine, tool registry, and state serialization for autonomous task execution.
-[View the Agent diagram](./ARCHITECTURE.md#12-the-agent-module-autonomous-orchestration)
+A fully isolated, ReAct-style orchestration layer featuring an instruction engine, tool registry, and state serialization for autonomous task execution with built-in memory management.
+[View the Agent diagram](./ARCHITECTURE.md#3-the-agent-module)
 
 ### 🔌 Official API Integration
-All models are integrated via their official APIs or official deployments to ensure maximum stability and capability.
+All 8 models are integrated via their official APIs or official deployments to ensure maximum stability, proper context windows (up to 1M tokens), and native streaming capabilities.
 
 </td>
 <td width="50%">
 
 ### 🌐 Web Search & Browsing
-Grounded generation powered by Volcengine's real-time indexing API, complete with web browsing sessions and content extraction.
+Grounded generation powered by Volcengine's real-time indexing API. Includes a full server-side browsing tool loop capable of searching, crawling single pages, and batch crawling multiple URLs.
 
 ### 📎 Multimodal Document Parsing
-Upload and parse images, PDFs, Word docs, spreadsheets, and code files. Processed asynchronously via Vercel Sandbox with Python runtime.
+Upload and parse images, PDFs, Word docs, spreadsheets, and code files. Processed securely via a **Vercel Sandbox** running Python 3.13 with deep extraction capabilities.
 
 ### 💭 Real-time Thinking Blocks
-Stream and display the model's internal reasoning processes in real-time, providing transparency into how the AI forms its conclusions.
+Stream and display the model's internal reasoning processes in real-time, providing transparency into how the AI forms its conclusions via our custom Server-Sent Events (SSE) protocol.
 
 </td>
 </tr>
@@ -92,11 +93,17 @@ Stream and display the model's internal reasoning processes in real-time, provid
 </tr>
 </table>
 
+### Core Technologies
+- **Auth**: JWT (jose), bcryptjs, HttpOnly cookies.
+- **File Storage**: `@vercel/blob` (Direct client uploads, SSRF-protected download proxies).
+- **LLM SDKs**: `@anthropic-ai/sdk`, Google GenAI, OpenAI REST, Volcengine ARK.
+- **Rendering**: `react-markdown`, `remark-math`, `rehype-katex`, `rehype-highlight`.
+
 ---
 
 ## 🚀 Deployment
 
-Vectaix AI is designed for **Vercel Pro** serverless deployment. It guarantees high concurrency and zero-maintenance scaling.
+Vectaix AI is designed exclusively for **Vercel Pro** serverless deployment. It guarantees high concurrency and zero-maintenance scaling.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FNoah-Wu66%2FVectaix-AI)
 
@@ -105,15 +112,16 @@ Vectaix AI is designed for **Vercel Pro** serverless deployment. It guarantees h
 | Variable | Required | Purpose |
 |:---------|:--------:|:--------|
 | `MONGO_URI` | ✅ | MongoDB connection string for stateful memory |
-| `JWT_SECRET` | ✅ | Cryptographic secret for session verification |
+| `JWT_SECRET` | ✅ | Cryptographic secret for session verification (HS256) |
 | `ADMIN_EMAILS` | ❌ | Comma-separated admin email list |
 | `OPENAI_API_KEY` | ✅ | Official OpenAI access |
 | `ANTHROPIC_API_KEY` | ✅ | Official Anthropic access |
 | `GEMINI_API_KEY` | ✅ | Official Google Gemini access |
 | `DEEPSEEK_API_KEY` | ✅ | Official DeepSeek access |
-| `ARK_API_KEY` | ✅ | Official ByteDance Seed access |
+| `ARK_API_KEY` | ✅ | Official ByteDance Seed & Volcengine ARK access |
 | `MINIMAX_API_KEY` | ✅ | Official MiniMax access |
 | `MIMO_API_BASE_URL` | ✅ | MiMo deployment base URL |
+| `MIMO_API_KEY` | ❌ | MiMo API key (if required) |
 | `VOLCENGINE_WEB_SEARCH_API_KEY` | ⬚ | Web search capabilities |
 
 ---
@@ -122,8 +130,10 @@ Vectaix AI is designed for **Vercel Pro** serverless deployment. It guarantees h
 
 - [x] Multi-model chat with 8 AI models
 - [x] Dual-Engine: Council Workflow & Agent Runtime
-- [x] Web search & multimodal document parsing
+- [x] Web search & web browsing tool loop
+- [x] Vercel Sandbox Python document parsing
 - [x] Real-time reasoning (Thinking Blocks)
+- [x] PWA support & secure JWT auth
 - [ ] Plugin / extension system expansion
 - [ ] Collaborative workspaces
 - [ ] Self-hosted Docker support

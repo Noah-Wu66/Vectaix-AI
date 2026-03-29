@@ -26,6 +26,7 @@
 <img src="https://img.shields.io/badge/Gemini_3.1_Pro_Preview-4285F4?style=flat-square&logo=google&logoColor=white" alt="Gemini" />
 <img src="https://img.shields.io/badge/DeepSeek_V3.2-0A0A0A?style=flat-square&logoColor=white" alt="DeepSeek" />
 <img src="https://img.shields.io/badge/Seed_2.0_Pro-FF6A00?style=flat-square&logoColor=white" alt="Seed" />
+<img src="https://img.shields.io/badge/MiniMax_M2.5-D01D24?style=flat-square&logoColor=white" alt="MiniMax" />
 
 </div>
 
@@ -33,9 +34,9 @@
 
 ## ✨ Vectaix AI란?
 
-Vectaix AI는 Vercel 클라우드 네이티브 배포를 위해 설계된 **오픈소스 AI 워크스페이스**입니다. 세계 최고의 AI 모델들을 하나의 통합 인터페이스에 모아 견고한 [듀얼 엔진 아키텍처 (Dual-Engine Architecture)](./ARCHITECTURE.ko.md)로 구동합니다.
+Vectaix AI는 Vercel 클라우드 네이티브 배포를 위해 설계된 **오픈소스 AI 워크스페이스**입니다. 세계 최고의 AI 모델들을 하나의 통합 인터페이스에 모아 견고한 [듀얼 엔진 아키텍처 (Dual-Engine Architecture)](./ARCHITECTURE.md)로 구동합니다.
 
-GPT-5.4의 빠른 답변, Claude Opus 4.6의 깊은 추론, 또는 여러 AI 전문가의 토론을 통한 최종 답변 통합 등 Vectaix AI는 세련되고 전문적인 경험을 제공합니다.
+DeepSeek V3.2의 빠른 답변, Claude Opus 4.6의 깊은 추론, 또는 여러 AI 전문가의 토론을 통한 최종 답변 통합 등 Vectaix AI는 세련되고 전문적인 경험을 제공합니다.
 
 ### 🖼️ 인터페이스 미리보기
 
@@ -50,27 +51,27 @@ GPT-5.4의 빠른 답변, Claude Opus 4.6의 깊은 추론, 또는 여러 AI 전
 <td width="50%">
 
 ### 🧠 Council 워크플로우 (멀티 전문가)
-여러 모델(예: GPT, Claude, Gemini)이 병렬 전문가로서 쿼리를 추론하고 최종 모델이 합의를 통합하는 고유한 협업 모드입니다.
-[수식 및 아키텍처 다이어그램 읽기](./ARCHITECTURE.md#11-the-council-module-multi-expert-consensus)
+여러 모델(**GPT-5.4, Claude Opus 4.6, Gemini 3.1 Pro**)이 병렬 전문가로서 쿼리를 추론하고 최종 모델(**Seed 2.0 Pro**)이 합의를 통합하는 고유한 협업 모드입니다. 단순한 질문은 자동으로 필터링됩니다.
+[수식 및 아키텍처 다이어그램 읽기](./ARCHITECTURE.md#2-the-council-module)
 
 ### 🤖 Agent 런타임
-자율적인 작업 실행을 위한 명령 엔진, 도구 레지스트리 및 상태 직렬화를 갖춘 완전히 격리된 오케스트레이션 계층입니다.
-[Agent 아키텍처 다이어그램 보기](./ARCHITECTURE.md#12-the-agent-module-autonomous-orchestration)
+자율적인 작업 실행을 위한 명령 엔진, 도구 레지스트리, 상태 직렬화 및 메모리 관리를 갖춘 완전히 격리된 ReAct 스타일의 오케스트레이션 계층입니다.
+[Agent 아키텍처 다이어그램 보기](./ARCHITECTURE.md#3-the-agent-module)
 
 ### 🔌 공식 API 통합
-최대 안정성과 성능을 보장하기 위해 모든 모델은 공식 API 또는 공식 배포를 통해 통합됩니다.
+8개의 모든 모델은 공식 API 또는 공식 배포를 통해 통합되어 최대 안정성, 최대 1M 토큰의 컨텍스트 창 및 기본 스트리밍 기능을 보장합니다.
 
 </td>
 <td width="50%">
 
 ### 🌐 웹 검색 & 브라우징
-Volcengine의 실시간 인덱싱 API를 활용한 Grounded 생성. 완전한 웹 브라우징 세션 및 콘텐츠 추출 포함.
+Volcengine의 실시간 인덱싱 API를 활용한 Grounded 생성. 웹 검색, 단일 페이지 크롤링 및 여러 URL의 일괄 크롤링이 가능한 서버 측 도구 루프 포함.
 
 ### 📎 멀티모달 문서 파싱
-이미지, PDF, Word, Excel 및 코드 파일 업로드 및 파싱. Vercel Sandbox의 Python 런타임을 통해 비동기적으로 처리.
+이미지, PDF, Word, Excel 및 코드 파일 업로드 및 파싱. Python 3.13을 실행하는 **Vercel Sandbox**를 통해 안전하게 처리됩니다.
 
 ### 💭 실시간 사고 과정
-모델의 내부 추론 과정을 실시간 스트리밍으로 표시하여 AI가 어떻게 결론을 도출하는지 투명하게 공개.
+사용자 지정 Server-Sent Events (SSE) 프로토콜을 통해 모델의 내부 추론 과정을 실시간 스트리밍으로 표시하여 AI가 어떻게 결론을 도출하는지 투명하게 공개.
 
 </td>
 </tr>
@@ -105,15 +106,16 @@ Vectaix AI는 **Vercel Pro** 서버리스 배포용으로 설계되었습니다.
 | 변수 | 필수 | 용도 |
 |:-----|:----:|:-----|
 | `MONGO_URI` | ✅ | 상태 저장 메모리를 위한 MongoDB 연결 문자열 |
-| `JWT_SECRET` | ✅ | 세션 확인을 위한 암호화 시크릿 |
+| `JWT_SECRET` | ✅ | 세션 확인을 위한 암호화 시크릿 (HS256) |
 | `ADMIN_EMAILS` | ❌ | 관리자 이메일 목록 (쉼표 구분) |
 | `OPENAI_API_KEY` | ✅ | OpenAI 공식 API |
 | `ANTHROPIC_API_KEY` | ✅ | Anthropic 공식 API |
 | `GEMINI_API_KEY` | ✅ | Google Gemini 공식 API |
 | `DEEPSEEK_API_KEY` | ✅ | DeepSeek 공식 API |
-| `ARK_API_KEY` | ✅ | ByteDance Seed 공식 API |
+| `ARK_API_KEY` | ✅ | ByteDance Seed 및 Volcengine ARK API |
 | `MINIMAX_API_KEY` | ✅ | MiniMax 공식 API |
 | `MIMO_API_BASE_URL` | ✅ | MiMo 배포 서비스 주소 |
+| `MIMO_API_KEY` | ❌ | MiMo 배포 서비스 API 키 (필요한 경우) |
 | `VOLCENGINE_WEB_SEARCH_API_KEY` | ⬚ | 웹 검색 기능 |
 
 ---
@@ -122,8 +124,10 @@ Vectaix AI는 **Vercel Pro** 서버리스 배포용으로 설계되었습니다.
 
 - [x] 8개 AI 모델 멀티모델 채팅
 - [x] 듀얼 엔진: Council 워크플로우 & Agent 런타임
-- [x] 웹 검색 & 멀티모달 문서 파싱
+- [x] 웹 검색, 일괄 크롤링 및 멀티모달 문서 파싱
+- [x] Vercel Sandbox Python 안전한 격리 환경 실행
 - [x] 실시간 추론 (Thinking Blocks) 표시
+- [x] PWA 지원 및 완전한 JWT 인증 시스템
 - [ ] 플러그인 / 확장 시스템 확대
 - [ ] 협업 워크스페이스
 - [ ] 셀프호스트 Docker 지원
@@ -144,7 +148,7 @@ Vectaix AI는 **Vercel Pro** 서버리스 배포용으로 설계되었습니다.
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Noah-Wu66/Vectaix-AI&type=Date&theme=dark" />
    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Noah-Wu66/Vectaix-AI&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Noah-Wu66/Vectaix-AI&type=Date" />
+   <img 단어 History Chart" src="https://api.star-history.com/svg?repos=Noah-Wu66/Vectaix-AI&type=Date" />
  </picture>
 </a>
 
