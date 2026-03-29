@@ -38,9 +38,9 @@ import {
   ArtifactCards,
 } from "./MessageListHelpers";
 import {
+  CHAT_RUNTIME_MODE_AGENT,
   CHAT_MODELS,
-  getModelConfig,
-  isAgentBackedModelId,
+  modelSupportsAvailableInput,
   isCouncilModel,
 } from "@/lib/shared/models";
 
@@ -75,6 +75,7 @@ export default function MessageList({
   editingImage,
   fontSizeClass,
   model,
+  chatMode,
   modelReady = true,
   onEditingContentChange,
   onEditingImageSelect,
@@ -99,8 +100,8 @@ export default function MessageList({
   const [openExportMenuIndex, setOpenExportMenuIndex] = useState(null);
   const prevMessagesRef = useRef([]);
   const isCouncilConversation = isCouncilModel(model);
-  const isAgentConversation = isAgentBackedModelId(model);
-  const canEditImages = getModelConfig(model)?.supportsImages === true;
+  const isAgentConversation = !isCouncilConversation && chatMode === CHAT_RUNTIME_MODE_AGENT;
+  const canEditImages = modelSupportsAvailableInput(model, "image", chatMode);
   const toast = useToast();
   const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
   const hasStreamingContent = messages.some((message) => (message?.isStreaming && !message?.isWaitingFirstChunk) || message?.isSearching);
@@ -285,7 +286,9 @@ export default function MessageList({
                   今天能帮您做点什么？
                 </h2>
                 <p className="text-zinc-400 dark:text-zinc-500 text-[15px] max-w-sm mx-auto leading-relaxed">
-                  选择一个模型开始对话，复杂任务会自动按 Agent 流程处理。
+                  {isAgentConversation
+                    ? "选择一个模型开始对话，复杂任务会按 Agent 流程处理。"
+                    : "选择一个模型开始对话，Chat 模式只保留原生聊天能力。"}
                 </p>
               </div>
             </div>

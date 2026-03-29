@@ -3,8 +3,9 @@ import {
   isNonEmptyString,
   getStoredPartsFromMessage,
 } from "@/app/api/chat/utils";
+import { buildAttachmentTextBlock } from "@/lib/server/files/service";
 
-export async function storedPartToOpenAIPart(part, role) {
+export async function storedPartToOpenAIPart(part, role, options = {}) {
   if (!part || typeof part !== "object") return null;
 
   // assistant 角色使用 output_text，user 角色使用 input_text
@@ -14,6 +15,19 @@ export async function storedPartToOpenAIPart(part, role) {
     return isAssistant
       ? { type: "output_text", text: part.text }
       : { type: "input_text", text: part.text };
+  }
+
+  const fileUrl = part?.fileData?.url;
+  if (isNonEmptyString(fileUrl)) {
+    const fileTextMap = options?.fileTextMap instanceof Map ? options.fileTextMap : new Map();
+    const prepared = fileTextMap.get(fileUrl);
+    const extractedText = prepared?.structuredText || prepared?.extractedText || "";
+    if (isNonEmptyString(extractedText)) {
+      const block = buildAttachmentTextBlock(prepared.file || part.fileData, extractedText);
+      return isAssistant
+        ? { type: "output_text", text: block }
+        : { type: "input_text", text: block };
+    }
   }
 
   // 图片只对 user 角色有效
@@ -33,7 +47,7 @@ export async function storedPartToOpenAIPart(part, role) {
   return null;
 }
 
-export async function buildOpenAIInputFromHistory(messages) {
+export async function buildOpenAIInputFromHistory(messages, options = {}) {
   const input = [];
   for (const msg of messages) {
     if (msg?.role !== "user" && msg?.role !== "model") continue;
@@ -44,7 +58,7 @@ export async function buildOpenAIInputFromHistory(messages) {
     const openaiRole = msg.role === "model" ? "assistant" : "user";
     const content = [];
     for (const storedPart of storedParts) {
-      const p = await storedPartToOpenAIPart(storedPart, openaiRole);
+      const p = await storedPartToOpenAIPart(storedPart, openaiRole, options);
       if (p) content.push(p);
     }
     if (content.length) {

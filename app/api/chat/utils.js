@@ -146,27 +146,31 @@ function isAllowedStoredImageUrl(url) {
 }
 
 export async function fetchImageAsBase64(url) {
+    return fetchBlobAsBase64(url, { resourceLabel: "image" });
+}
+
+export async function fetchBlobAsBase64(url, { resourceLabel = "file" } = {}) {
     if (typeof url !== "string" || !url.trim()) {
-        throw new Error("Invalid image url");
+        throw new Error(`Invalid ${resourceLabel} url`);
     }
 
     let parsed;
     try {
         parsed = new URL(url);
     } catch {
-        throw new Error("Invalid image url");
+        throw new Error(`Invalid ${resourceLabel} url`);
     }
 
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        throw new Error("Invalid image url protocol");
+        throw new Error(`Invalid ${resourceLabel} url protocol`);
     }
 
     if (!isAllowedImageDomain(url)) {
-        throw new Error("Image domain not allowed");
+        throw new Error(`${resourceLabel} domain not allowed`);
     }
 
     const imgRes = await fetch(url, { cache: "no-store" });
-    if (!imgRes.ok) throw new Error("Failed to fetch image from blob");
+    if (!imgRes.ok) throw new Error(`Failed to fetch ${resourceLabel} from blob`);
 
     const arrayBuffer = await imgRes.arrayBuffer();
     const base64Data = Buffer.from(arrayBuffer).toString("base64");

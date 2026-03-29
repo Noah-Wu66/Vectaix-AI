@@ -4,6 +4,7 @@ import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
+    fetchBlobAsBase64,
     fetchImageAsBase64,
     estimateTokens,
     generateMessageId,
@@ -35,6 +36,7 @@ import {
     normalizeSeedChunkText,
     requestSeedResponses,
 } from '@/lib/server/seed/service';
+import { getAttachmentInputType } from '@/lib/shared/attachments';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
     buildConversationWriteCondition,
@@ -218,6 +220,12 @@ export async function POST(req) {
             seedInput = await buildBytedanceInputFromHistory(effectiveHistory);
         }
 
+        const attachmentEntries = Array.isArray(config?.attachments)
+            ? config.attachments.filter((item) => {
+                const inputType = getAttachmentInputType(item?.category);
+                return (inputType === 'video' || inputType === 'audio') && isNonEmptyString(item?.url);
+            })
+            : [];
         const dbImageEntries = [];
         if (!isRegenerateMode) {
             const userContent = [];
@@ -234,6 +242,27 @@ export async function POST(req) {
                         image_url: `data:${mimeType};base64,${base64Data}`,
                     });
                     dbImageEntries.push({ url: img.url, mimeType });
+                }
+            }
+
+            for (const attachment of attachmentEntries) {
+                const inputType = getAttachmentInputType(attachment.category);
+                const { base64Data, mimeType: fetchedMimeType } = await fetchBlobAsBase64(attachment.url, {
+                    resourceLabel: inputType || 'media',
+                });
+                const mimeType = attachment.mimeType || fetchedMimeType;
+                if (inputType === 'video') {
+                    userContent.push({
+                        type: 'input_video',
+                        video_url: `data:${mimeType};base64,${base64Data}`,
+                    });
+                    continue;
+                }
+                if (inputType === 'audio') {
+                    userContent.push({
+                        type: 'input_audio',
+                        audio_url: `data:${mimeType};base64,${base64Data}`,
+                    });
                 }
             }
 

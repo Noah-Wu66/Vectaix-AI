@@ -8,6 +8,7 @@ import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
 import {
   CHAT_MODELS,
   DEFAULT_MODEL,
+  normalizeChatRuntimeMode,
   isCouncilModel,
   isPrimaryChatModelId,
 } from "@/lib/shared/models";
@@ -191,7 +192,29 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, isSettingsReady, setModel, thinkingLevels, historyLimit, maxTokens, webSearch, setWebSearch, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, avatar, setAvatar } = useUserSettings();
+  const {
+    model,
+    chatMode,
+    isSettingsReady,
+    setModel,
+    setChatMode,
+    thinkingLevels,
+    historyLimit,
+    maxTokens,
+    webSearch,
+    setWebSearch,
+    themeMode,
+    setThemeMode,
+    fontSize,
+    setFontSize,
+    completionSoundVolume,
+    setCompletionSoundVolume,
+    settingsError,
+    setSettingsError,
+    fetchSettings,
+    avatar,
+    setAvatar,
+  } = useUserSettings();
   useThemeMode(themeMode);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
@@ -413,6 +436,7 @@ export default function ChatApp() {
     loading,
     setLoading,
     model,
+    chatMode,
     thinkingLevels,
     mediaResolution,
     maxTokens,
@@ -603,6 +627,7 @@ export default function ChatApp() {
     const settings = rawSettings && typeof rawSettings === "object"
       ? rawSettings
       : {};
+    setChatMode(normalizeChatRuntimeMode(settings.mode));
     setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
   };
 
@@ -740,6 +765,13 @@ export default function ChatApp() {
       lastTextModelRef.current = DEFAULT_MODEL;
     }
     if (window.innerWidth < 768) setSidebarOpen(false);
+  };
+
+  const requestChatModeChange = (nextMode) => {
+    if (loading || messages.some((m) => m.isStreaming) || isCouncilModel(model)) return;
+    const normalizedMode = normalizeChatRuntimeMode(nextMode);
+    setChatMode(normalizedMode);
+    syncConversationSettings({ mode: normalizedMode });
   };
 
   const requestModelChange = (nextModel) => {
@@ -966,8 +998,10 @@ export default function ChatApp() {
             isStreaming,
             isWaitingForAI: loading && messages.length > 0,
             model,
+            chatMode,
             modelReady: isSettingsReady,
             onModelChange: requestModelChange,
+            onChatModeChange: requestChatModeChange,
             messages,
             historyLimit,
             webSearch,

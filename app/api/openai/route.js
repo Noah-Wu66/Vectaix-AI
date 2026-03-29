@@ -11,6 +11,7 @@ import {
     injectCurrentTimeSystemReminder,
     estimateTokens
 } from '@/app/api/chat/utils';
+import { getAttachmentInputType } from '@/lib/shared/attachments';
 import {
     buildWebSearchGuide,
 } from '@/lib/server/chat/webSearchConfig';
@@ -33,6 +34,10 @@ import {
     enrichConversationPartsWithBlobIds,
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
+import {
+    buildAttachmentTextBlock,
+    prepareDocumentAttachmentMapByUrls,
+} from '@/lib/server/files/service';
 
 import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
 import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
@@ -102,7 +107,7 @@ export async function POST(req) {
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
         }
-        if (!prompt || typeof prompt !== 'string') {
+        if (typeof prompt !== 'string') {
             return Response.json({ error: 'Prompt is required' }, { status: 400 });
         }
         if (!Array.isArray(history)) {
@@ -158,6 +163,9 @@ export async function POST(req) {
         let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
         let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
+        const currentAttachments = Array.isArray(config?.attachments)
+            ? config.attachments.filter((item) => getAttachmentInputType(item?.category) === 'file' && isNonEmptyString(item?.url))
+            : [];
         let openaiInput = [];
         let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
@@ -201,17 +209,48 @@ export async function POST(req) {
             effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
                 ? historyBeforeCurrentPrompt.slice(-limit)
                 : historyBeforeCurrentPrompt;
-            openaiInput = await buildOpenAIInputFromHistory(effectiveMsgs);
+            const historyAttachmentUrls = effectiveMsgs.flatMap((msg) =>
+                Array.isArray(msg?.parts)
+                    ? msg.parts
+                        .map((part) => part?.fileData)
+                        .filter((file) => getAttachmentInputType(file?.category) === 'file' && isNonEmptyString(file?.url))
+                        .map((file) => file.url)
+                    : []
+            );
+            const historyFileTextMap = await prepareDocumentAttachmentMapByUrls(historyAttachmentUrls, {
+                userId: user.userId,
+                conversationId: currentConversationId,
+                signal: req?.signal,
+            });
+            openaiInput = await buildOpenAIInputFromHistory(effectiveMsgs, { fileTextMap: historyFileTextMap });
         } else {
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
             effectiveHistoryMessages = effectiveHistory;
-            openaiInput = await buildOpenAIInputFromHistory(effectiveHistory);
+            const historyAttachmentUrls = effectiveHistory.flatMap((msg) =>
+                Array.isArray(msg?.parts)
+                    ? msg.parts
+                        .map((part) => part?.fileData)
+                        .filter((file) => getAttachmentInputType(file?.category) === 'file' && isNonEmptyString(file?.url))
+                        .map((file) => file.url)
+                    : []
+            );
+            const historyFileTextMap = await prepareDocumentAttachmentMapByUrls(historyAttachmentUrls, {
+                userId: user.userId,
+                conversationId: currentConversationId,
+                signal: req?.signal,
+            });
+            openaiInput = await buildOpenAIInputFromHistory(effectiveHistory, { fileTextMap: historyFileTextMap });
         }
 
         let dbImageEntries = [];
+        let attachmentEntries = [];
 
         if (!isRegenerateMode) {
-            const userContent = [{ type: 'input_text', text: prompt }];
+            const userContent = [];
+
+            if (isNonEmptyString(prompt)) {
+                userContent.push({ type: 'input_text', text: prompt });
+            }
 
             if (config?.images?.length > 0) {
                 for (const img of config.images) {
@@ -224,6 +263,31 @@ export async function POST(req) {
                         dbImageEntries.push({ url: img.url, mimeType });
                     }
                 }
+            }
+
+            if (currentAttachments.length > 0) {
+                const preparedAttachments = await prepareDocumentAttachmentMapByUrls(
+                    currentAttachments.map((item) => item.url),
+                    {
+                        userId: user.userId,
+                        conversationId: currentConversationId,
+                        signal: req?.signal,
+                    }
+                );
+                attachmentEntries = currentAttachments.filter((item) => preparedAttachments.has(item.url));
+                for (const attachment of attachmentEntries) {
+                    const prepared = preparedAttachments.get(attachment.url);
+                    const extractedText = prepared?.structuredText || prepared?.extractedText || '';
+                    if (!isNonEmptyString(extractedText)) continue;
+                    userContent.push({
+                        type: 'input_text',
+                        text: buildAttachmentTextBlock(prepared.file || attachment, extractedText),
+                    });
+                }
+            }
+
+            if (userContent.length === 0) {
+                return Response.json({ error: '请至少输入内容或上传附件' }, { status: 400 });
             }
 
             openaiInput.push({ role: 'user', content: userContent });
@@ -277,7 +341,10 @@ export async function POST(req) {
         });
 
         if (user && !currentConversationId) {
-            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
+            const titleSource = isNonEmptyString(prompt)
+                ? prompt
+                : (attachmentEntries[0]?.name || (dbImageEntries.length > 0 ? '图片对话' : 'New Chat'));
+            const title = titleSource.length > 30 ? titleSource.substring(0, 30) + '...' : titleSource;
             const newConv = await Conversation.create({
                 userId: user.userId,
                 title,
@@ -305,6 +372,21 @@ export async function POST(req) {
                         inlineData: {
                             mimeType: entry.mimeType,
                             url: entry.url,
+                        },
+                    });
+                }
+            }
+
+            if (attachmentEntries.length > 0) {
+                for (const attachment of attachmentEntries) {
+                    storedUserParts.push({
+                        fileData: {
+                            url: attachment.url,
+                            name: attachment.name,
+                            mimeType: attachment.mimeType,
+                            size: attachment.size,
+                            extension: attachment.extension,
+                            category: attachment.category,
                         },
                     });
                 }

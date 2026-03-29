@@ -4,6 +4,7 @@ import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
+    fetchBlobAsBase64,
     fetchImageAsBase64,
     isNonEmptyString,
     getStoredPartsFromMessage,
@@ -12,6 +13,11 @@ import {
     injectCurrentTimeSystemReminder,
     estimateTokens
 } from '@/app/api/chat/utils';
+import { getAttachmentInputType } from '@/lib/shared/attachments';
+import {
+    buildAttachmentTextBlock,
+    prepareDocumentAttachmentMapByUrls,
+} from '@/lib/server/files/service';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
     buildConversationWriteCondition,
@@ -42,7 +48,7 @@ export const dynamic = 'force-dynamic';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
 
-async function storedPartToRequestPart(part) {
+async function storedPartToRequestPart(part, options = {}) {
     if (!part || typeof part !== 'object') return null;
 
     if (isNonEmptyString(part.text)) {
@@ -60,10 +66,26 @@ async function storedPartToRequestPart(part) {
         return p;
     }
 
+    const fileUrl = part?.fileData?.url;
+    const inputType = getAttachmentInputType(part?.fileData?.category);
+    if (isNonEmptyString(fileUrl) && inputType === 'file') {
+        const fileTextMap = options?.fileTextMap instanceof Map ? options.fileTextMap : new Map();
+        const prepared = fileTextMap.get(fileUrl);
+        const extractedText = prepared?.structuredText || prepared?.extractedText || '';
+        if (isNonEmptyString(extractedText)) {
+            return { text: buildAttachmentTextBlock(prepared.file || part.fileData, extractedText) };
+        }
+    }
+    if (isNonEmptyString(fileUrl) && (inputType === 'video' || inputType === 'audio')) {
+        const { base64Data, mimeType: fetchedMimeType } = await fetchBlobAsBase64(fileUrl, { resourceLabel: inputType });
+        const mimeType = part.fileData?.mimeType || fetchedMimeType;
+        return { inlineData: { mimeType, data: base64Data } };
+    }
+
     return null;
 }
 
-async function buildGeminiContentsFromMessages(messages) {
+async function buildGeminiContentsFromMessages(messages, options = {}) {
     const contents = [];
     for (const msg of messages) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
@@ -72,7 +94,7 @@ async function buildGeminiContentsFromMessages(messages) {
         if (!storedParts || storedParts.length === 0) continue;
         const parts = [];
         for (const storedPart of storedParts) {
-            const p = await storedPartToRequestPart(storedPart);
+            const p = await storedPartToRequestPart(storedPart, options);
             if (p) parts.push(p);
         }
         if (parts.length) contents.push({ role: msg.role, parts });
@@ -108,7 +130,7 @@ export async function POST(req) {
             );
         }
 
-        if (!prompt || typeof prompt !== 'string') {
+        if (typeof prompt !== 'string') {
             return Response.json(
                 { error: 'Prompt is required and must be a string' },
                 { status: 400 }
@@ -211,15 +233,55 @@ export async function POST(req) {
             effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
                 ? historyBeforeCurrentPrompt.slice(-limit)
                 : historyBeforeCurrentPrompt;
-            contents = await buildGeminiContentsFromMessages(effectiveMsgs);
+            const historyAttachmentUrls = effectiveMsgs.flatMap((msg) =>
+                Array.isArray(msg?.parts)
+                    ? msg.parts
+                        .map((part) => part?.fileData)
+                        .filter((file) => getAttachmentInputType(file?.category) === 'file' && isNonEmptyString(file?.url))
+                        .map((file) => file.url)
+                    : []
+            );
+            const historyFileTextMap = await prepareDocumentAttachmentMapByUrls(historyAttachmentUrls, {
+                userId: user.userId,
+                conversationId: currentConversationId,
+                signal: req?.signal,
+            });
+            contents = await buildGeminiContentsFromMessages(effectiveMsgs, { fileTextMap: historyFileTextMap });
         } else {
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
             effectiveHistoryMessages = effectiveHistory;
-            contents = await buildGeminiContentsFromMessages(effectiveHistory);
+            const historyAttachmentUrls = effectiveHistory.flatMap((msg) =>
+                Array.isArray(msg?.parts)
+                    ? msg.parts
+                        .map((part) => part?.fileData)
+                        .filter((file) => getAttachmentInputType(file?.category) === 'file' && isNonEmptyString(file?.url))
+                        .map((file) => file.url)
+                    : []
+            );
+            const historyFileTextMap = await prepareDocumentAttachmentMapByUrls(historyAttachmentUrls, {
+                userId: user.userId,
+                conversationId: currentConversationId,
+                signal: req?.signal,
+            });
+            contents = await buildGeminiContentsFromMessages(effectiveHistory, { fileTextMap: historyFileTextMap });
         }
 
-        let currentParts = isRegenerateMode ? null : [{ text: prompt }];
+        const mediaAttachmentEntries = Array.isArray(config?.attachments)
+            ? config.attachments.filter((item) => {
+                const inputType = getAttachmentInputType(item?.category);
+                return (inputType === 'video' || inputType === 'audio') && isNonEmptyString(item?.url);
+            })
+            : [];
+        const documentAttachmentEntries = Array.isArray(config?.attachments)
+            ? config.attachments.filter((item) => getAttachmentInputType(item?.category) === 'file' && isNonEmptyString(item?.url))
+            : [];
+        let currentParts = isRegenerateMode ? null : [];
         let dbImageEntries = [];
+        const dbAttachmentEntries = [];
+
+        if (!isRegenerateMode && isNonEmptyString(prompt)) {
+            currentParts.push({ text: prompt });
+        }
 
         if (!isRegenerateMode && config?.images?.length > 0) {
             for (const img of config.images) {
@@ -235,6 +297,44 @@ export async function POST(req) {
                     dbImageEntries.push({ url: img.url, mimeType });
                 }
             }
+        }
+
+        if (!isRegenerateMode && mediaAttachmentEntries.length > 0) {
+            for (const attachment of mediaAttachmentEntries) {
+                const { base64Data, mimeType: fetchedMimeType } = await fetchBlobAsBase64(attachment.url, {
+                    resourceLabel: getAttachmentInputType(attachment.category) || 'media',
+                });
+                const mimeType = attachment.mimeType || fetchedMimeType;
+                currentParts.push({
+                    inlineData: {
+                        mimeType,
+                        data: base64Data,
+                    },
+                });
+                dbAttachmentEntries.push(attachment);
+            }
+        }
+
+        if (!isRegenerateMode && documentAttachmentEntries.length > 0) {
+            const preparedAttachments = await prepareDocumentAttachmentMapByUrls(
+                documentAttachmentEntries.map((item) => item.url),
+                {
+                    userId: user.userId,
+                    conversationId: currentConversationId,
+                    signal: req?.signal,
+                }
+            );
+            for (const attachment of documentAttachmentEntries) {
+                const prepared = preparedAttachments.get(attachment.url);
+                const extractedText = prepared?.structuredText || prepared?.extractedText || '';
+                if (!isNonEmptyString(extractedText)) continue;
+                currentParts.push({ text: buildAttachmentTextBlock(prepared.file || attachment, extractedText) });
+                dbAttachmentEntries.push(attachment);
+            }
+        }
+
+        if (!isRegenerateMode && currentParts.length === 0) {
+            return Response.json({ error: '请至少输入内容或上传附件' }, { status: 400 });
         }
 
         if (!isRegenerateMode) {
@@ -288,7 +388,10 @@ export async function POST(req) {
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         if (user && !currentConversationId) {
-            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
+            const titleSource = isNonEmptyString(prompt)
+                ? prompt
+                : (dbAttachmentEntries[0]?.name || (dbImageEntries.length > 0 ? '图片对话' : 'New Chat'));
+            const title = titleSource.length > 30 ? titleSource.substring(0, 30) + '...' : titleSource;
             const newConv = await Conversation.create({
                 userId: user.userId,
                 title,
@@ -316,6 +419,21 @@ export async function POST(req) {
                         inlineData: {
                             mimeType: entry.mimeType,
                             url: entry.url,
+                        },
+                    });
+                }
+            }
+
+            if (dbAttachmentEntries.length > 0) {
+                for (const attachment of dbAttachmentEntries) {
+                    storedUserParts.push({
+                        fileData: {
+                            url: attachment.url,
+                            name: attachment.name,
+                            mimeType: attachment.mimeType,
+                            size: attachment.size,
+                            extension: attachment.extension,
+                            category: attachment.category,
                         },
                     });
                 }

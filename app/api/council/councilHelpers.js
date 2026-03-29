@@ -1005,6 +1005,9 @@ export async function buildCouncilUserInput({ prompt, images }) {
 
 export async function buildCouncilUserInputFromMessage(message) {
   const parts = getStoredPartsFromMessage(message) || [];
+  if (parts.some((part) => part?.fileData?.url)) {
+    throw new Error("Council 当前只支持文字和图片输入");
+  }
   const prompt = extractTextFromStoredParts(parts);
   const images = parts
     .filter((part) => typeof part?.inlineData?.url === "string" && part.inlineData.url)

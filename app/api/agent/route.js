@@ -4,8 +4,11 @@ import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { rateLimit, getClientIP } from "@/lib/rateLimit";
 import {
+  CHAT_RUNTIME_MODE_AGENT,
+  getModelAttachmentSupport,
   isAgentBackedModelId,
   isCouncilModel,
+  normalizeChatRuntimeMode,
 } from "@/lib/shared/models";
 import { generateMessageId, isNonEmptyString } from "@/app/api/chat/utils";
 import {
@@ -18,6 +21,7 @@ import { runAgentRuntime } from "@/lib/server/agent/runtime";
 import { serializeRuntimeState } from "@/lib/server/agent/core/stateSerializer";
 import { parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
 import { enrichConversationPartsWithBlobIds } from "@/lib/server/conversations/blobReferences";
+import { getAttachmentInputType } from "@/lib/shared/attachments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,6 +89,7 @@ export async function POST(req) {
       historyLimit,
       conversationId,
       mode,
+      settings,
       userMessageId,
       modelMessageId,
     } = body || {};
@@ -149,6 +154,28 @@ export async function POST(req) {
           mimeType: typeof item?.mimeType === "string" && item.mimeType ? item.mimeType : "image/jpeg",
         }))
       : [];
+    const {
+      supportsImages,
+      supportsDocuments,
+      supportsVideo,
+      supportsAudio,
+    } = getModelAttachmentSupport(driverModel, CHAT_RUNTIME_MODE_AGENT);
+
+    if (currentImages.length > 0 && !supportsImages) {
+      return Response.json({ error: "当前 Agent 模型不支持图片输入" }, { status: 400 });
+    }
+
+    for (const attachment of currentAttachments) {
+      const inputType = getAttachmentInputType(attachment?.category);
+      const isSupported = (
+        (inputType === "file" && supportsDocuments)
+        || (inputType === "video" && supportsVideo)
+        || (inputType === "audio" && supportsAudio)
+      );
+      if (!isSupported) {
+        return Response.json({ error: "当前 Agent 模型不支持这类附件" }, { status: 400 });
+      }
+    }
 
     const userMessageParts = buildUserMessageParts({
       prompt: typeof prompt === "string" ? prompt : "",
@@ -181,6 +208,7 @@ export async function POST(req) {
         title: buildConversationTitle(prompt, currentAttachments),
         model: requestedModel,
         settings: {
+          mode: normalizeChatRuntimeMode(settings?.mode),
           webSearch: parsedWebSearch,
         },
         messages: [],
@@ -213,6 +241,7 @@ export async function POST(req) {
         $push: { messages: userMessage },
         $set: {
           model: requestedModel,
+          "settings.mode": normalizeChatRuntimeMode(settings?.mode),
           "settings.webSearch": parsedWebSearch,
           updatedAt: Date.now(),
         },

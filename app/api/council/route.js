@@ -5,7 +5,12 @@ import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { getClientIP, rateLimit } from "@/lib/rateLimit";
 import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
-import { COUNCIL_MAX_ROUNDS, COUNCIL_MODEL_ID, countCompletedCouncilRounds } from "@/lib/shared/models";
+import {
+  COUNCIL_MAX_ROUNDS,
+  COUNCIL_MODEL_ID,
+  countCompletedCouncilRounds,
+  modelSupportsAvailableInput,
+} from "@/lib/shared/models";
 import { resolveCouncilProviderRoutes } from "@/lib/modelRoutes";
 import {
   buildCouncilExpertState,
@@ -135,6 +140,8 @@ export async function POST(req) {
     mode,
     messages,
   } = body || {};
+  const requestImages = Array.isArray(config?.images) ? config.images : [];
+  const requestAttachments = Array.isArray(config?.attachments) ? config.attachments : [];
 
   if (model !== COUNCIL_MODEL_ID) {
     return Response.json({ error: "Council 模式请求无效" }, { status: 400 });
@@ -152,6 +159,12 @@ export async function POST(req) {
   }
   if (isRegenerateMode && !conversationId) {
     return Response.json({ error: "Council 重开必须提供 conversationId" }, { status: 400 });
+  }
+  if (requestImages.length > 0 && !modelSupportsAvailableInput(COUNCIL_MODEL_ID, "image")) {
+    return Response.json({ error: "Council 当前不支持图片输入" }, { status: 400 });
+  }
+  if (requestAttachments.length > 0) {
+    return Response.json({ error: "Council 当前只支持文字和图片输入" }, { status: 400 });
   }
 
   const auth = await getAuthPayload();
@@ -197,14 +210,13 @@ export async function POST(req) {
   let createdConversationForRequest = false;
 
   if (!isRegenerateMode && conversationId == null) {
-    const imageConfigs = Array.isArray(config?.images) ? config.images : [];
-    if (!promptText.trim() && imageConfigs.length === 0) {
+    if (!promptText.trim() && requestImages.length === 0) {
       return Response.json({ error: "Prompt is required" }, { status: 400 });
     }
     try {
       councilInput = await buildCouncilUserInput({
         prompt: promptText,
-        images: imageConfigs,
+        images: requestImages,
       });
     } catch (error) {
       return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
@@ -307,14 +319,13 @@ export async function POST(req) {
     }
 
     if (!councilInput) {
-      const imageConfigs = Array.isArray(config?.images) ? config.images : [];
-      if (!promptText.trim() && imageConfigs.length === 0) {
+      if (!promptText.trim() && requestImages.length === 0) {
         return Response.json({ error: "Prompt is required" }, { status: 400 });
       }
       try {
         councilInput = await buildCouncilUserInput({
           prompt: promptText,
-          images: imageConfigs,
+          images: requestImages,
         });
       } catch (error) {
         return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });

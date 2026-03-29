@@ -20,6 +20,7 @@ import {
     injectCurrentTimeSystemReminder,
     estimateTokens
 } from '@/app/api/chat/utils';
+import { getAttachmentInputType } from '@/lib/shared/attachments';
 import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
@@ -31,6 +32,10 @@ import {
     enrichConversationPartsWithBlobIds,
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
+import {
+    buildAttachmentTextBlock,
+    prepareDocumentAttachmentMapByUrls,
+} from '@/lib/server/files/service';
 import {
     buildWebSearchGuide,
 } from '@/lib/server/chat/webSearchConfig';
@@ -58,7 +63,7 @@ const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 
 const MAX_REQUEST_BYTES = 2_000_000;
 
-async function storedPartToClaudePart(part) {
+async function storedPartToClaudePart(part, options = {}) {
     if (!part || typeof part !== 'object') return null;
 
     if (isNonEmptyString(part.text)) {
@@ -79,10 +84,23 @@ async function storedPartToClaudePart(part) {
         };
     }
 
+    const fileUrl = part?.fileData?.url;
+    if (isNonEmptyString(fileUrl)) {
+        const fileTextMap = options?.fileTextMap instanceof Map ? options.fileTextMap : new Map();
+        const prepared = fileTextMap.get(fileUrl);
+        const extractedText = prepared?.structuredText || prepared?.extractedText || '';
+        if (isNonEmptyString(extractedText)) {
+            return {
+                type: 'text',
+                text: buildAttachmentTextBlock(prepared.file || part.fileData, extractedText),
+            };
+        }
+    }
+
     return null;
 }
 
-async function buildClaudeMessagesFromHistory(messages) {
+async function buildClaudeMessagesFromHistory(messages, options = {}) {
     const claudeMessages = [];
     for (const msg of messages) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
@@ -92,7 +110,7 @@ async function buildClaudeMessagesFromHistory(messages) {
 
         const content = [];
         for (const storedPart of storedParts) {
-            const p = await storedPartToClaudePart(storedPart);
+            const p = await storedPartToClaudePart(storedPart, options);
             if (p) content.push(p);
         }
         if (content.length) {
@@ -126,7 +144,7 @@ export async function POST(req) {
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
         }
-        if (!prompt || typeof prompt !== 'string') {
+        if (typeof prompt !== 'string') {
             return Response.json({ error: 'Prompt is required' }, { status: 400 });
         }
         if (!Array.isArray(history)) {
@@ -191,6 +209,9 @@ export async function POST(req) {
             baseURL: anthropicBaseUrl,
         });
 
+        const currentAttachments = Array.isArray(config?.attachments)
+            ? config.attachments.filter((item) => getAttachmentInputType(item?.category) === 'file' && isNonEmptyString(item?.url))
+            : [];
         let claudeMessages = [];
         let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
@@ -234,12 +255,38 @@ export async function POST(req) {
             effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
                 ? historyBeforeCurrentPrompt.slice(-limit)
                 : historyBeforeCurrentPrompt;
-            claudeMessages = await buildClaudeMessagesFromHistory(effectiveMsgs);
+            const historyAttachmentUrls = effectiveMsgs.flatMap((msg) =>
+                Array.isArray(msg?.parts)
+                    ? msg.parts
+                        .map((part) => part?.fileData)
+                        .filter((file) => getAttachmentInputType(file?.category) === 'file' && isNonEmptyString(file?.url))
+                        .map((file) => file.url)
+                    : []
+            );
+            const historyFileTextMap = await prepareDocumentAttachmentMapByUrls(historyAttachmentUrls, {
+                userId: user.userId,
+                conversationId: currentConversationId,
+                signal: req?.signal,
+            });
+            claudeMessages = await buildClaudeMessagesFromHistory(effectiveMsgs, { fileTextMap: historyFileTextMap });
         } else {
             // 非 regenerate 模式：历史消息也需要正确处理图片
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? history.slice(-limit) : history;
             effectiveHistoryMessages = effectiveHistory;
-            claudeMessages = await buildClaudeMessagesFromHistory(effectiveHistory);
+            const historyAttachmentUrls = effectiveHistory.flatMap((msg) =>
+                Array.isArray(msg?.parts)
+                    ? msg.parts
+                        .map((part) => part?.fileData)
+                        .filter((file) => getAttachmentInputType(file?.category) === 'file' && isNonEmptyString(file?.url))
+                        .map((file) => file.url)
+                    : []
+            );
+            const historyFileTextMap = await prepareDocumentAttachmentMapByUrls(historyAttachmentUrls, {
+                userId: user.userId,
+                conversationId: currentConversationId,
+                signal: req?.signal,
+            });
+            claudeMessages = await buildClaudeMessagesFromHistory(effectiveHistory, { fileTextMap: historyFileTextMap });
         }
 
         // 在历史消息的最后一条添加缓存控制，使对话历史可被缓存
@@ -252,9 +299,14 @@ export async function POST(req) {
         }
 
         let dbImageEntries = [];
+        let attachmentEntries = [];
 
         if (!isRegenerateMode) {
-            const userContent = [{ type: 'text', text: prompt }];
+            const userContent = [];
+
+            if (isNonEmptyString(prompt)) {
+                userContent.push({ type: 'text', text: prompt });
+            }
 
             // 支持多张图片
             if (config?.images?.length > 0) {
@@ -272,6 +324,31 @@ export async function POST(req) {
                         dbImageEntries.push({ url: img.url, mimeType });
                     }
                 }
+            }
+
+            if (currentAttachments.length > 0) {
+                const preparedAttachments = await prepareDocumentAttachmentMapByUrls(
+                    currentAttachments.map((item) => item.url),
+                    {
+                        userId: user.userId,
+                        conversationId: currentConversationId,
+                        signal: req?.signal,
+                    }
+                );
+                attachmentEntries = currentAttachments.filter((item) => preparedAttachments.has(item.url));
+                for (const attachment of attachmentEntries) {
+                    const prepared = preparedAttachments.get(attachment.url);
+                    const extractedText = prepared?.structuredText || prepared?.extractedText || '';
+                    if (!isNonEmptyString(extractedText)) continue;
+                    userContent.push({
+                        type: 'text',
+                        text: buildAttachmentTextBlock(prepared.file || attachment, extractedText),
+                    });
+                }
+            }
+
+            if (userContent.length === 0) {
+                return Response.json({ error: '请至少输入内容或上传附件' }, { status: 400 });
             }
 
             claudeMessages.push({ role: 'user', content: userContent });
@@ -316,7 +393,10 @@ export async function POST(req) {
         });
 
         if (user && !currentConversationId) {
-            const title = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt;
+            const titleSource = isNonEmptyString(prompt)
+                ? prompt
+                : (attachmentEntries[0]?.name || (dbImageEntries.length > 0 ? '图片对话' : 'New Chat'));
+            const title = titleSource.length > 30 ? titleSource.substring(0, 30) + '...' : titleSource;
             const newConv = await Conversation.create({
                 userId: user.userId,
                 title,
@@ -344,6 +424,21 @@ export async function POST(req) {
                         inlineData: {
                             mimeType: entry.mimeType,
                             url: entry.url,
+                        },
+                    });
+                }
+            }
+
+            if (attachmentEntries.length > 0) {
+                for (const attachment of attachmentEntries) {
+                    storedUserParts.push({
+                        fileData: {
+                            url: attachment.url,
+                            name: attachment.name,
+                            mimeType: attachment.mimeType,
+                            size: attachment.size,
+                            extension: attachment.extension,
+                            category: attachment.category,
                         },
                     });
                 }
