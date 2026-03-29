@@ -4,7 +4,6 @@ import Doubao from "@lobehub/icons/es/Doubao";
 import Gemini from "@lobehub/icons/es/Gemini";
 import Minimax from "@lobehub/icons/es/Minimax";
 import OpenAI from "@lobehub/icons/es/OpenAI";
-import Perplexity from "@lobehub/icons/es/Perplexity";
 import XiaomiMiMo from "./XiaomiMiMoIcon";
 import {
   COUNCIL_MODEL_ID,
@@ -44,6 +43,8 @@ const PROVIDER_VISUALS = {
   },
 };
 
+const COUNCIL_PROVIDERS = ["openai", "claude", "gemini", "seed"];
+
 function resolveProvider(model, provider) {
   if (provider) return provider;
   if (isCouncilModel(model)) return "council";
@@ -63,15 +64,44 @@ function ProviderAvatar({ provider, size = 24 }) {
   return <Avatar size={size} shape="square" />;
 }
 
+function CouncilComposite({ size = 16, avatar = false }) {
+  const gap = Math.max(1, Math.round(size * 0.08));
+  const tileSize = Math.max(6, Math.floor((size - gap) / 2));
+
+  return (
+    <span
+      className="inline-grid shrink-0"
+      style={{
+        width: size,
+        height: size,
+        gridTemplateColumns: `repeat(2, ${tileSize}px)`,
+        gridTemplateRows: `repeat(2, ${tileSize}px)`,
+        gap,
+      }}
+      aria-hidden="true"
+    >
+      {COUNCIL_PROVIDERS.map((providerName) => (
+        <span
+          key={providerName}
+          className="inline-flex items-center justify-center overflow-hidden"
+          style={{ width: tileSize, height: tileSize, borderRadius: avatar ? Math.max(3, Math.round(tileSize * 0.28)) : 0 }}
+        >
+          {avatar ? <ProviderAvatar provider={providerName} size={tileSize} /> : <ProviderGlyph provider={providerName} size={tileSize} />}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function ModelGlyph({ model, provider, size = 16 }) {
   if (model === COUNCIL_MODEL_ID) {
-    return <Perplexity.Color size={size} />;
+    return <CouncilComposite size={size} />;
   }
 
   const resolvedProvider = resolveProvider(model, provider);
 
   if (resolvedProvider === "council") {
-    return <Perplexity.Color size={size} />;
+    return <CouncilComposite size={size} />;
   }
 
   return <ProviderGlyph provider={resolvedProvider} size={size} />;
@@ -79,13 +109,13 @@ export function ModelGlyph({ model, provider, size = 16 }) {
 
 export function ModelAvatar({ model, size = 24 }) {
   if (model === COUNCIL_MODEL_ID) {
-    return <Perplexity.Avatar size={size} shape="square" />;
+    return <CouncilComposite size={size} avatar />;
   }
 
   const provider = resolveProvider(model);
 
   if (provider === "council") {
-    return <Perplexity.Avatar size={size} shape="square" />;
+    return <CouncilComposite size={size} avatar />;
   }
 
   return <ProviderAvatar provider={provider} size={size} />;

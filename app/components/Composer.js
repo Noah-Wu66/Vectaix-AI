@@ -389,13 +389,15 @@ export default function Composer({
             onModeChange={onModeChange}
             ready={modelReady}
           />
-          <SettingsMenu
-            model={model}
-            onModelChange={onModelChange}
-            ready={modelReady}
-            webSearch={webSearch}
-            setWebSearch={setWebSearch}
-          />
+          {!isCouncilSelected ? (
+            <SettingsMenu
+              model={model}
+              onModelChange={onModelChange}
+              ready={modelReady}
+              webSearch={webSearch}
+              setWebSearch={setWebSearch}
+            />
+          ) : null}
         </div>
 
         {/* Text area and main actions */}
