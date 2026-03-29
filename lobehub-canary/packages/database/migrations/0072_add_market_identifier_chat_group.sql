@@ -1,1 +1,0 @@
-ALTER TABLE "chat_groups" ADD COLUMN IF NOT EXISTS "market_identifier" text;

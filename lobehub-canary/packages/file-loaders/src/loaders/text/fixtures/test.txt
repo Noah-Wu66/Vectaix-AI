@@ -1,2 +1,0 @@
-Hello Text.
-Second Line.
