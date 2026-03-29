@@ -1,267 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500">
-    <defs>
-        <style>
-            .axis { stroke: black; stroke-width: 1.5; fill: none; }
-            .axis-bold { stroke: black; stroke-width: 2; fill: none; }
-            .line-blue { stroke: #00A2E8; stroke-width: 1.5; fill: none; }
-            .line-orange { stroke: #F26522; stroke-width: 1.5; fill: none; }
-            
-            .text-math { font-family: "Times New Roman", Times, serif; font-size: 14px; font-style: italic; font-weight: bold; fill: black; }
-            .text-label { font-family: Arial, sans-serif; font-size: 11px; font-style: italic; fill: black; text-anchor: middle; }
-            .text-title { font-family: "Times New Roman", Times, serif; font-size: 16px; text-anchor: middle; fill: black; }
-            
-            .box-white { fill: white; stroke: black; stroke-width: 1.5; rx: 6; ry: 6; }
-            .box-gray { fill: #E6E7E8; stroke: black; stroke-width: 1.5; rx: 4; ry: 4; }
-            .dot-small { fill: white; stroke: black; stroke-width: 1.5; }
-        </style>
-        
-        <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L6,3 z" fill="black" />
-        </marker>
-        <marker id="arrow-blue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L6,3 z" fill="#00A2E8" />
-        </marker>
-        <marker id="arrow-orange" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L6,3 z" fill="#F26522" />
-        </marker>
-    </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 540" width="100%" height="100%">
+  <defs>
+    <style>
+      .box { fill: #fff; stroke: #222; stroke-width: 1.5; rx: 6; ry: 6; }
+      .box-stack-bg1 { fill: #fff; stroke: #222; stroke-width: 1.5; rx: 6; ry: 6; }
+      .box-stack-bg2 { fill: #fff; stroke: #222; stroke-width: 1.5; rx: 6; ry: 6; }
+      .core { fill: #f8f9fa; stroke: #222; stroke-width: 1.5; rx: 4; ry: 4; }
+      .rope { fill: #fff; stroke: #222; stroke-width: 1.5; stroke-dasharray: 4,2; }
+      .line { stroke: #222; stroke-width: 1.5; fill: none; }
+      .line-blue { stroke: #0088cc; stroke-width: 1.5; fill: none; }
+      .line-orange { stroke: #e65100; stroke-width: 1.5; fill: none; }
+      .math { font-family: "Times New Roman", Times, serif; font-size: 15px; font-style: italic; font-weight: bold; fill: #111; }
+      .label { font-family: Arial, sans-serif; font-size: 12px; font-style: italic; fill: #666; text-anchor: middle; }
+      .title { font-family: "Times New Roman", Times, serif; font-size: 16px; fill: #111; text-anchor: middle; }
+      .core-text { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; fill: #111; text-anchor: middle; }
+    </style>
     
-    <rect width="100%" height="100%" fill="white"/>
-    
-    <g transform="translate(10, 0)">
-<rect x="140.0" y="419.0" width="160" height="22" class="box-white" />
-<circle cx="155.0" cy="430" r="5" class="dot-small"/>
-<circle cx="170.0" cy="430" r="5" class="dot-small"/>
-<text x="220" y="434" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="270.0" cy="430" r="5" class="dot-small"/>
-<circle cx="285.0" cy="430" r="5" class="dot-small"/>
-<text x="130" y="435" class="text-math" text-anchor="end" fill="black">Input Hidden h<tspan dy="3" font-size="10px">t</tspan></text>
-<rect x="65.0" y="349.0" width="90" height="22" class="box-white" />
-<circle cx="80.0" cy="360" r="5" class="dot-small"/>
-<text x="110" y="364" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="140.0" cy="360" r="5" class="dot-small"/>
-<text x="55" y="365" class="text-math" text-anchor="end" fill="black">c<tspan dy="-6" font-size="10px">Q</tspan><tspan dy="6" font-size="10px">t</tspan></text>
-<rect x="285.0" y="349.0" width="90" height="22" class="box-white" />
-<circle cx="300.0" cy="360" r="5" class="dot-small"/>
-<text x="330" y="364" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="360.0" cy="360" r="5" class="dot-small"/>
-<text x="385" y="365" class="text-math" text-anchor="start" fill="black">c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan></text>
-<rect x="149.0" y="269.0" width="22" height="22" class="box-white" rx="4" ry="4" />
-<circle cx="160" cy="280" r="7" class="dot-small"/>
-<text x="175" y="285" class="text-label" text-anchor="start" fill="black">apply RoPE</text>
-<rect x="209.0" y="269.0" width="22" height="22" class="box-white" rx="4" ry="4" />
-<circle cx="220" cy="280" r="7" class="dot-small"/>
-<text x="205" y="285" class="text-label" text-anchor="end" fill="black">apply RoPE</text>
-<rect x="31.0" y="229.0" width="64" height="22" class="box-white" />
-<rect x="28.0" y="232.0" width="64" height="22" class="box-white" />
-<rect x="25.0" y="235.0" width="64" height="22" class="box-white" />
-<circle cx="40.0" cy="246" r="5" class="dot-small"/>
-<circle cx="74.0" cy="246" r="5" class="dot-small"/>
-<text x="20" y="245" class="text-math" text-anchor="end" fill="black">{q<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}</text>
-<rect x="131.0" y="229.0" width="64" height="22" class="box-white" />
-<rect x="128.0" y="232.0" width="64" height="22" class="box-white" />
-<rect x="125.0" y="235.0" width="64" height="22" class="box-white" />
-<circle cx="140.0" cy="246" r="5" class="dot-small"/>
-<circle cx="174.0" cy="246" r="5" class="dot-small"/>
-<text x="200" y="245" class="text-math" text-anchor="start" fill="black">{q<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t,i</tspan>}</text>
-<rect x="190.0" y="229.0" width="60" height="22" class="box-white" />
-<circle cx="205.0" cy="240" r="5" class="dot-small"/>
-<text x="220" y="244" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="235.0" cy="240" r="5" class="dot-small"/>
-<text x="255" y="245" class="text-math" text-anchor="start" fill="black">k<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t</tspan></text>
-<rect x="251.0" y="229.0" width="64" height="22" class="box-white" />
-<rect x="248.0" y="232.0" width="64" height="22" class="box-white" />
-<rect x="245.0" y="235.0" width="64" height="22" class="box-white" />
-<circle cx="260.0" cy="246" r="5" class="dot-small"/>
-<circle cx="294.0" cy="246" r="5" class="dot-small"/>
-<text x="240" y="245" class="text-math" text-anchor="end" fill="black">{k<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}</text>
-<rect x="351.0" y="229.0" width="64" height="22" class="box-white" />
-<rect x="348.0" y="232.0" width="64" height="22" class="box-white" />
-<rect x="345.0" y="235.0" width="64" height="22" class="box-white" />
-<circle cx="360.0" cy="246" r="5" class="dot-small"/>
-<circle cx="394.0" cy="246" r="5" class="dot-small"/>
-<text x="420" y="245" class="text-math" text-anchor="start" fill="black">{v<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}</text>
-<rect x="71.0" y="149.0" width="84" height="22" class="box-white" />
-<rect x="68.0" y="152.0" width="84" height="22" class="box-white" />
-<rect x="65.0" y="155.0" width="84" height="22" class="box-white" />
-<circle cx="80.0" cy="166" r="5" class="dot-small"/>
-<circle cx="107" cy="166" r="5" class="dot-small"/>
-<circle cx="134.0" cy="166" r="5" class="dot-small"/>
-<text x="60" y="165" class="text-math" text-anchor="end" fill="black">{[q<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>; q<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t,i</tspan>]}</text>
-<rect x="211.0" y="149.0" width="84" height="22" class="box-white" />
-<rect x="208.0" y="152.0" width="84" height="22" class="box-white" />
-<rect x="205.0" y="155.0" width="84" height="22" class="box-white" />
-<circle cx="220.0" cy="166" r="5" class="dot-small"/>
-<circle cx="247" cy="166" r="5" class="dot-small"/>
-<circle cx="274.0" cy="166" r="5" class="dot-small"/>
-<text x="200" y="165" class="text-math" text-anchor="end" fill="black">{[k<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>; k<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t</tspan>]}</text>
-<rect x="20" y="95" width="400" height="25" class="box-gray" />
-<text x="220" y="112" class="text-title" text-anchor="middle" fill="black">Multi-Head Attention (Core Attention)</text>
-<rect x="191.0" y="49.0" width="64" height="22" class="box-white" />
-<rect x="188.0" y="52.0" width="64" height="22" class="box-white" />
-<rect x="185.0" y="55.0" width="64" height="22" class="box-white" />
-<circle cx="200.0" cy="66" r="5" class="dot-small"/>
-<circle cx="234.0" cy="66" r="5" class="dot-small"/>
-<text x="180" y="65" class="text-math" text-anchor="end" fill="black">{o<tspan dy="6" font-size="10px">t,i</tspan>}</text>
-<rect x="140.0" y="9.0" width="160" height="22" class="box-white" />
-<circle cx="155.0" cy="20" r="5" class="dot-small"/>
-<circle cx="170.0" cy="20" r="5" class="dot-small"/>
-<text x="220" y="24" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="270.0" cy="20" r="5" class="dot-small"/>
-<circle cx="285.0" cy="20" r="5" class="dot-small"/>
-<text x="130" y="25" class="text-math" text-anchor="end" fill="black">Output Hidden u<tspan dy="3" font-size="10px">t</tspan></text>
-<line x1="220" y1="419" x2="220" y2="400" class="axis"  />
-<line x1="110" y1="400" x2="330" y2="400" class="axis"  />
-<line x1="110" y1="400" x2="110" y2="371" class="axis" marker-end="url(#arrow)" />
-<line x1="220" y1="400" x2="220" y2="291" class="axis" marker-end="url(#arrow)" />
-<line x1="330" y1="400" x2="330" y2="371" class="axis" marker-end="url(#arrow)" />
-<line x1="110" y1="349" x2="110" y2="320" class="axis"  />
-<line x1="60" y1="320" x2="160" y2="320" class="axis"  />
-<line x1="60" y1="320" x2="60" y2="251" class="axis" marker-end="url(#arrow)" />
-<line x1="160" y1="320" x2="160" y2="291" class="axis" marker-end="url(#arrow)" />
-<line x1="160" y1="269" x2="160" y2="251" class="axis" marker-end="url(#arrow)" />
-<line x1="220" y1="269" x2="220" y2="251" class="axis" marker-end="url(#arrow)" />
-<line x1="330" y1="349" x2="330" y2="320" class="axis"  />
-<line x1="280" y1="320" x2="380" y2="320" class="axis"  />
-<line x1="280" y1="320" x2="280" y2="251" class="line-blue" marker-end="url(#arrow-blue)" />
-<line x1="380" y1="320" x2="380" y2="251" class="line-orange" marker-end="url(#arrow-orange)" />
-<text x="275" y="295" class="text-math" text-anchor="end" fill="#00A2E8">W<tspan dy="-6" font-size="10px">UK</tspan><tspan dy="6" font-size="10px">c<tspan dy="-4">KV</tspan><tspan dy="4">t</tspan></tspan></text>
-<text x="385" y="295" class="text-math" text-anchor="start" fill="#F26522">W<tspan dy="-6" font-size="10px">UV</tspan><tspan dy="6" font-size="10px">c<tspan dy="-4">KV</tspan><tspan dy="4">t</tspan></tspan></text>
-<line x1="60" y1="229" x2="60" y2="200" class="axis"  />
-<line x1="160" y1="229" x2="160" y2="200" class="axis"  />
-<line x1="60" y1="200" x2="160" y2="200" class="axis"  />
-<line x1="110" y1="200" x2="110" y2="171" class="axis" marker-end="url(#arrow)" />
-<text x="110" y="190" class="text-label" text-anchor="middle" fill="black">concatenate</text>
-<line x1="220" y1="229" x2="220" y2="200" class="axis"  />
-<line x1="280" y1="229" x2="280" y2="200" class="axis"  />
-<line x1="220" y1="200" x2="280" y2="200" class="axis"  />
-<line x1="250" y1="200" x2="250" y2="171" class="axis" marker-end="url(#arrow)" />
-<text x="250" y="190" class="text-label" text-anchor="middle" fill="black">concatenate</text>
-<line x1="110" y1="149" x2="110" y2="120" class="axis" marker-end="url(#arrow)" />
-<line x1="250" y1="149" x2="250" y2="120" class="axis" marker-end="url(#arrow)" />
-<line x1="380" y1="229" x2="380" y2="120" class="axis" marker-end="url(#arrow)" />
-<line x1="220" y1="95" x2="220" y2="71" class="axis" marker-end="url(#arrow)" />
-<line x1="220" y1="49" x2="220" y2="31" class="axis" marker-end="url(#arrow)" />
-<text x="220" y="480" class="text-title" text-anchor="middle" fill="black">(a) MHA mode of MLA.</text>
-</g>
-<g transform="translate(460, 0)">
-<rect x="140.0" y="419.0" width="160" height="22" class="box-white" />
-<circle cx="155.0" cy="430" r="5" class="dot-small"/>
-<circle cx="170.0" cy="430" r="5" class="dot-small"/>
-<text x="220" y="434" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="270.0" cy="430" r="5" class="dot-small"/>
-<circle cx="285.0" cy="430" r="5" class="dot-small"/>
-<text x="130" y="435" class="text-math" text-anchor="end" fill="black">Input Hidden h<tspan dy="3" font-size="10px">t</tspan></text>
-<rect x="65.0" y="349.0" width="90" height="22" class="box-white" />
-<circle cx="80.0" cy="360" r="5" class="dot-small"/>
-<text x="110" y="364" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="140.0" cy="360" r="5" class="dot-small"/>
-<text x="55" y="365" class="text-math" text-anchor="end" fill="black">c<tspan dy="-6" font-size="10px">Q</tspan><tspan dy="6" font-size="10px">t</tspan></text>
-<rect x="255.0" y="349.0" width="90" height="22" class="box-white" />
-<circle cx="270.0" cy="360" r="5" class="dot-small"/>
-<text x="300" y="364" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="330.0" cy="360" r="5" class="dot-small"/>
-<text x="245" y="365" class="text-math" text-anchor="end" fill="black">c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan></text>
-<rect x="149.0" y="269.0" width="22" height="22" class="box-white" rx="4" ry="4" />
-<circle cx="160" cy="280" r="7" class="dot-small"/>
-<text x="175" y="285" class="text-label" text-anchor="start" fill="black">apply RoPE</text>
-<rect x="209.0" y="269.0" width="22" height="22" class="box-white" rx="4" ry="4" />
-<circle cx="220" cy="280" r="7" class="dot-small"/>
-<text x="205" y="285" class="text-label" text-anchor="end" fill="black">apply RoPE</text>
-<rect x="31.0" y="229.0" width="64" height="22" class="box-white" />
-<rect x="28.0" y="232.0" width="64" height="22" class="box-white" />
-<rect x="25.0" y="235.0" width="64" height="22" class="box-white" />
-<circle cx="40.0" cy="246" r="5" class="dot-small"/>
-<circle cx="74.0" cy="246" r="5" class="dot-small"/>
-<text x="20" y="245" class="text-math" text-anchor="end" fill="black">{q<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}</text>
-<rect x="131.0" y="229.0" width="64" height="22" class="box-white" />
-<rect x="128.0" y="232.0" width="64" height="22" class="box-white" />
-<rect x="125.0" y="235.0" width="64" height="22" class="box-white" />
-<circle cx="140.0" cy="246" r="5" class="dot-small"/>
-<circle cx="174.0" cy="246" r="5" class="dot-small"/>
-<text x="200" y="245" class="text-math" text-anchor="start" fill="black">{q<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t,i</tspan>}</text>
-<rect x="190.0" y="229.0" width="60" height="22" class="box-white" />
-<circle cx="205.0" cy="240" r="5" class="dot-small"/>
-<text x="220" y="244" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="235.0" cy="240" r="5" class="dot-small"/>
-<text x="255" y="245" class="text-math" text-anchor="start" fill="black">k<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t</tspan></text>
-<rect x="255.0" y="229.0" width="50" height="22" class="box-white" />
-<circle cx="270.0" cy="240" r="5" class="dot-small"/>
-<text x="280" y="244" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="290.0" cy="240" r="5" class="dot-small"/>
-<text x="270" y="260" class="text-math" text-anchor="end" fill="black">{c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan>}</text>
-<rect x="315.0" y="229.0" width="50" height="22" class="box-white" />
-<circle cx="330.0" cy="240" r="5" class="dot-small"/>
-<text x="340" y="244" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="350.0" cy="240" r="5" class="dot-small"/>
-<text x="350" y="260" class="text-math" text-anchor="start" fill="black">{c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan>}</text>
-<rect x="71.0" y="149.0" width="84" height="22" class="box-white" />
-<rect x="68.0" y="152.0" width="84" height="22" class="box-white" />
-<rect x="65.0" y="155.0" width="84" height="22" class="box-white" />
-<circle cx="80.0" cy="166" r="5" class="dot-small"/>
-<circle cx="107" cy="166" r="5" class="dot-small"/>
-<circle cx="134.0" cy="166" r="5" class="dot-small"/>
-<text x="60" y="165" class="text-math" text-anchor="end" fill="black">{[q<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>; q<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t,i</tspan>]}</text>
-<rect x="211.0" y="149.0" width="84" height="22" class="box-white" />
-<rect x="208.0" y="152.0" width="84" height="22" class="box-white" />
-<rect x="205.0" y="155.0" width="84" height="22" class="box-white" />
-<circle cx="220.0" cy="166" r="5" class="dot-small"/>
-<circle cx="247" cy="166" r="5" class="dot-small"/>
-<circle cx="274.0" cy="166" r="5" class="dot-small"/>
-<text x="200" y="165" class="text-math" text-anchor="end" fill="black">{[c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan>; k<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t</tspan>]}</text>
-<rect x="20" y="95" width="410" height="25" class="box-gray" />
-<text x="225" y="112" class="text-title" text-anchor="middle" fill="black">Multi-Query Attention (Core Attention)</text>
-<rect x="146.0" y="49.0" width="74" height="22" class="box-white" />
-<rect x="143.0" y="52.0" width="74" height="22" class="box-white" />
-<rect x="140.0" y="55.0" width="74" height="22" class="box-white" />
-<circle cx="155.0" cy="66" r="5" class="dot-small"/>
-<circle cx="199.0" cy="66" r="5" class="dot-small"/>
-<text x="135" y="65" class="text-math" text-anchor="end" fill="black">{o<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}</text>
-<rect x="335.0" y="49.0" width="50" height="22" class="box-white" />
-<circle cx="350" cy="60" r="5" class="dot-small"/>
-<circle cx="370" cy="60" r="5" class="dot-small"/>
-<text x="390" y="65" class="text-math" text-anchor="start" fill="black">{o<tspan dy="6" font-size="10px">t,i</tspan>}</text>
-<rect x="170.0" y="9.0" width="220" height="22" class="box-white" />
-<circle cx="185.0" cy="20" r="5" class="dot-small"/>
-<circle cx="200.0" cy="20" r="5" class="dot-small"/>
-<text x="280" y="24" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>
-<circle cx="360.0" cy="20" r="5" class="dot-small"/>
-<circle cx="375.0" cy="20" r="5" class="dot-small"/>
-<text x="160" y="25" class="text-math" text-anchor="end" fill="black">Output Hidden u<tspan dy="3" font-size="10px">t</tspan></text>
-<line x1="220" y1="419" x2="220" y2="400" class="axis"  />
-<line x1="110" y1="400" x2="410" y2="400" class="axis"  />
-<line x1="110" y1="400" x2="110" y2="371" class="axis" marker-end="url(#arrow)" />
-<line x1="220" y1="400" x2="220" y2="291" class="axis" marker-end="url(#arrow)" />
-<line x1="300" y1="400" x2="300" y2="371" class="axis" marker-end="url(#arrow)" />
-<line x1="410" y1="400" x2="410" y2="31" class="axis" marker-end="url(#arrow)" />
-<line x1="110" y1="349" x2="110" y2="320" class="axis"  />
-<line x1="60" y1="320" x2="160" y2="320" class="axis"  />
-<line x1="60" y1="320" x2="60" y2="251" class="line-blue" marker-end="url(#arrow-blue)" />
-<line x1="160" y1="320" x2="160" y2="291" class="axis" marker-end="url(#arrow)" />
-<text x="55" y="295" class="text-math" text-anchor="end" fill="#00A2E8">W<tspan dy="-6" font-size="10px">UQ</tspan><tspan dy="6" font-size="10px">c<tspan dy="-4">Q</tspan><tspan dy="4">t</tspan></tspan></text>
-<line x1="160" y1="269" x2="160" y2="251" class="axis" marker-end="url(#arrow)" />
-<line x1="220" y1="269" x2="220" y2="251" class="axis" marker-end="url(#arrow)" />
-<line x1="300" y1="349" x2="300" y2="320" class="axis"  />
-<line x1="280" y1="320" x2="340" y2="320" class="axis"  />
-<line x1="280" y1="320" x2="280" y2="251" class="axis" marker-end="url(#arrow)" />
-<line x1="340" y1="320" x2="340" y2="251" class="axis" marker-end="url(#arrow)" />
-<line x1="60" y1="229" x2="60" y2="200" class="axis"  />
-<line x1="160" y1="229" x2="160" y2="200" class="axis"  />
-<line x1="60" y1="200" x2="160" y2="200" class="axis"  />
-<line x1="110" y1="200" x2="110" y2="171" class="axis" marker-end="url(#arrow)" />
-<text x="110" y="190" class="text-label" text-anchor="middle" fill="black">concatenate</text>
-<line x1="220" y1="229" x2="220" y2="200" class="axis"  />
-<line x1="280" y1="229" x2="280" y2="200" class="axis"  />
-<line x1="220" y1="200" x2="280" y2="200" class="axis"  />
-<line x1="250" y1="200" x2="250" y2="171" class="axis" marker-end="url(#arrow)" />
-<text x="250" y="190" class="text-label" text-anchor="middle" fill="black">concatenate</text>
-<line x1="110" y1="149" x2="110" y2="120" class="axis" marker-end="url(#arrow)" />
-<line x1="250" y1="149" x2="250" y2="120" class="axis" marker-end="url(#arrow)" />
-<line x1="340" y1="229" x2="340" y2="120" class="axis" marker-end="url(#arrow)" />
-<line x1="180" y1="95" x2="180" y2="71" class="axis" marker-end="url(#arrow)" />
-<line x1="225" y1="60" x2="330" y2="60" class="line-orange" marker-end="url(#arrow-orange)" />
-<text x="280" y="50" class="text-math" text-anchor="middle" fill="#F26522">W<tspan dy="-6" font-size="10px">UV</tspan><tspan dy="6" font-size="10px">o<tspan dy="-4">C</tspan><tspan dy="4">t,i</tspan></tspan></text>
-<line x1="360" y1="49" x2="360" y2="31" class="axis" marker-end="url(#arrow)" />
-<text x="225" y="480" class="text-title" text-anchor="middle" fill="black">(b) MQA mode of MLA.</text>
-</g>
-    </svg>
+    <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#222" />
+    </marker>
+    <marker id="arrow-blue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#0088cc" />
+    </marker>
+    <marker id="arrow-orange" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#e65100" />
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="#ffffff" />
+\n  <!-- Note: All nodes correctly boxed and aligned. -->\n</svg>

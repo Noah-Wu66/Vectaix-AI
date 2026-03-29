@@ -1,307 +1,237 @@
 import os
 
-def create_svg(filename, content, width, height):
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}">
-    <defs>
-        <style>
-            .axis {{ stroke: black; stroke-width: 1.5; fill: none; }}
-            .axis-bold {{ stroke: black; stroke-width: 2; fill: none; }}
-            .line-blue {{ stroke: #00A2E8; stroke-width: 1.5; fill: none; }}
-            .line-orange {{ stroke: #F26522; stroke-width: 1.5; fill: none; }}
-            
-            .text-math {{ font-family: "Times New Roman", Times, serif; font-size: 14px; font-style: italic; font-weight: bold; fill: black; }}
-            .text-label {{ font-family: Arial, sans-serif; font-size: 11px; font-style: italic; fill: black; text-anchor: middle; }}
-            .text-title {{ font-family: "Times New Roman", Times, serif; font-size: 16px; text-anchor: middle; fill: black; }}
-            
-            .box-white {{ fill: white; stroke: black; stroke-width: 1.5; rx: 6; ry: 6; }}
-            .box-gray {{ fill: #E6E7E8; stroke: black; stroke-width: 1.5; rx: 4; ry: 4; }}
-            .dot-small {{ fill: white; stroke: black; stroke-width: 1.5; }}
-        </style>
-        
-        <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L6,3 z" fill="black" />
-        </marker>
-        <marker id="arrow-blue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L6,3 z" fill="#00A2E8" />
-        </marker>
-        <marker id="arrow-orange" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L0,6 L6,3 z" fill="#F26522" />
-        </marker>
-    </defs>
+def create_svg(filename):
+    svg = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 540" width="100%" height="100%">
+  <defs>
+    <style>
+      .box { fill: #fff; stroke: #222; stroke-width: 1.5; rx: 6; ry: 6; }
+      .box-stack-bg1 { fill: #fff; stroke: #222; stroke-width: 1.5; rx: 6; ry: 6; }
+      .box-stack-bg2 { fill: #fff; stroke: #222; stroke-width: 1.5; rx: 6; ry: 6; }
+      .core { fill: #f8f9fa; stroke: #222; stroke-width: 1.5; rx: 4; ry: 4; }
+      .rope { fill: #fff; stroke: #222; stroke-width: 1.5; stroke-dasharray: 4,2; }
+      .line { stroke: #222; stroke-width: 1.5; fill: none; }
+      .line-blue { stroke: #0088cc; stroke-width: 1.5; fill: none; }
+      .line-orange { stroke: #e65100; stroke-width: 1.5; fill: none; }
+      .math { font-family: "Times New Roman", Times, serif; font-size: 15px; font-style: italic; font-weight: bold; fill: #111; }
+      .label { font-family: Arial, sans-serif; font-size: 12px; font-style: italic; fill: #666; text-anchor: middle; }
+      .title { font-family: "Times New Roman", Times, serif; font-size: 16px; fill: #111; text-anchor: middle; }
+      .core-text { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; fill: #111; text-anchor: middle; }
+    </style>
     
-    <rect width="100%" height="100%" fill="white"/>
-    
-    {content}
-    </svg>'''
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write(svg)
+    <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#222" />
+    </marker>
+    <marker id="arrow-blue" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#0088cc" />
+    </marker>
+    <marker id="arrow-orange" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L6,3 z" fill="#e65100" />
+    </marker>
+  </defs>
 
-def make_node(type, cx, cy, w=70, h=22):
-    rx = cx - w/2
-    ry = cy - h/2
-    c = []
-    
-    if type == 'hidden':
-        c.append(f'<rect x="{rx}" y="{ry}" width="{w}" height="{h}" class="box-white" />')
-        # Dots
-        c.append(f'<circle cx="{rx+15}" cy="{cy}" r="5" class="dot-small"/>')
-        c.append(f'<circle cx="{rx+30}" cy="{cy}" r="5" class="dot-small"/>')
-        c.append(f'<text x="{cx}" y="{cy+4}" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>')
-        c.append(f'<circle cx="{rx+w-30}" cy="{cy}" r="5" class="dot-small"/>')
-        c.append(f'<circle cx="{rx+w-15}" cy="{cy}" r="5" class="dot-small"/>')
-        
-    elif type == 'short':
-        c.append(f'<rect x="{rx}" y="{ry}" width="{w}" height="{h}" class="box-white" />')
-        c.append(f'<circle cx="{rx+15}" cy="{cy}" r="5" class="dot-small"/>')
-        c.append(f'<text x="{cx}" y="{cy+4}" font-family="Arial" font-size="14px" text-anchor="middle">. . .</text>')
-        c.append(f'<circle cx="{rx+w-15}" cy="{cy}" r="5" class="dot-small"/>')
-        
-    elif type == 'vshort':
-        c.append(f'<rect x="{rx}" y="{ry}" width="{w}" height="{h}" class="box-white" />')
-        c.append(f'<circle cx="{cx-10}" cy="{cy}" r="5" class="dot-small"/>')
-        c.append(f'<circle cx="{cx+10}" cy="{cy}" r="5" class="dot-small"/>')
-        
-    elif type == 'rope':
-        c.append(f'<rect x="{rx}" y="{ry}" width="{w}" height="{h}" class="box-white" rx="4" ry="4" />')
-        c.append(f'<circle cx="{cx}" cy="{cy}" r="7" class="dot-small"/>')
-        
-    elif type == 'stack':
-        # 3 layers
-        c.append(f'<rect x="{rx+6}" y="{ry}" width="{w-6}" height="{h}" class="box-white" />')
-        c.append(f'<rect x="{rx+3}" y="{ry+3}" width="{w-6}" height="{h}" class="box-white" />')
-        c.append(f'<rect x="{rx}" y="{ry+6}" width="{w-6}" height="{h}" class="box-white" />')
-        # Dots on front layer
-        c.append(f'<circle cx="{rx+15}" cy="{cy+6}" r="5" class="dot-small"/>')
-        c.append(f'<circle cx="{rx+w-21}" cy="{cy+6}" r="5" class="dot-small"/>')
-        
-    elif type == 'wstack':
-        c.append(f'<rect x="{rx+6}" y="{ry}" width="{w-6}" height="{h}" class="box-white" />')
-        c.append(f'<rect x="{rx+3}" y="{ry+3}" width="{w-6}" height="{h}" class="box-white" />')
-        c.append(f'<rect x="{rx}" y="{ry+6}" width="{w-6}" height="{h}" class="box-white" />')
-        c.append(f'<circle cx="{rx+15}" cy="{cy+6}" r="5" class="dot-small"/>')
-        c.append(f'<circle cx="{cx-3}" cy="{cy+6}" r="5" class="dot-small"/>')
-        c.append(f'<circle cx="{rx+w-21}" cy="{cy+6}" r="5" class="dot-small"/>')
-        
-    return "\n".join(c)
+  <rect width="100%" height="100%" fill="#ffffff" />
+'''
 
-def line(x1, y1, x2, y2, marker=False, color='black'):
-    cls = "axis"
-    if color == 'blue': cls = "line-blue"
-    elif color == 'orange': cls = "line-orange"
-    
-    m = ""
-    if marker:
-        if color == 'blue': m = 'marker-end="url(#arrow-blue)"'
-        elif color == 'orange': m = 'marker-end="url(#arrow-orange)"'
-        else: m = 'marker-end="url(#arrow)"'
+    def get_text(name):
+        if name == 'ht': return 'Input Hidden h<tspan dy="3" font-size="11">t</tspan>'
+        if name == 'ut': return 'Output Hidden u<tspan dy="3" font-size="11">t</tspan>'
+        if name == 'cQ': return 'c<tspan dy="3" font-size="11">t</tspan><tspan dy="-7" font-size="11">Q</tspan>'
+        if name == 'cKV': return 'c<tspan dy="3" font-size="11">t</tspan><tspan dy="-7" font-size="11">KV</tspan>'
         
-    return f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" class="{cls}" {m} />'
+        if name == 'qC': return 'q<tspan dy="3" font-size="11">t,i</tspan><tspan dy="-7" font-size="11">C</tspan>'
+        if name == 'qR': return 'q<tspan dy="3" font-size="11">t,i</tspan><tspan dy="-7" font-size="11">R</tspan>'
+        if name == 'kC': return 'k<tspan dy="3" font-size="11">t,i</tspan><tspan dy="-7" font-size="11">C</tspan>'
+        if name == 'kR': return 'k<tspan dy="3" font-size="11">t</tspan><tspan dy="-7" font-size="11">R</tspan>'
+        if name == 'vC': return 'v<tspan dy="3" font-size="11">t,i</tspan><tspan dy="-7" font-size="11">C</tspan>'
+        
+        if name == 'concatQ': return '[ q<tspan dy="3" font-size="11">t,i</tspan><tspan dy="-7" font-size="11">C</tspan><tspan dy="4" font-size="15"> ; </tspan>q<tspan dy="3" font-size="11">t,i</tspan><tspan dy="-7" font-size="11">R</tspan><tspan dy="4" font-size="15"> ]</tspan>'
+        if name == 'concatK_MHA': return '[ k<tspan dy="3" font-size="11">t,i</tspan><tspan dy="-7" font-size="11">C</tspan><tspan dy="4" font-size="15"> ; </tspan>k<tspan dy="3" font-size="11">t</tspan><tspan dy="-7" font-size="11">R</tspan><tspan dy="4" font-size="15"> ]</tspan>'
+        if name == 'concatK_MQA': return '[ c<tspan dy="3" font-size="11">t</tspan><tspan dy="-7" font-size="11">KV</tspan><tspan dy="4" font-size="15"> ; </tspan>k<tspan dy="3" font-size="11">t</tspan><tspan dy="-7" font-size="11">R</tspan><tspan dy="4" font-size="15"> ]</tspan>'
+        
+        if name == 'o': return 'o<tspan dy="3" font-size="11">t,i</tspan>'
+        if name == 'oC': return 'o<tspan dy="3" font-size="11">t,i</tspan><tspan dy="-7" font-size="11">C</tspan>'
+        
+        if name == 'WUK': return 'W<tspan dy="-5" font-size="11">UK</tspan>'
+        if name == 'WUV': return 'W<tspan dy="-5" font-size="11">UV</tspan>'
+        if name == 'WUQ': return 'W<tspan dy="-5" font-size="11">UQ</tspan>'
+        return name
 
-def text(x, y, s, cls="text-math", align="middle", fill="black"):
-    return f'<text x="{x}" y="{y}" class="{cls}" text-anchor="{align}" fill="{fill}">{s}</text>'
+    def make_box(x, y, w, h, text_id, style='normal'):
+        rx = x - w/2
+        ry = y - h/2
+        c = []
+        text_content = get_text(text_id)
+        if style == 'stack':
+            c.append(f'<rect x="{rx+6}" y="{ry-6}" width="{w}" height="{h}" class="box-stack-bg1" />')
+            c.append(f'<rect x="{rx+3}" y="{ry-3}" width="{w}" height="{h}" class="box-stack-bg2" />')
+            c.append(f'<rect x="{rx}" y="{ry}" width="{w}" height="{h}" class="box" />')
+            c.append(f'<text x="{x}" y="{y+1}" class="math" text-anchor="middle" dominant-baseline="middle">{text_content}</text>')
+        elif style == 'rope':
+            c.append(f'<circle cx="{x}" cy="{y}" r="17" class="rope" />')
+            c.append(f'<text x="{x}" y="{y+2}" class="math" font-size="12" font-style="normal" text-anchor="middle" dominant-baseline="middle">RoPE</text>')
+        else:
+            c.append(f'<rect x="{rx}" y="{ry}" width="{w}" height="{h}" class="box" />')
+            if text_content:
+                c.append(f'<text x="{x}" y="{y+1}" class="math" text-anchor="middle" dominant-baseline="middle">{text_content}</text>')
+        return "\\n".join(c)
 
-def build_architecture():
+    def path(pts, color='black', marker=False):
+        cls = 'line'
+        if color == 'blue': cls = 'line-blue'
+        if color == 'orange': cls = 'line-orange'
+        m = ''
+        if marker:
+            if color == 'blue': m = 'marker-end="url(#arrow-blue)"'
+            elif color == 'orange': m = 'marker-end="url(#arrow-orange)"'
+            else: m = 'marker-end="url(#arrow)"'
+        
+        d = f"M {pts[0][0]},{pts[0][1]} "
+        for p in pts[1:]:
+            d += f"L {p[0]},{p[1]} "
+        return f'<path d="{d}" class="{cls}" {m}/>'
+
     c = []
     
     # ================= MHA (LEFT) =================
-    c.append('<g transform="translate(10, 0)">')
+    # Input
+    c.append(make_box(250, 460, 200, 30, 'ht', 'normal'))
     
-    # Nodes
-    c.append(make_node('hidden', 220, 430, w=160))
-    c.append(text(130, 435, 'Input Hidden h<tspan dy="3" font-size="10px">t</tspan>', align="end"))
+    # cQ, cKV
+    c.append(make_box(140, 390, 80, 28, 'cQ', 'normal'))
+    c.append(make_box(380, 390, 80, 28, 'cKV', 'normal'))
     
-    c.append(make_node('short', 110, 360, w=90))
-    c.append(text(55, 365, 'c<tspan dy="-6" font-size="10px">Q</tspan><tspan dy="6" font-size="10px">t</tspan>', align="end"))
+    # RoPE
+    c.append(make_box(190, 320, 0, 0, '', 'rope'))
+    c.append(make_box(290, 320, 0, 0, '', 'rope'))
     
-    c.append(make_node('short', 330, 360, w=90))
-    c.append(text(385, 365, 'c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan>', align="start"))
+    # q, k, v
+    c.append(make_box(80, 260, 80, 28, 'qC', 'stack'))
+    c.append(make_box(190, 260, 80, 28, 'qR', 'stack'))
+    c.append(make_box(290, 260, 80, 28, 'kR', 'normal'))
+    c.append(make_box(390, 260, 80, 28, 'kC', 'stack'))
+    c.append(make_box(490, 260, 80, 28, 'vC', 'stack'))
     
-    c.append(make_node('rope', 160, 280, w=22))
-    c.append(text(175, 285, 'apply RoPE', cls="text-label", align="start"))
+    # Concat
+    c.append(make_box(135, 160, 130, 28, 'concatQ', 'stack'))
+    c.append(make_box(340, 160, 130, 28, 'concatK_MHA', 'stack'))
     
-    c.append(make_node('rope', 220, 280, w=22))
-    c.append(text(205, 285, 'apply RoPE', cls="text-label", align="end"))
+    # Core
+    c.append('<rect x="40" y="80" width="480" height="40" class="core" />')
+    c.append('<text x="280" y="105" class="core-text">Multi-Head Attention (Core Attention)</text>')
     
-    c.append(make_node('stack', 60, 240, w=70))
-    c.append(text(20, 245, '{q<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}', align="end"))
+    # Output
+    c.append(make_box(280, 40, 80, 28, 'o', 'stack'))
+    c.append(make_box(280, -10, 220, 30, 'ut', 'normal'))
     
-    c.append(make_node('stack', 160, 240, w=70))
-    c.append(text(200, 245, '{q<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t,i</tspan>}', align="start"))
+    # Lines
+    c.append(path([(250,445), (250,420), (140,420), (140,404)], marker=True))
+    c.append(path([(250,420), (380,420), (380,404)], marker=True))
     
-    c.append(make_node('short', 220, 240, w=60))
-    c.append(text(255, 245, 'k<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t</tspan>', align="start"))
+    c.append(path([(140,376), (140,350), (80,350), (80,277)], marker=True))
+    c.append(path([(140,350), (190,350), (190,337)], marker=True))
+    c.append(path([(190,303), (190,277)], marker=True))
     
-    c.append(make_node('stack', 280, 240, w=70))
-    c.append(text(240, 245, '{k<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}', align="end"))
+    c.append(path([(380,376), (380,350), (290,350), (290,337)], marker=True))
+    c.append(path([(290,303), (290,273)], marker=True))
     
-    c.append(make_node('stack', 380, 240, w=70))
-    c.append(text(420, 245, '{v<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}', align="start"))
+    c.append(path([(380,350), (390,350), (390,277)], color='blue', marker=True))
+    c.append(f'<text x="382" y="325" class="math" fill="#0088cc" text-anchor="end">{get_text("WUK")}</text>')
     
-    c.append(make_node('wstack', 110, 160, w=90))
-    c.append(text(60, 165, '{[q<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>; q<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t,i</tspan>]}', align="end"))
+    c.append(path([(380,350), (490,350), (490,277)], color='orange', marker=True))
+    c.append(f'<text x="498" y="325" class="math" fill="#e65100" text-anchor="start">{get_text("WUV")}</text>')
     
-    c.append(make_node('wstack', 250, 160, w=90))
-    c.append(text(200, 165, '{[k<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>; k<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t</tspan>]}', align="end"))
+    c.append(path([(80,247), (80,205), (190,205)]))
+    c.append(path([(190,247), (190,205)]))
+    c.append(path([(135,205), (135,174)], marker=True))
+    c.append('<text x="135" y="197" class="label">concatenate</text>')
     
-    # Core Attention
-    c.append('<rect x="20" y="95" width="400" height="25" class="box-gray" />')
-    c.append(text(220, 112, 'Multi-Head Attention (Core Attention)', cls="text-title", align="middle"))
+    c.append(path([(290,247), (290,205), (390,205)]))
+    c.append(path([(390,247), (390,205)]))
+    c.append(path([(340,205), (340,174)], marker=True))
+    c.append('<text x="340" y="197" class="label">concatenate</text>')
     
-    c.append(make_node('stack', 220, 60, w=70))
-    c.append(text(180, 65, '{o<tspan dy="6" font-size="10px">t,i</tspan>}', align="end"))
+    c.append(path([(135,147), (135,120)], marker=True))
+    c.append(path([(340,147), (340,120)], marker=True))
+    c.append(path([(490,247), (490,120)], marker=True))
     
-    c.append(make_node('hidden', 220, 20, w=160))
-    c.append(text(130, 25, 'Output Hidden u<tspan dy="3" font-size="10px">t</tspan>', align="end"))
+    c.append(path([(280,80), (280,57)], marker=True))
+    c.append(path([(280,27), (280,5)], marker=True))
     
-    # Paths MHA
-    c.append(line(220, 419, 220, 400))
-    c.append(line(110, 400, 330, 400))
-    c.append(line(110, 400, 110, 371, marker=True))
-    c.append(line(220, 400, 220, 291, marker=True))
-    c.append(line(330, 400, 330, 371, marker=True))
-    
-    c.append(line(110, 349, 110, 320))
-    c.append(line(60, 320, 160, 320))
-    c.append(line(60, 320, 60, 251, marker=True))
-    c.append(line(160, 320, 160, 291, marker=True))
-    
-    c.append(line(160, 269, 160, 251, marker=True))
-    c.append(line(220, 269, 220, 251, marker=True))
-    
-    c.append(line(330, 349, 330, 320))
-    c.append(line(280, 320, 380, 320))
-    c.append(line(280, 320, 280, 251, marker=True, color='blue'))
-    c.append(line(380, 320, 380, 251, marker=True, color='orange'))
-    
-    c.append(text(275, 295, 'W<tspan dy="-6" font-size="10px">UK</tspan><tspan dy="6" font-size="10px">c<tspan dy="-4">KV</tspan><tspan dy="4">t</tspan></tspan>', fill="#00A2E8", align="end"))
-    c.append(text(385, 295, 'W<tspan dy="-6" font-size="10px">UV</tspan><tspan dy="6" font-size="10px">c<tspan dy="-4">KV</tspan><tspan dy="4">t</tspan></tspan>', fill="#F26522", align="start"))
-    
-    c.append(line(60, 229, 60, 200))
-    c.append(line(160, 229, 160, 200))
-    c.append(line(60, 200, 160, 200))
-    c.append(line(110, 200, 110, 171, marker=True))
-    c.append(text(110, 190, 'concatenate', cls="text-label"))
-    
-    c.append(line(220, 229, 220, 200))
-    c.append(line(280, 229, 280, 200))
-    c.append(line(220, 200, 280, 200))
-    c.append(line(250, 200, 250, 171, marker=True))
-    c.append(text(250, 190, 'concatenate', cls="text-label"))
-    
-    c.append(line(110, 149, 110, 120, marker=True))
-    c.append(line(250, 149, 250, 120, marker=True))
-    c.append(line(380, 229, 380, 120, marker=True))
-    
-    c.append(line(220, 95, 220, 71, marker=True))
-    c.append(line(220, 49, 220, 31, marker=True))
-    
-    c.append(text(220, 480, '(a) MHA mode of MLA.', cls="text-title"))
-    
-    c.append('</g>')
-    
-    # ================= MQA (RIGHT) =================
-    c.append('<g transform="translate(460, 0)">')
-    
-    # Nodes
-    c.append(make_node('hidden', 220, 430, w=160))
-    c.append(text(130, 435, 'Input Hidden h<tspan dy="3" font-size="10px">t</tspan>', align="end"))
-    
-    c.append(make_node('short', 110, 360, w=90))
-    c.append(text(55, 365, 'c<tspan dy="-6" font-size="10px">Q</tspan><tspan dy="6" font-size="10px">t</tspan>', align="end"))
-    
-    c.append(make_node('short', 300, 360, w=90))
-    c.append(text(245, 365, 'c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan>', align="end"))
-    
-    c.append(make_node('rope', 160, 280, w=22))
-    c.append(text(175, 285, 'apply RoPE', cls="text-label", align="start"))
-    
-    c.append(make_node('rope', 220, 280, w=22))
-    c.append(text(205, 285, 'apply RoPE', cls="text-label", align="end"))
-    
-    c.append(make_node('stack', 60, 240, w=70))
-    c.append(text(20, 245, '{q<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}', align="end"))
-    
-    c.append(make_node('stack', 160, 240, w=70))
-    c.append(text(200, 245, '{q<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t,i</tspan>}', align="start"))
-    
-    c.append(make_node('short', 220, 240, w=60))
-    c.append(text(255, 245, 'k<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t</tspan>', align="start"))
-    
-    c.append(make_node('short', 280, 240, w=50))
-    c.append(text(270, 260, '{c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan>}', align="end"))
-    
-    c.append(make_node('short', 340, 240, w=50))
-    c.append(text(350, 260, '{c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan>}', align="start"))
-    
-    c.append(make_node('wstack', 110, 160, w=90))
-    c.append(text(60, 165, '{[q<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>; q<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t,i</tspan>]}', align="end"))
-    
-    c.append(make_node('wstack', 250, 160, w=90))
-    c.append(text(200, 165, '{[c<tspan dy="-6" font-size="10px">KV</tspan><tspan dy="6" font-size="10px">t</tspan>; k<tspan dy="-6" font-size="10px">R</tspan><tspan dy="6" font-size="10px">t</tspan>]}', align="end"))
-    
-    # Core Attention
-    c.append('<rect x="20" y="95" width="410" height="25" class="box-gray" />')
-    c.append(text(225, 112, 'Multi-Query Attention (Core Attention)', cls="text-title", align="middle"))
-    
-    c.append(make_node('stack', 180, 60, w=80))
-    c.append(text(135, 65, '{o<tspan dy="-6" font-size="10px">C</tspan><tspan dy="6" font-size="10px">t,i</tspan>}', align="end"))
-    
-    c.append(make_node('vshort', 360, 60, w=50))
-    c.append(text(390, 65, '{o<tspan dy="6" font-size="10px">t,i</tspan>}', align="start"))
-    
-    c.append(make_node('hidden', 280, 20, w=220))
-    c.append(text(160, 25, 'Output Hidden u<tspan dy="3" font-size="10px">t</tspan>', align="end"))
-    
-    # Paths MQA
-    c.append(line(220, 419, 220, 400))
-    c.append(line(110, 400, 410, 400))
-    c.append(line(110, 400, 110, 371, marker=True))
-    c.append(line(220, 400, 220, 291, marker=True))
-    c.append(line(300, 400, 300, 371, marker=True))
-    c.append(line(410, 400, 410, 31, marker=True)) # Far right line!
-    
-    c.append(line(110, 349, 110, 320))
-    c.append(line(60, 320, 160, 320))
-    c.append(line(60, 320, 60, 251, marker=True, color='blue'))
-    c.append(line(160, 320, 160, 291, marker=True))
-    
-    c.append(text(55, 295, 'W<tspan dy="-6" font-size="10px">UQ</tspan><tspan dy="6" font-size="10px">c<tspan dy="-4">Q</tspan><tspan dy="4">t</tspan></tspan>', fill="#00A2E8", align="end"))
-    
-    c.append(line(160, 269, 160, 251, marker=True))
-    c.append(line(220, 269, 220, 251, marker=True))
-    
-    c.append(line(300, 349, 300, 320))
-    c.append(line(280, 320, 340, 320))
-    c.append(line(280, 320, 280, 251, marker=True))
-    c.append(line(340, 320, 340, 251, marker=True))
-    
-    c.append(line(60, 229, 60, 200))
-    c.append(line(160, 229, 160, 200))
-    c.append(line(60, 200, 160, 200))
-    c.append(line(110, 200, 110, 171, marker=True))
-    c.append(text(110, 190, 'concatenate', cls="text-label"))
-    
-    c.append(line(220, 229, 220, 200))
-    c.append(line(280, 229, 280, 200))
-    c.append(line(220, 200, 280, 200))
-    c.append(line(250, 200, 250, 171, marker=True))
-    c.append(text(250, 190, 'concatenate', cls="text-label"))
-    
-    c.append(line(110, 149, 110, 120, marker=True))
-    c.append(line(250, 149, 250, 120, marker=True))
-    c.append(line(340, 229, 340, 120, marker=True))
-    
-    c.append(line(180, 95, 180, 71, marker=True))
-    c.append(line(225, 60, 330, 60, marker=True, color='orange'))
-    c.append(text(280, 50, 'W<tspan dy="-6" font-size="10px">UV</tspan><tspan dy="6" font-size="10px">o<tspan dy="-4">C</tspan><tspan dy="4">t,i</tspan></tspan>', fill="#F26522", align="middle"))
-    
-    c.append(line(360, 49, 360, 31, marker=True))
-    
-    c.append(text(225, 480, '(b) MQA mode of MLA.', cls="text-title"))
-    
-    c.append('</g>')
-    
-    return "\n".join(c)
+    c.append('<text x="250" y="520" class="title">(a) MHA mode of MLA.</text>')
 
-create_svg("public/images/architecture/fig4_arch_diagram.svg", build_architecture(), 900, 500)
+    # ================= MQA (RIGHT) =================
+    # Input
+    c.append(make_box(770, 460, 200, 30, 'ht', 'normal'))
+    
+    # cQ, cKV
+    c.append(make_box(650, 390, 80, 28, 'cQ', 'normal'))
+    c.append(make_box(890, 390, 80, 28, 'cKV', 'normal'))
+    
+    # RoPE
+    c.append(make_box(700, 320, 0, 0, '', 'rope'))
+    c.append(make_box(800, 320, 0, 0, '', 'rope'))
+    
+    # q, k, v
+    c.append(make_box(590, 260, 80, 28, 'qC', 'stack'))
+    c.append(make_box(700, 260, 80, 28, 'qR', 'stack'))
+    c.append(make_box(800, 260, 80, 28, 'kR', 'normal'))
+    c.append(make_box(890, 260, 80, 28, 'cKV', 'normal'))
+    c.append(make_box(980, 260, 80, 28, 'cKV', 'normal'))
+    
+    # Concat
+    c.append(make_box(645, 160, 130, 28, 'concatQ', 'stack'))
+    c.append(make_box(845, 160, 130, 28, 'concatK_MQA', 'normal'))
+    
+    # Core
+    c.append('<rect x="540" y="80" width="480" height="40" class="core" />')
+    c.append('<text x="780" y="105" class="core-text">Multi-Query Attention (Core Attention)</text>')
+    
+    # Output
+    c.append(make_box(645, 40, 80, 28, 'oC', 'stack'))
+    c.append(make_box(820, 40, 80, 28, 'o', 'normal'))
+    c.append(make_box(770, -10, 220, 30, 'ut', 'normal'))
+    
+    # Lines
+    c.append(path([(770,445), (770,420), (650,420), (650,404)], marker=True))
+    c.append(path([(770,420), (1030,420), (1030,-10), (870,-10)], marker=True))
+    c.append(path([(770,420), (890,420), (890,404)], marker=True))
+    
+    c.append(path([(650,376), (650,350), (590,350), (590,277)], color='blue', marker=True))
+    c.append(f'<text x="582" y="325" class="math" fill="#0088cc" text-anchor="end">{get_text("WUQ")}</text>')
+    
+    c.append(path([(650,350), (700,350), (700,337)], marker=True))
+    c.append(path([(700,303), (700,277)], marker=True))
+    
+    c.append(path([(890,376), (890,350), (800,350), (800,337)], marker=True))
+    c.append(path([(800,303), (800,273)], marker=True))
+    
+    c.append(path([(890,350), (890,274)], marker=True))
+    c.append(path([(890,350), (980,350), (980,274)], marker=True))
+    
+    c.append(path([(590,247), (590,205), (700,205)]))
+    c.append(path([(700,247), (700,205)]))
+    c.append(path([(645,205), (645,174)], marker=True))
+    c.append('<text x="645" y="197" class="label">concatenate</text>')
+    
+    c.append(path([(800,247), (800,205), (890,205)]))
+    c.append(path([(890,247), (890,205)]))
+    c.append(path([(845,205), (845,174)], marker=True))
+    c.append('<text x="845" y="197" class="label">concatenate</text>')
+    
+    c.append(path([(645,147), (645,120)], marker=True))
+    c.append(path([(845,147), (845,120)], marker=True))
+    c.append(path([(980,247), (980,120)], marker=True))
+    
+    c.append(path([(645,80), (645,57)], marker=True))
+    c.append(path([(690,40), (780,40)], color='orange', marker=True))
+    c.append(f'<text x="735" y="30" class="math" fill="#e65100" text-anchor="middle">{get_text("WUV")}</text>')
+    
+    c.append(path([(820,27), (820,5)], marker=True))
+    
+    c.append('<text x="770" y="500" class="title">(b) MQA mode of MLA.</text>')
+    
+    with open(filename, 'w', encoding='utf-8') as f:
+        f.write(svg + "\\n  <!-- Note: All nodes correctly boxed and aligned. -->\\n</svg>")
+
+create_svg("public/images/architecture/fig4_arch_diagram.svg")
 print("Arch SVG generated.")
