@@ -1,1 +1,0 @@
-ALTER TABLE "agent_bot_providers" ADD COLUMN IF NOT EXISTS "settings" jsonb DEFAULT '{}'::jsonb;

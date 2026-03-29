@@ -1,1 +1,0 @@
-ALTER TABLE "agents" ADD COLUMN IF NOT EXISTS "editor_data" jsonb;
