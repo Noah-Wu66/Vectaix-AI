@@ -2,12 +2,10 @@
 
 # 🌌 Vectaix AI
 
-### Open-Source AI Workspace — Multi-Model, Multi-Expert, One Platform.
+### Open-Source AI Workspace — Dual-Engine Architecture for Multi-Expert Council & Autonomous Agents
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/Noah-Wu66/Vectaix-AI?style=for-the-badge&logo=github&color=gold)](https://github.com/Noah-Wu66/Vectaix-AI/stargazers)
-[![Forks](https://img.shields.io/github/forks/Noah-Wu66/Vectaix-AI?style=for-the-badge&logo=github&color=silver)](https://github.com/Noah-Wu66/Vectaix-AI/network/members)
-[![Issues](https://img.shields.io/github/issues/Noah-Wu66/Vectaix-AI?style=for-the-badge&logo=github&color=orange)](https://github.com/Noah-Wu66/Vectaix-AI/issues)
 [![Deploy with Vercel](https://img.shields.io/badge/Deploy-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com)
 [![Node](https://img.shields.io/badge/Node-24.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
 
@@ -15,16 +13,18 @@
 
 **English** · [简体中文](./README.zh-CN.md) · [日本語](./README.ja.md) · [한국어](./README.ko.md)
 
+[📄 Read the Technical Architecture Paper](./ARCHITECTURE.md)
+
 <br/>
 
-> ⚠️ **Early Stage Notice** — This project is under active development. Features, APIs, and UI may change frequently. We are committed to continuous updates and improvements. Star the repo to stay tuned!
+> ⚠️ **Early Stage Notice** — This project is under active development. Features, APIs, and UI may change frequently. Star the repo to stay tuned!
 
 <br/>
 
 <img src="https://img.shields.io/badge/GPT--5.4-412991?style=flat-square&logo=openai&logoColor=white" alt="GPT-5.4" />
 <img src="https://img.shields.io/badge/Claude_Opus_4.6-d97706?style=flat-square&logo=anthropic&logoColor=white" alt="Claude" />
 <img src="https://img.shields.io/badge/Gemini_3.1_Pro_Preview-4285F4?style=flat-square&logo=google&logoColor=white" alt="Gemini" />
-<img src="https://img.shields.io/badge/DeepSeek_V3.2-0A0A0A?style=flat-square&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiLz48L3N2Zz4=&logoColor=white" alt="DeepSeek" />
+<img src="https://img.shields.io/badge/DeepSeek_V3.2-0A0A0A?style=flat-square&logoColor=white" alt="DeepSeek" />
 <img src="https://img.shields.io/badge/Seed_2.0_Pro-FF6A00?style=flat-square&logoColor=white" alt="Seed" />
 
 </div>
@@ -33,9 +33,13 @@
 
 ## ✨ What is Vectaix AI?
 
-Vectaix AI is an **open-source AI workspace** designed for cloud-native deployment on Vercel. It brings together the world's leading AI models under one unified interface — with official API support and a unique multi-expert collaboration system.
+Vectaix AI is an **open-source AI workspace** designed for cloud-native deployment on Vercel. It brings together the world's leading AI models under one unified interface, powered by a rigorous [Dual-Engine Architecture](./ARCHITECTURE.md). 
 
-Whether you need a quick answer from GPT-5.4, deep reasoning from Claude Opus 4.6, or want multiple AI experts to debate and synthesize — Vectaix AI has you covered.
+Whether you need a quick answer from GPT-5.4, deep reasoning from Claude Opus 4.6, or want multiple AI experts to debate and synthesize a final response, Vectaix AI delivers a highly polished and professional experience.
+
+### 🖼️ Interface Preview
+
+*(Insert a screenshot or GIF of the chat interface here)*
 
 ---
 
@@ -45,68 +49,32 @@ Whether you need a quick answer from GPT-5.4, deep reasoning from Claude Opus 4.
 <tr>
 <td width="50%">
 
-### 🤖 Multi-Model Chat
-Switch freely between 8 AI models in a single workspace. Each conversation can be bound to a different model.
+### 🧠 Council Workflow (Multi-Expert)
+A unique collaborative mode where multiple models (e.g., GPT, Claude, Gemini) act as parallel experts to reason about a query, and a final model synthesizes the consensus. 
+[Read the math & architecture](./ARCHITECTURE.md#11-the-council-module-multi-expert-consensus)
 
-### 🧠 Council Workflow
-A unique multi-expert collaboration mode: GPT-5.4, Claude Opus 4.6, and Gemini 3.1 Pro Preview answer as parallel experts, then Seed 2.0 Pro synthesizes the final response.
+### 🤖 Agent Runtime
+A fully isolated orchestration layer featuring an instruction engine, tool registry, and state serialization for autonomous task execution.
+[View the Agent diagram](./ARCHITECTURE.md#12-the-agent-module-autonomous-orchestration)
 
-### 🔌 Official Access
-All models now use official APIs or official deployments only. Route switching has been removed for a simpler setup.
+### 🔌 Official API Integration
+All models are integrated via their official APIs or official deployments to ensure maximum stability and capability.
 
 </td>
 <td width="50%">
 
 ### 🌐 Web Search & Browsing
-Built-in web search powered by Volcengine API with advanced filters. Full web browsing sessions with content extraction.
+Grounded generation powered by Volcengine's real-time indexing API, complete with web browsing sessions and content extraction.
 
-### 📎 File Upload & Parsing
-Upload and parse images, PDFs, Word docs, spreadsheets, code files — processed via Vercel Sandbox with Python runtime.
+### 📎 Multimodal Document Parsing
+Upload and parse images, PDFs, Word docs, spreadsheets, and code files. Processed asynchronously via Vercel Sandbox with Python runtime.
 
-### 💭 Thinking Blocks
-Stream and display model reasoning processes in real-time, giving you transparency into how AI thinks.
-
-</td>
-</tr>
-</table>
-
-<table>
-<tr>
-<td width="33%">
-
-### 🔐 Authentication
-Email/password auth with JWT tokens and HttpOnly cookies. Admin system via environment variables.
-
-</td>
-<td width="33%">
-
-### 🤖 Agent Runtime
-Full agent framework with instruction engine, tool registry, orchestrator, and state serialization.
-
-</td>
-<td width="33%">
-
-### 📱 PWA Ready
-Web App Manifest with mobile-optimized UI. Dark/Light/System theme support.
+### 💭 Real-time Thinking Blocks
+Stream and display the model's internal reasoning processes in real-time, providing transparency into how the AI forms its conclusions.
 
 </td>
 </tr>
 </table>
-
----
-
-## 🧩 Supported Models
-
-| Model | Provider | Access | Specialty |
-|:------|:---------|:--------|:----------|
-| **GPT-5.4** | OpenAI | Official API | General intelligence, coding, analysis |
-| **Claude Opus 4.6** | Anthropic | Official API | Deep reasoning, writing, safety |
-| **Gemini 3.1 Pro Preview** | Google | Official API | Multimodal, long context |
-| **DeepSeek V3.2** | DeepSeek | Official API | Reasoning, math, code |
-| **Seed 2.0 Pro** | ByteDance | Official API | Chinese language, summarization |
-| **MiMo** | Xiaomi | Official deployment | Reasoning, compact-model performance |
-| **MiniMax M2.5** | MiniMax | Official API | Multilingual generation, coding |
-| **Council** | Multi-model | GPT + Claude + Gemini + Seed | Expert consensus synthesis |
 
 ---
 
@@ -124,36 +92,20 @@ Web App Manifest with mobile-optimized UI. Dark/Light/System theme support.
 </tr>
 </table>
 
-| Layer | Technology |
-|:------|:-----------|
-| Framework | Next.js 16 (App Router) |
-| Frontend | React 19, Tailwind CSS 3.4, Ant Design 5, Framer Motion |
-| Database | MongoDB (Mongoose 8) |
-| Auth | JWT (jose), bcryptjs, HttpOnly Cookie |
-| File Storage | Vercel Blob |
-| Sandbox | @vercel/sandbox (Node 24 + Python 3.13) |
-| AI SDKs | @anthropic-ai/sdk, Gemini REST, OpenAI REST, Volcengine Seed |
-| Markdown | react-markdown + remark-gfm + remark-math + rehype-katex |
-| Doc Parsing | pdf-parse, mammoth, word-extractor, xlsx |
-
 ---
 
 ## 🚀 Deployment
 
-Vectaix AI is designed for **Vercel Pro** deployment. No local runtime is provided.
+Vectaix AI is designed for **Vercel Pro** serverless deployment. It guarantees high concurrency and zero-maintenance scaling.
 
-### Prerequisites
-
-- Vercel Pro account
-- MongoDB database (e.g., MongoDB Atlas)
-- API keys for the AI providers you want to use
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FNoah-Wu66%2FVectaix-AI)
 
 ### Environment Variables
 
 | Variable | Required | Purpose |
 |:---------|:--------:|:--------|
-| `MONGO_URI` | ✅ | MongoDB connection string |
-| `JWT_SECRET` | ✅ | Auth token signing secret |
+| `MONGO_URI` | ✅ | MongoDB connection string for stateful memory |
+| `JWT_SECRET` | ✅ | Cryptographic secret for session verification |
 | `ADMIN_EMAILS` | ❌ | Comma-separated admin email list |
 | `OPENAI_API_KEY` | ✅ | Official OpenAI access |
 | `ANTHROPIC_API_KEY` | ✅ | Official Anthropic access |
@@ -161,90 +113,28 @@ Vectaix AI is designed for **Vercel Pro** deployment. No local runtime is provid
 | `DEEPSEEK_API_KEY` | ✅ | Official DeepSeek access |
 | `ARK_API_KEY` | ✅ | Official ByteDance Seed access |
 | `MINIMAX_API_KEY` | ✅ | Official MiniMax access |
-| `MINIMAX_MODEL_ID` | ❌ | MiniMax model id, defaults to `MiniMax-M2.5` |
-| `MIMO_API_BASE_URL` | ✅ | MiMo deployment base URL, for example `https://your-mimo-server/v1` |
-| `MIMO_API_KEY` | ❌ | MiMo deployment API key |
-| `MIMO_MODEL_ID` | ❌ | MiMo deployment model id, defaults to `XiaomiMiMo/MiMo-7B-RL-0530` |
-| `VOLCENGINE_WEB_SEARCH_API_KEY` | ⬚ | Web search (optional for now) |
-
-> **Note:** No `.env.example` file is provided. This README is the single source of truth for environment configuration.
-
----
-
-## 📁 Project Structure
-
-```
-vectaix-ai/
-├── app/
-│   ├── api/                  # 19 API route groups
-│   │   ├── admin/            # User management
-│   │   ├── agent/            # Agent runtime entry
-│   │   ├── anthropic/        # Claude direct
-│   │   ├── auth/             # Login / Register / Password
-│   │   ├── council/          # Multi-model Council workflow
-│   │   ├── conversations/    # Conversation CRUD
-│   │   ├── deepseek/         # DeepSeek direct
-│   │   ├── gemini/           # Gemini direct
-│   │   ├── openai/           # OpenAI direct
-│   │   ├── upload/           # File upload
-│   │   └── ...               # More routes
-│   ├── components/           # 20+ React components
-│   ├── ChatApp.js            # Main chat application
-│   ├── layout.js             # Root layout
-│   └── globals.css           # Global styles
-├── lib/
-│   ├── server/               # Server-side logic
-│   │   ├── agent/            # Agent framework (orchestrator, tools, state)
-│   │   ├── chat/             # Provider adapters, official APIs
-│   │   ├── search/           # Web search providers
-│   │   ├── webBrowsing/      # Web browsing system
-│   │   └── sandbox/          # Vercel Sandbox integration
-│   ├── client/               # Client utilities & hooks
-│   └── shared/               # Shared models & configs
-├── models/                   # Mongoose schemas
-├── scripts/sandbox/          # Python parsing scripts
-├── public/                   # Static assets
-└── vercel.json               # Vercel config & cron
-```
+| `MIMO_API_BASE_URL` | ✅ | MiMo deployment base URL |
+| `VOLCENGINE_WEB_SEARCH_API_KEY` | ⬚ | Web search capabilities |
 
 ---
 
 ## 🗺️ Roadmap
 
 - [x] Multi-model chat with 8 AI models
-- [x] Council multi-expert workflow
-- [x] Official access
-- [x] Web search & browsing
-- [x] File upload & document parsing
-- [x] Agent runtime framework
-- [x] Thinking blocks display
-- [x] PWA support
-- [ ] More model providers
-- [ ] Plugin / extension system
-- [ ] Voice input & output
+- [x] Dual-Engine: Council Workflow & Agent Runtime
+- [x] Web search & multimodal document parsing
+- [x] Real-time reasoning (Thinking Blocks)
+- [ ] Plugin / extension system expansion
 - [ ] Collaborative workspaces
-- [ ] Mobile native app
 - [ ] Self-hosted Docker support
 
 ---
 
-## 🤝 Contributing
+## 🤝 Contributing & License
 
-Contributions are welcome! Whether it's bug reports, feature requests, or pull requests — every bit helps.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
+Contributions are welcome! Please fork the repository and open a Pull Request.
 
 This project is licensed under the [MIT License](LICENSE).
-
----
 
 <div align="center">
 
@@ -257,20 +147,5 @@ This project is licensed under the [MIT License](LICENSE).
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Noah-Wu66/Vectaix-AI&type=Date" />
  </picture>
 </a>
-
-<br/>
-<br/>
-
-**If you find Vectaix AI useful, please consider giving it a ⭐**
-
-<br/>
-
-[![Star this repo](https://img.shields.io/github/stars/Noah-Wu66/Vectaix-AI?style=social)](https://github.com/Noah-Wu66/Vectaix-AI)
-
-<br/>
-
----
-
-<sub>Built with passion. Powered by open source.</sub>
 
 </div>
