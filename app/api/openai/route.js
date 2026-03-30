@@ -8,13 +8,9 @@ import {
     generateMessageId,
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
-    injectCurrentTimeSystemReminder,
     estimateTokens
 } from '@/app/api/chat/utils';
 import { getAttachmentInputType } from '@/lib/shared/attachments';
-import {
-    buildWebSearchGuide,
-} from '@/lib/server/chat/webSearchConfig';
 import {
     parseMaxTokens,
     parseOpenAIThinkingLevel,
@@ -22,7 +18,7 @@ import {
     parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
-import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
+import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import { getModelRoutes, resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
@@ -150,7 +146,7 @@ export async function POST(req) {
         }
 
         const modelRoutes = await getModelRoutes(user.userId);
-        const { baseUrl: apiBaseUrl, apiKey } = resolveOpenAIProviderConfig(modelRoutes);
+        const { route: providerRoute, baseUrl: apiBaseUrl, apiKey } = resolveOpenAIProviderConfig(modelRoutes);
         const apiModel = model;
 
         let currentConversationId = conversationId;
@@ -304,8 +300,6 @@ export async function POST(req) {
         }
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
-        const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
-        const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
         const baseInput = Array.isArray(openaiInput) ? openaiInput : [];
 
         const allowedEfforts = MODEL_REASONING_EFFORTS[model] || DEFAULT_REASONING_EFFORTS;
@@ -322,7 +316,6 @@ export async function POST(req) {
             model: apiModel,
             stream: true,
             max_output_tokens: maxTokens,
-            instructions: baseSystemPrompt,
             input: baseInput,
             reasoning: reasoningConfig
         };
@@ -330,7 +323,6 @@ export async function POST(req) {
         // 是否启用联网搜索
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
-        const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
             maxTokens,
             model,
@@ -535,7 +527,13 @@ export async function POST(req) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
-                    const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}${systemPromptSuffix.trim() ? `\n\n${systemPromptSuffix}` : ''}`;
+                    const finalSystemPrompt = await buildDirectChatSystemPrompt({
+                        userSystemPrompt,
+                        systemPromptSuffix,
+                        enableWebSearch,
+                        searchContextSection,
+                        includeEconomyPrefix: providerRoute === 'default',
+                    });
                     const requestBody = {
                         ...baseRequestBody,
                         instructions: finalSystemPrompt

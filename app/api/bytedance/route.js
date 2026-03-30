@@ -8,7 +8,6 @@ import {
     fetchImageAsBase64,
     estimateTokens,
     generateMessageId,
-    injectCurrentTimeSystemReminder,
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
 } from '@/app/api/chat/utils';
@@ -20,9 +19,7 @@ import {
     isSeedModel,
     normalizeModelId,
 } from '@/lib/shared/models';
-import {
-    buildWebSearchGuide,
-} from '@/lib/server/chat/webSearchConfig';
+import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     parseMaxTokens,
     parseSeedThinkingLevel,
@@ -288,11 +285,6 @@ export async function POST(req) {
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
-        const baseSystemPrompt = await injectCurrentTimeSystemReminder(
-            userSystemPrompt
-        );
-        const formattingGuard = 'Output formatting rules: Do not use Markdown horizontal rules or standalone lines of \'---\'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.';
-        const webSearchGuard = buildWebSearchGuide(enableWebSearch).trim();
         const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
             apiKey,
             maxTokens,
@@ -464,9 +456,13 @@ export async function POST(req) {
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
 
-                    const instructions = [baseSystemPrompt, formattingGuard, webSearchGuard, searchContextSection, systemPromptSuffix]
-                        .filter((item) => typeof item === 'string' && item.trim())
-                        .join('\n\n');
+                    const instructions = await buildDirectChatSystemPrompt({
+                        userSystemPrompt,
+                        systemPromptSuffix,
+                        enableWebSearch,
+                        searchContextSection,
+                        includeEconomyPrefix: false,
+                    });
                     const requestBody = buildSeedRequestBody({
                         model: apiModel || SEED_MODEL_ID,
                         input: seedInput,

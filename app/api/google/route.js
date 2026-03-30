@@ -10,7 +10,6 @@ import {
     getStoredPartsFromMessage,
     sanitizeStoredMessagesStrict,
     generateMessageId,
-    injectCurrentTimeSystemReminder,
     estimateTokens
 } from '@/app/api/chat/utils';
 import { getAttachmentInputType } from '@/lib/shared/attachments';
@@ -28,9 +27,8 @@ import {
     enrichConversationPartsWithBlobIds,
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
-import {
-    buildWebSearchGuide,
-} from '@/lib/server/chat/webSearchConfig';
+import { getModelRoutes, resolveGeminiProviderConfig } from '@/lib/modelRoutes';
+import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     parseGeminiThinkingLevel,
     parseMaxTokens,
@@ -179,6 +177,8 @@ export async function POST(req) {
         }
 
         const apiModel = resolveGeminiApiModel(model);
+        const modelRoutes = await getModelRoutes(user.userId);
+        const providerConfig = resolveGeminiProviderConfig(modelRoutes);
         const ai = await createGeminiClient(user.userId);
         let currentConversationId = conversationId;
         let currentConversation = await loadConversationForRoute({
@@ -346,7 +346,6 @@ export async function POST(req) {
 
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
-        const baseSystemText = await injectCurrentTimeSystemReminder(userSystemPrompt);
         const generationConfig = (config?.generationConfig && typeof config.generationConfig === 'object' && !Array.isArray(config.generationConfig))
             ? config.generationConfig
             : {};
@@ -362,9 +361,6 @@ export async function POST(req) {
         }
 
         const baseConfig = {
-            systemInstruction: {
-                parts: [{ text: baseSystemText }]
-            },
             ...safeGenerationConfig,
             temperature: 1.0,
             maxOutputTokens: maxTokens,
@@ -376,7 +372,6 @@ export async function POST(req) {
 
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
-        const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
             maxTokens,
             model,
@@ -386,8 +381,6 @@ export async function POST(req) {
             userId: user.userId,
             userText,
         });
-        const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
-
         if (user && !currentConversationId) {
             const titleSource = isNonEmptyString(prompt)
                 ? prompt
@@ -551,7 +544,13 @@ export async function POST(req) {
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
 
-                    const finalSystemPrompt = `${baseSystemText}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}${systemPromptSuffix.trim() ? `\n\n${systemPromptSuffix}` : ''}`;
+                    const finalSystemPrompt = await buildDirectChatSystemPrompt({
+                        userSystemPrompt,
+                        systemPromptSuffix,
+                        enableWebSearch,
+                        searchContextSection,
+                        includeEconomyPrefix: providerConfig.route === 'default',
+                    });
                     const finalConfig = {
                         ...baseConfig,
                         systemInstruction: {

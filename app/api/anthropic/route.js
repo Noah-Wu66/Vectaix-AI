@@ -17,11 +17,9 @@ import {
     getStoredPartsFromMessage,
     sanitizeStoredMessagesStrict,
     generateMessageId,
-    injectCurrentTimeSystemReminder,
     estimateTokens
 } from '@/app/api/chat/utils';
 import { getAttachmentInputType } from '@/lib/shared/attachments';
-import { buildEconomySystemPrompt } from '@/lib/server/chat/economyModels';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
     buildConversationWriteCondition,
@@ -36,9 +34,7 @@ import {
     buildAttachmentTextBlock,
     prepareDocumentAttachmentMapByUrls,
 } from '@/lib/server/files/service';
-import {
-    buildWebSearchGuide,
-} from '@/lib/server/chat/webSearchConfig';
+import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     clampMaxTokens,
     parseClaudeThinkingLevel,
@@ -202,7 +198,7 @@ export async function POST(req) {
         }
 
         const providerConfig = await resolveAnthropicProviderConfig(model, user.userId);
-        const { baseUrl: anthropicBaseUrl, apiKey } = providerConfig;
+        const { route: providerRoute, baseUrl: anthropicBaseUrl, apiKey } = providerConfig;
         const apiModel = resolveAnthropicApiModel(model);
         const client = new Anthropic({
             apiKey,
@@ -374,15 +370,10 @@ export async function POST(req) {
         const normalizedMaxTokens = clampMaxTokens(maxTokens, maxTokenCap);
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
-        const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
-        const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         // 是否启用联网搜索
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
-
-        // 启用联网搜索时禁用来源括号标注
-        const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
             maxTokens,
             model,
@@ -553,7 +544,13 @@ export async function POST(req) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
-                    const systemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}${systemPromptSuffix.trim() ? `\n\n${systemPromptSuffix}` : ''}`;
+                    const systemPrompt = await buildDirectChatSystemPrompt({
+                        userSystemPrompt,
+                        systemPromptSuffix,
+                        enableWebSearch,
+                        searchContextSection,
+                        includeEconomyPrefix: providerRoute === 'default',
+                    });
                     const requestParams = {
                         model: apiModel,
                         max_tokens: normalizedMaxTokens,

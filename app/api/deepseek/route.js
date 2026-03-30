@@ -8,14 +8,11 @@ import {
     generateMessageId,
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
-    injectCurrentTimeSystemReminder,
     estimateTokens,
     getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
 import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL } from '@/lib/shared/models';
-import {
-    buildWebSearchGuide,
-} from '@/lib/server/chat/webSearchConfig';
+import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     clampMaxTokens,
     parseMaxTokens,
@@ -254,12 +251,9 @@ export async function POST(req) {
 
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
-        const baseSystemPrompt = await injectCurrentTimeSystemReminder(userSystemPrompt);
-        const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
-        const webSearchGuide = buildWebSearchGuide(enableWebSearch);
         const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
             maxTokens,
             model,
@@ -411,7 +405,13 @@ export async function POST(req) {
                     }
 
                     // 构建最终请求
-                    const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}${systemPromptSuffix.trim() ? `\n\n${systemPromptSuffix}` : ''}`;
+                    const finalSystemPrompt = await buildDirectChatSystemPrompt({
+                        userSystemPrompt,
+                        systemPromptSuffix,
+                        enableWebSearch,
+                        searchContextSection,
+                        includeEconomyPrefix: false,
+                    });
                     const finalMessages = [
                         { role: 'system', content: finalSystemPrompt },
                         ...deepseekMessages
