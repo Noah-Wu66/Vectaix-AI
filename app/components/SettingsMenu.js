@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Globe, Plus, Settings2, X } from "lucide-react";
+import { Globe, Settings2, X, MessageSquareQuote } from "lucide-react";
 import { CHAT_RUNTIME_MODE_CHAT, getModelConfig } from "@/lib/shared/models";
 import { DEFAULT_WEB_SEARCH_SETTINGS } from "@/lib/shared/webSearch";
 import ModelSelector from "./ModelSelector";
 import { useToast } from "./ToastProvider";
-import PromptEditorModal from "./PromptEditorModal";
+import SystemPromptModal from "./SystemPromptModal";
 
 export default function SettingsMenu({
   model,
@@ -25,93 +25,19 @@ export default function SettingsMenu({
 }) {
   const toast = useToast();
   const [showSettings, setShowSettings] = useState(false);
-  const [chatSystemPromptDraft, setChatSystemPromptDraft] = useState("");
-  const [systemPromptSaving, setSystemPromptSaving] = useState(false);
-
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editorMode, setEditorMode] = useState("add");
-  const [editorPromptId, setEditorPromptId] = useState(null);
-  const [editorName, setEditorName] = useState("");
-  const [editorContent, setEditorContent] = useState("");
-  const [editorSaving, setEditorSaving] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false);
   const modelConfig = getModelConfig(model);
   const supportsWebSearch = modelConfig?.supportsWebSearch === true;
   const isChatMode = chatMode === CHAT_RUNTIME_MODE_CHAT;
   const webSearchSettings = webSearch && typeof webSearch === "object"
     ? { ...DEFAULT_WEB_SEARCH_SETTINGS, ...webSearch }
     : DEFAULT_WEB_SEARCH_SETTINGS;
-  const savedChatSystemPrompt = typeof chatSystemPrompt === "string" ? chatSystemPrompt : "";
-  const hasChatSystemPromptChanges = chatSystemPromptDraft !== savedChatSystemPrompt;
-
-  useEffect(() => {
-    if (!showSettings) return;
-    setChatSystemPromptDraft(savedChatSystemPrompt);
-  }, [showSettings, savedChatSystemPrompt]);
 
   const updateWebSearch = (patch) => {
     setWebSearch((prev) => ({
       ...(prev && typeof prev === "object" ? prev : DEFAULT_WEB_SEARCH_SETTINGS),
       ...patch,
     }));
-  };
-
-  const saveChatSystemPrompt = async () => {
-    if (!hasChatSystemPromptChanges || !onChatSystemPromptSave) return;
-    setSystemPromptSaving(true);
-    try {
-      const settings = await onChatSystemPromptSave(chatSystemPromptDraft);
-      if (!settings) return;
-      toast.success(chatSystemPromptDraft.trim() ? "Chat 系统提示词已保存" : "Chat 系统提示词已清空");
-    } finally {
-      setSystemPromptSaving(false);
-    }
-  };
-
-  const openAddPrompt = () => {
-    setEditorMode("add");
-    setEditorName("");
-    setEditorContent(chatSystemPromptDraft);
-    setEditorOpen(true);
-  };
-
-  const openEditPrompt = (prompt) => {
-    setEditorMode("edit");
-    setEditorPromptId(prompt._id);
-    setEditorName(prompt.name);
-    setEditorContent(prompt.content);
-    setEditorOpen(true);
-  };
-
-  const handleSavePrompt = async () => {
-    if (!editorName.trim() || !editorContent.trim()) {
-      toast.warning("名称和内容不能为空");
-      return;
-    }
-    setEditorSaving(true);
-    try {
-      if (editorMode === "add") {
-        await addSystemPrompt(editorName, editorContent);
-        toast.success("已保存预设");
-      } else {
-        await updateSystemPrompt(editorPromptId, editorName, editorContent);
-        toast.success("已更新预设");
-      }
-      setEditorOpen(false);
-    } catch (e) {
-      toast.error(e?.message || "保存失败");
-    } finally {
-      setEditorSaving(false);
-    }
-  };
-
-  const handleDeletePrompt = async (id) => {
-    if (!window.confirm("确定删除这个预设吗？")) return;
-    try {
-      await deleteSystemPrompt(id);
-      toast.success("已删除");
-    } catch (e) {
-      toast.error("删除失败");
-    }
   };
 
   return (
@@ -190,85 +116,22 @@ export default function SettingsMenu({
 
                 {isChatMode ? (
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider block">
-                        系统提示词
-                      </label>
-                      <button
-                        type="button"
-                        onClick={openAddPrompt}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                      >
-                        <Plus size={12} /> 存为预设
-                      </button>
-                    </div>
-
-                    {systemPrompts && systemPrompts.length > 0 && (
-                      <div className="mb-2 flex items-center gap-1">
-                        <select
-                          className="flex-1 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg p-1.5 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none"
-                          value=""
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (!val) return;
-                            const prompt = systemPrompts.find(p => p._id === val);
-                            if (prompt) {
-                              setChatSystemPromptDraft(prompt.content);
-                              toast.success("已加载预设内容");
-                            }
-                            e.target.value = "";
-                          }}
-                        >
-                          <option value="" disabled>选择预设填充...</option>
-                          {systemPrompts.map(p => (
-                            <option key={p._id} value={p._id}>{p.name}</option>
-                          ))}
-                        </select>
-                        <select
-                          className="w-16 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-lg p-1.5 text-xs text-zinc-800 dark:text-zinc-200 focus:outline-none"
-                          value=""
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (!val) return;
-                            const [action, id] = val.split(":");
-                            const prompt = systemPrompts.find(p => p._id === id);
-                            if (!prompt) return;
-                            if (action === "edit") openEditPrompt(prompt);
-                            if (action === "delete") handleDeletePrompt(id);
-                            e.target.value = "";
-                          }}
-                        >
-                          <option value="" disabled>管理</option>
-                          {systemPrompts.map(p => (
-                            <optgroup key={p._id} label={p.name}>
-                              <option value={`edit:${p._id}`}>编辑</option>
-                              <option value={`delete:${p._id}`}>删除</option>
-                            </optgroup>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    <textarea
-                      value={chatSystemPromptDraft}
-                      onChange={(e) => setChatSystemPromptDraft(e.target.value)}
-                      placeholder="默认无。这里写的内容会追加到 Chat 模式系统提示词最后。"
-                      rows={6}
-                      className="w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-800 dark:text-zinc-200 resize-none focus:outline-none focus:border-zinc-400"
-                    />
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <p className="text-xs text-zinc-500 leading-5">
-                        留空就是不追加，只对 Chat 模式生效。
-                      </p>
-                      <button
-                        type="button"
-                        onClick={saveChatSystemPrompt}
-                        disabled={systemPromptSaving || !hasChatSystemPromptChanges}
-                        className="shrink-0 bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium px-3 py-2 rounded-lg text-sm transition-colors"
-                      >
-                        {systemPromptSaving ? "保存中..." : "保存"}
-                      </button>
-                    </div>
+                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                      系统提示词
+                    </label>
+                    <button
+                      onClick={() => setShowPromptModal(true)}
+                      type="button"
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors text-sm bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                    >
+                      <span className="flex items-center gap-2">
+                        <MessageSquareQuote size={14} />
+                        配置提示词
+                      </span>
+                      <span className="text-[10px] bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded text-zinc-500 font-medium">
+                        {chatSystemPrompt ? "已设置" : "默认无"}
+                      </span>
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -276,16 +139,15 @@ export default function SettingsMenu({
           </>
         )}
       </AnimatePresence>
-      <PromptEditorModal
-        open={editorOpen}
-        title={editorMode === "add" ? "保存为预设" : "编辑预设"}
-        name={editorName}
-        content={editorContent}
-        onNameChange={setEditorName}
-        onContentChange={setEditorContent}
-        onClose={() => setEditorOpen(false)}
-        onSave={handleSavePrompt}
-        saving={editorSaving}
+      <SystemPromptModal
+        open={showPromptModal}
+        onClose={() => setShowPromptModal(false)}
+        chatSystemPrompt={chatSystemPrompt}
+        onChatSystemPromptSave={onChatSystemPromptSave}
+        systemPrompts={systemPrompts}
+        addSystemPrompt={addSystemPrompt}
+        updateSystemPrompt={updateSystemPrompt}
+        deleteSystemPrompt={deleteSystemPrompt}
       />
     </div>
   );
