@@ -196,6 +196,7 @@ export function getStoredPartsFromMessage(msg, { includeThoughtSignature = false
             .map((part) => {
                 const out = {};
                 if (isNonEmptyString(part.text)) out.text = part.text;
+                if (part.thought === true) out.thought = true;
                 if (part?.inlineData && typeof part.inlineData === 'object') {
                     const url = part.inlineData.url;
                     const mimeType = part.inlineData.mimeType;
@@ -276,6 +277,11 @@ export function sanitizeStoredMessage(msg) {
     if (isNonEmptyString(msg.id) && msg.id.length <= 128) out.id = msg.id;
     if (isNonEmptyString(msg.thought)) out.thought = msg.thought;
     if (Array.isArray(msg.citations) && msg.citations.length > 0) out.citations = msg.citations;
+    if (Array.isArray(msg.tools) && msg.tools.length > 0) out.tools = msg.tools;
+    if (Array.isArray(msg.artifacts) && msg.artifacts.length > 0) out.artifacts = msg.artifacts;
+    if (Array.isArray(msg.thinkingTimeline) && msg.thinkingTimeline.length > 0) out.thinkingTimeline = msg.thinkingTimeline;
+    if (Number.isFinite(msg.searchContextTokens) && msg.searchContextTokens > 0) out.searchContextTokens = Math.max(0, Math.floor(msg.searchContextTokens));
+    if (msg.providerState && typeof msg.providerState === 'object') out.providerState = msg.providerState;
     out.parts = normalizedParts;
     return out;
 }

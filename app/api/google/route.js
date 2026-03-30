@@ -37,8 +37,12 @@ import {
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
 import { createGeminiClient, resolveGeminiApiModel } from '@/lib/server/chat/providerAdapters';
-import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
-import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
+import {
+    createWebBrowsingRuntime,
+    executeWebBrowsingNativeToolCall,
+    getGeminiWebTools,
+    WEB_BROWSING_MAX_ROUNDS,
+} from '@/lib/server/webBrowsing/nativeTools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -51,6 +55,7 @@ async function storedPartToRequestPart(part, options = {}) {
 
     if (isNonEmptyString(part.text)) {
         const p = { text: part.text };
+        if (part.thought === true) p.thought = true;
         if (isNonEmptyString(part.thoughtSignature)) p.thoughtSignature = part.thoughtSignature;
         return p;
     }
@@ -88,7 +93,7 @@ async function buildGeminiContentsFromMessages(messages, options = {}) {
     for (const msg of messages) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
-        const storedParts = getStoredPartsFromMessage(msg);
+        const storedParts = getStoredPartsFromMessage(msg, { includeThoughtSignature: true });
         if (!storedParts || storedParts.length === 0) continue;
         const parts = [];
         for (const storedPart of storedParts) {
@@ -98,6 +103,44 @@ async function buildGeminiContentsFromMessages(messages, options = {}) {
         if (parts.length) contents.push({ role: msg.role, parts });
     }
     return contents;
+}
+
+function extractGeminiResponseState(parts) {
+    const safeParts = Array.isArray(parts) ? parts : [];
+    const functionCalls = [];
+    const storedModelParts = [];
+    let fullText = '';
+    let fullThought = '';
+
+    for (const part of safeParts) {
+        if (!part || typeof part !== 'object') continue;
+
+        if (part.functionCall && typeof part.functionCall === 'object') {
+            functionCalls.push(part.functionCall);
+            continue;
+        }
+
+        const text = typeof part.text === 'string' ? part.text : '';
+        if (!text) continue;
+
+        const storedPart = { text };
+        if (part.thought === true) storedPart.thought = true;
+        if (isNonEmptyString(part.thoughtSignature)) storedPart.thoughtSignature = part.thoughtSignature;
+        storedModelParts.push(storedPart);
+
+        if (part.thought === true) {
+            fullThought += text;
+        } else {
+            fullText += text;
+        }
+    }
+
+    return {
+        functionCalls,
+        storedModelParts,
+        fullText: fullText.trim(),
+        fullThought: fullThought.trim(),
+    };
 }
 
 export async function POST(req) {
@@ -372,15 +415,6 @@ export async function POST(req) {
 
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
-        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
-            maxTokens,
-            model,
-            req,
-            systemText,
-            thinkingLevel,
-            userId: user.userId,
-            userText,
-        });
         if (user && !currentConversationId) {
             const titleSource = isNonEmptyString(prompt)
                 ? prompt
@@ -520,35 +554,11 @@ export async function POST(req) {
                         }
                     };
 
-                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
-                        actionRunner: runWebBrowsingAction,
-                        enableWebSearch,
-                        webSearchOptions: webSearchConfig,
-                        prompt,
-                        historyMessages: effectiveHistoryMessages,
-                        sendEvent,
-                        pushCitations,
-                        isClientAborted: () => clientAborted,
-                        signal: req?.signal,
-                    });
-
-                    if (clientAborted) {
-                        await rollbackCurrentTurn();
-                        try { controller.close(); } catch { /* ignore */ }
-                        return;
-                    }
-
-                    const searchContextSection = webBrowsingContextText || "";
-                    if (searchContextSection) {
-                        searchContextTokens = estimateTokens(searchContextSection);
-                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
-                    }
-
                     const finalSystemPrompt = await buildDirectChatSystemPrompt({
                         userSystemPrompt,
                         systemPromptSuffix,
                         enableWebSearch,
-                        searchContextSection,
+                        searchContextSection: '',
                         includeEconomyPrefix: providerConfig.route === 'default',
                     });
                     const finalConfig = {
@@ -557,40 +567,78 @@ export async function POST(req) {
                             parts: [{ text: finalSystemPrompt }]
                         }
                     };
+                    const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
+                    const workingContents = [...contents];
+                    const toolRecords = [];
+                    let storedModelParts = [];
+                    let finished = false;
 
-                    const streamResult = await ai.models.generateContentStream({
-                        model: apiModel,
-                        contents: contents,
-                        config: finalConfig
-                    });
-
-                    for await (const chunk of streamResult) {
+                    for (let round = 0; round < (enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1); round += 1) {
+                        const response = await ai.models.generateContent({
+                            model: apiModel,
+                            contents: workingContents,
+                            config: enableWebSearch
+                                ? { ...finalConfig, tools: getGeminiWebTools() }
+                                : finalConfig,
+                        });
                         if (clientAborted) break;
 
-                        const candidate = Array.isArray(chunk?.candidates)
-                            ? chunk.candidates[0]
-                            : null;
-                        const parts = Array.isArray(candidate?.content?.parts)
-                            ? candidate.content.parts
-                            : [];
+                        const candidate = Array.isArray(response?.candidates) ? response.candidates[0] : null;
+                        const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+                        const state = extractGeminiResponseState(parts);
 
-                        if (parts.length === 0) continue;
-
-                        for (const part of parts) {
-                            if (clientAborted) break;
-                            if (!part || typeof part !== 'object') continue;
-
-                            const text = typeof part.text === 'string' ? part.text : '';
-                            if (!text) continue;
-
-                            if (part.thought) {
-                                fullThought += text;
-                                sendEvent({ type: 'thought', content: text });
-                            } else {
-                                fullText += text;
-                                sendEvent({ type: 'text', content: text });
-                            }
+                        if (state.fullThought) {
+                            fullThought = fullThought ? `${fullThought}\n\n${state.fullThought}` : state.fullThought;
+                            sendEvent({ type: 'thought', content: state.fullThought });
                         }
+
+                        if (!enableWebSearch || state.functionCalls.length === 0) {
+                            fullText = state.fullText;
+                            storedModelParts = state.storedModelParts.length > 0
+                                ? state.storedModelParts
+                                : (fullText ? [{ text: fullText }] : []);
+                            if (fullText) {
+                                sendEvent({ type: 'text', content: fullText });
+                            }
+                            finished = true;
+                            break;
+                        }
+
+                        workingContents.push({ role: 'model', parts });
+                        const functionResponseParts = [];
+                        for (const functionCall of state.functionCalls) {
+                            const toolExecution = await executeWebBrowsingNativeToolCall({
+                                apiName: functionCall?.name,
+                                argumentsInput: functionCall?.args,
+                                runtime,
+                                sendEvent,
+                                pushCitations,
+                                round: round + 1,
+                                signal: req?.signal,
+                            });
+                            toolRecords.push(toolExecution.toolRecord);
+                            functionResponseParts.push({
+                                functionResponse: {
+                                    name: functionCall.name,
+                                    response: {
+                                        result: toolExecution.outputText,
+                                    },
+                                    ...(isNonEmptyString(functionCall?.id) ? { id: functionCall.id } : {}),
+                                },
+                            });
+                        }
+                        workingContents.push({ role: 'user', parts: functionResponseParts });
+                    }
+
+                    if (enableWebSearch && toolRecords.length > 0) {
+                        searchContextTokens = estimateTokens(toolRecords.map((item) => item.content || '').join('\n\n'));
+                        if (searchContextTokens > 0) {
+                            sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
+                        }
+                    }
+
+                    if (!finished && !clientAborted) {
+                        throw new Error('Gemini 工具循环未返回最终答案');
                     }
 
                     if (clientAborted) {
@@ -612,9 +660,10 @@ export async function POST(req) {
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
+                            tools: enableWebSearch && toolRecords.length > 0 ? toolRecords : null,
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
-                            parts: [{ text: fullText }]
+                            parts: storedModelParts.length > 0 ? storedModelParts : [{ text: fullText }]
                         };
                         const persistedConversation = await Conversation.findOneAndUpdate(
                             buildConversationWriteCondition(currentConversationId, user.userId, writePermitTime),

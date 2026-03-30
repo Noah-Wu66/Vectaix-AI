@@ -35,9 +35,19 @@ import {
     prepareDocumentAttachmentMapByUrls,
 } from '@/lib/server/files/service';
 
-import { buildOpenAIInputFromHistory } from '@/app/api/openai/openaiHelpers';
-import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
-import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
+import {
+    buildOpenAIInputFromHistory,
+    extractOpenAIFunctionCalls,
+    extractOpenAIResponseReasoning,
+    extractOpenAIResponseText,
+    normalizeOpenAIOutputItems,
+} from '@/app/api/openai/openaiHelpers';
+import {
+    createWebBrowsingRuntime,
+    executeWebBrowsingNativeToolCall,
+    getOpenAIWebTools,
+    WEB_BROWSING_MAX_ROUNDS,
+} from '@/lib/server/webBrowsing/nativeTools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,6 +57,18 @@ const MAX_REQUEST_BYTES = 2_000_000;
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
 const MODEL_REASONING_EFFORTS = {};
 const REASONING_SUMMARY_MODELS = new Set(['gpt-5.4']);
+
+function findLatestOpenAIResponseId(messages) {
+    if (!Array.isArray(messages)) return '';
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        const responseId = typeof message?.providerState?.openai?.responseId === 'string'
+            ? message.providerState.openai.responseId.trim()
+            : '';
+        if (responseId) return responseId;
+    }
+    return '';
+}
 
 function extractUpstreamErrorMessage(status, rawText) {
     const text = typeof rawText === 'string' ? rawText.trim() : '';
@@ -301,6 +323,10 @@ export async function POST(req) {
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
         const baseInput = Array.isArray(openaiInput) ? openaiInput : [];
+        const currentTurnInput = !isRegenerateMode && baseInput.length > 0
+            ? baseInput[baseInput.length - 1]
+            : null;
+        const latestOpenAIResponseId = isRegenerateMode ? '' : findLatestOpenAIResponseId(effectiveHistoryMessages);
 
         const allowedEfforts = MODEL_REASONING_EFFORTS[model] || DEFAULT_REASONING_EFFORTS;
         if (!allowedEfforts.has(thinkingLevel)) {
@@ -314,24 +340,15 @@ export async function POST(req) {
         }
         const baseRequestBody = {
             model: apiModel,
-            stream: true,
+            stream: false,
             max_output_tokens: maxTokens,
-            input: baseInput,
-            reasoning: reasoningConfig
+            reasoning: reasoningConfig,
+            store: true,
         };
 
         // 是否启用联网搜索
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
-        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
-            maxTokens,
-            model,
-            req,
-            systemText,
-            thinkingLevel,
-            userId: user.userId,
-            userText,
-        });
 
         if (user && !currentConversationId) {
             const titleSource = isNonEmptyString(prompt)
@@ -422,40 +439,6 @@ export async function POST(req) {
         const HEARTBEAT_INTERVAL_MS = 15000;
         let heartbeatTimer = null;
 
-        const normalizeChunkText = (value) => {
-            if (typeof value === 'string') return value;
-            if (!Array.isArray(value)) return '';
-            return value.map((item) => {
-                if (typeof item === 'string') return item;
-                if (item && typeof item.text === 'string') return item.text;
-                return '';
-            }).join('');
-        };
-
-        const normalizeChunkThought = (value) => {
-            if (typeof value === 'string') return value;
-            if (Array.isArray(value)) {
-                return value.map((item) => {
-                    if (typeof item === 'string') return item;
-                    if (item && typeof item.text === 'string') return item.text;
-                    if (item && typeof item.content === 'string') return item.content;
-                    return '';
-                }).join('');
-            }
-            if (value && typeof value === 'object') {
-                if (typeof value.text === 'string') return value.text;
-                if (typeof value.content === 'string') return value.content;
-            }
-            return '';
-        };
-
-        const normalizeEventDelta = (event) => {
-            if (typeof event?.delta === 'string') return event.delta;
-            if (typeof event?.text === 'string') return event.text;
-            if (typeof event?.data?.text === 'string') return event.data.text;
-            return '';
-        };
-
         const responseStream = new ReadableStream({
             async start(controller) {
                 let fullText = "";
@@ -503,120 +486,110 @@ export async function POST(req) {
                             }
                         }
                     };
-
-                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
-                        actionRunner: runWebBrowsingAction,
-                        enableWebSearch,
-                        webSearchOptions: webSearchConfig,
-                        prompt,
-                        historyMessages: effectiveHistoryMessages,
-                        sendEvent,
-                        pushCitations,
-                        isClientAborted: () => clientAborted,
-                        signal: req?.signal,
-                    });
-
-                    if (clientAborted) {
-                        await rollbackCurrentTurn();
-                        try { controller.close(); } catch { /* ignore */ }
-                        return;
-                    }
-
-                    const searchContextSection = webBrowsingContextText || "";
-                    if (searchContextSection) {
-                        searchContextTokens = estimateTokens(searchContextSection);
-                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
-                    }
                     const finalSystemPrompt = await buildDirectChatSystemPrompt({
                         userSystemPrompt,
                         systemPromptSuffix,
                         enableWebSearch,
-                        searchContextSection,
+                        searchContextSection: '',
                         includeEconomyPrefix: providerRoute === 'default',
                     });
-                    const requestBody = {
-                        ...baseRequestBody,
-                        instructions: finalSystemPrompt
+
+                    const requestResponsesJson = async (requestBody) => {
+                        const request = async () => fetch(`${apiBaseUrl}/responses`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify(requestBody)
+                        });
+
+                        let response = await request();
+                        if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
+                            await new Promise((resolve) => setTimeout(resolve, 800));
+                            response = await request();
+                        }
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            const message = extractUpstreamErrorMessage(response.status, errorText);
+                            const upstreamError = new Error(message);
+                            upstreamError.status = response.status;
+                            throw upstreamError;
+                        }
+                        return response.json();
                     };
 
-                    const requestResponses = async () => fetch(`${apiBaseUrl}/responses`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
-                        },
-                        body: JSON.stringify(requestBody)
-                    });
+                    const usePreviousResponseId = Boolean(latestOpenAIResponseId && currentTurnInput);
+                    let nextInput = usePreviousResponseId ? [currentTurnInput] : baseInput;
+                    let previousResponseId = usePreviousResponseId ? latestOpenAIResponseId : '';
+                    let finalPayload = null;
+                    const toolRecords = [];
+                    const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
+                    const maxRounds = enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1;
 
-                    let response = await requestResponses();
-                    if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
-                        await new Promise((resolve) => setTimeout(resolve, 800));
-                        response = await requestResponses();
-                    }
-
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        const message = extractUpstreamErrorMessage(response.status, errorText);
-                        const upstreamError = new Error(message);
-                        upstreamError.status = response.status;
-                        throw upstreamError;
-                    }
-
-                    if (!response.body) {
-                        const upstreamError = new Error('OpenAI 返回了空响应体，请稍后重试');
-                        upstreamError.status = 502;
-                        throw upstreamError;
-                    }
-
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
-                    let buffer = "";
-
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done || clientAborted) break;
-
-                        buffer += decoder.decode(value, { stream: true });
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop();
-
-                        for (const line of lines) {
-                            if (!line.trim() || line.startsWith(':')) continue;
-                            if (!line.startsWith('data: ')) continue;
-
-                            const dataStr = line.slice(6);
-                            if (dataStr === '[DONE]') continue;
-
-                            try {
-                                const event = JSON.parse(dataStr);
-
-                                // 处理 Responses API 和 Chat Completions 事件
-                                if (event.type === 'output.text.delta' || event.type === 'response.output_text.delta') {
-                                    const text = normalizeEventDelta(event);
-                                    fullText += text;
-                                    sendEvent({ type: 'text', content: text });
-                                } else if (event.type === 'response.reasoning.delta' || event.type === 'response.reasoning_summary_text.delta') {
-                                    const thought = normalizeEventDelta(event);
-                                    fullThought += thought;
-                                    sendEvent({ type: 'thought', content: thought });
-                                } else if (Array.isArray(event?.choices)) {
-                                    const choice = event.choices[0] || null;
-                                    const delta = choice?.delta;
-
-                                    const text = normalizeChunkText(delta?.content);
-                                    if (text) {
-                                        fullText += text;
-                                        sendEvent({ type: 'text', content: text });
-                                    }
-
-                                    const thought = normalizeChunkThought(delta?.reasoning_content);
-                                    if (thought) {
-                                        fullThought += thought;
-                                        sendEvent({ type: 'thought', content: thought });
-                                    }
-                                }
-                            } catch { /* ignore parse errors */ }
+                    for (let round = 0; round < maxRounds; round += 1) {
+                        const requestBody = {
+                            ...baseRequestBody,
+                            instructions: finalSystemPrompt,
+                            input: nextInput,
+                        };
+                        if (previousResponseId) {
+                            requestBody.previous_response_id = previousResponseId;
                         }
+                        if (enableWebSearch) {
+                            requestBody.tools = getOpenAIWebTools();
+                        }
+
+                        const payload = await requestResponsesJson(requestBody);
+                        if (clientAborted) break;
+
+                        const thought = extractOpenAIResponseReasoning(payload);
+                        if (thought) {
+                            fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
+                            sendEvent({ type: 'thought', content: thought });
+                        }
+
+                        const functionCalls = enableWebSearch ? extractOpenAIFunctionCalls(payload) : [];
+                        if (functionCalls.length === 0) {
+                            finalPayload = payload;
+                            fullText = extractOpenAIResponseText(payload);
+                            if (fullText) {
+                                sendEvent({ type: 'text', content: fullText });
+                            }
+                            break;
+                        }
+
+                        previousResponseId = typeof payload?.id === 'string' ? payload.id : previousResponseId;
+                        nextInput = [];
+
+                        for (const functionCall of functionCalls) {
+                            const toolExecution = await executeWebBrowsingNativeToolCall({
+                                apiName: functionCall.name,
+                                argumentsInput: functionCall.arguments,
+                                runtime,
+                                sendEvent,
+                                pushCitations,
+                                round: round + 1,
+                                signal: req?.signal,
+                            });
+                            toolRecords.push(toolExecution.toolRecord);
+                            nextInput.push({
+                                type: 'function_call_output',
+                                call_id: functionCall.call_id,
+                                output: toolExecution.outputText,
+                            });
+                        }
+                    }
+
+                    if (enableWebSearch && toolRecords.length > 0) {
+                        searchContextTokens = estimateTokens(toolRecords.map((item) => item.content || '').join('\n\n'));
+                        if (searchContextTokens > 0) {
+                            sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
+                        }
+                    }
+
+                    if (!finalPayload && !clientAborted) {
+                        throw new Error('OpenAI 工具循环未返回最终答案');
                     }
 
                     if (clientAborted) {
@@ -640,9 +613,18 @@ export async function POST(req) {
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
+                            tools: enableWebSearch && toolRecords.length > 0 ? toolRecords : null,
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
-                            parts: [{ text: fullText }]
+                            parts: [{ text: fullText }],
+                            providerState: finalPayload
+                                ? {
+                                    openai: {
+                                        responseId: typeof finalPayload?.id === 'string' ? finalPayload.id : '',
+                                        output: normalizeOpenAIOutputItems(finalPayload?.output),
+                                    },
+                                }
+                                : null,
                         };
                         const persistedConversation = await Conversation.findOneAndUpdate(
                             buildConversationWriteCondition(currentConversationId, user.userId, writePermitTime),

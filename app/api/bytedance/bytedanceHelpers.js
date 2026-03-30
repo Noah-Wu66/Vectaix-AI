@@ -82,6 +82,16 @@ export async function buildBytedanceInputFromHistory(messages, options = {}) {
   for (const msg of messages) {
     if (msg?.role !== "user" && msg?.role !== "model") continue;
 
+    if (msg.role === "model") {
+      const providerOutput = Array.isArray(msg?.providerState?.seed?.output)
+        ? msg.providerState.seed.output
+        : [];
+      if (providerOutput.length > 0) {
+        input.push(...providerOutput);
+        continue;
+      }
+    }
+
     const storedParts = getStoredPartsFromMessage(msg);
     if (!storedParts || storedParts.length === 0) continue;
 

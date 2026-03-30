@@ -11,8 +11,6 @@ import {
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
 } from '@/app/api/chat/utils';
-import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
-import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
 import { buildBytedanceInputFromHistory, buildSeedMessageInput } from '@/app/api/bytedance/bytedanceHelpers';
 import {
     SEED_MODEL_ID,
@@ -29,7 +27,10 @@ import {
 } from '@/lib/server/chat/requestConfig';
 import {
     buildSeedRequestBody,
+    extractSeedFunctionCalls,
+    extractSeedResponseReasoning,
     extractSeedResponseText,
+    normalizeSeedOutputItems,
     normalizeSeedChunkText,
     requestSeedResponses,
 } from '@/lib/server/seed/service';
@@ -44,6 +45,24 @@ import {
     enrichConversationPartsWithBlobIds,
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
+import {
+    createWebBrowsingRuntime,
+    executeWebBrowsingNativeToolCall,
+    getOpenAIWebTools,
+    WEB_BROWSING_MAX_ROUNDS,
+} from '@/lib/server/webBrowsing/nativeTools';
+
+function findLatestSeedResponseId(messages) {
+    if (!Array.isArray(messages)) return '';
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        const responseId = typeof message?.providerState?.seed?.responseId === 'string'
+            ? message.providerState.seed.responseId.trim()
+            : '';
+        if (responseId) return responseId;
+    }
+    return '';
+}
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -285,16 +304,10 @@ export async function POST(req) {
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
-        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
-            apiKey,
-            maxTokens,
-            model: conversationModel,
-            req,
-            systemText,
-            thinkingLevel,
-            userId: user.userId,
-            userText,
-        });
+        const currentTurnInput = !isRegenerateMode && seedInput.length > 0
+            ? seedInput[seedInput.length - 1]
+            : null;
+        const latestSeedResponseId = isRegenerateMode ? '' : findLatestSeedResponseId(effectiveHistoryMessages);
 
         if (user && !currentConversationId) {
             const titleSource = isNonEmptyString(prompt)
@@ -432,116 +445,97 @@ export async function POST(req) {
                         pushUniqueCitations(citations, items);
                     };
 
-                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
-                        actionRunner: runWebBrowsingAction,
-                        enableWebSearch,
-                        webSearchOptions: webSearchConfig,
-                        prompt,
-                        historyMessages: effectiveHistoryMessages,
-                        sendEvent,
-                        pushCitations,
-                        isClientAborted: () => clientAborted,
-                        signal: req?.signal,
-                    });
-
-                    if (clientAborted) {
-                        await rollbackCurrentTurn();
-                        try { controller.close(); } catch { }
-                        return;
-                    }
-
-                    const searchContextSection = webBrowsingContextText || '';
-                    if (searchContextSection) {
-                        searchContextTokens = estimateTokens(searchContextSection);
-                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
-                    }
-
                     const instructions = await buildDirectChatSystemPrompt({
                         userSystemPrompt,
                         systemPromptSuffix,
                         enableWebSearch,
-                        searchContextSection,
+                        searchContextSection: '',
                         includeEconomyPrefix: false,
                     });
-                    const requestBody = buildSeedRequestBody({
-                        model: apiModel || SEED_MODEL_ID,
-                        input: seedInput,
-                        instructions,
-                        maxTokens,
-                        thinkingLevel,
-                    });
+                    const requestSeedJson = async (requestBody) => {
+                        const response = await requestSeedResponses({
+                            apiKey,
+                            requestBody,
+                            req,
+                        });
+                        return response.json();
+                    };
 
-                    const response = await requestSeedResponses({
-                        apiKey,
-                        requestBody,
-                        req,
-                    });
+                    const usePreviousResponseId = Boolean(latestSeedResponseId && currentTurnInput);
+                    let nextInput = usePreviousResponseId ? [currentTurnInput] : seedInput;
+                    let previousResponseId = usePreviousResponseId ? latestSeedResponseId : '';
+                    let finalPayload = null;
+                    const toolRecords = [];
+                    const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
+                    const maxRounds = enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1;
 
-                    if (!response.body) {
-                        throw new Error('Seed 官方接口返回了空响应体，请稍后重试');
-                    }
-
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
-                    let buffer = '';
-
-                    const handleEvent = (event) => {
-                        const eventType = typeof event?.type === 'string' ? event.type : '';
-
-                        if (eventType === 'response.output_text.delta') {
-                            const text = normalizeSeedChunkText(event?.delta);
-                            if (!text) return;
-                            fullText += text;
-                            sendEvent({ type: 'text', content: text });
-                            return;
+                    for (let round = 0; round < maxRounds; round += 1) {
+                        const requestBody = buildSeedRequestBody({
+                            model: apiModel || SEED_MODEL_ID,
+                            input: nextInput,
+                            instructions,
+                            maxTokens,
+                            thinkingLevel,
+                            stream: false,
+                        });
+                        requestBody.store = true;
+                        if (previousResponseId) {
+                            requestBody.previous_response_id = previousResponseId;
+                        }
+                        if (enableWebSearch) {
+                            requestBody.tools = getOpenAIWebTools();
                         }
 
-                        if (eventType === 'response.reasoning.delta' || eventType === 'response.reasoning_summary_text.delta') {
-                            const thought = normalizeSeedChunkText(event?.delta);
-                            if (!thought) return;
-                            fullThought += thought;
+                        const payload = await requestSeedJson(requestBody);
+                        if (clientAborted) break;
+
+                        const thought = extractSeedResponseReasoning(payload);
+                        if (thought) {
+                            fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
                             sendEvent({ type: 'thought', content: thought });
-                            return;
                         }
-                    };
 
-                    const consumeSseBuffer = (final = false) => {
-                        const blocks = buffer.split(/\r?\n\r?\n/);
-                        buffer = final ? '' : (blocks.pop() || '');
-
-                        for (const block of blocks) {
-                            const trimmedBlock = block.trim();
-                            if (!trimmedBlock) continue;
-
-                            const lines = trimmedBlock.split(/\r?\n/);
-                            const dataLines = [];
-                            for (const line of lines) {
-                                if (!line || line.startsWith(':')) continue;
-                                if (line.startsWith('data:')) {
-                                    dataLines.push(line.slice(5).replace(/^\s*/, ''));
-                                }
+                        const functionCalls = enableWebSearch ? extractSeedFunctionCalls(payload) : [];
+                        if (functionCalls.length === 0) {
+                            finalPayload = payload;
+                            fullText = extractSeedResponseText(payload);
+                            if (fullText) {
+                                sendEvent({ type: 'text', content: fullText });
                             }
-
-                            if (!dataLines.length) continue;
-                            const dataStr = dataLines.join('\n');
-                            if (dataStr === '[DONE]') continue;
-
-                            try {
-                                handleEvent(JSON.parse(dataStr));
-                            } catch { }
+                            break;
                         }
-                    };
 
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done || clientAborted) break;
-
-                        buffer += decoder.decode(value, { stream: true });
-                        consumeSseBuffer(false);
+                        previousResponseId = typeof payload?.id === 'string' ? payload.id : previousResponseId;
+                        nextInput = [];
+                        for (const functionCall of functionCalls) {
+                            const toolExecution = await executeWebBrowsingNativeToolCall({
+                                apiName: functionCall.name,
+                                argumentsInput: functionCall.arguments,
+                                runtime,
+                                sendEvent,
+                                pushCitations,
+                                round: round + 1,
+                                signal: req?.signal,
+                            });
+                            toolRecords.push(toolExecution.toolRecord);
+                            nextInput.push({
+                                type: 'function_call_output',
+                                call_id: functionCall.call_id,
+                                output: toolExecution.outputText,
+                            });
+                        }
                     }
 
-                    buffer += decoder.decode();
-                    consumeSseBuffer(true);
+                    if (enableWebSearch && toolRecords.length > 0) {
+                        searchContextTokens = estimateTokens(toolRecords.map((item) => item.content || '').join('\n\n'));
+                        if (searchContextTokens > 0) {
+                            sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
+                        }
+                    }
+
+                    if (!finalPayload && !clientAborted) {
+                        throw new Error('Seed 工具循环未返回最终答案');
+                    }
 
                     if (clientAborted) {
                         await rollbackCurrentTurn();
@@ -562,9 +556,18 @@ export async function POST(req) {
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
+                            tools: enableWebSearch && toolRecords.length > 0 ? toolRecords : null,
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
                             parts: [{ text: fullText }],
+                            providerState: finalPayload
+                                ? {
+                                    seed: {
+                                        responseId: typeof finalPayload?.id === 'string' ? finalPayload.id : '',
+                                        output: normalizeSeedOutputItems(finalPayload?.output),
+                                    },
+                                }
+                                : null,
                         };
 
                         const persistedConversation = await Conversation.findOneAndUpdate(

@@ -6,8 +6,6 @@ import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
     CLAUDE_OPUS_MODEL,
-    MIMO_V2_PRO_MODEL,
-    MINIMAX_M2_7_HIGHSPEED_MODEL,
     getDefaultMaxTokensForModel,
     getModelConfig,
 } from '@/lib/shared/models';
@@ -45,12 +43,15 @@ import {
 } from '@/lib/server/chat/requestConfig';
 import {
     isClaudeModel,
-    isZenmuxAnthropicModel,
     resolveAnthropicApiModel,
     resolveAnthropicProviderConfig,
 } from '@/lib/server/chat/providerAdapters';
-import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
-import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
+import {
+    createWebBrowsingRuntime,
+    executeWebBrowsingNativeToolCall,
+    getAnthropicWebTools,
+    WEB_BROWSING_MAX_ROUNDS,
+} from '@/lib/server/webBrowsing/nativeTools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -101,6 +102,14 @@ async function buildClaudeMessagesFromHistory(messages, options = {}) {
     for (const msg of messages) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
 
+        if (msg.role === 'model' && Array.isArray(msg?.providerState?.anthropic?.content) && msg.providerState.anthropic.content.length > 0) {
+            claudeMessages.push({
+                role: 'assistant',
+                content: msg.providerState.anthropic.content,
+            });
+            continue;
+        }
+
         const storedParts = getStoredPartsFromMessage(msg);
         if (!storedParts || storedParts.length === 0) continue;
 
@@ -117,6 +126,66 @@ async function buildClaudeMessagesFromHistory(messages, options = {}) {
         }
     }
     return claudeMessages;
+}
+
+function normalizeAnthropicAssistantContent(content) {
+    if (!Array.isArray(content)) return [];
+    return content
+        .map((block) => {
+            if (!block || typeof block !== 'object') return null;
+            if (block.type === 'thinking') {
+                return {
+                    type: 'thinking',
+                    thinking: typeof block.thinking === 'string' ? block.thinking : '',
+                    signature: typeof block.signature === 'string' ? block.signature : '',
+                };
+            }
+            if (block.type === 'text') {
+                return {
+                    type: 'text',
+                    text: typeof block.text === 'string' ? block.text : '',
+                };
+            }
+            if (block.type === 'tool_use') {
+                return {
+                    type: 'tool_use',
+                    id: typeof block.id === 'string' ? block.id : '',
+                    name: typeof block.name === 'string' ? block.name : '',
+                    input: block.input && typeof block.input === 'object' ? block.input : {},
+                };
+            }
+            return null;
+        })
+        .filter(Boolean);
+}
+
+function extractAnthropicResponseState(content) {
+    const safeContent = Array.isArray(content) ? content : [];
+    const toolUses = [];
+    let fullThought = '';
+    let fullText = '';
+
+    for (const block of safeContent) {
+        if (!block || typeof block !== 'object') continue;
+        if (block.type === 'thinking' && typeof block.thinking === 'string') {
+            fullThought += block.thinking;
+            continue;
+        }
+        if (block.type === 'text' && typeof block.text === 'string') {
+            fullText += block.text;
+            continue;
+        }
+        if (block.type === 'tool_use') {
+            toolUses.push(block);
+        }
+    }
+
+    return {
+        fullText: fullText.trim(),
+        fullThought: fullThought.trim(),
+        toolUses,
+        storedContent: normalizeAnthropicAssistantContent(safeContent),
+    };
 }
 
 export async function POST(req) {
@@ -192,7 +261,7 @@ export async function POST(req) {
         let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
         let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
-        const supportedAnthropicModel = isClaudeModel(model) || isZenmuxAnthropicModel(model);
+        const supportedAnthropicModel = isClaudeModel(model);
         if (!supportedAnthropicModel) {
             return Response.json({ error: 'unsupported anthropic-compatible model' }, { status: 400 });
         }
@@ -356,7 +425,7 @@ export async function POST(req) {
         const modelConfig = getModelConfig(model);
         const supportsMaxTokensControl = modelConfig?.supportsMaxTokensControl === true;
         const supportsThinkingLevelControl = modelConfig?.supportsThinkingLevelControl === true;
-        const maxTokenCap = typeof model === "string" && (model === MIMO_V2_PRO_MODEL || model === MINIMAX_M2_7_HIGHSPEED_MODEL) ? 131072 : (model.startsWith(CLAUDE_OPUS_MODEL) ? 128000 : 64000);
+        const maxTokenCap = model.startsWith(CLAUDE_OPUS_MODEL) ? 128000 : 64000;
         try {
             maxTokens = supportsMaxTokensControl
                 ? parseMaxTokens(config?.maxTokens)
@@ -374,15 +443,6 @@ export async function POST(req) {
         // 是否启用联网搜索
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
-        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
-            maxTokens,
-            model,
-            req,
-            systemText,
-            thinkingLevel,
-            userId: user.userId,
-            userText,
-        });
 
         if (user && !currentConversationId) {
             const titleSource = isNonEmptyString(prompt)
@@ -521,77 +581,96 @@ export async function POST(req) {
                         }
                     };
 
-                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
-                        actionRunner: runWebBrowsingAction,
-                        enableWebSearch,
-                        webSearchOptions: webSearchConfig,
-                        prompt,
-                        historyMessages: effectiveHistoryMessages,
-                        sendEvent,
-                        pushCitations,
-                        isClientAborted: () => clientAborted,
-                        signal: req?.signal,
-                    });
-
-                    if (clientAborted) {
-                        await rollbackCurrentTurn();
-                        try { controller.close(); } catch { /* ignore */ }
-                        return;
-                    }
-
-                    const searchContextSection = webBrowsingContextText || "";
-                    if (searchContextSection) {
-                        searchContextTokens = estimateTokens(searchContextSection);
-                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
-                    }
                     const systemPrompt = await buildDirectChatSystemPrompt({
                         userSystemPrompt,
                         systemPromptSuffix,
                         enableWebSearch,
-                        searchContextSection,
+                        searchContextSection: '',
                         includeEconomyPrefix: providerRoute === 'default',
                     });
-                    const requestParams = {
-                        model: apiModel,
-                        max_tokens: normalizedMaxTokens,
-                        system: [
-                            {
-                                type: "text",
-                                text: systemPrompt,
-                                cache_control: {
-                                    type: "ephemeral",
-                                    ttl: "1h"
+                    const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
+                    const workingMessages = [...claudeMessages];
+                    const toolRecords = [];
+                    let storedAssistantContent = [];
+                    let finished = false;
+
+                    for (let round = 0; round < (enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1); round += 1) {
+                        const requestParams = {
+                            model: apiModel,
+                            max_tokens: normalizedMaxTokens,
+                            system: [
+                                {
+                                    type: "text",
+                                    text: systemPrompt,
+                                    cache_control: {
+                                        type: "ephemeral",
+                                        ttl: "1h"
+                                    }
                                 }
-                            }
-                        ],
-                        messages: claudeMessages,
-                        stream: true,
-                    };
-
-                    if (isClaudeModel(model)) {
-                        requestParams.thinking = { type: "adaptive" };
-                        requestParams.output_config = {
-                            effort: thinkingLevel
+                            ],
+                            messages: workingMessages,
+                            ...(enableWebSearch ? { tools: getAnthropicWebTools() } : {}),
                         };
-                    } else if (supportsThinkingLevelControl && thinkingLevel) {
-                        requestParams.thinking = { type: thinkingLevel };
-                    }
 
-                    const stream = await client.messages.stream(requestParams);
+                        if (isClaudeModel(model)) {
+                            requestParams.thinking = { type: "adaptive" };
+                            requestParams.output_config = {
+                                effort: thinkingLevel
+                            };
+                        } else if (supportsThinkingLevelControl && thinkingLevel) {
+                            requestParams.thinking = { type: thinkingLevel };
+                        }
 
-                    for await (const event of stream) {
+                        const response = await client.messages.create(requestParams);
                         if (clientAborted) break;
 
-                        if (event.type === 'content_block_delta') {
-                            const delta = event.delta;
-                            if (delta.type === 'thinking_delta') {
-                                fullThought += delta.thinking;
-                                sendEvent({ type: 'thought', content: delta.thinking });
-                            } else if (delta.type === 'text_delta') {
-                                fullText += delta.text;
-                                sendEvent({ type: 'text', content: delta.text });
-                            }
+                        const state = extractAnthropicResponseState(response?.content);
+                        if (state.fullThought) {
+                            fullThought = fullThought ? `${fullThought}\n\n${state.fullThought}` : state.fullThought;
+                            sendEvent({ type: 'thought', content: state.fullThought });
                         }
+
+                        if (!enableWebSearch || state.toolUses.length === 0 || response?.stop_reason !== 'tool_use') {
+                            fullText = state.fullText;
+                            storedAssistantContent = state.storedContent;
+                            if (fullText) {
+                                sendEvent({ type: 'text', content: fullText });
+                            }
+                            finished = true;
+                            break;
+                        }
+
+                        workingMessages.push({ role: 'assistant', content: response.content });
+                        const toolResultBlocks = [];
+                        for (const toolUse of state.toolUses) {
+                            const toolExecution = await executeWebBrowsingNativeToolCall({
+                                apiName: toolUse?.name,
+                                argumentsInput: toolUse?.input,
+                                runtime,
+                                sendEvent,
+                                pushCitations,
+                                round: round + 1,
+                                signal: req?.signal,
+                            });
+                            toolRecords.push(toolExecution.toolRecord);
+                            toolResultBlocks.push({
+                                type: 'tool_result',
+                                tool_use_id: toolUse.id,
+                                content: toolExecution.outputText,
+                            });
+                        }
+                        workingMessages.push({ role: 'user', content: toolResultBlocks });
+                    }
+
+                    if (enableWebSearch && toolRecords.length > 0) {
+                        searchContextTokens = estimateTokens(toolRecords.map((item) => item.content || '').join('\n\n'));
+                        if (searchContextTokens > 0) {
+                            sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
+                        }
+                    }
+
+                    if (!finished && !clientAborted) {
+                        throw new Error('Anthropic 工具循环未返回最终答案');
                     }
 
                     if (clientAborted) {
@@ -615,9 +694,15 @@ export async function POST(req) {
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
+                            tools: enableWebSearch && toolRecords.length > 0 ? toolRecords : null,
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
-                            parts: [{ text: fullText }]
+                            parts: [{ text: fullText }],
+                            providerState: {
+                                anthropic: {
+                                    content: storedAssistantContent,
+                                },
+                            },
                         };
                         const persistedConversation = await Conversation.findOneAndUpdate(
                             buildConversationWriteCondition(currentConversationId, user.userId, writePermitTime),

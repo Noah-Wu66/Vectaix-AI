@@ -30,8 +30,12 @@ import {
     enrichConversationPartsWithBlobIds,
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
-import { runWebBrowsingSession } from '@/lib/server/webBrowsing/session';
-import { runWebBrowsingActionText } from '@/lib/server/webBrowsing/actionRunner';
+import {
+    createWebBrowsingRuntime,
+    executeWebBrowsingNativeToolCall,
+    getDeepSeekWebTools,
+    WEB_BROWSING_MAX_ROUNDS,
+} from '@/lib/server/webBrowsing/nativeTools';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -254,14 +258,6 @@ export async function POST(req) {
 
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
-        const runWebBrowsingAction = ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
-            maxTokens,
-            model,
-            req,
-            systemText,
-            userId: user.userId,
-            userText,
-        });
 
         if (user && !currentConversationId) {
             const title = prompt.length > 30 ? `${prompt.substring(0, 30)}...` : prompt;
@@ -379,107 +375,157 @@ export async function POST(req) {
                             }
                         }
                     };
-
-                    const { contextText: webBrowsingContextText } = await runWebBrowsingSession({
-                        actionRunner: runWebBrowsingAction,
-                        enableWebSearch,
-                        webSearchOptions: webSearchConfig,
-                        prompt,
-                        historyMessages: effectiveHistoryMessages,
-                        sendEvent,
-                        pushCitations,
-                        isClientAborted: () => clientAborted,
-                        signal: req?.signal,
-                    });
-
-                    if (clientAborted) {
-                        await rollbackCurrentTurn();
-                        try { controller.close(); } catch { }
-                        return;
-                    }
-
-                    const searchContextSection = webBrowsingContextText || '';
-                    if (searchContextSection) {
-                        searchContextTokens = estimateTokens(searchContextSection);
-                        sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
-                    }
-
-                    // 构建最终请求
                     const finalSystemPrompt = await buildDirectChatSystemPrompt({
                         userSystemPrompt,
                         systemPromptSuffix,
                         enableWebSearch,
-                        searchContextSection,
+                        searchContextSection: '',
                         includeEconomyPrefix: false,
                     });
                     const finalMessages = [
                         { role: 'system', content: finalSystemPrompt },
                         ...deepseekMessages
                     ];
+                    const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
+                    const toolRecords = [];
 
-                    // DeepSeek reasoner 使用 max_tokens，上限 65536
-                    const requestBody = {
-                        model: apiModel,
-                        messages: finalMessages,
-                        stream: true,
-                        max_tokens: clampMaxTokens(maxTokens, 65536),
-                    };
+                    if (enableWebSearch) {
+                        const loopMessages = [...finalMessages];
+                        let finished = false;
 
-                    const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
-                        },
-                        body: JSON.stringify(requestBody)
-                    });
+                        for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
+                            const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${apiKey}`
+                                },
+                                body: JSON.stringify({
+                                    model: apiModel,
+                                    messages: loopMessages,
+                                    max_tokens: clampMaxTokens(maxTokens, 65536),
+                                    tools: getDeepSeekWebTools(),
+                                })
+                            });
 
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
+                            if (!response.ok) {
+                                const errorText = await response.text();
+                                throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
+                            }
+
+                            const payload = await response.json();
+                            const message = payload?.choices?.[0]?.message || {};
+                            const thought = typeof message?.reasoning_content === 'string' ? message.reasoning_content : '';
+                            if (thought) {
+                                fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
+                                sendEvent({ type: 'thought', content: thought });
+                            }
+
+                            const toolCalls = Array.isArray(message?.tool_calls)
+                                ? message.tool_calls.filter((item) => typeof item?.function?.name === 'string' && item.function.name)
+                                : [];
+                            if (toolCalls.length === 0) {
+                                fullText = typeof message?.content === 'string' ? message.content : '';
+                                if (fullText) {
+                                    sendEvent({ type: 'text', content: fullText });
+                                }
+                                finished = true;
+                                break;
+                            }
+
+                            loopMessages.push({
+                                role: 'assistant',
+                                content: typeof message?.content === 'string' ? message.content : '',
+                                ...(thought ? { reasoning_content: thought } : {}),
+                                tool_calls: toolCalls,
+                            });
+
+                            for (const toolCall of toolCalls) {
+                                const toolExecution = await executeWebBrowsingNativeToolCall({
+                                    apiName: toolCall?.function?.name,
+                                    argumentsInput: toolCall?.function?.arguments,
+                                    runtime,
+                                    sendEvent,
+                                    pushCitations,
+                                    round: round + 1,
+                                    signal: req?.signal,
+                                });
+                                toolRecords.push(toolExecution.toolRecord);
+                                loopMessages.push({
+                                    role: 'tool',
+                                    tool_call_id: toolCall.id,
+                                    content: toolExecution.outputText,
+                                });
+                            }
+                        }
+
+                        if (!finished && !clientAborted) {
+                            throw new Error('DeepSeek 工具循环未返回最终答案');
+                        }
+                    } else {
+                        const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`
+                            },
+                            body: JSON.stringify({
+                                model: apiModel,
+                                messages: finalMessages,
+                                stream: true,
+                                max_tokens: clampMaxTokens(maxTokens, 65536),
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
+                        }
+
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        let buffer = '';
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done || clientAborted) break;
+
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop();
+
+                            for (const line of lines) {
+                                if (!line.trim() || line.startsWith(':')) continue;
+                                if (!line.startsWith('data: ')) continue;
+
+                                const dataStr = line.slice(6);
+                                if (dataStr === '[DONE]') continue;
+
+                                try {
+                                    const event = JSON.parse(dataStr);
+                                    const choice = event?.choices?.[0];
+                                    if (!choice) continue;
+
+                                    const delta = choice.delta;
+                                    if (delta?.reasoning_content) {
+                                        const thought = delta.reasoning_content;
+                                        fullThought += thought;
+                                        sendEvent({ type: 'thought', content: thought });
+                                    }
+                                    if (delta?.content) {
+                                        const text = delta.content;
+                                        fullText += text;
+                                        sendEvent({ type: 'text', content: text });
+                                    }
+                                } catch { }
+                            }
+                        }
                     }
 
-                    // 解析 SSE 流式响应
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
-                    let buffer = '';
-
-                    while (true) {
-                        const { value, done } = await reader.read();
-                        if (done || clientAborted) break;
-
-                        buffer += decoder.decode(value, { stream: true });
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop();
-
-                        for (const line of lines) {
-                            if (!line.trim() || line.startsWith(':')) continue;
-                            if (!line.startsWith('data: ')) continue;
-
-                            const dataStr = line.slice(6);
-                            if (dataStr === '[DONE]') continue;
-
-                            try {
-                                const event = JSON.parse(dataStr);
-                                const choice = event?.choices?.[0];
-                                if (!choice) continue;
-
-                                const delta = choice.delta;
-
-                                // DeepSeek reasoner 的思考过程通过 reasoning_content 字段传递
-                                if (delta?.reasoning_content) {
-                                    const thought = delta.reasoning_content;
-                                    fullThought += thought;
-                                    sendEvent({ type: 'thought', content: thought });
-                                }
-
-                                // 最终答案通过 content 字段传递
-                                if (delta?.content) {
-                                    const text = delta.content;
-                                    fullText += text;
-                                    sendEvent({ type: 'text', content: text });
-                                }
-                            } catch { }
+                    if (enableWebSearch && toolRecords.length > 0) {
+                        searchContextTokens = estimateTokens(toolRecords.map((item) => item.content || '').join('\n\n'));
+                        if (searchContextTokens > 0) {
+                            sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                         }
                     }
 
@@ -504,6 +550,7 @@ export async function POST(req) {
                             content: fullText,
                             thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
+                            tools: enableWebSearch && toolRecords.length > 0 ? toolRecords : null,
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
                             parts: [{ text: fullText }]

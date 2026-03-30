@@ -5,6 +5,90 @@ import {
 } from "@/app/api/chat/utils";
 import { buildAttachmentTextBlock } from "@/lib/server/files/service";
 
+function sanitizeJsonValue(value, depth = 0) {
+  if (depth > 6) return undefined;
+  if (typeof value === "string") return value.slice(0, 12000);
+  if (typeof value === "number" || typeof value === "boolean" || value == null) return value;
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 100)
+      .map((item) => sanitizeJsonValue(item, depth + 1))
+      .filter((item) => item !== undefined);
+  }
+  if (!value || typeof value !== "object") return undefined;
+  const next = {};
+  for (const [key, item] of Object.entries(value).slice(0, 80)) {
+    const sanitized = sanitizeJsonValue(item, depth + 1);
+    if (sanitized !== undefined) next[key] = sanitized;
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function normalizeChunkText(value) {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item.text === "string") return item.text;
+      if (item && typeof item.content === "string") return item.content;
+      return "";
+    }).join("");
+  }
+  if (value && typeof value === "object") {
+    if (typeof value.text === "string") return value.text;
+    if (typeof value.content === "string") return value.content;
+  }
+  return "";
+}
+
+export function normalizeOpenAIOutputItems(output) {
+  if (!Array.isArray(output)) return [];
+  return output
+    .map((item) => sanitizeJsonValue(item))
+    .filter((item) => item && typeof item === "object");
+}
+
+export function extractOpenAIResponseText(payload) {
+  if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
+    return payload.output_text.trim();
+  }
+
+  const outputs = Array.isArray(payload?.output) ? payload.output : [];
+  return outputs
+    .filter((item) => item?.type === "message")
+    .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
+    .map((item) => normalizeChunkText(item?.text ?? item))
+    .join("")
+    .trim();
+}
+
+export function extractOpenAIResponseReasoning(payload) {
+  const outputs = Array.isArray(payload?.output) ? payload.output : [];
+  return outputs
+    .filter((item) => item?.type === "reasoning")
+    .flatMap((item) => {
+      const summary = Array.isArray(item?.summary) ? item.summary : [];
+      if (summary.length > 0) return summary;
+      const content = Array.isArray(item?.content) ? item.content : [];
+      return content;
+    })
+    .map((item) => normalizeChunkText(item?.text ?? item))
+    .join("")
+    .trim();
+}
+
+export function extractOpenAIFunctionCalls(payload) {
+  const outputs = Array.isArray(payload?.output) ? payload.output : [];
+  return outputs
+    .filter((item) => item?.type === "function_call" && typeof item?.name === "string" && item.name && typeof item?.call_id === "string" && item.call_id)
+    .map((item) => ({
+      id: typeof item?.id === "string" ? item.id : "",
+      call_id: item.call_id,
+      name: item.name,
+      arguments: typeof item?.arguments === "string" ? item.arguments : JSON.stringify(item?.arguments || {}),
+    }));
+}
+
 export async function storedPartToOpenAIPart(part, role, options = {}) {
   if (!part || typeof part !== "object") return null;
 
@@ -51,6 +135,16 @@ export async function buildOpenAIInputFromHistory(messages, options = {}) {
   const input = [];
   for (const msg of messages) {
     if (msg?.role !== "user" && msg?.role !== "model") continue;
+
+    if (msg.role === "model") {
+      const providerOutput = Array.isArray(msg?.providerState?.openai?.output)
+        ? msg.providerState.openai.output
+        : [];
+      if (providerOutput.length > 0) {
+        input.push(...providerOutput);
+        continue;
+      }
+    }
 
     const storedParts = getStoredPartsFromMessage(msg);
     if (!storedParts || storedParts.length === 0) continue;
