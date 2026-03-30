@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { X, Plus, Trash2, Edit3, MessageSquareQuote, Check } from "lucide-react";
 import { useToast } from "./ToastProvider";
@@ -18,6 +19,11 @@ export default function SystemPromptModal({
   const toast = useToast();
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // Inline edit state for preset
   const [editingId, setEditingId] = useState(null);
@@ -97,7 +103,9 @@ export default function SystemPromptModal({
     }
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -238,6 +246,7 @@ export default function SystemPromptModal({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
