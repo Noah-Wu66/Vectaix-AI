@@ -19,8 +19,6 @@ export default function ChatLayout({
   onFontSizeChange,
   completionSoundVolume,
   onCompletionSoundVolumeChange,
-  avatar,
-  onAvatarChange,
   nickname,
   onNicknameChange,
   sidebarOpen,

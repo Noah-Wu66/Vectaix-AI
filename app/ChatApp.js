@@ -223,29 +223,156 @@ export default function ChatApp() {
     setAvatar,
     nickname,
     setNickname,
-    webSearch,
-    chatSystemPrompt,
-    historyLimit,
-    currentConversationId,
-    setCurrentConversationId,
-    fetchConversations,
-    chatAbortRef,
-    chatRequestLockRef,
-    userInterruptedRef,
-    editingMsgIndex,
-    editingContent,
-    editingImageAction,
-    editingImage,
-    setEditingMsgIndex,
-    setEditingContent,
-    setEditingImageAction,
-    setEditingImage,
-    completionSoundVolume,
-    onSensitiveRefusal: handleSensitiveRefusal,
-    onAuthExpired: handleAuthExpired,
-    onConversationMissing: handleConversationMissing,
-    onConversationActivity: () => {},
-  });
+  } = useUserSettings();
+  useThemeMode(themeMode);
+  const [editingMsgIndex, setEditingMsgIndex] = useState(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [editingImageAction, setEditingImageAction] = useState("keep");
+  const [editingImage, setEditingImage] = useState(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [composerPrefill, setComposerPrefill] = useState({ text: "", nonce: 0 });
+  const [serverSettingsReady, setServerSettingsReady] = useState(false);
+
+  const chatEndRef = useRef(null);
+  const messageListRef = useRef(null);
+  const userInterruptedRef = useRef(false);
+  const wasStreamingRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
+  const lastUserScrollAtRef = useRef(0);
+  const scrollRafRef = useRef(0);
+  const chatAbortRef = useRef(null);
+  const chatRequestLockRef = useRef(false);
+  const syncSettingsTimeoutRef = useRef(null);
+  const pendingSettingsRef = useRef({});
+  const pendingConversationIdRef = useRef(null);
+  const lastTextModelRef = useRef(DEFAULT_MODEL);
+  const hasRestoredConversationRef = useRef(false);
+  const currentConversationIdRef = useRef(null);
+  const isStreamingRef = useRef(false);
+  const isStreaming = messages.some((message) => message?.isStreaming === true);
+  isStreamingRef.current = isStreaming;
+  const SCROLL_BOTTOM_THRESHOLD = 80;
+  const lastSettingsErrorRef = useRef(null);
+
+  useEffect(() => {
+    if (settingsError && settingsError !== lastSettingsErrorRef.current) {
+      toast.error(settingsError);
+      lastSettingsErrorRef.current = settingsError;
+    }
+  }, [settingsError, toast]);
+
+  const stopOngoingChatWork = () => {
+    chatAbortRef.current?.abort();
+    chatAbortRef.current = null;
+    chatRequestLockRef.current = false;
+    userInterruptedRef.current = false;
+    if (syncSettingsTimeoutRef.current) {
+      clearTimeout(syncSettingsTimeoutRef.current);
+      syncSettingsTimeoutRef.current = null;
+    }
+    pendingSettingsRef.current = {};
+    pendingConversationIdRef.current = null;
+    setLoading(false);
+  };
+
+  const handleAuthExpired = () => {
+    stopOngoingChatWork();
+    hasRestoredConversationRef.current = false;
+    setServerSettingsReady(false);
+    setUser(null);
+    setConversations([]);
+    setCurrentConversationId(null);
+    setMessages([]);
+    setSettingsError(null);
+    setShowProfileModal(false);
+    setShowAuthModal(true);
+    setAuthMode("login");
+    setPassword("");
+    setConfirmPassword("");
+  };
+
+  const distanceToBottom = (el) => {
+    if (!el) return 0;
+    const top = Number.isFinite(el.scrollTop) ? el.scrollTop : 0;
+    const height = Number.isFinite(el.clientHeight) ? el.clientHeight : 0;
+    const scrollHeight = Number.isFinite(el.scrollHeight) ? el.scrollHeight : 0;
+    return Math.max(0, scrollHeight - (top + height));
+  };
+
+  const isNearBottom = (el) => distanceToBottom(el) <= SCROLL_BOTTOM_THRESHOLD;
+
+  const scrollToBottom = () => {
+    const el = messageListRef.current;
+    if (!el) return;
+    const top = Math.max(0, el.scrollHeight - el.clientHeight);
+    el.scrollTop = top;
+  };
+
+  const scheduleScrollToBottom = () => {
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      scrollToBottom();
+    });
+  };
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user) {
+          setUser(data.user);
+          fetchConversations();
+          Promise.resolve(fetchSettings()).finally(() => {
+            setServerSettingsReady(true);
+          });
+        } else {
+          handleAuthExpired();
+        }
+      })
+      .catch(() => {
+        handleAuthExpired();
+      });
+  }, []);
+
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+    if (typeof window === "undefined") return;
+    if (currentConversationId) {
+      window.localStorage.setItem("vectaix-current-conversation", currentConversationId);
+      return;
+    }
+    window.localStorage.removeItem("vectaix-current-conversation");
+  }, [currentConversationId]);
+
+  useEffect(() => {
+    if (!user || !serverSettingsReady || hasRestoredConversationRef.current || conversations.length === 0) return;
+    hasRestoredConversationRef.current = true;
+    if (typeof window === "undefined") return;
+    const savedConversationId = window.localStorage.getItem("vectaix-current-conversation");
+    if (!savedConversationId) return;
+    const exists = conversations.some((conversation) => conversation?._id === savedConversationId);
+    if (exists) {
+      loadConversation(savedConversationId, { silent: true });
+    }
+  }, [conversations, serverSettingsReady, user]);
+
+  useEffect(() => {
+    return () => {
+      chatAbortRef.current?.abort();
+      chatAbortRef.current = null;
+      if (scrollRafRef.current) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = 0;
+      }
+      if (syncSettingsTimeoutRef.current) {
+        clearTimeout(syncSettingsTimeoutRef.current);
+        syncSettingsTimeoutRef.current = null;
+      }
+      pendingSettingsRef.current = {};
+      pendingConversationIdRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!wasStreamingRef.current && isStreaming) {
@@ -414,6 +541,98 @@ export default function ChatApp() {
     setChatMode(normalizeChatRuntimeMode(settings.mode));
     setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
   };
+
+  const sortConversations = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.slice().sort((a, b) => {
+      const ap = a?.pinned ? 1 : 0;
+      const bp = b?.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+
+      const at = new Date(a?.updatedAt || 0).getTime();
+      const bt = new Date(b?.updatedAt || 0).getTime();
+      return bt - at;
+    });
+  };
+
+  const fetchConversations = async () => {
+    try {
+      const res = await fetch("/api/conversations");
+      if (res.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      if (!res.ok) return;
+      let nextConversations = [];
+      setConversations(() => {
+        nextConversations = data?.conversations
+          ? sortConversations(data.conversations)
+          : [];
+        return nextConversations;
+      });
+      if (currentConversationId && !nextConversations.some((conv) => conv._id === currentConversationId)) {
+        setCurrentConversationId(null);
+        setMessages([]);
+      }
+    } catch { }
+  };
+
+  const handleConversationMissing = () => {
+    stopOngoingChatWork();
+    setCurrentConversationId(null);
+    setMessages([]);
+    fetchConversations();
+  };
+
+  const handleSensitiveRefusal = (payload) => {
+    const promptText = typeof payload === "string" ? payload : payload?.prompt;
+    const shouldPrefill = typeof payload === "object" ? payload?.shouldPrefill !== false : true;
+    toast.warning("消息包含敏感内容，请修改后重新尝试");
+    if (shouldPrefill && typeof promptText === "string" && promptText.trim()) {
+      setComposerPrefill({ text: promptText, nonce: Date.now() });
+    }
+  };
+
+  const actions = createChatAppActions({
+    toast,
+    messages,
+    setMessages,
+    loading,
+    setLoading,
+    model,
+    chatMode,
+    thinkingLevels,
+    mediaResolution,
+    maxTokens,
+    webSearch,
+    chatSystemPrompt,
+    historyLimit,
+    currentConversationId,
+    setCurrentConversationId,
+    fetchConversations,
+    chatAbortRef,
+    chatRequestLockRef,
+    userInterruptedRef,
+    editingMsgIndex,
+    editingContent,
+    editingImageAction,
+    editingImage,
+    setEditingMsgIndex,
+    setEditingContent,
+    setEditingImageAction,
+    setEditingImage,
+    completionSoundVolume,
+    onSensitiveRefusal: handleSensitiveRefusal,
+    onAuthExpired: handleAuthExpired,
+    onConversationMissing: handleConversationMissing,
+    onConversationActivity: () => {},
+  });
 
   const persistConversationModel = async (conversationIdToUpdate, nextModel) => {
     if (!conversationIdToUpdate || !nextModel || isCouncilModel(nextModel)) return;
@@ -807,8 +1026,6 @@ export default function ChatApp() {
           onFontSizeChange={updateFontSize}
           completionSoundVolume={completionSoundVolume}
           onCompletionSoundVolumeChange={setCompletionSoundVolume}
-          avatar={userAvatar}
-          onAvatarChange={onAvatarChange}
           nickname={nickname}
           onNicknameChange={setNickname}
           sidebarOpen={sidebarOpen}
