@@ -4,7 +4,7 @@ import {
   addUserPrompt,
   deleteUserPrompt,
   getUserSettings,
-  updateUserAvatar,
+  updateUserProfileSettings,
   updateUserPrompt,
 } from "@/lib/server/settings/service";
 
@@ -72,7 +72,7 @@ export async function PUT(req) {
   if (!parsed.ok) return Response.json({ error: "请求体格式错误" }, { status: 400 });
 
   try {
-    const settings = await updateUserAvatar(user.userId, parsed.body?.avatar);
+    const settings = await updateUserProfileSettings(user.userId, parsed.body || {});
     return Response.json({ settings });
   } catch (error) {
     return Response.json({ error: error?.message || "更新失败" }, { status: 400 });

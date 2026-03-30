@@ -345,6 +345,7 @@ export async function POST(req) {
         }
 
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
+        const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
         const baseSystemText = await injectCurrentTimeSystemReminder(userSystemPrompt);
         const generationConfig = (config?.generationConfig && typeof config.generationConfig === 'object' && !Array.isArray(config.generationConfig))
             ? config.generationConfig
@@ -550,7 +551,7 @@ export async function POST(req) {
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
 
-                    const finalSystemPrompt = `${baseSystemText}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
+                    const finalSystemPrompt = `${baseSystemText}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}${systemPromptSuffix.trim() ? `\n\n${systemPromptSuffix}` : ''}`;
                     const finalConfig = {
                         ...baseConfig,
                         systemInstruction: {

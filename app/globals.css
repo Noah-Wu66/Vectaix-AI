@@ -705,6 +705,7 @@ h1, h2, h3, h4, h5, h6 {
   --loading-sweep-spacing: 0.22em;
   --loading-sweep-line-height: 1;
   transform: translateY(-0.15em);
+  padding-left: var(--loading-sweep-spacing);
 }
 
 .loading-sweep::after {

@@ -89,6 +89,7 @@ export default function MessageList({
   onRegenerateModelMessage,
   onStartEdit,
   userAvatar,
+  userNickname,
   onSendStarterPrompt,
 }) {
   const editTextareaRef = useRef(null);
@@ -358,6 +359,20 @@ export default function MessageList({
               )}
 
               <div className={`flex flex-col w-full ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                {msg.role === "user" && (
+                  <div className="flex items-center gap-2 pr-1 mb-1 relative">
+                    <span className="text-[11px] text-zinc-500 font-medium truncate max-w-[150px]">
+                      {userNickname || "您"}
+                    </span>
+                    {userAvatar ? (
+                      <img src={userAvatar} alt="" className="w-5 h-5 rounded-md object-cover ring-1 ring-zinc-200/50" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-md bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-500">
+                        {userNickname?.[0] || "您"}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {msg.role === "model" && (msg.thought || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState) && (
                   <ThinkingBlock
                     thought={msg.thought}

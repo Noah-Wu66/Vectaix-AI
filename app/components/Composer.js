@@ -49,6 +49,12 @@ export default function Composer({
   messages,
   webSearch,
   setWebSearch,
+  chatSystemPrompt,
+  onChatSystemPromptSave,
+  systemPrompts,
+  addSystemPrompt,
+  updateSystemPrompt,
+  deleteSystemPrompt,
   onSend,
   onStop,
   prefill,
@@ -392,10 +398,17 @@ export default function Composer({
           {!isCouncilSelected ? (
             <SettingsMenu
               model={model}
+              chatMode={chatMode}
               onModelChange={onModelChange}
               ready={modelReady}
               webSearch={webSearch}
               setWebSearch={setWebSearch}
+              chatSystemPrompt={chatSystemPrompt}
+              onChatSystemPromptSave={onChatSystemPromptSave}
+              systemPrompts={systemPrompts}
+              addSystemPrompt={addSystemPrompt}
+              updateSystemPrompt={updateSystemPrompt}
+              deleteSystemPrompt={deleteSystemPrompt}
             />
           ) : null}
         </div>

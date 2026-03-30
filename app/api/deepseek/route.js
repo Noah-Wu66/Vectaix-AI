@@ -252,9 +252,9 @@ export async function POST(req) {
             return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
 
-        const baseSystemPrompt = await injectCurrentTimeSystemReminder(
-            parseSystemPrompt(config?.systemPrompt)
-        );
+        const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
+        const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
+        const baseSystemPrompt = await injectCurrentTimeSystemReminder(userSystemPrompt);
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
@@ -411,7 +411,7 @@ export async function POST(req) {
                     }
 
                     // 构建最终请求
-                    const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
+                    const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}${systemPromptSuffix.trim() ? `\n\n${systemPromptSuffix}` : ''}`;
                     const finalMessages = [
                         { role: 'system', content: finalSystemPrompt },
                         ...deepseekMessages

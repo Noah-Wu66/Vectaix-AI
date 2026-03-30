@@ -16,6 +16,14 @@ const UserSettingsSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    nickname: {
+        type: String,
+        default: ''
+    },
+    chatSystemPrompt: {
+        type: String,
+        default: ''
+    },
     modelRoutes: {
         openai: {
             type: String,

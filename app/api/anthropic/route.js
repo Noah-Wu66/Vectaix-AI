@@ -373,6 +373,7 @@ export async function POST(req) {
         }
         const normalizedMaxTokens = clampMaxTokens(maxTokens, maxTokenCap);
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
+        const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 
@@ -552,7 +553,7 @@ export async function POST(req) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
-                    const systemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
+                    const systemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}${systemPromptSuffix.trim() ? `\n\n${systemPromptSuffix}` : ''}`;
                     const requestParams = {
                         model: apiModel,
                         max_tokens: normalizedMaxTokens,

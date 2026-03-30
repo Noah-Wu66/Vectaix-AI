@@ -286,8 +286,10 @@ export async function POST(req) {
         }
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
+        const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
+        const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(
-            parseSystemPrompt(config?.systemPrompt)
+            userSystemPrompt
         );
         const formattingGuard = 'Output formatting rules: Do not use Markdown horizontal rules or standalone lines of \'---\'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.';
         const webSearchGuard = buildWebSearchGuide(enableWebSearch).trim();
@@ -462,7 +464,7 @@ export async function POST(req) {
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
 
-                    const instructions = [baseSystemPrompt, formattingGuard, webSearchGuard, searchContextSection]
+                    const instructions = [baseSystemPrompt, formattingGuard, webSearchGuard, searchContextSection, systemPromptSuffix]
                         .filter((item) => typeof item === 'string' && item.trim())
                         .join('\n\n');
                     const requestBody = buildSeedRequestBody({

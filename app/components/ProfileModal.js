@@ -49,6 +49,8 @@ export default function ProfileModal({
   onCompletionSoundVolumeChange,
   avatar,
   onAvatarChange,
+  nickname,
+  onNicknameChange,
 }) {
   const toast = useToast();
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -66,6 +68,8 @@ export default function ProfileModal({
   const [routeSaving, setRouteSaving] = useState(false);
   const [modelRoutes, setModelRoutes] = useState(EMPTY_MODEL_ROUTES);
   const [savedModelRoutes, setSavedModelRoutes] = useState(EMPTY_MODEL_ROUTES);
+  const [nicknameDraft, setNicknameDraft] = useState("");
+  const [nicknameSaving, setNicknameSaving] = useState(false);
   const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
     ? Number(completionSoundVolume)
     : 60;
@@ -82,6 +86,8 @@ export default function ProfileModal({
     modelRoutes.openai !== savedModelRoutes.openai ||
     modelRoutes.opus !== savedModelRoutes.opus ||
     modelRoutes.gemini !== savedModelRoutes.gemini;
+  const savedNickname = typeof nickname === "string" ? nickname : "";
+  const hasNicknameChanges = nicknameDraft !== savedNickname;
 
   const handleAvatarSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -145,6 +151,11 @@ export default function ProfileModal({
     };
   }, [open, canSwitchRoutes, toast]);
 
+  useEffect(() => {
+    if (!open) return;
+    setNicknameDraft(savedNickname);
+  }, [open, savedNickname]);
+
   const setProviderRoute = (provider, route) => {
     setModelRoutes((prev) => ({ ...prev, [provider]: route }));
   };
@@ -165,6 +176,18 @@ export default function ProfileModal({
       toast.error(e?.message || "保存线路配置失败");
     } finally {
       setRouteSaving(false);
+    }
+  };
+
+  const saveNickname = async () => {
+    if (!hasNicknameChanges || !onNicknameChange) return;
+    setNicknameSaving(true);
+    try {
+      const settings = await onNicknameChange(nicknameDraft);
+      if (!settings) return;
+      toast.success("昵称已更新");
+    } finally {
+      setNicknameSaving(false);
     }
   };
 
@@ -252,10 +275,26 @@ export default function ProfileModal({
                   </div>
                 )}
               </button>
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                {user?.email}
-              </h2>
-              <p className="text-sm text-zinc-500">个人中心</p>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="昵称"
+                  value={nicknameDraft}
+                  onChange={(e) => setNicknameDraft(e.target.value)}
+                  className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none text-center"
+                />
+                {hasNicknameChanges && (
+                  <button
+                    type="button"
+                    onClick={saveNickname}
+                    disabled={nicknameSaving}
+                    className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-xs transition-colors"
+                  >
+                    {nicknameSaving ? "保存中..." : "保存昵称"}
+                  </button>
+                )}
+              </div>
+              <p className="text-sm text-zinc-500 mt-6">个人中心</p>
             </div>
 
             <div className="space-y-3">

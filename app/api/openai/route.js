@@ -303,6 +303,7 @@ export async function POST(req) {
             return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
+        const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
         const baseSystemPrompt = await injectCurrentTimeSystemReminder(buildEconomySystemPrompt(userSystemPrompt));
         const formattingGuard = "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
         const baseInput = Array.isArray(openaiInput) ? openaiInput : [];
@@ -534,7 +535,7 @@ export async function POST(req) {
                         searchContextTokens = estimateTokens(searchContextSection);
                         sendEvent({ type: 'search_context_tokens', tokens: searchContextTokens });
                     }
-                    const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}`;
+                    const finalSystemPrompt = `${baseSystemPrompt}\n\n${formattingGuard}${webSearchGuide}${searchContextSection}${systemPromptSuffix.trim() ? `\n\n${systemPromptSuffix}` : ''}`;
                     const requestBody = {
                         ...baseRequestBody,
                         instructions: finalSystemPrompt
