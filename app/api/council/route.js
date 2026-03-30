@@ -4,7 +4,7 @@ import Conversation from "@/models/Conversation";
 import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { getClientIP, rateLimit } from "@/lib/rateLimit";
-import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
+import { buildContextSafeHistoryMessages, generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
 import {
   COUNCIL_MAX_ROUNDS,
   COUNCIL_MODEL_ID,
@@ -150,16 +150,10 @@ export async function POST(req) {
     return Response.json({ error: "history must be an array" }, { status: 400 });
   }
 
-  const isRegenerateMode = mode === "regenerate";
-  if (mode && !isRegenerateMode) {
+  if (mode) {
     return Response.json({ error: "Council 模式不支持该操作" }, { status: 400 });
   }
-  if (isRegenerateMode && !Array.isArray(messages)) {
-    return Response.json({ error: "messages must be an array" }, { status: 400 });
-  }
-  if (isRegenerateMode && !conversationId) {
-    return Response.json({ error: "Council 重开必须提供 conversationId" }, { status: 400 });
-  }
+  const isRegenerateMode = false;
   if (requestImages.length > 0 && !modelSupportsAvailableInput(COUNCIL_MODEL_ID, "image")) {
     return Response.json({ error: "Council 当前不支持图片输入" }, { status: 400 });
   }
@@ -260,6 +254,7 @@ export async function POST(req) {
 
   const currentConversationId = currentConversation._id.toString();
   const previousMessages = Array.isArray(currentConversation.messages) ? currentConversation.messages : [];
+  const safeRequestHistory = buildContextSafeHistoryMessages(history);
   const previousUpdatedAt = currentConversation.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
   const resolvedUserMessageId = normalizeMessageId(userMessageId);
   const resolvedModelMessageId = normalizeMessageId(modelMessageId);
@@ -545,7 +540,7 @@ export async function POST(req) {
               clientAborted: () => clientAborted,
               updateStatus: (patch) => updateExpertState(expert, patch),
               providerRoutes,
-              history,
+              history: safeRequestHistory,
               signal: councilSignal,
               onDone: (result) => {
                 try {

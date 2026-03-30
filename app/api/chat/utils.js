@@ -187,7 +187,7 @@ export function generateMessageId() {
     return `msg_${Date.now()}_${rand}`;
 }
 
-export function getStoredPartsFromMessage(msg) {
+export function getStoredPartsFromMessage(msg, { includeThoughtSignature = false } = {}) {
     if (!msg || typeof msg !== 'object') return null;
 
     if (Array.isArray(msg.parts) && msg.parts.length > 0) {
@@ -228,7 +228,7 @@ export function getStoredPartsFromMessage(msg) {
                         if (blobFileId) out.fileData.blobFileId = blobFileId;
                     }
                 }
-                if (isNonEmptyString(part.thoughtSignature)) out.thoughtSignature = part.thoughtSignature;
+                if (includeThoughtSignature && isNonEmptyString(part.thoughtSignature)) out.thoughtSignature = part.thoughtSignature;
                 return out;
             })
             .filter((part) => Object.keys(part).length > 0);
@@ -283,6 +283,23 @@ export function sanitizeStoredMessage(msg) {
 export function sanitizeStoredMessages(messages) {
     if (!Array.isArray(messages)) return [];
     return messages.map(sanitizeStoredMessage).filter(Boolean);
+}
+
+export function buildContextSafeHistoryMessages(messages) {
+    if (!Array.isArray(messages)) return [];
+    return messages
+        .map((message) => {
+            if (!message || typeof message !== 'object') return null;
+            if (message.role !== 'user' && message.role !== 'model') return null;
+            const parts = getStoredPartsFromMessage(message);
+            if (!parts || parts.length === 0) return null;
+            return {
+                role: message.role,
+                content: typeof message.content === 'string' ? message.content : '',
+                parts,
+            };
+        })
+        .filter(Boolean);
 }
 
 export function sanitizeStoredMessagesStrict(messages) {

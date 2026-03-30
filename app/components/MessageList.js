@@ -352,7 +352,7 @@ export default function MessageList({
               {msg.role === "model" && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || hasToolRuns || hasArtifacts) && (
                 <div className="flex items-center gap-2 pl-1">
                   <AIAvatar model={model} size={24} animate={msg.isStreaming} />
-                  <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">
+                  <span className="text-[11px] text-zinc-400 font-bold tracking-wider">
                     {CHAT_MODELS.find((m) => m.id === model)?.name}
                   </span>
                 </div>

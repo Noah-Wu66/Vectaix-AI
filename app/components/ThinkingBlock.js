@@ -272,7 +272,13 @@ export default function ThinkingBlock({
     const capsuleClass = `thinking-capsule flex w-fit max-w-full items-center gap-2 font-medium transition-all duration-300 py-1.5 px-3 rounded-full ${isError ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-primary hover:bg-primary/5"}`;
 
     if (step.kind === "thought") {
-      const canExpandThought = showThoughtDetails && hasDetail;
+      const thoughtDetailText = typeof step.content === "string" && step.content.trim()
+        ? step.content
+        : (step.synthetic
+          ? "这一阶段只有执行状态，没有拿到模型返回的原始思考文本，所以当前只能展示执行过程，无法还原更细的思考内容。"
+          : "这一阶段没有可展示的思考内容。"
+        );
+      const canExpandThought = showThoughtDetails;
       const isThoughtOpen = canExpandThought && isExpanded;
       return (
         <div key={step.id || `thought-${idx}`} className="w-full max-w-2xl mb-2">
@@ -315,7 +321,7 @@ export default function ThinkingBlock({
                     enableMath={true}
                     className="prose-xs text-zinc-500 dark:text-zinc-400"
                   >
-                    {step.content}
+                    {thoughtDetailText}
                   </Markdown>
                 </div>
               </motion.div>

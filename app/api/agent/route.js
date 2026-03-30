@@ -10,7 +10,7 @@ import {
   isCouncilModel,
   normalizeChatRuntimeMode,
 } from "@/lib/shared/models";
-import { generateMessageId, isNonEmptyString } from "@/app/api/chat/utils";
+import { buildContextSafeHistoryMessages, generateMessageId, isNonEmptyString } from "@/app/api/chat/utils";
 import {
   CONVERSATION_WRITE_CONFLICT_ERROR,
   buildConversationWriteCondition,
@@ -253,8 +253,9 @@ export async function POST(req) {
     }
     let writePermitTime = updatedConversation.updatedAt?.getTime?.() ?? Date.now();
 
-    const effectiveHistoryMessages = (limit > 0 ? history.slice(-limit) : history)
-      .filter((message) => message?.role === "user" || message?.role === "model");
+    const effectiveHistoryMessages = buildContextSafeHistoryMessages(
+      limit > 0 ? history.slice(-limit) : history
+    );
 
     const encoder = new TextEncoder();
     const responseStream = new ReadableStream({
