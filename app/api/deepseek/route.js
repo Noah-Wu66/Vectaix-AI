@@ -403,6 +403,7 @@ export async function POST(req) {
                                 body: JSON.stringify({
                                     model: apiModel,
                                     messages: loopMessages,
+                                    stream: true,
                                     max_tokens: clampMaxTokens(maxTokens, 65536),
                                     tools: getDeepSeekWebTools(),
                                 })
@@ -413,19 +414,72 @@ export async function POST(req) {
                                 throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
                             }
 
-                            const payload = await response.json();
-                            const message = payload?.choices?.[0]?.message || {};
-                            const thought = typeof message?.reasoning_content === 'string' ? message.reasoning_content : '';
-                            if (thought) {
-                                fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
-                                sendEvent({ type: 'thought', content: thought });
+                            const reader = response.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = '';
+                            let thought = '';
+                            let content = '';
+                            let toolCalls = [];
+                            const toolCallsMap = new Map();
+
+                            while (true) {
+                                const { value, done } = await reader.read();
+                                if (done || clientAborted) break;
+
+                                buffer += decoder.decode(value, { stream: true });
+                                const lines = buffer.split('\n');
+                                buffer = lines.pop();
+
+                                for (const line of lines) {
+                                    if (!line.trim() || line.startsWith(':')) continue;
+                                    if (!line.startsWith('data: ')) continue;
+
+                                    const dataStr = line.slice(6);
+                                    if (dataStr === '[DONE]') continue;
+
+                                    try {
+                                        const event = JSON.parse(dataStr);
+                                        const choice = event?.choices?.[0];
+                                        if (!choice) continue;
+
+                                        const delta = choice.delta;
+                                        if (delta?.reasoning_content) {
+                                            thought += delta.reasoning_content;
+                                            sendEvent({ type: 'thought', content: delta.reasoning_content });
+                                        }
+                                        if (delta?.content) {
+                                            content += delta.content;
+                                        }
+                                        if (Array.isArray(delta?.tool_calls)) {
+                                            for (const tc of delta.tool_calls) {
+                                                const idx = tc.index;
+                                                if (!toolCallsMap.has(idx)) {
+                                                    toolCallsMap.set(idx, { id: tc.id || '', function: { name: '', arguments: '' } });
+                                                }
+                                                const existing = toolCallsMap.get(idx);
+                                                if (tc.id) existing.id = tc.id;
+                                                if (tc.function?.name) existing.function.name += tc.function.name;
+                                                if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+                                            }
+                                        }
+                                    } catch { }
+                                }
                             }
 
-                            const toolCalls = Array.isArray(message?.tool_calls)
-                                ? message.tool_calls.filter((item) => typeof item?.function?.name === 'string' && item.function.name)
-                                : [];
+                            if (thought) {
+                                fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
+                            }
+
+                            toolCalls = Array.from(toolCallsMap.values())
+                                .filter((item) => item.function?.name)
+                                .map((item) => ({
+                                    id: item.id,
+                                    type: 'function',
+                                    function: item.function,
+                                }));
+
                             if (toolCalls.length === 0) {
-                                fullText = typeof message?.content === 'string' ? message.content : '';
+                                fullText = content;
                                 if (fullText) {
                                     sendEvent({ type: 'text', content: fullText });
                                 }
@@ -435,7 +489,7 @@ export async function POST(req) {
 
                             loopMessages.push({
                                 role: 'assistant',
-                                content: typeof message?.content === 'string' ? message.content : '',
+                                content: content || '',
                                 ...(thought ? { reasoning_content: thought } : {}),
                                 tool_calls: toolCalls,
                             });

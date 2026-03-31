@@ -219,7 +219,9 @@ export default function ThinkingBlock({
         return `联网搜索完成${query}${countLabel}`;
       }
       if (step.kind === "reader") {
-        const target = step.url ? `「${step.url}」` : "";
+        const url = step.url || "";
+        const truncatedUrl = url.length > 50 ? `${url.slice(0, 47)}...` : url;
+        const target = truncatedUrl ? `「${truncatedUrl}」` : "";
         const countLabel = Number.isFinite(step.resultCount) && step.resultCount > 0 ? `（${step.resultCount}页）` : "";
         if (isRunning) return `浏览页面中${target}`;
         if (isError) return `网页抓取失败${target}`;

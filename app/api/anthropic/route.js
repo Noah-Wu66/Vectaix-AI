@@ -621,16 +621,42 @@ export async function POST(req) {
                             requestParams.thinking = { type: thinkingLevel };
                         }
 
-                        const response = await client.messages.create(requestParams);
+                        const stream = await client.messages.stream(requestParams);
                         if (clientAborted) break;
 
-                        const state = extractAnthropicResponseState(response?.content);
-                        if (state.fullThought) {
-                            fullThought = fullThought ? `${fullThought}\n\n${state.fullThought}` : state.fullThought;
-                            sendEvent({ type: 'thought', content: state.fullThought });
+                        let responseContent = [];
+                        let stopReason = null;
+
+                        for await (const event of stream) {
+                            if (clientAborted) break;
+
+                            if (event.type === 'content_block_delta') {
+                                if (event.delta?.type === 'thinking_delta' && event.delta?.thinking) {
+                                    sendEvent({ type: 'thought', content: event.delta.thinking });
+                                } else if (event.delta?.type === 'text_delta' && event.delta?.text) {
+                                    // Text deltas will be accumulated in responseContent
+                                }
+                            } else if (event.type === 'content_block_start') {
+                                responseContent.push(event.content_block);
+                            } else if (event.type === 'content_block_stop') {
+                                // Content block completed
+                            } else if (event.type === 'message_delta') {
+                                if (event.delta?.stop_reason) {
+                                    stopReason = event.delta.stop_reason;
+                                }
+                            }
                         }
 
-                        if (!enableWebSearch || state.toolUses.length === 0 || response?.stop_reason !== 'tool_use') {
+                        const finalMessage = await stream.finalMessage();
+                        responseContent = finalMessage.content || responseContent;
+                        stopReason = finalMessage.stop_reason || stopReason;
+
+                        const state = extractAnthropicResponseState(responseContent);
+                        if (state.fullThought) {
+                            fullThought = fullThought ? `${fullThought}\n\n${state.fullThought}` : state.fullThought;
+                        }
+
+                        if (!enableWebSearch || state.toolUses.length === 0 || stopReason !== 'tool_use') {
                             fullText = state.fullText;
                             storedAssistantContent = state.storedContent;
                             if (fullText) {
@@ -640,7 +666,7 @@ export async function POST(req) {
                             break;
                         }
 
-                        workingMessages.push({ role: 'assistant', content: response.content });
+                        workingMessages.push({ role: 'assistant', content: responseContent });
                         const toolResultBlocks = [];
                         for (const toolUse of state.toolUses) {
                             const toolExecution = await executeWebBrowsingNativeToolCall({

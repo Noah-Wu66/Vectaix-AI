@@ -494,14 +494,14 @@ export async function POST(req) {
                         includeEconomyPrefix: providerRoute === 'default',
                     });
 
-                    const requestResponsesJson = async (requestBody) => {
+                    const requestResponsesStream = async (requestBody, onThought) => {
                         const request = async () => fetch(`${apiBaseUrl}/responses`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${apiKey}`
                             },
-                            body: JSON.stringify(requestBody)
+                            body: JSON.stringify({ ...requestBody, stream: true })
                         });
 
                         let response = await request();
@@ -516,7 +516,48 @@ export async function POST(req) {
                             upstreamError.status = response.status;
                             throw upstreamError;
                         }
-                        return response.json();
+
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        let buffer = '';
+                        let accumulated = { reasoning: [], output: [] };
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done || clientAborted) break;
+
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop();
+
+                            for (const line of lines) {
+                                if (!line.trim() || line.startsWith(':')) continue;
+                                if (!line.startsWith('data: ')) continue;
+
+                                const dataStr = line.slice(6);
+                                if (dataStr === '[DONE]') continue;
+
+                                try {
+                                    const event = JSON.parse(dataStr);
+                                    if (event.type === 'response.reasoning.delta' || event.type === 'output.reasoning.delta') {
+                                        const text = event.delta?.text || event.text || '';
+                                        if (text) {
+                                            accumulated.reasoning.push({ type: 'reasoning', text });
+                                            onThought?.(text);
+                                        }
+                                    } else if (event.type === 'response.output_text.delta' || event.type === 'output.text.delta') {
+                                        const text = event.delta?.text || event.text || '';
+                                        if (text) {
+                                            accumulated.output.push({ type: 'text', text });
+                                        }
+                                    } else if (event.type === 'response.done' || event.type === 'done') {
+                                        return event.response || event;
+                                    }
+                                } catch { }
+                            }
+                        }
+
+                        return { output: accumulated.output, reasoning: accumulated.reasoning };
                     };
 
                     const usePreviousResponseId = Boolean(latestOpenAIResponseId && currentTurnInput);
@@ -540,13 +581,14 @@ export async function POST(req) {
                             requestBody.tools = getOpenAIWebTools();
                         }
 
-                        const payload = await requestResponsesJson(requestBody);
+                        const payload = await requestResponsesStream(requestBody, (thought) => {
+                            sendEvent({ type: 'thought', content: thought });
+                        });
                         if (clientAborted) break;
 
                         const thought = extractOpenAIResponseReasoning(payload);
                         if (thought) {
                             fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
-                            sendEvent({ type: 'thought', content: thought });
                         }
 
                         const functionCalls = enableWebSearch ? extractOpenAIFunctionCalls(payload) : [];
