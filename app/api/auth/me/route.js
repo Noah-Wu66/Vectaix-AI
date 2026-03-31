@@ -10,6 +10,8 @@ export async function GET() {
       id: user.userId,
       email: user.email,
       isAdmin: user.isAdmin,
+      isAdvancedUser: user.isAdvancedUser,
+      canSwitchRoutes: user.canSwitchRoutes,
     }
   });
 }

@@ -33,7 +33,7 @@ const BlobFileSchema = new mongoose.Schema({
     },
     category: {
         type: String,
-        enum: ['image', 'text', 'code', 'document', 'spreadsheet', 'data', null],
+        enum: ['image', 'video', 'audio', 'text', 'code', 'document', 'spreadsheet', 'data', null],
         default: null,
     },
     kind: {

@@ -8,7 +8,6 @@ import {
   Download,
   Edit3,
   Paperclip,
-  RotateCcw,
   Trash2,
   Type,
   User,
@@ -38,9 +37,10 @@ import {
   ArtifactCards,
 } from "./MessageListHelpers";
 import {
+  CHAT_RUNTIME_MODE_CHAT,
+  CHAT_RUNTIME_MODE_AGENT,
   CHAT_MODELS,
-  getModelConfig,
-  isAgentBackedModelId,
+  modelSupportsAvailableInput,
   isCouncilModel,
 } from "@/lib/shared/models";
 
@@ -75,6 +75,7 @@ export default function MessageList({
   editingImage,
   fontSizeClass,
   model,
+  chatMode,
   modelReady = true,
   onEditingContentChange,
   onEditingImageSelect,
@@ -88,6 +89,7 @@ export default function MessageList({
   onRegenerateModelMessage,
   onStartEdit,
   userAvatar,
+  userNickname,
   onSendStarterPrompt,
 }) {
   const editTextareaRef = useRef(null);
@@ -99,8 +101,9 @@ export default function MessageList({
   const [openExportMenuIndex, setOpenExportMenuIndex] = useState(null);
   const prevMessagesRef = useRef([]);
   const isCouncilConversation = isCouncilModel(model);
-  const isAgentConversation = isAgentBackedModelId(model);
-  const canEditImages = getModelConfig(model)?.supportsImages === true;
+  const isAgentConversation = !isCouncilConversation && chatMode === CHAT_RUNTIME_MODE_AGENT;
+  const canEditUserMessage = chatMode === CHAT_RUNTIME_MODE_CHAT;
+  const canEditImages = modelSupportsAvailableInput(model, "image", chatMode);
   const toast = useToast();
   const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
   const hasStreamingContent = messages.some((message) => (message?.isStreaming && !message?.isWaitingFirstChunk) || message?.isSearching);
@@ -285,7 +288,9 @@ export default function MessageList({
                   今天能帮您做点什么？
                 </h2>
                 <p className="text-zinc-400 dark:text-zinc-500 text-[15px] max-w-sm mx-auto leading-relaxed">
-                  选择一个模型开始对话，复杂任务会自动按 Agent 流程处理。
+                  {isAgentConversation
+                    ? "选择一个模型开始对话，复杂任务会按 Agent 流程处理。"
+                    : "选择一个模型开始对话，Chat 模式只保留原生聊天能力。"}
                 </p>
               </div>
             </div>
@@ -347,13 +352,27 @@ export default function MessageList({
               {msg.role === "model" && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || hasToolRuns || hasArtifacts) && (
                 <div className="flex items-center gap-2 pl-1">
                   <AIAvatar model={model} size={24} animate={msg.isStreaming} />
-                  <span className="text-[11px] text-zinc-400 font-bold uppercase tracking-wider">
+                  <span className="text-[11px] text-zinc-400 font-bold tracking-wider">
                     {CHAT_MODELS.find((m) => m.id === model)?.name}
                   </span>
                 </div>
               )}
 
               <div className={`flex flex-col w-full ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                {msg.role === "user" && (
+                  <div className="flex items-center gap-2 pr-1 mb-1 relative">
+                    <span className="text-[11px] text-zinc-500 font-medium truncate max-w-[150px]">
+                      {userNickname || "您"}
+                    </span>
+                    {userAvatar ? (
+                      <img src={userAvatar} alt="" className="w-5 h-5 rounded-md object-cover ring-1 ring-zinc-200/50" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-md bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-500">
+                        {userNickname?.[0] || "您"}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {msg.role === "model" && (msg.thought || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState) && (
                   <ThinkingBlock
                     thought={msg.thought}
@@ -371,7 +390,7 @@ export default function MessageList({
                   />
                 )}
 
-                {editingMsgIndex === i && msg.role === "user" && isCouncilConversation ? (
+                {editingMsgIndex === i && msg.role === "user" && canEditUserMessage ? (
                   <div className="w-full flex flex-col items-end gap-2">
                     <div className="msg-bubble-user w-full max-w-full glass-effect !bg-white dark:!bg-zinc-800 border-primary/20">
                       <textarea
@@ -444,11 +463,8 @@ export default function MessageList({
                         )}
                         <button onClick={() => onCopy(buildCopyText(msg))} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Copy size={14} /></button>
                         <button onClick={() => handleDeleteClick(i, msg.role)} className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
-                        {msg.role === "user" && isCouncilConversation && (
+                        {msg.role === "user" && canEditUserMessage && (
                           <button onClick={() => onStartEdit(i, msg)} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Edit3 size={14} /></button>
-                        )}
-                        {msg.role === "model" && isCouncilConversation && (
-                          <button onClick={() => onRegenerateModelMessage(i)} disabled={loading || hasActiveConversationRun} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg disabled:opacity-30"><RotateCcw size={14} /></button>
                         )}
                       </div>
                     )}

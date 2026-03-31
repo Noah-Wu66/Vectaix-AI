@@ -3,21 +3,24 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
+  FileText,
   Paperclip,
   Square,
   X,
 } from "lucide-react";
 import { upload } from "@vercel/blob/client";
 import { useToast } from "./ToastProvider";
-import ModelSelector from "./ModelSelector";
+import ModeSwitcher from "./ModeSwitcher";
 import SettingsMenu from "./SettingsMenu";
 import {
+  CHAT_RUNTIME_MODE_AGENT,
   COUNCIL_MAX_ROUNDS,
   countCompletedCouncilRounds,
-  getModelConfig,
+  getModelAttachmentSupport,
   isCouncilModel,
 } from "@/lib/shared/models";
 import {
+  getAttachmentInputType,
   getAttachmentAcceptForModel,
   getAttachmentLimits,
   IMAGE_MIME_TYPES,
@@ -39,11 +42,19 @@ export default function Composer({
   isStreaming,
   isWaitingForAI,
   model,
+  chatMode,
   modelReady,
   onModelChange,
+  onModeChange,
   messages,
   webSearch,
   setWebSearch,
+  chatSystemPrompt,
+  onChatSystemPromptSave,
+  systemPrompts,
+  addSystemPrompt,
+  updateSystemPrompt,
+  deleteSystemPrompt,
   onSend,
   onStop,
   prefill,
@@ -55,12 +66,20 @@ export default function Composer({
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const mountedRef = useRef(true);
-  const modelConfig = getModelConfig(model);
   const isCouncilSelected = isCouncilModel(model);
-  const supportsImages = modelConfig?.supportsImages === true;
-  const supportsDocuments = !isCouncilSelected;
-  const supportsFilePicker = supportsImages || supportsDocuments;
-  const attachmentAccept = getAttachmentAcceptForModel({ supportsDocuments, supportsImages });
+  const {
+    supportsImages,
+    supportsDocuments,
+    supportsVideo,
+    supportsAudio,
+    supportsFilePicker,
+  } = getModelAttachmentSupport(model, chatMode);
+  const attachmentAccept = getAttachmentAcceptForModel({
+    supportsDocuments,
+    supportsImages,
+    supportsVideo,
+    supportsAudio,
+  });
   const completedCouncilRounds = isCouncilSelected ? countCompletedCouncilRounds(messages) : 0;
   const hasReachedCouncilRoundLimit = isCouncilSelected && completedCouncilRounds >= COUNCIL_MAX_ROUNDS;
 
@@ -121,14 +140,18 @@ export default function Composer({
       }
       return;
     }
-    if (supportsDocuments) {
-      return;
-    }
-    const next = selectedAttachments.filter((item) => isImageAttachment(item));
+    const next = selectedAttachments.filter((item) => {
+      const inputType = getAttachmentInputType(item.category);
+      if (inputType === "image") return supportsImages;
+      if (inputType === "video") return supportsVideo;
+      if (inputType === "audio") return supportsAudio;
+      if (inputType === "file") return supportsDocuments;
+      return false;
+    });
     if (next.length !== selectedAttachments.length) {
       setSelectedAttachments(next);
     }
-  }, [selectedAttachments, supportsDocuments, supportsFilePicker]);
+  }, [selectedAttachments, supportsAudio, supportsDocuments, supportsFilePicker, supportsImages, supportsVideo]);
 
   const convertToPng = (file) => {
     return new Promise((resolve) => {
@@ -165,7 +188,7 @@ export default function Composer({
     const remainingSlots = MAX_CHAT_ATTACHMENTS - selectedAttachments.length;
     const filesToAdd = files.slice(0, remainingSlots);
     const nextAttachments = [];
-    const blockedDocuments = [];
+    const blockedUnsupported = [];
     const invalidFiles = [];
     const oversizedFiles = [];
 
@@ -186,8 +209,16 @@ export default function Composer({
         continue;
       }
 
-      if (!supportsDocuments && !isImageAttachment(local)) {
-        blockedDocuments.push(file.name);
+      const inputType = getAttachmentInputType(local.category);
+      const isSupported = (
+        (inputType === "image" && supportsImages)
+        || (inputType === "video" && supportsVideo)
+        || (inputType === "audio" && supportsAudio)
+        || (inputType === "file" && supportsDocuments)
+      );
+
+      if (!isSupported) {
+        blockedUnsupported.push(file.name);
         continue;
       }
 
@@ -219,8 +250,8 @@ export default function Composer({
     if (invalidFiles.length > 0) {
       toast.warning(`以下文件类型不支持或读取失败，已跳过：${invalidFiles.join("、")}`);
     }
-    if (blockedDocuments.length > 0) {
-      toast.warning("当前模型只支持图片，不支持这类文件");
+    if (blockedUnsupported.length > 0) {
+      toast.warning("当前模型或当前模式不支持这类附件，已跳过");
     }
 
     if (nextAttachments.length > 0 && mountedRef.current) {
@@ -261,6 +292,7 @@ export default function Composer({
         clientPayload: JSON.stringify({
           kind: "chat",
           model,
+          mode: chatMode,
           originalName: att.file.name,
           declaredMimeType: att.file.type || att.mimeType,
         }),
@@ -356,18 +388,29 @@ export default function Composer({
 
       <div className="relative flex flex-col glass-effect rounded-[24px] border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700">
         {/* Top toolbar */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-900/30 rounded-t-[24px]">
-          <ModelSelector model={model} onModelChange={onModelChange} ready={modelReady} />
-          {!isCouncilSelected && (
-            <div className="flex items-center gap-1">
-              <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-700 mx-1" />
-              <SettingsMenu
-                model={model}
-                webSearch={webSearch}
-                setWebSearch={setWebSearch}
-              />
-            </div>
-          )}
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-900/30 rounded-t-[24px]">
+          <ModeSwitcher
+            model={model}
+            chatMode={chatMode}
+            onModeChange={onModeChange}
+            ready={modelReady}
+          />
+          {!isCouncilSelected ? (
+            <SettingsMenu
+              model={model}
+              chatMode={chatMode}
+              onModelChange={onModelChange}
+              ready={modelReady}
+              webSearch={webSearch}
+              setWebSearch={setWebSearch}
+              chatSystemPrompt={chatSystemPrompt}
+              onChatSystemPromptSave={onChatSystemPromptSave}
+              systemPrompts={systemPrompts}
+              addSystemPrompt={addSystemPrompt}
+              updateSystemPrompt={updateSystemPrompt}
+              deleteSystemPrompt={deleteSystemPrompt}
+            />
+          ) : null}
         </div>
 
         {/* Text area and main actions */}

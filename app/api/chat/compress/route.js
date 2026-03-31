@@ -3,13 +3,13 @@ import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
 import { GEMINI_PRO_MODEL } from '@/lib/shared/models';
-import { resolveGeminiProviderConfig } from '@/lib/providerConfigs';
 import { createGeminiClient, resolveGeminiApiModel } from '@/lib/server/chat/providerAdapters';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const COMPRESS_RATE_LIMIT = { limit: 10, windowMs: 60 * 1000 };
+const COMPRESS_MODEL = resolveGeminiApiModel(GEMINI_PRO_MODEL);
 
 const COMPRESS_SYSTEM_PROMPT = `你是一个对话历史压缩器。你的任务是将一段多轮对话压缩成一份简洁的摘要，保留所有关键信息。
 
@@ -78,15 +78,14 @@ export async function POST(req) {
             return Response.json({ error: 'No valid messages to compress' }, { status: 400 });
         }
 
-        const providerConfig = resolveGeminiProviderConfig();
-        const ai = createGeminiClient();
+        const ai = await createGeminiClient(auth.userId);
+
         const result = await ai.models.generateContent({
-            model: resolveGeminiApiModel(GEMINI_PRO_MODEL, providerConfig),
+            model: COMPRESS_MODEL,
             contents: [{
                 role: "user",
                 parts: [{ text: `请将以下对话历史压缩成一份摘要：\n\n${conversationText}` }]
             }],
-            signal: req.signal,
             config: {
                 systemInstruction: { parts: [{ text: COMPRESS_SYSTEM_PROMPT }] }
             }

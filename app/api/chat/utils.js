@@ -146,27 +146,31 @@ function isAllowedStoredImageUrl(url) {
 }
 
 export async function fetchImageAsBase64(url) {
+    return fetchBlobAsBase64(url, { resourceLabel: "image" });
+}
+
+export async function fetchBlobAsBase64(url, { resourceLabel = "file" } = {}) {
     if (typeof url !== "string" || !url.trim()) {
-        throw new Error("Invalid image url");
+        throw new Error(`Invalid ${resourceLabel} url`);
     }
 
     let parsed;
     try {
         parsed = new URL(url);
     } catch {
-        throw new Error("Invalid image url");
+        throw new Error(`Invalid ${resourceLabel} url`);
     }
 
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        throw new Error("Invalid image url protocol");
+        throw new Error(`Invalid ${resourceLabel} url protocol`);
     }
 
     if (!isAllowedImageDomain(url)) {
-        throw new Error("Image domain not allowed");
+        throw new Error(`${resourceLabel} domain not allowed`);
     }
 
     const imgRes = await fetch(url, { cache: "no-store" });
-    if (!imgRes.ok) throw new Error("Failed to fetch image from blob");
+    if (!imgRes.ok) throw new Error(`Failed to fetch ${resourceLabel} from blob`);
 
     const arrayBuffer = await imgRes.arrayBuffer();
     const base64Data = Buffer.from(arrayBuffer).toString("base64");
@@ -183,7 +187,7 @@ export function generateMessageId() {
     return `msg_${Date.now()}_${rand}`;
 }
 
-export function getStoredPartsFromMessage(msg) {
+export function getStoredPartsFromMessage(msg, { includeThoughtSignature = false } = {}) {
     if (!msg || typeof msg !== 'object') return null;
 
     if (Array.isArray(msg.parts) && msg.parts.length > 0) {
@@ -192,6 +196,7 @@ export function getStoredPartsFromMessage(msg) {
             .map((part) => {
                 const out = {};
                 if (isNonEmptyString(part.text)) out.text = part.text;
+                if (part.thought === true) out.thought = true;
                 if (part?.inlineData && typeof part.inlineData === 'object') {
                     const url = part.inlineData.url;
                     const mimeType = part.inlineData.mimeType;
@@ -224,7 +229,7 @@ export function getStoredPartsFromMessage(msg) {
                         if (blobFileId) out.fileData.blobFileId = blobFileId;
                     }
                 }
-                if (isNonEmptyString(part.thoughtSignature)) out.thoughtSignature = part.thoughtSignature;
+                if (includeThoughtSignature && isNonEmptyString(part.thoughtSignature)) out.thoughtSignature = part.thoughtSignature;
                 return out;
             })
             .filter((part) => Object.keys(part).length > 0);
@@ -272,6 +277,11 @@ export function sanitizeStoredMessage(msg) {
     if (isNonEmptyString(msg.id) && msg.id.length <= 128) out.id = msg.id;
     if (isNonEmptyString(msg.thought)) out.thought = msg.thought;
     if (Array.isArray(msg.citations) && msg.citations.length > 0) out.citations = msg.citations;
+    if (Array.isArray(msg.tools) && msg.tools.length > 0) out.tools = msg.tools;
+    if (Array.isArray(msg.artifacts) && msg.artifacts.length > 0) out.artifacts = msg.artifacts;
+    if (Array.isArray(msg.thinkingTimeline) && msg.thinkingTimeline.length > 0) out.thinkingTimeline = msg.thinkingTimeline;
+    if (Number.isFinite(msg.searchContextTokens) && msg.searchContextTokens > 0) out.searchContextTokens = Math.max(0, Math.floor(msg.searchContextTokens));
+    if (msg.providerState && typeof msg.providerState === 'object') out.providerState = msg.providerState;
     out.parts = normalizedParts;
     return out;
 }
@@ -279,6 +289,23 @@ export function sanitizeStoredMessage(msg) {
 export function sanitizeStoredMessages(messages) {
     if (!Array.isArray(messages)) return [];
     return messages.map(sanitizeStoredMessage).filter(Boolean);
+}
+
+export function buildContextSafeHistoryMessages(messages) {
+    if (!Array.isArray(messages)) return [];
+    return messages
+        .map((message) => {
+            if (!message || typeof message !== 'object') return null;
+            if (message.role !== 'user' && message.role !== 'model') return null;
+            const parts = getStoredPartsFromMessage(message);
+            if (!parts || parts.length === 0) return null;
+            return {
+                role: message.role,
+                content: typeof message.content === 'string' ? message.content : '',
+                parts,
+            };
+        })
+        .filter(Boolean);
 }
 
 export function sanitizeStoredMessagesStrict(messages) {

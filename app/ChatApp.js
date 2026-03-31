@@ -7,7 +7,9 @@ import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
 import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
 import {
   CHAT_MODELS,
+  COUNCIL_MODEL_ID,
   DEFAULT_MODEL,
+  normalizeChatRuntimeMode,
   isCouncilModel,
   isPrimaryChatModelId,
 } from "@/lib/shared/models";
@@ -191,14 +193,40 @@ export default function ChatApp() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const mediaResolution = "media_resolution_high";
-  const { model, isSettingsReady, setModel, thinkingLevels, historyLimit, maxTokens, webSearch, setWebSearch, themeMode, setThemeMode, fontSize, setFontSize, completionSoundVolume, setCompletionSoundVolume, settingsError, setSettingsError, fetchSettings, avatar, setAvatar } = useUserSettings();
+  const {
+    model,
+    chatMode,
+    isSettingsReady,
+    setModel,
+    setChatMode,
+    thinkingLevels,
+    historyLimit,
+    maxTokens,
+    webSearch,
+    setWebSearch,
+    chatSystemPrompt,
+    setChatSystemPrompt,
+    systemPrompts,
+    addSystemPrompt,
+    updateSystemPrompt,
+    deleteSystemPrompt,
+    themeMode,
+    setThemeMode,
+    fontSize,
+    setFontSize,
+    completionSoundVolume,
+    setCompletionSoundVolume,
+    settingsError,
+    setSettingsError,
+    fetchSettings,
+    avatar,
+    setAvatar,
+    nickname,
+    setNickname,
+  } = useUserSettings();
   useThemeMode(themeMode);
   const [editingMsgIndex, setEditingMsgIndex] = useState(null);
   const [editingContent, setEditingContent] = useState("");
-  // 编辑并重新生成：图片编辑状态
-  // - keep: 保留原图（如有）
-  // - remove: 移除图片
-  // - new: 选择了新图片（替换/新增）
   const [editingImageAction, setEditingImageAction] = useState("keep");
   const [editingImage, setEditingImage] = useState(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -226,7 +254,6 @@ export default function ChatApp() {
   const SCROLL_BOTTOM_THRESHOLD = 80;
   const lastSettingsErrorRef = useRef(null);
 
-  // 监听 settingsError 变化，显示 toast
   useEffect(() => {
     if (settingsError && settingsError !== lastSettingsErrorRef.current) {
       toast.error(settingsError);
@@ -306,7 +333,6 @@ export default function ChatApp() {
       .catch(() => {
         handleAuthExpired();
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -331,7 +357,6 @@ export default function ChatApp() {
     }
   }, [conversations, serverSettingsReady, user]);
 
-  // Cleanup: abort pending requests on unmount
   useEffect(() => {
     return () => {
       chatAbortRef.current?.abort();
@@ -348,96 +373,6 @@ export default function ChatApp() {
       pendingConversationIdRef.current = null;
     };
   }, []);
-
-  const sortConversations = (list) => {
-    if (!Array.isArray(list)) return [];
-    return list.slice().sort((a, b) => {
-      const ap = a?.pinned ? 1 : 0;
-      const bp = b?.pinned ? 1 : 0;
-      if (ap !== bp) return bp - ap;
-
-      const at = new Date(a?.updatedAt || 0).getTime();
-      const bt = new Date(b?.updatedAt || 0).getTime();
-      return bt - at;
-    });
-  };
-
-  const fetchConversations = async () => {
-    try {
-      const res = await fetch("/api/conversations");
-      if (res.status === 401) {
-        handleAuthExpired();
-        return;
-      }
-      let data = null;
-      try {
-        data = await res.json();
-      } catch {
-        data = null;
-      }
-      if (!res.ok) return;
-      let nextConversations = [];
-      setConversations((prev) => {
-        nextConversations = data?.conversations
-          ? sortConversations(data.conversations)
-          : [];
-        return nextConversations;
-      });
-      if (currentConversationId && !nextConversations.some((conv) => conv._id === currentConversationId)) {
-        setCurrentConversationId(null);
-        setMessages([]);
-      }
-    } catch { }
-  };
-
-  const handleConversationMissing = () => {
-    stopOngoingChatWork();
-    setCurrentConversationId(null);
-    setMessages([]);
-    fetchConversations();
-  };
-
-  const handleSensitiveRefusal = (payload) => {
-    const promptText = typeof payload === "string" ? payload : payload?.prompt;
-    const shouldPrefill = typeof payload === "object" ? payload?.shouldPrefill !== false : true;
-    toast.warning("消息包含敏感内容，请修改后重新尝试");
-    if (shouldPrefill && typeof promptText === "string" && promptText.trim()) {
-      setComposerPrefill({ text: promptText, nonce: Date.now() });
-    }
-  };
-
-  const actions = createChatAppActions({
-    toast,
-    messages,
-    setMessages,
-    loading,
-    setLoading,
-    model,
-    thinkingLevels,
-    mediaResolution,
-    maxTokens,
-    webSearch,
-    historyLimit,
-    currentConversationId,
-    setCurrentConversationId,
-    fetchConversations,
-    chatAbortRef,
-    chatRequestLockRef,
-    userInterruptedRef,
-    editingMsgIndex,
-    editingContent,
-    editingImageAction,
-    editingImage,
-    setEditingMsgIndex,
-    setEditingContent,
-    setEditingImageAction,
-    setEditingImage,
-    completionSoundVolume,
-    onSensitiveRefusal: handleSensitiveRefusal,
-    onAuthExpired: handleAuthExpired,
-    onConversationMissing: handleConversationMissing,
-    onConversationActivity: () => {},
-  });
 
   useEffect(() => {
     if (!wasStreamingRef.current && isStreaming) {
@@ -603,8 +538,101 @@ export default function ChatApp() {
     const settings = rawSettings && typeof rawSettings === "object"
       ? rawSettings
       : {};
+    setChatMode(normalizeChatRuntimeMode(settings.mode));
     setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
   };
+
+  const sortConversations = (list) => {
+    if (!Array.isArray(list)) return [];
+    return list.slice().sort((a, b) => {
+      const ap = a?.pinned ? 1 : 0;
+      const bp = b?.pinned ? 1 : 0;
+      if (ap !== bp) return bp - ap;
+
+      const at = new Date(a?.updatedAt || 0).getTime();
+      const bt = new Date(b?.updatedAt || 0).getTime();
+      return bt - at;
+    });
+  };
+
+  const fetchConversations = async () => {
+    try {
+      const res = await fetch("/api/conversations");
+      if (res.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+      if (!res.ok) return;
+      let nextConversations = [];
+      setConversations(() => {
+        nextConversations = data?.conversations
+          ? sortConversations(data.conversations)
+          : [];
+        return nextConversations;
+      });
+      if (currentConversationId && !nextConversations.some((conv) => conv._id === currentConversationId)) {
+        setCurrentConversationId(null);
+        setMessages([]);
+      }
+    } catch { }
+  };
+
+  const handleConversationMissing = () => {
+    stopOngoingChatWork();
+    setCurrentConversationId(null);
+    setMessages([]);
+    fetchConversations();
+  };
+
+  const handleSensitiveRefusal = (payload) => {
+    const promptText = typeof payload === "string" ? payload : payload?.prompt;
+    const shouldPrefill = typeof payload === "object" ? payload?.shouldPrefill !== false : true;
+    toast.warning("消息包含敏感内容，请修改后重新尝试");
+    if (shouldPrefill && typeof promptText === "string" && promptText.trim()) {
+      setComposerPrefill({ text: promptText, nonce: Date.now() });
+    }
+  };
+
+  const actions = createChatAppActions({
+    toast,
+    messages,
+    setMessages,
+    loading,
+    setLoading,
+    model,
+    chatMode,
+    thinkingLevels,
+    mediaResolution,
+    maxTokens,
+    webSearch,
+    chatSystemPrompt,
+    historyLimit,
+    currentConversationId,
+    setCurrentConversationId,
+    fetchConversations,
+    chatAbortRef,
+    chatRequestLockRef,
+    userInterruptedRef,
+    editingMsgIndex,
+    editingContent,
+    editingImageAction,
+    editingImage,
+    setEditingMsgIndex,
+    setEditingContent,
+    setEditingImageAction,
+    setEditingImage,
+    completionSoundVolume,
+    onSensitiveRefusal: handleSensitiveRefusal,
+    onAuthExpired: handleAuthExpired,
+    onConversationMissing: handleConversationMissing,
+    onConversationActivity: () => {},
+  });
 
   const persistConversationModel = async (conversationIdToUpdate, nextModel) => {
     if (!conversationIdToUpdate || !nextModel || isCouncilModel(nextModel)) return;
@@ -671,7 +699,9 @@ export default function ChatApp() {
 
         if (targetModel !== model) {
           setModel(targetModel);
-          lastTextModelRef.current = targetModel;
+          if (!isCouncilModel(targetModel)) {
+            lastTextModelRef.current = targetModel;
+          }
         }
 
         applyConversationSettings(conversation.settings);
@@ -742,6 +772,75 @@ export default function ChatApp() {
     if (window.innerWidth < 768) setSidebarOpen(false);
   };
 
+  const getLastStandardModel = () => {
+    const candidate = lastTextModelRef.current;
+    if (isPrimaryChatModelId(candidate) && !isCouncilModel(candidate)) {
+      return candidate;
+    }
+    return DEFAULT_MODEL;
+  };
+
+  const requestModeChange = (nextMode) => {
+    if (loading || messages.some((m) => m.isStreaming)) return;
+
+    if (nextMode === COUNCIL_MODEL_ID) {
+      if (isCouncilModel(model)) return;
+
+      const applyCouncilMode = () => {
+        userInterruptedRef.current = false;
+        setCurrentConversationId(null);
+        setMessages([]);
+        setModel(COUNCIL_MODEL_ID);
+      };
+
+      if (messages.length > 0) {
+        setConfirmModalConfig({
+          title: "切换模式",
+          message: "切换到 Council 需要新建对话。Council 和普通模型不能在同一个会话里混用。\n\n是否新建对话并切换？",
+          onConfirm: applyCouncilMode,
+        });
+        setShowConfirmModal(true);
+        return;
+      }
+
+      applyCouncilMode();
+      return;
+    }
+
+    const normalizedMode = normalizeChatRuntimeMode(nextMode);
+
+    if (isCouncilModel(model)) {
+      const fallbackModel = getLastStandardModel();
+      const nextModeLabel = normalizedMode === "agent" ? "Agent" : "Chat";
+      const applyStandardMode = () => {
+        userInterruptedRef.current = false;
+        setCurrentConversationId(null);
+        setMessages([]);
+        setModel(fallbackModel);
+        lastTextModelRef.current = fallbackModel;
+        setChatMode(normalizedMode);
+      };
+
+      if (messages.length > 0) {
+        setConfirmModalConfig({
+          title: "切换模式",
+          message: `切换到 ${nextModeLabel} 需要新建对话。Council 和普通模型不能在同一个会话里混用。\n\n是否新建对话并切换？`,
+          onConfirm: applyStandardMode,
+        });
+        setShowConfirmModal(true);
+        return;
+      }
+
+      applyStandardMode();
+      return;
+    }
+
+    if (normalizedMode === chatMode) return;
+
+    setChatMode(normalizedMode);
+    syncConversationSettings({ mode: normalizedMode });
+  };
+
   const requestModelChange = (nextModel) => {
     if (loading || messages.some((m) => m.isStreaming)) return;
 
@@ -758,7 +857,9 @@ export default function ChatApp() {
           setCurrentConversationId(null);
           setMessages([]);
           setModel(nextModel);
-          lastTextModelRef.current = nextModel;
+          if (!nextIsCouncil) {
+            lastTextModelRef.current = nextModel;
+          }
         }
       });
       setShowConfirmModal(true);
@@ -766,7 +867,9 @@ export default function ChatApp() {
     }
 
     setModel(nextModel);
-    lastTextModelRef.current = nextModel;
+    if (!nextIsCouncil) {
+      lastTextModelRef.current = nextModel;
+    }
     if (currentConversationId && !currentIsCouncil && !nextIsCouncil) {
       persistConversationModel(currentConversationId, nextModel);
     }
@@ -923,6 +1026,8 @@ export default function ChatApp() {
           onFontSizeChange={updateFontSize}
           completionSoundVolume={completionSoundVolume}
           onCompletionSoundVolumeChange={setCompletionSoundVolume}
+          nickname={nickname}
+          onNicknameChange={setNickname}
           sidebarOpen={sidebarOpen}
           conversations={conversations}
           currentConversationId={currentConversationId}
@@ -966,8 +1071,10 @@ export default function ChatApp() {
             isStreaming,
             isWaitingForAI: loading && messages.length > 0,
             model,
+            chatMode,
             modelReady: isSettingsReady,
             onModelChange: requestModelChange,
+            onModeChange: requestModeChange,
             messages,
             historyLimit,
             webSearch,
@@ -975,6 +1082,12 @@ export default function ChatApp() {
               setWebSearch(v);
               syncConversationSettings({ webSearch: v });
             },
+            chatSystemPrompt,
+            onChatSystemPromptSave: setChatSystemPrompt,
+            systemPrompts,
+            addSystemPrompt,
+            updateSystemPrompt,
+            deleteSystemPrompt,
             onSend: actions.handleSendFromComposer,
             onStop: actions.stopStreaming,
             prefill: composerPrefill,

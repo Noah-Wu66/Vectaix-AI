@@ -4,9 +4,14 @@ import Conversation from "@/models/Conversation";
 import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { getClientIP, rateLimit } from "@/lib/rateLimit";
-import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
-import { COUNCIL_MAX_ROUNDS, COUNCIL_MODEL_ID, countCompletedCouncilRounds } from "@/lib/shared/models";
-import { resolveCouncilProviderConfigs } from "@/lib/providerConfigs";
+import { buildContextSafeHistoryMessages, generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
+import {
+  COUNCIL_MAX_ROUNDS,
+  COUNCIL_MODEL_ID,
+  countCompletedCouncilRounds,
+  modelSupportsAvailableInput,
+} from "@/lib/shared/models";
+import { resolveCouncilProviderRoutes } from "@/lib/modelRoutes";
 import {
   buildCouncilExpertState,
   buildCouncilFinalMessage,
@@ -20,6 +25,7 @@ import {
   runSeedCouncilSummary,
   runSeedTriage,
 } from "./councilHelpers";
+import { getModelRoutes } from "@/lib/modelRoutes";
 import {
   enrichConversationPartsWithBlobIds,
   enrichStoredMessagesWithBlobIds,
@@ -134,6 +140,8 @@ export async function POST(req) {
     mode,
     messages,
   } = body || {};
+  const requestImages = Array.isArray(config?.images) ? config.images : [];
+  const requestAttachments = Array.isArray(config?.attachments) ? config.attachments : [];
 
   if (model !== COUNCIL_MODEL_ID) {
     return Response.json({ error: "Council 模式请求无效" }, { status: 400 });
@@ -142,15 +150,15 @@ export async function POST(req) {
     return Response.json({ error: "history must be an array" }, { status: 400 });
   }
 
-  const isRegenerateMode = mode === "regenerate";
-  if (mode && !isRegenerateMode) {
+  if (mode) {
     return Response.json({ error: "Council 模式不支持该操作" }, { status: 400 });
   }
-  if (isRegenerateMode && !Array.isArray(messages)) {
-    return Response.json({ error: "messages must be an array" }, { status: 400 });
+  const isRegenerateMode = false;
+  if (requestImages.length > 0 && !modelSupportsAvailableInput(COUNCIL_MODEL_ID, "image")) {
+    return Response.json({ error: "Council 当前不支持图片输入" }, { status: 400 });
   }
-  if (isRegenerateMode && !conversationId) {
-    return Response.json({ error: "Council 重开必须提供 conversationId" }, { status: 400 });
+  if (requestAttachments.length > 0) {
+    return Response.json({ error: "Council 当前只支持文字和图片输入" }, { status: 400 });
   }
 
   const auth = await getAuthPayload();
@@ -184,9 +192,10 @@ export async function POST(req) {
 
   let providerRoutes;
   try {
-    providerRoutes = resolveCouncilProviderConfigs();
+    const savedRoutes = await getModelRoutes(auth.userId);
+    providerRoutes = resolveCouncilProviderRoutes(savedRoutes);
   } catch (error) {
-    return Response.json({ error: error?.message || "模型接口未配置" }, { status: 500 });
+    return Response.json({ error: error?.message || "模型线路配置错误" }, { status: 500 });
   }
 
   let promptText = typeof prompt === "string" ? prompt : "";
@@ -195,14 +204,13 @@ export async function POST(req) {
   let createdConversationForRequest = false;
 
   if (!isRegenerateMode && conversationId == null) {
-    const imageConfigs = Array.isArray(config?.images) ? config.images : [];
-    if (!promptText.trim() && imageConfigs.length === 0) {
+    if (!promptText.trim() && requestImages.length === 0) {
       return Response.json({ error: "Prompt is required" }, { status: 400 });
     }
     try {
       councilInput = await buildCouncilUserInput({
         prompt: promptText,
-        images: imageConfigs,
+        images: requestImages,
       });
     } catch (error) {
       return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
@@ -246,6 +254,7 @@ export async function POST(req) {
 
   const currentConversationId = currentConversation._id.toString();
   const previousMessages = Array.isArray(currentConversation.messages) ? currentConversation.messages : [];
+  const safeRequestHistory = buildContextSafeHistoryMessages(history);
   const previousUpdatedAt = currentConversation.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
   const resolvedUserMessageId = normalizeMessageId(userMessageId);
   const resolvedModelMessageId = normalizeMessageId(modelMessageId);
@@ -305,14 +314,13 @@ export async function POST(req) {
     }
 
     if (!councilInput) {
-      const imageConfigs = Array.isArray(config?.images) ? config.images : [];
-      if (!promptText.trim() && imageConfigs.length === 0) {
+      if (!promptText.trim() && requestImages.length === 0) {
         return Response.json({ error: "Prompt is required" }, { status: 400 });
       }
       try {
         councilInput = await buildCouncilUserInput({
           prompt: promptText,
-          images: imageConfigs,
+          images: requestImages,
         });
       } catch (error) {
         return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
@@ -532,7 +540,7 @@ export async function POST(req) {
               clientAborted: () => clientAborted,
               updateStatus: (patch) => updateExpertState(expert, patch),
               providerRoutes,
-              history,
+              history: safeRequestHistory,
               signal: councilSignal,
               onDone: (result) => {
                 try {

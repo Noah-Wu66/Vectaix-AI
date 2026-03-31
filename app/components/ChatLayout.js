@@ -19,6 +19,8 @@ export default function ChatLayout({
   onFontSizeChange,
   completionSoundVolume,
   onCompletionSoundVolumeChange,
+  nickname,
+  onNicknameChange,
   sidebarOpen,
   conversations,
   currentConversationId,
@@ -62,8 +64,8 @@ export default function ChatLayout({
 }) {
   return (
     <div className="app-root flex font-sans overflow-hidden" style={{ backgroundColor: 'var(--bg-primary)' }}>
-      <ProfileModal open={showProfileModal} onClose={onCloseProfile} user={user} isAdmin={isAdmin} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={onThemeModeChange} onFontSizeChange={onFontSizeChange} completionSoundVolume={completionSoundVolume} onCompletionSoundVolumeChange={onCompletionSoundVolumeChange} avatar={userAvatar} onAvatarChange={onAvatarChange} />
-      <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} avatar={userAvatar} onStartNewChat={onStartNewChat} onLoadConversation={onLoadConversation} onDeleteConversation={onDeleteConversation} onRenameConversation={onRenameConversation} onTogglePinConversation={onTogglePinConversation} onDuplicateConversation={onDuplicateConversation} onOpenProfile={onOpenProfile} onLogout={onLogout} onClose={onCloseSidebar} />
+      <ProfileModal open={showProfileModal} onClose={onCloseProfile} user={user} isAdmin={isAdmin} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={onThemeModeChange} onFontSizeChange={onFontSizeChange} completionSoundVolume={completionSoundVolume} onCompletionSoundVolumeChange={onCompletionSoundVolumeChange} avatar={userAvatar} onAvatarChange={onAvatarChange} nickname={nickname} onNicknameChange={onNicknameChange} />
+      <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} avatar={userAvatar} nickname={nickname} onStartNewChat={onStartNewChat} onLoadConversation={onLoadConversation} onDeleteConversation={onDeleteConversation} onRenameConversation={onRenameConversation} onTogglePinConversation={onTogglePinConversation} onDuplicateConversation={onDuplicateConversation} onOpenProfile={onOpenProfile} onLogout={onLogout} onClose={onCloseSidebar} />
       <div className="flex-1 flex flex-col w-full h-full relative overflow-hidden">
         <ChatHeader onToggleSidebar={onToggleSidebar} />
         <main className="flex-1 flex flex-col min-h-0 relative">
@@ -79,6 +81,7 @@ export default function ChatLayout({
             editingImage={editingImage}
             fontSizeClass={fontSizeClass}
             model={composerProps?.model}
+            chatMode={composerProps?.chatMode}
             modelReady={isSettingsReady}
             onEditingContentChange={onEditingContentChange}
             onEditingImageSelect={onEditingImageSelect}
@@ -92,6 +95,7 @@ export default function ChatLayout({
             onRegenerateModelMessage={onRegenerateModelMessage}
             onStartEdit={onStartEdit}
             userAvatar={userAvatar}
+            userNickname={nickname}
           />
           <AnimatePresence>
             {showScrollButton && (

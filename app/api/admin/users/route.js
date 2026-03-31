@@ -36,7 +36,7 @@ export async function GET(req) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .select('email createdAt')
+      .select('email createdAt isAdvancedUser')
       .lean(),
     User.countDocuments(filter),
   ]);

@@ -12,6 +12,7 @@ export default function Sidebar({
   currentConversationId,
   user,
   avatar,
+  nickname,
   onStartNewChat,
   onLoadConversation,
   onDeleteConversation,
@@ -174,7 +175,7 @@ export default function Sidebar({
                     <span className="truncate pr-8">{conv.title}</span>
                   </button>
                   
-                  <div className={`absolute right-2 flex items-center gap-0.5 transition-all duration-200 ${activeActionsId === conv._id ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none"}`}>
+                  <div className={`absolute right-2 flex items-center gap-0.5 transition-all duration-200 ${activeActionsId === conv._id ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 group-hover:pointer-events-auto"}`}>
                     <button
                       onClick={(e) => handlePinClick(conv, e)}
                       className={`p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${conv.pinned
@@ -220,12 +221,12 @@ export default function Sidebar({
                 />
               ) : (
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-sm font-bold text-white shadow-sm">
-                  {user?.email?.[0]?.toUpperCase?.()}
+                  {nickname?.[0]?.toUpperCase?.() || user?.email?.[0]?.toUpperCase?.()}
                 </div>
               )}
               <div className="flex flex-col min-w-0">
                 <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">
-                  {user?.email?.split('@')[0]}
+                  {nickname || user?.email?.split('@')[0]}
                 </span>
                 <span className="text-[10px] text-zinc-400 truncate">
                   {user?.email}

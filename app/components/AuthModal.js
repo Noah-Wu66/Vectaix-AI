@@ -60,6 +60,19 @@ export default function AuthModal({
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             {loading ? (authMode === "login" ? "登录中..." : "注册中...") : (authMode === "login" ? "登录" : "注册")}
           </button>
+
+          {authMode === "login" && (
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/enterprise-login";
+              }}
+              disabled={loading}
+              className="auth-secondary-btn w-full border border-zinc-200 font-medium py-3 rounded-lg transition-colors"
+            >
+              企业登录
+            </button>
+          )}
         </form>
 
         <p className="text-center mt-6 text-zinc-500 text-sm">

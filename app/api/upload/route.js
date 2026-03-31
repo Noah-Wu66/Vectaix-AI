@@ -5,6 +5,7 @@ import dbConnect from '@/lib/db';
 import BlobFile from '@/models/BlobFile';
 import {
     createAttachmentDescriptor,
+    getAttachmentInputType,
     getAllowedMimeTypesForExtension,
     getAttachmentCategory,
     getFileExtension,
@@ -13,7 +14,11 @@ import {
     isSupportedUploadExtension,
     normalizeMimeType,
 } from '@/lib/shared/attachments';
-import { isAgentBackedModelId } from '@/lib/shared/models';
+import {
+    CHAT_RUNTIME_MODE_AGENT,
+    getModelAttachmentSupport,
+    normalizeChatRuntimeMode,
+} from '@/lib/shared/models';
 
 const UPLOAD_RATE_LIMIT = { limit: 30, windowMs: 10 * 60 * 1000 };
 
@@ -59,6 +64,7 @@ export async function POST(request) {
                 let originalName = pathname;
                 let extension = getFileExtension(pathname);
                 let model = '';
+                let mode = CHAT_RUNTIME_MODE_AGENT;
                 if (typeof clientPayload === 'string' && clientPayload) {
                     try {
                         const parsed = JSON.parse(clientPayload);
@@ -71,6 +77,7 @@ export async function POST(request) {
                         if (typeof parsed?.model === 'string') {
                             model = parsed.model.trim();
                         }
+                        mode = normalizeChatRuntimeMode(parsed?.mode);
                     } catch {
                         // ignore invalid payload
                     }
@@ -93,8 +100,24 @@ export async function POST(request) {
                     throw new Error('头像仅支持图片文件');
                 }
 
-                if (kind === 'chat' && isDocumentAttachment({ extension, mimeType: declaredMimeType }) && !isAgentBackedModelId(model)) {
-                    throw new Error('当前模式不支持这类文件');
+                if (kind === 'chat') {
+                    const {
+                        supportsImages,
+                        supportsDocuments,
+                        supportsVideo,
+                        supportsAudio,
+                    } = getModelAttachmentSupport(model, mode);
+                    const inputType = getAttachmentInputType(category);
+                    const isSupported = (
+                        (inputType === 'image' && supportsImages)
+                        || (inputType === 'video' && supportsVideo)
+                        || (inputType === 'audio' && supportsAudio)
+                        || (inputType === 'file' && supportsDocuments)
+                    );
+
+                    if (!isSupported) {
+                        throw new Error('当前模式不支持这类文件');
+                    }
                 }
 
                 const allowedContentTypes = declaredMimeType

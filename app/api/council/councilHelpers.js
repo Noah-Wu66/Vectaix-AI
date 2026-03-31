@@ -1,3 +1,4 @@
+import { GoogleGenAI } from "@google/genai";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   fetchImageAsBase64,
@@ -11,23 +12,32 @@ import {
 } from "@/lib/server/chat/webSearchConfig";
 import {
   buildSeedRequestBody,
+  extractSeedFunctionCalls,
+  extractSeedResponseReasoning,
   extractSeedResponseText,
   normalizeSeedChunkText,
   requestSeedResponses,
 } from "@/lib/server/seed/service";
 import {
+  CLAUDE_OPUS_MODEL,
   DEFAULT_SEED_THINKING_LEVEL,
   getCouncilExpertConfigs,
   getCouncilExpertDisplayLabel,
   SEED_MODEL_ID,
 } from "@/lib/shared/models";
 import {
-  resolveAnthropicApiModel,
-  resolveGeminiApiModel,
-} from "@/lib/server/chat/providerAdapters";
-import { createGeminiApiClient } from "@/lib/server/chat/geminiRestClient";
-import { runWebBrowsingSession } from "@/lib/server/webBrowsing/session";
-import { runWebBrowsingActionText } from "@/lib/server/webBrowsing/actionRunner";
+  createWebBrowsingRuntime,
+  executeWebBrowsingNativeToolCall,
+  getAnthropicWebTools,
+  getGeminiWebTools,
+  getOpenAIWebTools,
+  WEB_BROWSING_MAX_ROUNDS,
+} from "@/lib/server/webBrowsing/nativeTools";
+import {
+  extractOpenAIFunctionCalls,
+  extractOpenAIResponseReasoning,
+  extractOpenAIResponseText,
+} from "@/app/api/openai/openaiHelpers";
 
 const ARK_API_KEY = process.env.ARK_API_KEY;
 const FORMATTING_GUARD =
@@ -237,6 +247,24 @@ function extractGeminiText(result) {
     .trim();
 }
 
+function extractGeminiResponseState(result) {
+  const parts = Array.isArray(result?.candidates?.[0]?.content?.parts)
+    ? result.candidates[0].content.parts
+    : [];
+  const functionCalls = [];
+  let fullText = "";
+  for (const part of parts) {
+    if (part?.functionCall) {
+      functionCalls.push(part.functionCall);
+      continue;
+    }
+    if (!part?.thought && typeof part?.text === "string") {
+      fullText += part.text;
+    }
+  }
+  return { parts, functionCalls, fullText: fullText.trim() };
+}
+
 function extractClaudeText(response) {
   return Array.isArray(response?.content)
     ? response.content
@@ -244,6 +272,22 @@ function extractClaudeText(response) {
         .join("")
         .trim()
     : "";
+}
+
+function extractClaudeResponseState(response) {
+  const content = Array.isArray(response?.content) ? response.content : [];
+  const toolUses = [];
+  let fullText = "";
+  for (const block of content) {
+    if (block?.type === "tool_use") {
+      toolUses.push(block);
+      continue;
+    }
+    if (block?.type === "text" && typeof block.text === "string") {
+      fullText += block.text;
+    }
+  }
+  return { content, toolUses, fullText: fullText.trim() };
 }
 
 function normalizeResponseText(value) {
@@ -402,7 +446,15 @@ function createGeminiClient(providerConfig) {
   if (!providerConfig?.apiKey) {
     throw new Error("Gemini provider apiKey is not set");
   }
-  return createGeminiApiClient({ apiKey: providerConfig.apiKey });
+  if (providerConfig?.baseUrl) {
+    return new GoogleGenAI({
+      apiKey: providerConfig.apiKey,
+      httpOptions: {
+        baseUrl: providerConfig.baseUrl,
+      },
+    });
+  }
+  return new GoogleGenAI({ apiKey: providerConfig.apiKey });
 }
 
 async function consumeOpenAIStream(response) {
@@ -476,77 +528,9 @@ async function consumeOpenAIStream(response) {
   return fullText.trim();
 }
 
-async function collectSearchContext({
-  prompt,
-  expert,
-  userId,
-  conversationId,
-  clientAborted,
-  updateStatus,
-  historyMessages,
-  signal,
-}) {
-  const citations = [];
-  const pushCitations = (items) => {
-    citations.push(...normalizeCitations(items));
-  };
-  const handleSearchEvent = (event) => {
-    if (!isPlainObject(event)) return;
-    if (event.type === "search_start") {
-      const query = typeof event.query === "string" ? event.query.trim() : "";
-      updateStatus?.({
-        status: "running",
-        phase: "searching",
-        message: query
-          ? `联网检索：${query}`
-          : `联网检索中`,
-      });
-    }
-    if (event.type === "search_result") {
-      updateStatus?.({
-        status: "running",
-        phase: "thinking",
-        message: "思考中",
-      });
-    }
-    if (event.type === "page_fetch_start") {
-      updateStatus?.({
-        status: "running",
-        phase: "searching",
-        message: "抓取网页中",
-      });
-    }
-    if (event.type === "page_fetch_result") {
-      updateStatus?.({
-        status: "running",
-        phase: "thinking",
-        message: "思考中",
-      });
-    }
-  };
-
-  const { contextText: searchContextText } = await raceWithSignal(runWebBrowsingSession({
-    actionRunner: ({ systemText, userText, maxTokens }) => runWebBrowsingActionText({
-      maxTokens,
-      model: expert.modelId,
-      req: { signal },
-      systemText,
-      thinkingLevel: expert.thinkingLevel,
-      userId,
-      userText,
-    }),
-    enableWebSearch: true,
-    prompt,
-    historyMessages,
-    sendEvent: handleSearchEvent,
-    pushCitations,
-    isClientAborted: () => clientAborted(),
-    signal,
-  }), signal);
-  return { searchContextText, citations: normalizeCitations(citations) };
-}
-
 async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
+  const ai = createGeminiClient(providerConfig);
+  const modelId = expert.modelId;
   const parts = [{ text: prompt }];
   for (const image of imagePayloads) {
     parts.push({
@@ -561,30 +545,54 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
     includeEconomyPrefix: false,
     searchContextText,
   });
-  const ai = createGeminiClient(providerConfig);
-  const result = await raceWithSignal(ai.models.generateContent({
-    model: resolveGeminiApiModel(expert.modelId, providerConfig),
-    contents: [{ role: "user", parts }],
-    signal,
-    config: {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      maxOutputTokens: EXPERT_MAX_OUTPUT_TOKENS,
-      temperature: 1,
-      thinkingConfig: {
-        thinkingLevel: expert.thinkingLevel,
-        includeThoughts: false,
+  const citations = [];
+  const runtime = createWebBrowsingRuntime();
+  const workingContents = [{ role: "user", parts }];
+
+  for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
+    const result = await raceWithSignal(ai.models.generateContent({
+      model: modelId,
+      contents: workingContents,
+      config: {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        maxOutputTokens: EXPERT_MAX_OUTPUT_TOKENS,
+        temperature: 1,
+        thinkingConfig: {
+          thinkingLevel: expert.thinkingLevel,
+          includeThoughts: false,
+        },
+        tools: getGeminiWebTools(),
       },
-    },
-  }), signal);
-  return extractGeminiText(result);
+    }), signal);
+    const state = extractGeminiResponseState(result);
+    if (state.functionCalls.length === 0) {
+      return { rawText: state.fullText || extractGeminiText(result), citations: normalizeCitations(citations) };
+    }
+    workingContents.push({ role: "model", parts: state.parts });
+    const functionResponseParts = [];
+    for (const functionCall of state.functionCalls) {
+      const toolExecution = await executeWebBrowsingNativeToolCall({
+        apiName: functionCall?.name,
+        argumentsInput: functionCall?.args,
+        runtime,
+        pushCitations: (items) => citations.push(...items),
+        round: round + 1,
+        signal,
+      });
+      functionResponseParts.push({
+        functionResponse: {
+          name: functionCall.name,
+          response: { result: toolExecution.outputText },
+          ...(typeof functionCall?.id === "string" && functionCall.id ? { id: functionCall.id } : {}),
+        },
+      });
+    }
+    workingContents.push({ role: "user", parts: functionResponseParts });
+  }
+  throw new Error(`${expert.label} 工具循环未返回最终答案`);
 }
 
 async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
-  const systemPrompt = await buildExpertSystemPrompt({
-    enableWebSearch: true,
-    includeEconomyPrefix: true,
-    searchContextText,
-  });
   const client = new Anthropic({
     apiKey: providerConfig.apiKey,
     baseURL: providerConfig.baseUrl,
@@ -600,22 +608,49 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
       },
     });
   }
-  const response = await raceWithSignal(client.messages.create({
-    model: resolveAnthropicApiModel(expert.modelId, providerConfig),
-    max_tokens: EXPERT_MAX_OUTPUT_TOKENS,
-    system: [
-      {
-        type: "text",
-        text: systemPrompt,
-      },
-    ],
-    messages: [{ role: "user", content }],
-    thinking: { type: "adaptive" },
-    output_config: {
-      effort: expert.thinkingLevel,
-    },
-  }), signal);
-  return extractClaudeText(response);
+  const systemPrompt = await buildExpertSystemPrompt({
+    enableWebSearch: true,
+    includeEconomyPrefix: true,
+    searchContextText,
+  });
+  const citations = [];
+  const runtime = createWebBrowsingRuntime();
+  const workingMessages = [{ role: "user", content }];
+
+  for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
+    const response = await raceWithSignal(client.messages.create({
+      model: CLAUDE_OPUS_MODEL,
+      max_tokens: EXPERT_MAX_OUTPUT_TOKENS,
+      system: [{ type: "text", text: systemPrompt }],
+      messages: workingMessages,
+      tools: getAnthropicWebTools(),
+      thinking: { type: "adaptive" },
+      output_config: { effort: expert.thinkingLevel },
+    }), signal);
+    const state = extractClaudeResponseState(response);
+    if (state.toolUses.length === 0 || response?.stop_reason !== "tool_use") {
+      return { rawText: state.fullText || extractClaudeText(response), citations: normalizeCitations(citations) };
+    }
+    workingMessages.push({ role: "assistant", content: response.content });
+    const toolResultBlocks = [];
+    for (const toolUse of state.toolUses) {
+      const toolExecution = await executeWebBrowsingNativeToolCall({
+        apiName: toolUse?.name,
+        argumentsInput: toolUse?.input,
+        runtime,
+        pushCitations: (items) => citations.push(...items),
+        round: round + 1,
+        signal,
+      });
+      toolResultBlocks.push({
+        type: "tool_result",
+        tool_use_id: toolUse.id,
+        content: toolExecution.outputText,
+      });
+    }
+    workingMessages.push({ role: "user", content: toolResultBlocks });
+  }
+  throw new Error(`${expert.label} 工具循环未返回最终答案`);
 }
 
 async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
@@ -631,29 +666,62 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
       image_url: image.dataUrl,
     });
   }
-  const response = await fetch(`${providerConfig.baseUrl}/responses`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${providerConfig.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: expert.modelId,
-      stream: true,
-      max_output_tokens: EXPERT_MAX_OUTPUT_TOKENS,
-      instructions: systemPrompt,
-      input: [{ role: "user", content }],
-      reasoning: {
-        effort: expert.thinkingLevel,
+  const citations = [];
+  const runtime = createWebBrowsingRuntime();
+  let nextInput = [{ role: "user", content }];
+  let previousResponseId = "";
+
+  for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
+    const response = await fetch(`${providerConfig.baseUrl}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${providerConfig.apiKey}`,
       },
-    }),
-    signal,
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(extractUpstreamErrorMessage(response.status, errorText));
+      body: JSON.stringify({
+        model: expert.modelId,
+        stream: false,
+        store: true,
+        max_output_tokens: EXPERT_MAX_OUTPUT_TOKENS,
+        instructions: systemPrompt,
+        input: nextInput,
+        ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
+        tools: getOpenAIWebTools(),
+        reasoning: { effort: expert.thinkingLevel },
+      }),
+      signal,
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(extractUpstreamErrorMessage(response.status, errorText));
+    }
+    const payload = await response.json();
+    const functionCalls = extractOpenAIFunctionCalls(payload);
+    if (functionCalls.length === 0) {
+      return {
+        rawText: extractOpenAIResponseText(payload),
+        citations: normalizeCitations(citations),
+      };
+    }
+    previousResponseId = typeof payload?.id === "string" ? payload.id : previousResponseId;
+    nextInput = [];
+    for (const functionCall of functionCalls) {
+      const toolExecution = await executeWebBrowsingNativeToolCall({
+        apiName: functionCall.name,
+        argumentsInput: functionCall.arguments,
+        runtime,
+        pushCitations: (items) => citations.push(...items),
+        round: round + 1,
+        signal,
+      });
+      nextInput.push({
+        type: "function_call_output",
+        call_id: functionCall.call_id,
+        output: toolExecution.outputText,
+      });
+    }
   }
-  return consumeOpenAIStream(response);
+  throw new Error(`${expert.label} 工具循环未返回最终答案`);
 }
 
 function normalizeExpertOutput(rawText, expert, citations) {
@@ -685,16 +753,6 @@ export async function runCouncilExpert({
 }) {
   try {
     const finalPrompt = buildCouncilTurnPrompt({ historyMemo, prompt });
-    const { searchContextText, citations } = await collectSearchContext({
-      prompt,
-      expert,
-      userId,
-      conversationId,
-      clientAborted,
-      updateStatus,
-      historyMessages: history,
-      signal,
-    });
     throwIfAborted(signal);
     if (clientAborted()) throw new Error("COUNCIL_ABORTED");
 
@@ -705,34 +763,41 @@ export async function runCouncilExpert({
     });
 
     let rawText = "";
+    let citations = [];
 
     if (expert.provider === "gemini") {
-      rawText = await requestGeminiExpert({
+      const result = await requestGeminiExpert({
         prompt: finalPrompt,
         imagePayloads,
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
-        searchContextText,
+        searchContextText: "",
         providerConfig: providerRoutes.gemini,
         signal,
       });
+      rawText = result.rawText;
+      citations = result.citations;
     } else if (expert.provider === "claude") {
-      rawText = await requestClaudeExpert({
+      const result = await requestClaudeExpert({
         prompt: finalPrompt,
         imagePayloads,
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
-        searchContextText,
-        providerConfig: providerRoutes.anthropic,
+        searchContextText: "",
+        providerConfig: providerRoutes.opus,
         signal,
       });
+      rawText = result.rawText;
+      citations = result.citations;
     } else if (expert.provider === "openai") {
-      rawText = await requestOpenAIExpert({
+      const result = await requestOpenAIExpert({
         prompt: finalPrompt,
         imagePayloads,
         expert: { ...expert, label: expert.label, thinkingLevel: expert.thinkingLevel },
-        searchContextText,
+        searchContextText: "",
         providerConfig: providerRoutes.openai,
         signal,
       });
+      rawText = result.rawText;
+      citations = result.citations;
     } else {
       throw new Error(`未知专家 provider：${expert.provider}`);
     }
@@ -996,6 +1061,9 @@ export async function buildCouncilUserInput({ prompt, images }) {
 
 export async function buildCouncilUserInputFromMessage(message) {
   const parts = getStoredPartsFromMessage(message) || [];
+  if (parts.some((part) => part?.fileData?.url)) {
+    throw new Error("Council 当前只支持文字和图片输入");
+  }
   const prompt = extractTextFromStoredParts(parts);
   const images = parts
     .filter((part) => typeof part?.inlineData?.url === "string" && part.inlineData.url)

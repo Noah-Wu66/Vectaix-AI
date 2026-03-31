@@ -1,5 +1,6 @@
 import dbConnect from '@/lib/db';
-import { requireAdmin } from '@/lib/admin';
+import { isAdminEmail, requireAdmin } from '@/lib/admin';
+import { resetModelRoutesForUser } from '@/lib/modelRoutes';
 import User from '@/models/User';
 import Conversation from '@/models/Conversation';
 import UserSettings from '@/models/UserSettings';
@@ -110,8 +111,29 @@ export async function PATCH(req, context) {
     }
 
     const body = await parseJsonBody(req);
-    if (body?.action && body.action !== 'reset-password') {
-        return Response.json({ error: '不支持的操作' }, { status: 400 });
+    if (body?.action === 'set-advanced-user') {
+        if (isAdminEmail(user.email)) {
+            return Response.json({ error: '超级管理员不需要调整高级用户权限' }, { status: 400 });
+        }
+
+        const nextIsAdvancedUser = body?.isAdvancedUser === true;
+        user.isAdvancedUser = nextIsAdvancedUser;
+        await user.save();
+
+        if (!nextIsAdvancedUser) {
+            await resetModelRoutesForUser(user._id);
+        }
+
+        return Response.json({
+            success: true,
+            user: {
+                id: user._id.toString(),
+                email: user.email,
+                isAdmin: false,
+                isAdvancedUser: nextIsAdvancedUser,
+                canSwitchRoutes: nextIsAdvancedUser,
+            },
+        });
     }
 
     // 生成随机密码（12 位，包含大小写字母和数字）

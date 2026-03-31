@@ -1,9 +1,11 @@
 import {
+  fetchBlobAsBase64,
   fetchImageAsBase64,
   isNonEmptyString,
   getStoredPartsFromMessage,
 } from "@/app/api/chat/utils";
 import { buildAttachmentTextBlock } from "@/lib/server/files/service";
+import { getAttachmentInputType } from "@/lib/shared/attachments";
 
 export function buildSeedMessageInput({ role, content }) {
   if (!isNonEmptyString(role) || !Array.isArray(content) || content.length === 0) {
@@ -42,6 +44,25 @@ export async function storedPartToBytedancePart(part, role, options = {}) {
 
     const fileUrl = part?.fileData?.url;
     if (isNonEmptyString(fileUrl)) {
+      const inputType = getAttachmentInputType(part?.fileData?.category);
+      if (inputType === "video") {
+        const { base64Data, mimeType: fetchedMimeType } = await fetchBlobAsBase64(fileUrl, { resourceLabel: "video" });
+        const mimeType = part.fileData?.mimeType || fetchedMimeType;
+        return {
+          type: "input_video",
+          video_url: `data:${mimeType};base64,${base64Data}`,
+        };
+      }
+
+      if (inputType === "audio") {
+        const { base64Data, mimeType: fetchedMimeType } = await fetchBlobAsBase64(fileUrl, { resourceLabel: "audio" });
+        const mimeType = part.fileData?.mimeType || fetchedMimeType;
+        return {
+          type: "input_audio",
+          audio_url: `data:${mimeType};base64,${base64Data}`,
+        };
+      }
+
       const fileTextMap = options?.fileTextMap instanceof Map ? options.fileTextMap : new Map();
       const prepared = fileTextMap.get(fileUrl);
       if (prepared?.structuredText || prepared?.extractedText) {
@@ -60,6 +81,16 @@ export async function buildBytedanceInputFromHistory(messages, options = {}) {
   const input = [];
   for (const msg of messages) {
     if (msg?.role !== "user" && msg?.role !== "model") continue;
+
+    if (msg.role === "model") {
+      const providerOutput = Array.isArray(msg?.providerState?.seed?.output)
+        ? msg.providerState.seed.output
+        : [];
+      if (providerOutput.length > 0) {
+        input.push(...providerOutput);
+        continue;
+      }
+    }
 
     const storedParts = getStoredPartsFromMessage(msg);
     if (!storedParts || storedParts.length === 0) continue;
