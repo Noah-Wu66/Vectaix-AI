@@ -221,7 +221,7 @@ export default function ThinkingBlock({
       if (step.kind === "reader") {
         const target = step.url ? `「${step.url}」` : "";
         const countLabel = Number.isFinite(step.resultCount) && step.resultCount > 0 ? `（${step.resultCount}页）` : "";
-        if (isRunning) return `抓取网页中${target}`;
+        if (isRunning) return `浏览页面中${target}`;
         if (isError) return `网页抓取失败${target}`;
         return `网页抓取完成${target}${countLabel}`;
       }
@@ -383,7 +383,7 @@ export default function ThinkingBlock({
             <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
               {icon}
               {isRunning ? (
-                <SplitStatusText status="抓取网页中" suffix={urlSuffix} active />
+                <SplitStatusText status="浏览页面中" suffix={urlSuffix} active />
               ) : (
                 <span>{isError ? `网页抓取失败${urlSuffix}` : `网页抓取完成${urlSuffix}`}</span>
               )}
@@ -395,7 +395,7 @@ export default function ThinkingBlock({
             <div className={capsuleClass}>
               {icon}
               {isRunning ? (
-                <SplitStatusText status="抓取网页中" suffix={urlSuffix} active />
+                <SplitStatusText status="浏览页面中" suffix={urlSuffix} active />
               ) : (
                 <span>{isError ? `网页抓取失败${urlSuffix}` : `网页抓取完成${urlSuffix}`}</span>
               )}
