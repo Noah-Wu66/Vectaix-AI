@@ -51,7 +51,7 @@ export async function POST(req) {
 
         const clientIP = getClientIP(req);
         const rateLimitKey = `compress:${auth.userId}:${clientIP}`;
-        const { success } = rateLimit(rateLimitKey, COMPRESS_RATE_LIMIT);
+        const { success } = await rateLimit(rateLimitKey, COMPRESS_RATE_LIMIT);
         if (!success) {
             return Response.json({ error: '请求过于频繁，请稍后再试' }, { status: 429 });
         }

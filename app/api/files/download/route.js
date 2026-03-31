@@ -1,4 +1,5 @@
 import { getAuthPayload } from "@/lib/auth";
+import { rateLimit, getClientIP } from "@/lib/rateLimit";
 import dbConnect from "@/lib/db";
 import Conversation from "@/models/Conversation";
 import UserSettings from "@/models/UserSettings";
@@ -56,6 +57,18 @@ async function isUrlOwnedByUser(userId, url) {
 export async function GET(req) {
   const auth = await getAuthPayload();
   if (!auth) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Rate limit: 100 downloads per hour per user
+  const clientIP = getClientIP(req);
+  const rlKey = `download:${auth.userId}:${clientIP}`;
+  const { success: rlOk, resetTime } = await rateLimit(rlKey, { limit: 100, windowMs: 60 * 60 * 1000 });
+  if (!rlOk) {
+    const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
+    return Response.json(
+      { error: "下载过于频繁，请稍后再试" },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } }
+    );
+  }
 
   const { searchParams } = new URL(req.url);
   const url = searchParams.get("url");

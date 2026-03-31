@@ -127,7 +127,7 @@ export async function POST(req) {
 
         const clientIP = getClientIP(req);
         const rateLimitKey = `chat:${auth.userId}:${clientIP}`;
-        const { success, resetTime } = rateLimit(rateLimitKey, CHAT_RATE_LIMIT);
+        const { success, resetTime } = await rateLimit(rateLimitKey, CHAT_RATE_LIMIT);
         if (!success) {
             const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
             return Response.json(

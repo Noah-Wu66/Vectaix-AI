@@ -13,7 +13,7 @@ export async function POST(req) {
         // Apply rate limiting
         const clientIP = getClientIP(req);
         const rateLimitKey = `login:${clientIP}`;
-        const { success, remaining, resetTime } = rateLimit(rateLimitKey, LOGIN_RATE_LIMIT);
+        const { success, remaining, resetTime } = await rateLimit(rateLimitKey, LOGIN_RATE_LIMIT);
 
         if (!success) {
             const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);

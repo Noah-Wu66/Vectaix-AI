@@ -5,8 +5,8 @@ import bcrypt from 'bcryptjs';
 import { signAuthToken, setAuthCookie } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 
-// Email validation regex
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Email validation: stricter regex requiring domain with at least 2 char TLD
+const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
 
 // Password requirements: at least 8 chars, 1 uppercase, 1 lowercase, 1 number
 const PASSWORD_MIN_LENGTH = 8;
@@ -41,7 +41,7 @@ export async function POST(req) {
         // Apply rate limiting
         const clientIP = getClientIP(req);
         const rateLimitKey = `register:${clientIP}`;
-        const { success, resetTime } = rateLimit(rateLimitKey, REGISTER_RATE_LIMIT);
+        const { success, resetTime } = await rateLimit(rateLimitKey, REGISTER_RATE_LIMIT);
 
         if (!success) {
             const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);

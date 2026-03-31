@@ -1,6 +1,8 @@
 import { handleUpload } from '@vercel/blob/client';
+import { del } from '@vercel/blob';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
+import { validateMagicBytes } from '@/lib/magicBytes';
 import dbConnect from '@/lib/db';
 import BlobFile from '@/models/BlobFile';
 import {
@@ -31,10 +33,13 @@ export async function POST(request) {
     }
 
     const user = await getAuthPayload();
+    if (!user) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const clientIP = getClientIP(request);
     const rateLimitKey = `upload:${user?.userId || 'anon'}:${clientIP}`;
-    const { success, resetTime } = rateLimit(rateLimitKey, UPLOAD_RATE_LIMIT);
+    const { success, resetTime } = await rateLimit(rateLimitKey, UPLOAD_RATE_LIMIT);
     if (!success) {
         const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
         return Response.json(
@@ -150,6 +155,28 @@ export async function POST(request) {
                     const originalName = typeof payload?.originalName === 'string' ? payload.originalName : blob.pathname;
                     const mimeType = typeof payload?.mimeType === 'string' ? payload.mimeType : normalizeMimeType(blob.contentType);
                     const extension = typeof payload?.extension === 'string' ? payload.extension : getFileExtension(originalName);
+
+                    // Validate magic bytes for binary file types
+                    const category = payload?.category || getAttachmentCategory({ extension, mimeType });
+                    if (category === 'image' || category === 'document' || category === 'video' || category === 'audio') {
+                        try {
+                            const headRes = await fetch(blob.url, {
+                                headers: { Range: 'bytes=0-31' },
+                                cache: 'no-store',
+                            });
+                            if (headRes.ok) {
+                                const headerBytes = new Uint8Array(await headRes.arrayBuffer());
+                                if (!validateMagicBytes(headerBytes, mimeType)) {
+                                    console.warn(`Magic bytes mismatch: ${originalName} (${mimeType}), deleting blob`);
+                                    await del(blob.url);
+                                    return;
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Magic bytes validation error:', e?.message);
+                            // Don't block upload on validation failure
+                        }
+                    }
                     const descriptor = createAttachmentDescriptor({
                         url: blob.url,
                         name: originalName,
@@ -179,7 +206,9 @@ export async function POST(request) {
                         },
                         { upsert: true }
                     );
-                } catch { }
+                } catch (e) {
+                    console.error('onUploadCompleted error:', e?.message);
+                }
             },
         });
 

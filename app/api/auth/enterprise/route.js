@@ -41,7 +41,9 @@ export async function GET() {
 
     let user = await User.findOne({ email });
     if (!user) {
-      const randomPassword = crypto.randomBytes(24).toString('base64url');
+      // SSO-only account: password is random and not communicated to the user.
+      // They can only log in via enterprise SSO.
+      const randomPassword = crypto.randomBytes(32).toString('base64url');
       const hashedPassword = await bcrypt.hash(randomPassword, 10);
       user = await User.create({ email, password: hashedPassword });
     }

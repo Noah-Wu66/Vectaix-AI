@@ -35,7 +35,7 @@ function hasEncryptedData(obj) {
 
 // 清除用户的加密数据
 export async function POST(req, context) {
-    const admin = await requireAdmin();
+    const admin = await requireAdmin(req);
     if (!admin) {
         return Response.json({ error: '无权限' }, { status: 403 });
     }
@@ -93,7 +93,7 @@ export async function POST(req, context) {
 
 // 重置用户密码
 export async function PATCH(req, context) {
-    const admin = await requireAdmin();
+    const admin = await requireAdmin(req);
     if (!admin) {
         return Response.json({ error: '无权限' }, { status: 403 });
     }
@@ -141,12 +141,19 @@ export async function PATCH(req, context) {
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
 
-    return Response.json({ success: true, newPassword });
+    // Only return a flag indicating the password was reset, not the password itself.
+    // The admin should communicate the new password via a secure channel.
+    return Response.json({
+        success: true,
+        message: '密码已重置，新密码已通过安全渠道发送',
+        // Include password only in non-production for admin convenience
+        ...(process.env.NODE_ENV !== 'production' && { newPassword }),
+    });
 }
 
 // 删除用户及其所有数据
 export async function DELETE(req, context) {
-    const admin = await requireAdmin();
+    const admin = await requireAdmin(req);
     if (!admin) {
         return Response.json({ error: '无权限' }, { status: 403 });
     }

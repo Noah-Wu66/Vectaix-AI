@@ -13,7 +13,7 @@ function escapeRegex(input) {
 }
 
 export async function GET(req) {
-  const admin = await requireAdmin();
+  const admin = await requireAdmin(req);
   if (!admin) {
     return Response.json({ error: '无权限' }, { status: 403 });
   }
@@ -69,8 +69,8 @@ export async function GET(req) {
 }
 
 // 清除全部用户的加密数据（包含侧边栏会话标题）
-export async function POST() {
-  const admin = await requireAdmin();
+export async function POST(req) {
+  const admin = await requireAdmin(req);
   if (!admin) {
     return Response.json({ error: '无权限' }, { status: 403 });
   }
