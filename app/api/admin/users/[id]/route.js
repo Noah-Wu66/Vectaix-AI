@@ -1,6 +1,5 @@
 import dbConnect from '@/lib/db';
 import { isAdminEmail, requireAdmin } from '@/lib/admin';
-import { resetModelRoutesForUser } from '@/lib/modelRoutes';
 import User from '@/models/User';
 import Conversation from '@/models/Conversation';
 import UserSettings from '@/models/UserSettings';
@@ -120,10 +119,6 @@ export async function PATCH(req, context) {
         user.isAdvancedUser = nextIsAdvancedUser;
         await user.save();
 
-        if (!nextIsAdvancedUser) {
-            await resetModelRoutesForUser(user._id);
-        }
-
         return Response.json({
             success: true,
             user: {
@@ -131,7 +126,6 @@ export async function PATCH(req, context) {
                 email: user.email,
                 isAdmin: false,
                 isAdvancedUser: nextIsAdvancedUser,
-                canSwitchRoutes: nextIsAdvancedUser,
             },
         });
     }

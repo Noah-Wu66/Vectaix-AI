@@ -19,7 +19,8 @@ import {
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
-import { getModelRoutes, resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
+import { resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
+import { toZenmuxModel } from '@/lib/shared/models';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
     buildConversationWriteCondition,
@@ -167,9 +168,8 @@ export async function POST(req) {
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        const modelRoutes = await getModelRoutes(user.userId);
-        const { route: providerRoute, baseUrl: apiBaseUrl, apiKey } = resolveOpenAIProviderConfig(modelRoutes);
-        const apiModel = model;
+        const { baseUrl: apiBaseUrl, apiKey } = resolveOpenAIProviderConfig();
+        const apiModel = toZenmuxModel(model);
 
         let currentConversationId = conversationId;
         let currentConversation = await loadConversationForRoute({
@@ -491,7 +491,7 @@ export async function POST(req) {
                         systemPromptSuffix,
                         enableWebSearch,
                         searchContextSection: '',
-                        includeEconomyPrefix: providerRoute === 'default',
+                        includeEconomyPrefix: true,
                     });
 
                     const requestResponsesStream = async (requestBody, onThought) => {

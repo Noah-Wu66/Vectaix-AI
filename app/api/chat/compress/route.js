@@ -78,7 +78,7 @@ export async function POST(req) {
             return Response.json({ error: 'No valid messages to compress' }, { status: 400 });
         }
 
-        const ai = await createGeminiClient(auth.userId);
+        const ai = await createGeminiClient();
 
         const result = await ai.models.generateContent({
             model: COMPRESS_MODEL,

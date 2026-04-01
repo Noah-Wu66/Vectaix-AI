@@ -24,7 +24,9 @@ import {
   getCouncilExpertConfigs,
   getCouncilExpertDisplayLabel,
   SEED_MODEL_ID,
+  toZenmuxModel,
 } from "@/lib/shared/models";
+import { resolveSeedProviderConfig } from "@/lib/modelRoutes";
 import {
   createWebBrowsingRuntime,
   executeWebBrowsingNativeToolCall,
@@ -39,7 +41,6 @@ import {
   extractOpenAIResponseText,
 } from "@/app/api/openai/openaiHelpers";
 
-const ARK_API_KEY = process.env.ARK_API_KEY;
 const FORMATTING_GUARD =
   "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
@@ -623,7 +624,7 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
 
   for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
     const response = await raceWithSignal(client.messages.create({
-      model: CLAUDE_OPUS_MODEL,
+      model: toZenmuxModel(CLAUDE_OPUS_MODEL),
       max_tokens: EXPERT_MAX_OUTPUT_TOKENS,
       system: [{ type: "text", text: systemPrompt }],
       messages: workingMessages,
@@ -683,7 +684,7 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
         Authorization: `Bearer ${providerConfig.apiKey}`,
       },
       body: JSON.stringify({
-        model: expert.modelId,
+        model: toZenmuxModel(expert.modelId),
         stream: false,
         store: true,
         max_output_tokens: EXPERT_MAX_OUTPUT_TOKENS,
@@ -862,14 +863,15 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
     return { needCouncil: true };
   }
 
-  assertConfigured(ARK_API_KEY, "ARK_API_KEY 未配置");
+  const seedConfig = resolveSeedProviderConfig();
   throwIfAborted(signal);
 
   try {
     const response = await requestSeedResponses({
-      apiKey: ARK_API_KEY,
+      apiKey: seedConfig.apiKey,
+      baseUrl: seedConfig.baseUrl,
       requestBody: buildSeedRequestBody({
-        model: SEED_MODEL_ID,
+        model: toZenmuxModel(SEED_MODEL_ID),
         stream: false,
         maxTokens: TRIAGE_MAX_OUTPUT_TOKENS,
         thinkingLevel: "minimal",
@@ -934,12 +936,13 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
 }
 
 export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTextDelta, signal }) {
-  assertConfigured(ARK_API_KEY, "ARK_API_KEY 未配置");
+  const seedConfig = resolveSeedProviderConfig();
   const instructions = await buildSeedSystemPrompt();
   const response = await requestSeedResponses({
-    apiKey: ARK_API_KEY,
+    apiKey: seedConfig.apiKey,
+    baseUrl: seedConfig.baseUrl,
     requestBody: buildSeedRequestBody({
-      model: SEED_MODEL_ID,
+      model: toZenmuxModel(SEED_MODEL_ID),
       stream: true,
       input: [
         buildSeedMessageInput({

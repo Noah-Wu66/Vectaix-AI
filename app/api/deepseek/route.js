@@ -11,7 +11,8 @@ import {
     estimateTokens,
     getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
-import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL } from '@/lib/shared/models';
+import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL, toZenmuxModel } from '@/lib/shared/models';
+import { resolveDeepSeekProviderConfig } from '@/lib/modelRoutes';
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     clampMaxTokens,
@@ -40,7 +41,6 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const MAX_REQUEST_BYTES = 2_000_000;
 
@@ -156,12 +156,9 @@ export async function POST(req) {
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        const apiKey = process.env.DEEPSEEK_API_KEY;
-        if (!apiKey) {
-            return Response.json({ error: 'DEEPSEEK_API_KEY is not set' }, { status: 500 });
-        }
-        // 使用 deepseek-reasoner 作为 API 模型（内置思考模式）
-        const apiModel = model === DEEPSEEK_REASONER_MODEL ? DEEPSEEK_REASONER_MODEL : DEEPSEEK_CHAT_MODEL;
+        const { baseUrl: deepseekBaseUrl, apiKey } = resolveDeepSeekProviderConfig();
+        const rawApiModel = model === DEEPSEEK_REASONER_MODEL ? DEEPSEEK_REASONER_MODEL : DEEPSEEK_CHAT_MODEL;
+        const apiModel = toZenmuxModel(rawApiModel);
 
         let currentConversationId = conversationId;
         let currentConversation = await loadConversationForRoute({
@@ -394,7 +391,7 @@ export async function POST(req) {
                         let finished = false;
 
                         for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
-                            const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
+                            const response = await fetch(`${deepseekBaseUrl}/chat/completions`, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -517,7 +514,7 @@ export async function POST(req) {
                             throw new Error('DeepSeek 工具循环未返回最终答案');
                         }
                     } else {
-                        const response = await fetch(`${DEEPSEEK_BASE_URL}/v1/chat/completions`, {
+                        const response = await fetch(`${deepseekBaseUrl}/chat/completions`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',

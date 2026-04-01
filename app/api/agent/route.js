@@ -135,9 +135,9 @@ export async function POST(req) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const apiKey = process.env.ARK_API_KEY;
+    const apiKey = process.env.ZENMUX_API_KEY;
     if (!apiKey) {
-      return Response.json({ error: "ARK_API_KEY 未配置" }, { status: 500 });
+      return Response.json({ error: "ZENMUX_API_KEY 未配置" }, { status: 500 });
     }
 
     const limit = Number.parseInt(historyLimit, 10);

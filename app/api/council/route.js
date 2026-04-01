@@ -25,7 +25,6 @@ import {
   runSeedCouncilSummary,
   runSeedTriage,
 } from "./councilHelpers";
-import { getModelRoutes } from "@/lib/modelRoutes";
 import {
   enrichConversationPartsWithBlobIds,
   enrichStoredMessagesWithBlobIds,
@@ -192,8 +191,7 @@ export async function POST(req) {
 
   let providerRoutes;
   try {
-    const savedRoutes = await getModelRoutes(auth.userId);
-    providerRoutes = resolveCouncilProviderRoutes(savedRoutes);
+    providerRoutes = resolveCouncilProviderRoutes();
   } catch (error) {
     return Response.json({ error: error?.message || "模型线路配置错误" }, { status: 500 });
   }

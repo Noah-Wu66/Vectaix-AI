@@ -16,7 +16,9 @@ import {
     SEED_MODEL_ID,
     isSeedModel,
     normalizeModelId,
+    toZenmuxModel,
 } from '@/lib/shared/models';
+import { resolveSeedProviderConfig } from '@/lib/modelRoutes';
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     parseMaxTokens,
@@ -155,13 +157,10 @@ export async function POST(req) {
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        const apiKey = process.env.ARK_API_KEY;
-        if (!apiKey) {
-            return Response.json({ error: 'ARK_API_KEY 未配置' }, { status: 500 });
-        }
+        const { baseUrl: seedBaseUrl, apiKey } = resolveSeedProviderConfig();
 
         const conversationModel = normalizeModelId(model);
-        const apiModel = conversationModel;
+        const apiModel = toZenmuxModel(conversationModel);
         if (!isSeedModel(apiModel)) {
             return Response.json({ error: '当前接口仅支持官方 Seed 模型' }, { status: 400 });
         }
@@ -455,6 +454,7 @@ export async function POST(req) {
                     const requestSeedJson = async (requestBody) => {
                         const response = await requestSeedResponses({
                             apiKey,
+                            baseUrl: seedBaseUrl,
                             requestBody,
                             req,
                         });
@@ -646,9 +646,9 @@ export async function POST(req) {
         let errorMessage = error?.message;
 
         if (rawStatus === 401) {
-            errorMessage = 'Seed 官方接口认证失败，请检查 ARK_API_KEY';
-        } else if (error?.message?.includes('ARK_API_KEY')) {
-            errorMessage = 'Seed 官方接口未正确配置，请检查 ARK_API_KEY';
+            errorMessage = 'Seed 接口认证失败，请检查 ZENMUX_API_KEY';
+        } else if (error?.message?.includes('ZENMUX_API_KEY')) {
+            errorMessage = 'Seed 接口未正确配置，请检查 ZENMUX_API_KEY';
         }
 
         return Response.json({ error: errorMessage }, { status });

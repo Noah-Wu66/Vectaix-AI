@@ -27,7 +27,7 @@ import {
     enrichConversationPartsWithBlobIds,
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
-import { getModelRoutes, resolveGeminiProviderConfig } from '@/lib/modelRoutes';
+import { resolveGeminiProviderConfig } from '@/lib/modelRoutes';
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     parseGeminiThinkingLevel,
@@ -220,9 +220,8 @@ export async function POST(req) {
         }
 
         const apiModel = resolveGeminiApiModel(model);
-        const modelRoutes = await getModelRoutes(user.userId);
-        const providerConfig = resolveGeminiProviderConfig(modelRoutes);
-        const ai = await createGeminiClient(user.userId);
+        const providerConfig = resolveGeminiProviderConfig();
+        const ai = await createGeminiClient();
         let currentConversationId = conversationId;
         let currentConversation = await loadConversationForRoute({
             conversationId: currentConversationId,

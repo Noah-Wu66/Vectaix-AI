@@ -24,23 +24,6 @@ const UserSettingsSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
-    modelRoutes: {
-        openai: {
-            type: String,
-            enum: ['default', 'zenmux'],
-            default: 'default',
-        },
-        opus: {
-            type: String,
-            enum: ['default', 'zenmux'],
-            default: 'default',
-        },
-        gemini: {
-            type: String,
-            enum: ['default', 'native'],
-            default: 'default',
-        },
-    },
     systemPrompts: [SystemPromptSchema],
     updatedAt: {
         type: Date,

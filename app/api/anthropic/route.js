@@ -8,6 +8,7 @@ import {
     CLAUDE_OPUS_MODEL,
     getDefaultMaxTokensForModel,
     getModelConfig,
+    toZenmuxModel,
 } from '@/lib/shared/models';
 import {
     fetchImageAsBase64,
@@ -266,9 +267,9 @@ export async function POST(req) {
             return Response.json({ error: 'unsupported anthropic-compatible model' }, { status: 400 });
         }
 
-        const providerConfig = await resolveAnthropicProviderConfig(model, user.userId);
-        const { route: providerRoute, baseUrl: anthropicBaseUrl, apiKey } = providerConfig;
-        const apiModel = resolveAnthropicApiModel(model);
+        const providerConfig = await resolveAnthropicProviderConfig();
+        const { baseUrl: anthropicBaseUrl, apiKey } = providerConfig;
+        const apiModel = toZenmuxModel(resolveAnthropicApiModel(model));
         const client = new Anthropic({
             apiKey,
             baseURL: anthropicBaseUrl,
@@ -586,7 +587,7 @@ export async function POST(req) {
                         systemPromptSuffix,
                         enableWebSearch,
                         searchContextSection: '',
-                        includeEconomyPrefix: providerRoute === 'default',
+                        includeEconomyPrefix: true,
                     });
                     const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
                     const workingMessages = [...claudeMessages];

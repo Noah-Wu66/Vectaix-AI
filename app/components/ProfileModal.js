@@ -12,29 +12,12 @@ import {
   X,
   Camera,
   Volume2,
-  GitBranch,
 } from "lucide-react";
 
 import { upload } from "@vercel/blob/client";
 import { apiJson } from "@/lib/client/apiClient";
-import { MODEL_GROUP_TITLES } from "@/lib/shared/models";
 import { useToast } from "./ToastProvider";
 import UserManagementModal from "./UserManagementModal";
-
-const EMPTY_MODEL_ROUTES = { openai: "default", opus: "default", gemini: "default" };
-const MODEL_ROUTE_LABELS = Object.freeze({
-  openai: MODEL_GROUP_TITLES.openai,
-  opus: MODEL_GROUP_TITLES.claude,
-  gemini: MODEL_GROUP_TITLES.gemini,
-});
-
-function normalizeUserModelRoutes(routes) {
-  return {
-    openai: routes?.openai === "zenmux" ? "zenmux" : "default",
-    opus: routes?.opus === "zenmux" ? "zenmux" : "default",
-    gemini: routes?.gemini === "native" || routes?.gemini === "zenmux" ? "native" : "default",
-  };
-}
 
 export default function ProfileModal({
   open,
@@ -55,7 +38,6 @@ export default function ProfileModal({
   const toast = useToast();
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
-  const [showRouteSelector, setShowRouteSelector] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
 
   const [oldPassword, setOldPassword] = useState("");
@@ -64,10 +46,6 @@ export default function ProfileModal({
   const [pwLoading, setPwLoading] = useState(false);
 
   const [avatarLoading, setAvatarLoading] = useState(false);
-  const [routeLoading, setRouteLoading] = useState(false);
-  const [routeSaving, setRouteSaving] = useState(false);
-  const [modelRoutes, setModelRoutes] = useState(EMPTY_MODEL_ROUTES);
-  const [savedModelRoutes, setSavedModelRoutes] = useState(EMPTY_MODEL_ROUTES);
   const [nicknameDraft, setNicknameDraft] = useState("");
   const [nicknameSaving, setNicknameSaving] = useState(false);
   const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
@@ -81,11 +59,6 @@ export default function ProfileModal({
 
   const avatarFileInputRef = useRef(null);
   const canManageUsers = Boolean(isAdmin);
-  const canSwitchRoutes = Boolean(user?.canSwitchRoutes || isAdmin);
-  const hasRouteChanges =
-    modelRoutes.openai !== savedModelRoutes.openai ||
-    modelRoutes.opus !== savedModelRoutes.opus ||
-    modelRoutes.gemini !== savedModelRoutes.gemini;
   const savedNickname = typeof nickname === "string" ? nickname : "";
   const hasNicknameChanges = nicknameDraft !== savedNickname;
 
@@ -120,64 +93,9 @@ export default function ProfileModal({
   };
 
   useEffect(() => {
-    if (!open || !canSwitchRoutes) return;
-
-    let cancelled = false;
-
-    const fetchRouteConfig = async () => {
-      setRouteLoading(true);
-      try {
-        const routesData = await apiJson("/api/model-routes");
-
-        if (!cancelled) {
-          const nextRoutes = normalizeUserModelRoutes(routesData?.routes);
-          setModelRoutes(nextRoutes);
-          setSavedModelRoutes(nextRoutes);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          toast.error(e?.message || "加载线路配置失败");
-        }
-      } finally {
-        if (!cancelled) {
-          setRouteLoading(false);
-        }
-      }
-    };
-
-    fetchRouteConfig();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, canSwitchRoutes, toast]);
-
-  useEffect(() => {
     if (!open) return;
     setNicknameDraft(savedNickname);
   }, [open, savedNickname]);
-
-  const setProviderRoute = (provider, route) => {
-    setModelRoutes((prev) => ({ ...prev, [provider]: route }));
-  };
-
-  const saveModelRoutes = async () => {
-    setRouteSaving(true);
-    try {
-      const data = await apiJson("/api/model-routes", {
-        method: "PATCH",
-        body: modelRoutes,
-      });
-
-      const nextRoutes = normalizeUserModelRoutes(data?.routes);
-      setModelRoutes(nextRoutes);
-      setSavedModelRoutes(nextRoutes);
-      toast.success("线路配置已保存，只影响当前账号");
-    } catch (e) {
-      toast.error(e?.message || "保存线路配置失败");
-    } finally {
-      setRouteSaving(false);
-    }
-  };
 
   const saveNickname = async () => {
     if (!hasNicknameChanges || !onNicknameChange) return;
@@ -461,115 +379,6 @@ export default function ProfileModal({
                   </motion.div>
                 )}
               </AnimatePresence>
-
-              {/* 线路选择（仅高级用户和超级管理员可见） */}
-              {canSwitchRoutes && (
-                <>
-                  <button
-                    onClick={() => setShowRouteSelector(!showRouteSelector)}
-                    className="w-full flex items-center justify-between bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 transition-colors"
-                  >
-                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
-                      <GitBranch size={14} /> 线路选择
-                    </span>
-                    <ChevronDown
-                      size={16}
-                      className={`text-zinc-400 transition-transform ${showRouteSelector ? "rotate-180" : ""}`}
-                    />
-                  </button>
-
-                  <AnimatePresence>
-                    {showRouteSelector && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 space-y-4">
-                          <div className="space-y-2">
-                            <label className="text-xs text-zinc-500 font-medium tracking-wider block">{MODEL_ROUTE_LABELS.openai} 线路</label>
-                            <div className="flex gap-2">
-                              {[
-                                { id: "default", label: "AICodeMirror" },
-                                { id: "zenmux", label: "Zenmux" },
-                              ].map((item) => (
-                                <button
-                                  key={`openai-${item.id}`}
-                                  type="button"
-                                  onClick={() => setProviderRoute("openai", item.id)}
-                                  disabled={routeLoading || routeSaving}
-                                  className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.openai === item.id
-                                    ? "bg-zinc-600 text-white border-zinc-600"
-                                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                                    } disabled:opacity-50`}
-                                >
-                                  {item.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-xs text-zinc-500 font-medium tracking-wider block">{MODEL_ROUTE_LABELS.opus} 线路</label>
-                            <div className="flex gap-2">
-                              {[
-                                { id: "default", label: "AICodeMirror" },
-                                { id: "zenmux", label: "Zenmux" },
-                              ].map((item) => (
-                                <button
-                                  key={`opus-${item.id}`}
-                                  type="button"
-                                  onClick={() => setProviderRoute("opus", item.id)}
-                                  disabled={routeLoading || routeSaving}
-                                  className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.opus === item.id
-                                    ? "bg-zinc-600 text-white border-zinc-600"
-                                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                                    } disabled:opacity-50`}
-                                >
-                                  {item.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-xs text-zinc-500 font-medium tracking-wider block">{MODEL_ROUTE_LABELS.gemini} 线路</label>
-                            <div className="flex gap-2">
-                              {[
-                                { id: "default", label: "AICodeMirror" },
-                                { id: "native", label: "Google 原生" },
-                              ].map((item) => (
-                                <button
-                                  key={`gemini-${item.id}`}
-                                  type="button"
-                                  onClick={() => setProviderRoute("gemini", item.id)}
-                                  disabled={routeLoading || routeSaving}
-                                  className={`flex-1 py-2 rounded-lg border transition-colors text-sm ${modelRoutes.gemini === item.id
-                                    ? "bg-zinc-600 text-white border-zinc-600"
-                                    : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                                    } disabled:opacity-50`}
-                                >
-                                  {item.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={saveModelRoutes}
-                            disabled={routeLoading || routeSaving || !hasRouteChanges}
-                            className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
-                          >
-                            {routeLoading ? "加载中..." : routeSaving ? "保存中..." : "保存线路配置"}
-                          </button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </>
-              )}
 
               {/* 用户管理（仅超级管理员可见） */}
               {canManageUsers && (

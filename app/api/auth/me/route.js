@@ -11,7 +11,6 @@ export async function GET() {
       email: user.email,
       isAdmin: user.isAdmin,
       isAdvancedUser: user.isAdvancedUser,
-      canSwitchRoutes: user.canSwitchRoutes,
     }
   });
 }
