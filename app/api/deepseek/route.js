@@ -49,7 +49,7 @@ const MAX_REQUEST_BYTES = 2_000_000;
  * DeepSeek 使用标准 OpenAI Chat Completions 消息格式：
  * { role: "user"|"assistant", content: "..." }
  * 
- * 关键：多轮对话中只传递 content，不传递 reasoning_content
+ * 关键：多轮对话中只传递 content，不传递 reasoning
  */
 async function buildDeepSeekMessagesFromHistory(messages) {
     const result = [];
@@ -440,9 +440,9 @@ export async function POST(req) {
                                         if (!choice) continue;
 
                                         const delta = choice.delta;
-                                        if (delta?.reasoning_content) {
-                                            thought += delta.reasoning_content;
-                                            sendEvent({ type: 'thought', content: delta.reasoning_content });
+                                        if (delta?.reasoning) {
+                                            thought += delta.reasoning;
+                                            sendEvent({ type: 'thought', content: delta.reasoning });
                                         }
                                         if (delta?.content) {
                                             content += delta.content;
@@ -487,7 +487,7 @@ export async function POST(req) {
                             loopMessages.push({
                                 role: 'assistant',
                                 content: content || '',
-                                ...(thought ? { reasoning_content: thought } : {}),
+                                ...(thought ? { reasoning: thought } : {}),
                                 tool_calls: toolCalls,
                             });
 
@@ -558,8 +558,8 @@ export async function POST(req) {
                                     if (!choice) continue;
 
                                     const delta = choice.delta;
-                                    if (delta?.reasoning_content) {
-                                        const thought = delta.reasoning_content;
+                                    if (delta?.reasoning) {
+                                        const thought = delta.reasoning;
                                         fullThought += thought;
                                         sendEvent({ type: 'thought', content: thought });
                                     }
