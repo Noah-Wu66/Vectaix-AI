@@ -550,7 +550,12 @@ export async function POST(req) {
                                         if (text) {
                                             accumulated.output.push({ type: 'text', text });
                                         }
-                                    } else if (event.type === 'response.done' || event.type === 'done') {
+                                    } else if (event.type === 'response.output_text.done' || event.type === 'output.text.done') {
+                                        // GPT-5 style: collect the final text when output_text is done
+                                        if (event.text) {
+                                            accumulated.output.push({ type: 'text', text: event.text });
+                                        }
+                                    } else if (event.type === 'response.completed' || event.type === 'response.done' || event.type === 'done') {
                                         return event.response || event;
                                     }
                                 } catch { }

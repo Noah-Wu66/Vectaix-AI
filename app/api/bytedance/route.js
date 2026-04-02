@@ -161,7 +161,7 @@ export async function POST(req) {
 
         const conversationModel = normalizeModelId(model);
         const apiModel = toZenmuxModel(conversationModel);
-        if (!isSeedModel(apiModel)) {
+        if (!isSeedModel(conversationModel)) {
             return Response.json({ error: '当前接口仅支持官方 Seed 模型' }, { status: 400 });
         }
 

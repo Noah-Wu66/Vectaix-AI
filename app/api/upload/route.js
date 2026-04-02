@@ -15,7 +15,7 @@ import {
     normalizeMimeType,
 } from '@/lib/shared/attachments';
 import {
-    CHAT_RUNTIME_MODE_AGENT,
+    DEFAULT_CHAT_RUNTIME_MODE,
     getModelAttachmentSupport,
     normalizeChatRuntimeMode,
 } from '@/lib/shared/models';
@@ -64,7 +64,7 @@ export async function POST(request) {
                 let originalName = pathname;
                 let extension = getFileExtension(pathname);
                 let model = '';
-                let mode = CHAT_RUNTIME_MODE_AGENT;
+                let mode = DEFAULT_CHAT_RUNTIME_MODE;
                 if (typeof clientPayload === 'string' && clientPayload) {
                     try {
                         const parsed = JSON.parse(clientPayload);

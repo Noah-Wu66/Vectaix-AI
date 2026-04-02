@@ -4,6 +4,8 @@ import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { rateLimit, getClientIP } from "@/lib/rateLimit";
 import {
+  AGENT_MODE_DISABLED_REASON,
+  AGENT_MODE_ENABLED,
   CHAT_RUNTIME_MODE_AGENT,
   getModelAttachmentSupport,
   isAgentBackedModelId,
@@ -69,6 +71,10 @@ function buildConversationTitle(prompt, attachments) {
 
 export async function POST(req) {
   try {
+    if (!AGENT_MODE_ENABLED) {
+      return Response.json({ error: AGENT_MODE_DISABLED_REASON }, { status: 503 });
+    }
+
     const contentLength = req.headers.get("content-length");
     if (contentLength && Number(contentLength) > MAX_REQUEST_BYTES) {
       return Response.json({ error: "Request too large" }, { status: 413 });

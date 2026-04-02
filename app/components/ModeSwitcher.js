@@ -69,24 +69,32 @@ export default function ModeSwitcher({
               <div className="space-y-1">
                 {MODE_OPTIONS.map((item) => {
                   const active = currentModeId === item.id;
+                  const disabled = item.disabled === true;
+                  const itemTitle = disabled
+                    ? (item.disabledReason || "暂不可用")
+                    : item.description;
                   return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        if (!ready || active) return;
-                        setShowModeMenu(false);
-                        onModeChange?.(item.id);
-                      }}
-                      className={`w-full px-3 py-2.5 rounded-lg text-sm md:text-[13px] font-medium text-left transition-colors ${
-                        active
-                          ? "bg-zinc-600 text-white"
-                          : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                      }`}
-                      type="button"
-                      title={item.description}
-                    >
-                      <div>{item.label}</div>
-                    </button>
+                    <div key={item.id} title={itemTitle}>
+                      <button
+                        onClick={() => {
+                          if (!ready || active || disabled) return;
+                          setShowModeMenu(false);
+                          onModeChange?.(item.id);
+                        }}
+                        className={`w-full px-3 py-2.5 rounded-lg text-sm md:text-[13px] font-medium text-left transition-colors ${
+                          active
+                            ? "bg-zinc-600 text-white"
+                            : disabled
+                              ? "bg-zinc-100 dark:bg-zinc-800/60 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+                              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        }`}
+                        type="button"
+                        disabled={disabled}
+                        aria-disabled={disabled}
+                      >
+                        <div>{item.label}</div>
+                      </button>
+                    </div>
                   );
                 })}
               </div>

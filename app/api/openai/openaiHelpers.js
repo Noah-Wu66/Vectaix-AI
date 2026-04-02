@@ -54,6 +54,21 @@ export function extractOpenAIResponseText(payload) {
   }
 
   const outputs = Array.isArray(payload?.output) ? payload.output : [];
+
+  // Try to extract text from output_text type items (GPT-5.4 style: response.output contains {type: "output_text", text: "..."} directly)
+  const outputTextItems = outputs.filter((item) => item?.type === "output_text");
+  if (outputTextItems.length > 0) {
+    return outputTextItems
+      .map((item) => normalizeChunkText(item?.text ?? item))
+      .join("")
+      .trim();
+  }
+
+  // Fallback: try to get text directly from payload
+  if (typeof payload?.text === "string" && payload.text.trim()) {
+    return payload.text.trim();
+  }
+
   return outputs
     .filter((item) => item?.type === "message")
     .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
