@@ -1,8 +1,3 @@
-import Claude from "@lobehub/icons/es/Claude";
-import DeepSeek from "@lobehub/icons/es/DeepSeek";
-import Doubao from "@lobehub/icons/es/Doubao";
-import Gemini from "@lobehub/icons/es/Gemini";
-import OpenAI from "@lobehub/icons/es/OpenAI";
 import {
   COUNCIL_MODEL_ID,
   getModelProvider,
@@ -10,27 +5,13 @@ import {
   isSeedModel,
 } from "@/lib/shared/models";
 
-const PROVIDER_VISUALS = {
-  gemini: {
-    Glyph: Gemini.Color,
-    Avatar: Gemini.Avatar,
-  },
-  claude: {
-    Glyph: Claude.Color,
-    Avatar: Claude.Avatar,
-  },
-  openai: {
-    Glyph: OpenAI,
-    Avatar: OpenAI.Avatar,
-  },
-  seed: {
-    Glyph: Doubao.Color,
-    Avatar: Doubao.Avatar,
-  },
-  deepseek: {
-    Glyph: DeepSeek.Color,
-    Avatar: DeepSeek.Avatar,
-  },
+const PROVIDER_ICONS = {
+  gemini: "https://cdn.marmot-cloud.com/storage/zenmux/2025/12/25/XQVLSt6/Gemini-model-logo.svg",
+  claude: "https://cdn.marmot-cloud.com/storage/zenmux/2025/10/15/dzvOyI0/Property-1Claude.svg",
+  openai: "https://cdn.marmot-cloud.com/storage/zenmux/2025/10/15/Mm7IePA/Property-1GPT.svg",
+  seed: "https://cdn.marmot-cloud.com/storage/zenmux/2025/11/11/OXR17nY/Property-1seed.svg",
+  deepseek: "https://cdn.marmot-cloud.com/storage/zenmux/2025/10/15/tmeJLqx/Property-1deepseek.svg",
+  qwen: "https://cdn.marmot-cloud.com/storage/zenmux/2026/04/01/qeMamJm/Property-1Qwen.svg",
 };
 
 const COUNCIL_PROVIDERS = ["openai", "claude", "gemini", "seed"];
@@ -43,15 +24,27 @@ function resolveProvider(model, provider) {
 }
 
 function ProviderGlyph({ provider, size }) {
-  const visual = PROVIDER_VISUALS[provider] || PROVIDER_VISUALS.gemini;
-  const Glyph = visual.Glyph;
-  return <Glyph size={size} />;
+  const src = PROVIDER_ICONS[provider] || PROVIDER_ICONS.gemini;
+  return (
+    <img
+      src={src}
+      alt=""
+      style={{ width: size, height: size }}
+      className="shrink-0"
+    />
+  );
 }
 
 function ProviderAvatar({ provider, size = 24 }) {
-  const visual = PROVIDER_VISUALS[provider] || PROVIDER_VISUALS.gemini;
-  const Avatar = visual.Avatar;
-  return <Avatar size={size} shape="square" />;
+  const src = PROVIDER_ICONS[provider] || PROVIDER_ICONS.gemini;
+  return (
+    <img
+      src={src}
+      alt=""
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.17) }}
+      className="shrink-0 object-cover"
+    />
+  );
 }
 
 function CouncilComposite({ size = 16, avatar = false }) {
