@@ -51,6 +51,12 @@ import {
     getOpenAIWebTools,
     WEB_BROWSING_MAX_ROUNDS,
 } from '@/lib/server/webBrowsing/nativeTools';
+import {
+    CHAT_RATE_LIMIT,
+    MAX_REQUEST_BYTES,
+    SSE_PADDING,
+    HEARTBEAT_INTERVAL_MS,
+} from '@/lib/server/chat/routeConstants';
 
 function findLatestSeedResponseId(messages) {
     if (!Array.isArray(messages)) return '';
@@ -66,20 +72,6 @@ function findLatestSeedResponseId(messages) {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const MAX_REQUEST_BYTES = 2_000_000;
-
-function pushUniqueCitations(target, items) {
-    if (!Array.isArray(target) || !Array.isArray(items)) return;
-    for (const item of items) {
-        if (!item?.url) continue;
-        if (!target.some((citation) => citation.url === item.url)) {
-            target.push(item);
-        }
-    }
-}
-
 
 export async function POST(req) {
     let writePermitTime = null;
@@ -106,6 +98,7 @@ export async function POST(req) {
             conversationId,
             mode,
             messages,
+            settings,
             userMessageId,
             modelMessageId,
         } = body;
@@ -318,6 +311,7 @@ export async function POST(req) {
                 title,
                 model: conversationModel,
                 settings: {
+                    ...(settings && typeof settings === 'object' ? settings : {}),
                     webSearch: parseWebSearchConfig(config?.webSearch),
                 },
                 messages: [],
@@ -394,9 +388,7 @@ export async function POST(req) {
             req?.signal?.addEventListener?.('abort', onAbort, { once: true });
         } catch { }
 
-        const PADDING = ' '.repeat(2048);
         let paddingSent = false;
-        const HEARTBEAT_INTERVAL_MS = 15000;
         let heartbeatTimer = null;
 
         const responseStream = new ReadableStream({
@@ -405,6 +397,7 @@ export async function POST(req) {
                 let fullThought = '';
                 const citations = [];
                 let searchContextTokens = 0;
+                const seenUrls = new Set();
                 let finalMessagePersisted = false;
 
                 const rollbackCurrentTurn = async () => {
@@ -433,13 +426,17 @@ export async function POST(req) {
                     sendHeartbeat();
 
                     const sendEvent = (payload) => {
-                        const padding = !paddingSent ? PADDING : '';
+                        const padding = !paddingSent ? SSE_PADDING : '';
                         paddingSent = true;
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}${padding}\n\n`));
                     };
 
                     const pushCitations = (items) => {
-                        pushUniqueCitations(citations, items);
+                        for (const item of items) {
+                            if (!item?.url || seenUrls.has(item.url)) continue;
+                            seenUrls.add(item.url);
+                            citations.push({ url: item.url, title: item.title });
+                        }
                     };
 
                     const instructions = await buildDirectChatSystemPrompt({
@@ -665,7 +662,7 @@ export async function POST(req) {
                             type: 'stream_error',
                             message: error?.message || 'Unknown error',
                         });
-                        const padding = !paddingSent ? PADDING : '';
+                        const padding = !paddingSent ? SSE_PADDING : '';
                         paddingSent = true;
                         controller.enqueue(encoder.encode(`data: ${errorPayload}${padding}\n\n`));
                         controller.enqueue(encoder.encode('data: [DONE]\n\n'));

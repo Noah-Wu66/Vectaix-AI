@@ -24,12 +24,13 @@ import { serializeRuntimeState } from "@/lib/server/agent/core/stateSerializer";
 import { parseWebSearchConfig } from "@/lib/server/chat/requestConfig";
 import { enrichConversationPartsWithBlobIds } from "@/lib/server/conversations/blobReferences";
 import { getAttachmentInputType } from "@/lib/shared/attachments";
+import {
+  AGENT_RATE_LIMIT,
+  MAX_REQUEST_BYTES,
+} from '@/lib/server/chat/routeConstants';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const CHAT_RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
-const MAX_REQUEST_BYTES = 2_000_000;
 
 function buildUserMessageParts({ prompt, images, attachments }) {
   const parts = [];
@@ -120,7 +121,7 @@ export async function POST(req) {
 
     const clientIP = getClientIP(req);
     const rateLimitKey = `agent:${auth.userId}:${clientIP}`;
-    const { success, resetTime } = rateLimit(rateLimitKey, CHAT_RATE_LIMIT);
+    const { success, resetTime } = rateLimit(rateLimitKey, AGENT_RATE_LIMIT);
     if (!success) {
       const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
       return Response.json(

@@ -6,8 +6,7 @@ import {
   isValidConversationId,
   updateConversationForUser,
 } from "@/lib/server/conversations/service";
-
-const MAX_REQUEST_BYTES = 2_000_000;
+import { MAX_REQUEST_BYTES } from '@/lib/server/chat/routeConstants';
 
 async function requireConversationUser() {
   await dbConnect();

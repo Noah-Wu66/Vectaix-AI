@@ -43,12 +43,15 @@ import {
     getGeminiWebTools,
     WEB_BROWSING_MAX_ROUNDS,
 } from '@/lib/server/webBrowsing/nativeTools';
+import {
+    CHAT_RATE_LIMIT,
+    MAX_REQUEST_BYTES,
+    SSE_PADDING,
+    HEARTBEAT_INTERVAL_MS,
+} from '@/lib/server/chat/routeConstants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const MAX_REQUEST_BYTES = 2_000_000;
 
 async function storedPartToRequestPart(part, options = {}) {
     if (!part || typeof part !== 'object') return null;
@@ -498,9 +501,7 @@ export async function POST(req) {
             // ignore
         }
 
-        const PADDING = ' '.repeat(2048);
         let paddingSent = false;
-        const HEARTBEAT_INTERVAL_MS = 15000;
         let heartbeatTimer = null;
 
         const stream = new ReadableStream({
@@ -539,7 +540,7 @@ export async function POST(req) {
                     sendHeartbeat();
 
                     const sendEvent = (payload) => {
-                        const padding = !paddingSent ? PADDING : '';
+                        const padding = !paddingSent ? SSE_PADDING : '';
                         paddingSent = true;
                         const data = `data: ${JSON.stringify(payload)}${padding}\n\n`;
                         controller.enqueue(encoder.encode(data));
@@ -718,7 +719,7 @@ export async function POST(req) {
                     try { await rollbackCurrentTurn(); } catch { /* ignore */ }
                     try {
                         const errorPayload = JSON.stringify({ type: 'stream_error', message: err?.message || 'Unknown error' });
-                        const padding = !paddingSent ? PADDING : '';
+                        const padding = !paddingSent ? SSE_PADDING : '';
                         paddingSent = true;
                         controller.enqueue(encoder.encode(`data: ${errorPayload}${padding}\n\n`));
                         controller.enqueue(encoder.encode('data: [DONE]\n\n'));

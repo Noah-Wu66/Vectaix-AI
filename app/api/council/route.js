@@ -29,17 +29,21 @@ import {
   enrichConversationPartsWithBlobIds,
   enrichStoredMessagesWithBlobIds,
 } from "@/lib/server/conversations/blobReferences";
+import {
+  CONVERSATION_WRITE_CONFLICT_ERROR,
+  buildConversationWriteCondition,
+} from "@/app/api/chat/conversationState";
+import {
+  CHAT_RATE_LIMIT,
+  MAX_REQUEST_BYTES,
+} from '@/lib/server/chat/routeConstants';
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const CHAT_RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-const MAX_REQUEST_BYTES = 2_000_000;
 const MAX_COUNCIL_EXPERTS = 3;
 const MAX_EXPERT_MODEL_CHARS = 100;
 const MAX_EXPERT_LABEL_CHARS = 120;
 const MAX_EXPERT_CONTENT_CHARS = 20000;
-const CONVERSATION_WRITE_CONFLICT_ERROR = "当前对话已被其他请求更新，请重试";
 
 function buildTitle(prompt) {
   const text = typeof prompt === "string" ? prompt.trim() : "";
@@ -62,14 +66,6 @@ function createStreamErrorEvent(message) {
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function buildConversationWriteCondition(conversationId, userId, writePermitTime) {
-  const condition = { _id: conversationId, userId };
-  if (Number.isFinite(writePermitTime)) {
-    condition.updatedAt = { $lte: new Date(writePermitTime) };
-  }
-  return condition;
 }
 
 function sanitizeCouncilExperts(value, fieldPath) {

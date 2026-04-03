@@ -3,11 +3,10 @@ import Conversation from '@/models/Conversation';
 import { getAuthPayload } from '@/lib/auth';
 import { sanitizeImportedConversation } from '@/lib/server/conversations/sanitize';
 import { enrichStoredMessagesWithBlobIds } from '@/lib/server/conversations/blobReferences';
+import { MAX_REQUEST_BYTES } from '@/lib/server/chat/routeConstants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const MAX_REQUEST_BYTES = 2_000_000;
 
 export async function GET() {
     try {
