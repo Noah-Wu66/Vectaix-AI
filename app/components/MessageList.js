@@ -316,7 +316,7 @@ export default function MessageList({
       ) : (
         messages.map((msg, i) => {
           const displayParts = Array.isArray(msg.parts) && msg.role === "model"
-            ? msg.parts.filter((part) => !(typeof part?.text === "string" && isPendingRunText(part.text)))
+            ? msg.parts.filter((part) => !(typeof part?.text === "string" && isPendingRunText(part.text)) && !part?.thought)
             : msg.parts;
           const hasParts = Array.isArray(displayParts) && displayParts.some((part) =>
             part?.inlineData?.url || part?.fileData?.name || (typeof part?.text === "string" && part.text.trim().length > 0)
@@ -419,9 +419,9 @@ export default function MessageList({
                             {(() => {
                               const entries = displayParts.map((part, idx) => ({ part, idx }));
                               const isUser = msg.role === "user";
-                              const ordered = isUser 
+                              const ordered = isUser
                                 ? [...entries.filter(e => e.part?.inlineData?.url), ...entries.filter(e => e.part?.fileData?.name), ...entries.filter(e => e.part?.text)]
-                                : entries;
+                                : entries.filter(e => !e.part?.thought);
 
                               return ordered.map(({ part, idx }) => {
                                 const url = part?.inlineData?.url;
