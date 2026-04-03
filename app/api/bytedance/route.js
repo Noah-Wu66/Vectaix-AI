@@ -33,8 +33,6 @@ import {
     extractSeedResponseReasoning,
     extractSeedResponseText,
     normalizeSeedOutputItems,
-    normalizeSeedChunkText,
-    requestSeedResponses,
 } from '@/lib/server/seed/service';
 import { getAttachmentInputType } from '@/lib/shared/attachments';
 import {
@@ -450,14 +448,81 @@ export async function POST(req) {
                         enableWebSearch,
                         searchContextSection: '',
                     });
-                    const requestSeedJson = async (requestBody) => {
-                        const response = await requestSeedResponses({
-                            apiKey,
-                            baseUrl: seedBaseUrl,
-                            requestBody,
-                            req,
+                    const requestSeedStream = async (requestBody, onThought, onText) => {
+                        const url = `${seedBaseUrl}/responses`;
+                        let response = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${apiKey}`,
+                            },
+                            body: JSON.stringify({ ...requestBody, stream: true }),
+                            signal: req?.signal,
                         });
-                        return response.json();
+                        if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
+                            await new Promise((resolve) => setTimeout(resolve, 800));
+                            response = await fetch(url, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${apiKey}`,
+                                },
+                                body: JSON.stringify({ ...requestBody, stream: true }),
+                                signal: req?.signal,
+                            });
+                        }
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            throw new Error(`Seed APIError: ${response.status} ${errorText}`);
+                        }
+
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+                        let buffer = '';
+                        let accumulated = { reasoning: [], output: [] };
+                        let lastResponseEvent = null;
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done || clientAborted) break;
+
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop();
+
+                            for (const line of lines) {
+                                if (!line.trim() || line.startsWith(':')) continue;
+                                if (!line.startsWith('data: ')) continue;
+
+                                const dataStr = line.slice(6);
+                                if (dataStr === '[DONE]') continue;
+
+                                try {
+                                    const event = JSON.parse(dataStr);
+                                    if (event.type === 'response.reasoning.delta' || event.type === 'output.reasoning.delta') {
+                                        const text = event.delta?.text || event.text || '';
+                                        if (text) {
+                                            accumulated.reasoning.push({ type: 'reasoning', text });
+                                            onThought?.(text);
+                                        }
+                                    } else if (event.type === 'response.output_text.delta' || event.type === 'output.text.delta') {
+                                        const text = event.delta?.text || event.text || '';
+                                        if (text) {
+                                            accumulated.output.push({ type: 'text', text });
+                                            onText?.(text);
+                                        }
+                                    } else if (event.type === 'response.output_text.done' || event.type === 'output.text.done') {
+                                        if (event.text) {
+                                            accumulated.output.push({ type: 'text', text: event.text });
+                                        }
+                                    } else if (event.type === 'response.completed' || event.type === 'response.done' || event.type === 'done') {
+                                        lastResponseEvent = event.response || event;
+                                    }
+                                } catch { }
+                            }
+                        }
+
+                        return lastResponseEvent || { output: accumulated.output, reasoning: accumulated.reasoning };
                     };
 
                     const usePreviousResponseId = Boolean(latestSeedResponseId && currentTurnInput);
@@ -475,7 +540,7 @@ export async function POST(req) {
                             instructions,
                             maxTokens,
                             thinkingLevel,
-                            stream: false,
+                            stream: true,
                         });
                         requestBody.store = true;
                         if (previousResponseId) {
@@ -485,22 +550,22 @@ export async function POST(req) {
                             requestBody.tools = getOpenAIWebTools();
                         }
 
-                        const payload = await requestSeedJson(requestBody);
+                        const payload = await requestSeedStream(requestBody, (thought) => {
+                            sendEvent({ type: 'thought', content: thought });
+                        }, (text) => {
+                            sendEvent({ type: 'text', content: text });
+                        });
                         if (clientAborted) break;
 
                         const thought = extractSeedResponseReasoning(payload);
                         if (thought) {
                             fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
-                            sendEvent({ type: 'thought', content: thought });
                         }
 
                         const functionCalls = enableWebSearch ? extractSeedFunctionCalls(payload) : [];
                         if (functionCalls.length === 0) {
                             finalPayload = payload;
                             fullText = extractSeedResponseText(payload);
-                            if (fullText) {
-                                sendEvent({ type: 'text', content: fullText });
-                            }
                             break;
                         }
 

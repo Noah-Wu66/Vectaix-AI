@@ -572,39 +572,66 @@ export async function POST(req) {
                     let finished = false;
 
                     for (let round = 0; round < (enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1); round += 1) {
-                        const response = await ai.models.generateContent({
+                        const response = await ai.models.generateContentStream({
                             model: apiModel,
                             contents: workingContents,
                             config: enableWebSearch
                                 ? { ...finalConfig, tools: getGeminiWebTools() }
                                 : finalConfig,
                         });
-                        if (clientAborted) break;
 
-                        const candidate = Array.isArray(response?.candidates) ? response.candidates[0] : null;
-                        const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
-                        const state = extractGeminiResponseState(parts);
+                        let roundFullText = '';
+                        let roundFullThought = '';
+                        let roundStoredParts = [];
+                        let roundFunctionCalls = [];
 
-                        if (state.fullThought) {
-                            fullThought = fullThought ? `${fullThought}\n\n${state.fullThought}` : state.fullThought;
-                            sendEvent({ type: 'thought', content: state.fullThought });
+                        for await (const chunk of response) {
+                            if (clientAborted) break;
+
+                            const candidate = Array.isArray(chunk?.candidates) ? chunk.candidates[0] : null;
+                            const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+
+                            for (const part of parts) {
+                                if (!part || typeof part !== 'object') continue;
+
+                                if (part.functionCall && typeof part.functionCall === 'object') {
+                                    roundFunctionCalls.push(part.functionCall);
+                                }
+
+                                const text = typeof part.text === 'string' ? part.text : '';
+                                if (!text) continue;
+
+                                if (part.thought === true) {
+                                    roundFullThought += text;
+                                    sendEvent({ type: 'thought', content: text });
+                                } else {
+                                    roundFullText += text;
+                                    sendEvent({ type: 'text', content: text });
+                                    const storedPart = { text };
+                                    roundStoredParts.push(storedPart);
+                                }
+                            }
                         }
 
-                        if (!enableWebSearch || state.functionCalls.length === 0) {
-                            fullText = state.fullText;
-                            storedModelParts = state.storedModelParts.length > 0
-                                ? state.storedModelParts
+                        if (clientAborted) break;
+
+                        if (roundFullThought.trim()) {
+                            fullThought = fullThought ? `${fullThought}\n\n${roundFullThought.trim()}` : roundFullThought.trim();
+                        }
+
+                        if (!enableWebSearch || roundFunctionCalls.length === 0) {
+                            fullText = roundFullText;
+                            storedModelParts = roundStoredParts.length > 0
+                                ? roundStoredParts
                                 : (fullText ? [{ text: fullText }] : []);
-                            if (fullText) {
-                                sendEvent({ type: 'text', content: fullText });
-                            }
                             finished = true;
                             break;
                         }
 
-                        workingContents.push({ role: 'model', parts });
+                        const lastParts = roundStoredParts.length > 0 ? roundStoredParts : [{ text: roundFullText }];
+                        workingContents.push({ role: 'model', parts: lastParts });
                         const functionResponseParts = [];
-                        for (const functionCall of state.functionCalls) {
+                        for (const functionCall of roundFunctionCalls) {
                             const toolExecution = await executeWebBrowsingNativeToolCall({
                                 apiName: functionCall?.name,
                                 argumentsInput: functionCall?.args,

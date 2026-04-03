@@ -493,7 +493,7 @@ export async function POST(req) {
                         searchContextSection: '',
                     });
 
-                    const requestResponsesStream = async (requestBody, onThought) => {
+                    const requestResponsesStream = async (requestBody, onThought, onText) => {
                         const request = async () => fetch(`${apiBaseUrl}/responses`, {
                             method: 'POST',
                             headers: {
@@ -548,6 +548,7 @@ export async function POST(req) {
                                         const text = event.delta?.text || event.text || '';
                                         if (text) {
                                             accumulated.output.push({ type: 'text', text });
+                                            onText?.(text);
                                         }
                                     } else if (event.type === 'response.output_text.done' || event.type === 'output.text.done') {
                                         // GPT-5 style: collect the final text when output_text is done
@@ -587,6 +588,8 @@ export async function POST(req) {
 
                         const payload = await requestResponsesStream(requestBody, (thought) => {
                             sendEvent({ type: 'thought', content: thought });
+                        }, (text) => {
+                            sendEvent({ type: 'text', content: text });
                         });
                         if (clientAborted) break;
 
@@ -599,9 +602,6 @@ export async function POST(req) {
                         if (functionCalls.length === 0) {
                             finalPayload = payload;
                             fullText = extractOpenAIResponseText(payload);
-                            if (fullText) {
-                                sendEvent({ type: 'text', content: fullText });
-                            }
                             break;
                         }
 

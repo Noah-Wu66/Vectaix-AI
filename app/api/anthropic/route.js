@@ -634,7 +634,7 @@ export async function POST(req) {
                                 if (event.delta?.type === 'thinking_delta' && event.delta?.thinking) {
                                     sendEvent({ type: 'thought', content: event.delta.thinking });
                                 } else if (event.delta?.type === 'text_delta' && event.delta?.text) {
-                                    // Text deltas will be accumulated in responseContent
+                                    sendEvent({ type: 'text', content: event.delta.text });
                                 }
                             } else if (event.type === 'content_block_start') {
                                 responseContent.push(event.content_block);
@@ -659,9 +659,6 @@ export async function POST(req) {
                         if (!enableWebSearch || state.toolUses.length === 0 || stopReason !== 'tool_use') {
                             fullText = state.fullText;
                             storedAssistantContent = state.storedContent;
-                            if (fullText) {
-                                sendEvent({ type: 'text', content: fullText });
-                            }
                             finished = true;
                             break;
                         }

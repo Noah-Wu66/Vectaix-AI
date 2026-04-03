@@ -445,6 +445,7 @@ export async function POST(req) {
                                         }
                                         if (delta?.content) {
                                             content += delta.content;
+                                            sendEvent({ type: 'text', content: delta.content });
                                         }
                                         if (Array.isArray(delta?.tool_calls)) {
                                             for (const tc of delta.tool_calls) {
@@ -476,9 +477,6 @@ export async function POST(req) {
 
                             if (toolCalls.length === 0) {
                                 fullText = content;
-                                if (fullText) {
-                                    sendEvent({ type: 'text', content: fullText });
-                                }
                                 finished = true;
                                 break;
                             }
