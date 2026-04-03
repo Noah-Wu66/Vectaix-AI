@@ -377,7 +377,6 @@ export async function POST(req) {
                         systemPromptSuffix,
                         enableWebSearch,
                         searchContextSection: '',
-                        includeEconomyPrefix: false,
                     });
                     const finalMessages = [
                         { role: 'system', content: finalSystemPrompt },

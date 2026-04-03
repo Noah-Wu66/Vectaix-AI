@@ -6,7 +6,6 @@ import {
   injectCurrentTimeSystemReminder,
 } from "@/app/api/chat/utils";
 import { buildSeedMessageInput } from "@/app/api/bytedance/bytedanceHelpers";
-import { buildEconomySystemPrompt } from "@/lib/server/chat/economyModels";
 import {
   buildWebSearchGuide,
 } from "@/lib/server/chat/webSearchConfig";
@@ -41,8 +40,6 @@ import {
   extractOpenAIResponseText,
 } from "@/app/api/openai/openaiHelpers";
 
-const FORMATTING_GUARD =
-  "Output formatting rules: Do not use Markdown horizontal rules or standalone lines of '---'. Do not insert multiple consecutive blank lines; use at most one blank line between paragraphs.";
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
 const SEED_MAX_OUTPUT_TOKENS = 8000;
 const TRIAGE_MAX_OUTPUT_TOKENS = 1200;
@@ -382,12 +379,11 @@ function buildStoredUserParts(prompt, imagePayloads) {
   return parts;
 }
 
-async function buildExpertSystemPrompt({ enableWebSearch, searchContextText, includeEconomyPrefix = false }) {
-  const basePrompt = includeEconomyPrefix ? buildEconomySystemPrompt() : "";
-  const base = await injectCurrentTimeSystemReminder(basePrompt);
+async function buildExpertSystemPrompt({ enableWebSearch, searchContextText }) {
+  const base = await injectCurrentTimeSystemReminder("");
   const webSearchGuide = buildWebSearchGuide(enableWebSearch);
   const searchContextSection = searchContextText || "";
-  return `${base}\n\n${FORMATTING_GUARD}${webSearchGuide}${searchContextSection}`;
+  return `${base}${webSearchGuide}${searchContextSection}`;
 }
 
 async function buildSeedSystemPrompt() {
@@ -547,7 +543,6 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
   }
   const systemPrompt = await buildExpertSystemPrompt({
     enableWebSearch: true,
-    includeEconomyPrefix: false,
     searchContextText,
   });
   const citations = [];
@@ -615,7 +610,6 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
   }
   const systemPrompt = await buildExpertSystemPrompt({
     enableWebSearch: true,
-    includeEconomyPrefix: true,
     searchContextText,
   });
   const citations = [];
@@ -661,7 +655,6 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
 async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
   const systemPrompt = await buildExpertSystemPrompt({
     enableWebSearch: true,
-    includeEconomyPrefix: true,
     searchContextText,
   });
   const content = [{ type: "input_text", text: prompt }];

@@ -449,7 +449,6 @@ export async function POST(req) {
                         systemPromptSuffix,
                         enableWebSearch,
                         searchContextSection: '',
-                        includeEconomyPrefix: false,
                     });
                     const requestSeedJson = async (requestBody) => {
                         const response = await requestSeedResponses({

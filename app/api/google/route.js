@@ -558,7 +558,6 @@ export async function POST(req) {
                         systemPromptSuffix,
                         enableWebSearch,
                         searchContextSection: '',
-                        includeEconomyPrefix: providerConfig.route === 'default',
                     });
                     const finalConfig = {
                         ...baseConfig,

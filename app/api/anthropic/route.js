@@ -587,7 +587,6 @@ export async function POST(req) {
                         systemPromptSuffix,
                         enableWebSearch,
                         searchContextSection: '',
-                        includeEconomyPrefix: true,
                     });
                     const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
                     const workingMessages = [...claudeMessages];

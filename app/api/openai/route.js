@@ -318,7 +318,7 @@ export async function POST(req) {
             maxTokens = parseMaxTokens(config?.maxTokens);
             thinkingLevel = parseOpenAIThinkingLevel(config?.thinkingLevel);
         } catch (error) {
-            return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
+            thinkingLevel = 'none';
         }
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
@@ -491,7 +491,6 @@ export async function POST(req) {
                         systemPromptSuffix,
                         enableWebSearch,
                         searchContextSection: '',
-                        includeEconomyPrefix: true,
                     });
 
                     const requestResponsesStream = async (requestBody, onThought) => {
