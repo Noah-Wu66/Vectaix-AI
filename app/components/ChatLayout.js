@@ -67,7 +67,12 @@ export default function ChatLayout({
       <ProfileModal open={showProfileModal} onClose={onCloseProfile} user={user} isAdmin={isAdmin} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={onThemeModeChange} onFontSizeChange={onFontSizeChange} completionSoundVolume={completionSoundVolume} onCompletionSoundVolumeChange={onCompletionSoundVolumeChange} avatar={userAvatar} onAvatarChange={onAvatarChange} nickname={nickname} onNicknameChange={onNicknameChange} />
       <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} avatar={userAvatar} nickname={nickname} onStartNewChat={onStartNewChat} onLoadConversation={onLoadConversation} onDeleteConversation={onDeleteConversation} onRenameConversation={onRenameConversation} onTogglePinConversation={onTogglePinConversation} onDuplicateConversation={onDuplicateConversation} onOpenProfile={onOpenProfile} onLogout={onLogout} onClose={onCloseSidebar} />
       <div className="flex-1 flex flex-col w-full h-full relative overflow-hidden">
-        <ChatHeader onToggleSidebar={onToggleSidebar} />
+        <ChatHeader
+          onToggleSidebar={onToggleSidebar}
+          model={composerProps?.model}
+          onModeChange={composerProps?.onModeChange}
+          modelReady={isSettingsReady}
+        />
         <main className="flex-1 flex flex-col min-h-0 relative">
           <MessageList
             messages={messages}

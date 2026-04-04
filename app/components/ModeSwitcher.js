@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronUp } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import {
   CHAT_RUNTIME_MODE_CHAT,
   COUNCIL_MODEL_ID,
@@ -38,13 +38,13 @@ export default function ModeSwitcher({
           if (!ready) return;
           setShowModeMenu((value) => !value);
         }}
-        className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-sm"
+        className="px-1 py-1 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1.5"
         type="button"
         disabled={!ready}
       >
-        <span className="truncate max-w-[140px]">{currentMode.label}</span>
-        <ChevronUp
-          size={12}
+        <span className="truncate max-w-[140px] font-bold text-zinc-900 dark:text-white text-[17px] md:text-lg">{currentMode.label}</span>
+        <ChevronDown
+          size={14}
           className={`transition-transform ${showModeMenu ? "rotate-180" : ""} ${ready ? "" : "opacity-40"}`}
         />
       </button>
@@ -60,10 +60,10 @@ export default function ModeSwitcher({
               onClick={() => setShowModeMenu(false)}
             />
             <motion.div
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 w-[min(88vw,220px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className="absolute top-full left-0 mt-2 w-[min(88vw,220px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
             >
               <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 tracking-wider">
                 模式

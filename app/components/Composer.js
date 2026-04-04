@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { upload } from "@vercel/blob/client";
 import { useToast } from "./ToastProvider";
-import ModeSwitcher from "./ModeSwitcher";
+import ModelSelector from "./ModelSelector";
 import SettingsMenu from "./SettingsMenu";
 import {
   COUNCIL_MAX_ROUNDS,
@@ -43,7 +43,6 @@ export default function Composer({
   model,
   modelReady,
   onModelChange,
-  onModeChange,
   messages,
   webSearch,
   setWebSearch,
@@ -386,25 +385,27 @@ export default function Composer({
       <div className="relative flex flex-col glass-effect rounded-[24px] border-zinc-200/60 dark:border-zinc-800/60 transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700">
         {/* Top toolbar */}
         <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-900/30 rounded-t-[24px]">
-          <ModeSwitcher
-            model={model}
-            onModeChange={onModeChange}
-            ready={modelReady}
-          />
           {!isCouncilSelected ? (
-            <SettingsMenu
-              model={model}
-              onModelChange={onModelChange}
-              ready={modelReady}
-              webSearch={webSearch}
-              setWebSearch={setWebSearch}
-              chatSystemPrompt={chatSystemPrompt}
-              onChatSystemPromptSave={onChatSystemPromptSave}
-              systemPrompts={systemPrompts}
-              addSystemPrompt={addSystemPrompt}
-              updateSystemPrompt={updateSystemPrompt}
-              deleteSystemPrompt={deleteSystemPrompt}
-            />
+            <>
+              <SettingsMenu
+                model={model}
+                ready={modelReady}
+                webSearch={webSearch}
+                setWebSearch={setWebSearch}
+                chatSystemPrompt={chatSystemPrompt}
+                onChatSystemPromptSave={onChatSystemPromptSave}
+                systemPrompts={systemPrompts}
+                addSystemPrompt={addSystemPrompt}
+                updateSystemPrompt={updateSystemPrompt}
+                deleteSystemPrompt={deleteSystemPrompt}
+              />
+              <ModelSelector
+                model={model}
+                onModelChange={onModelChange}
+                ready={modelReady}
+                includeCouncil={false}
+              />
+            </>
           ) : null}
         </div>
 

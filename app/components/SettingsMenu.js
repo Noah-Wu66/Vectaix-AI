@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Globe, Settings2, MessageSquareQuote } from "lucide-react";
 import { getModelConfig } from "@/lib/shared/models";
 import { DEFAULT_WEB_SEARCH_SETTINGS } from "@/lib/shared/webSearch";
-import ModelSelector from "./ModelSelector";
 import { useToast } from "./ToastProvider";
 import SystemPromptModal from "./SystemPromptModal";
 
 export default function SettingsMenu({
   model,
-  onModelChange,
   ready = true,
   webSearch,
   setWebSearch,
@@ -68,20 +66,6 @@ export default function SettingsMenu({
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               className="absolute bottom-full right-0 mb-2 w-[min(90vw,300px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-3 z-50 space-y-3"
             >
-              {/* 模型选择 */}
-              <div>
-                <label className="text-[10px] font-semibold text-zinc-400 tracking-wider px-1 mb-1.5 block">
-                  模型
-                </label>
-                <ModelSelector
-                  model={model}
-                  onModelChange={onModelChange}
-                  ready={ready}
-                  includeCouncil={false}
-                  fullWidth
-                />
-              </div>
-
               {/* 联网搜索 */}
               {supportsWebSearch ? (
                 <div>

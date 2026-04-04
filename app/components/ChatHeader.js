@@ -1,8 +1,9 @@
 "use client";
 
 import { Menu } from "lucide-react";
+import ModeSwitcher from "./ModeSwitcher";
 
-export default function ChatHeader({ onToggleSidebar }) {
+export default function ChatHeader({ onToggleSidebar, model, onModeChange, modelReady }) {
   return (
     <header className="px-4 py-3 glass-effect border-b border-zinc-200/50 dark:border-zinc-700/50 flex items-center justify-between z-40 sticky top-0">
       <div className="flex items-center gap-3">
@@ -12,19 +13,11 @@ export default function ChatHeader({ onToggleSidebar }) {
         >
           <Menu size={22} />
         </button>
-        <div className="flex items-center gap-2">
-          <img
-            src="/icon"
-            alt="Vectaix Logo"
-            className="w-8 h-8 object-contain"
-          />
-          <h1 className="font-bold tracking-tight text-zinc-900 dark:text-white text-[17px] md:text-lg whitespace-nowrap">
-            Vectaix AI
-          </h1>
-        </div>
-      </div>
-      <div className="md:hidden">
-        {/* Placeholder for future mobile actions like share or model quick switch */}
+        <ModeSwitcher
+          model={model}
+          onModeChange={onModeChange}
+          ready={modelReady}
+        />
       </div>
     </header>
   );
