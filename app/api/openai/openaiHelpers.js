@@ -157,14 +157,17 @@ export async function storedPartToOpenAIPart(part, role, options = {}) {
   return null;
 }
 
-export async function buildOpenAIInputFromHistory(messages, options = {}) {
+export async function buildResponsesInputFromHistory(messages, options = {}) {
+  const providerStateKey = typeof options?.providerStateKey === "string" && options.providerStateKey.trim()
+    ? options.providerStateKey.trim()
+    : "openai";
   const input = [];
   for (const msg of messages) {
     if (msg?.role !== "user" && msg?.role !== "model") continue;
 
     if (msg.role === "model") {
-      const providerOutput = Array.isArray(msg?.providerState?.openai?.output)
-        ? msg.providerState.openai.output
+      const providerOutput = Array.isArray(msg?.providerState?.[providerStateKey]?.output)
+        ? msg.providerState[providerStateKey].output
         : [];
       if (providerOutput.length > 0) {
         input.push(...providerOutput);
@@ -186,4 +189,11 @@ export async function buildOpenAIInputFromHistory(messages, options = {}) {
     }
   }
   return input;
+}
+
+export async function buildOpenAIInputFromHistory(messages, options = {}) {
+  return buildResponsesInputFromHistory(messages, {
+    ...options,
+    providerStateKey: "openai",
+  });
 }

@@ -57,6 +57,7 @@ import {
     SSE_PADDING,
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
+import { consumeStrictResponsesStream } from '@/lib/server/chat/responsesStream';
 
 const SEED_UPSTREAM_DEBUG_SAMPLE_LIMIT = 12;
 
@@ -581,95 +582,31 @@ export async function POST(req) {
                             throw new Error(`Seed APIError: ${response.status} ${errorText}`);
                         }
 
-                        const reader = response.body.getReader();
-                        const decoder = new TextDecoder();
-                        let buffer = '';
-                        let lastResponseEvent = null;
                         let streamedText = '';
 
-                        const emitThought = (value) => {
-                            const text = normalizeSeedChunkText(value);
-                            if (!text) return;
-                            onThought?.(text);
-                        };
-
-                        const emitText = (value) => {
-                            const text = normalizeSeedChunkText(value);
-                            if (!text) return;
-                            streamedText += text;
-                            onText?.(text);
-                        };
-
-                        const handleEvent = (event) => {
-                            const eventType = typeof event?.type === 'string' ? event.type : '';
-
-                            if (eventType === 'response.reasoning_summary_text.delta') {
-                                emitThought(event?.delta);
-                                return;
-                            }
-
-                            if (eventType === 'response.output_text.delta') {
-                                emitText(event?.delta);
-                                return;
-                            }
-
-                            if (eventType === 'response.completed') {
-                                lastResponseEvent = event.response;
-                                return;
-                            }
-                        };
-
-                        const consumeSseBuffer = (final = false) => {
-                            const blocks = buffer.split(/\r?\n\r?\n/);
-                            buffer = final ? '' : (blocks.pop() || '');
-
-                            for (const block of blocks) {
-                                const trimmedBlock = block.trim();
-                                if (!trimmedBlock) continue;
-
-                                const lines = trimmedBlock.split(/\r?\n/);
-                                const dataLines = [];
-                                for (const line of lines) {
-                                    if (!line || line.startsWith(':')) continue;
-                                    if (line.startsWith('data:')) {
-                                        dataLines.push(line.slice(5).replace(/^\s*/, ''));
-                                    }
-                                }
-
-                                if (!dataLines.length) continue;
-                                const dataStr = dataLines.join('\n');
-                                if (dataStr === '[DONE]') {
-                                    upstreamDebug.markDone();
-                                    continue;
-                                }
-
-                                try {
-                                    const event = JSON.parse(dataStr);
-                                    upstreamDebug.recordEvent(event);
-                                    handleEvent(event);
-                                } catch {
-                                    upstreamDebug.recordParseError(dataStr);
-                                }
-                            }
-                        };
-
                         try {
-                            while (true) {
-                                const { value, done } = await reader.read();
-                                if (done || clientAborted) break;
-
-                                buffer += decoder.decode(value, { stream: true });
-                                consumeSseBuffer(false);
-                            }
-
-                            buffer += decoder.decode();
-                            consumeSseBuffer(true);
-
-                            if (!lastResponseEvent) {
-                                throw new Error('Seed 上游缺少 response.completed 事件');
-                            }
-
-                            const finalPayload = lastResponseEvent;
+                            const finalPayload = await consumeStrictResponsesStream({
+                                response,
+                                signal: req?.signal,
+                                normalizeText: normalizeSeedChunkText,
+                                onEvent: (event) => {
+                                    upstreamDebug.recordEvent(event);
+                                },
+                                onParseError: (dataStr) => {
+                                    upstreamDebug.recordParseError(dataStr);
+                                },
+                                onDone: () => {
+                                    upstreamDebug.markDone();
+                                },
+                                onThoughtDelta: (text) => {
+                                    onThought?.(text);
+                                },
+                                onTextDelta: (text) => {
+                                    streamedText += text;
+                                    onText?.(text);
+                                },
+                                missingCompletedMessage: 'Seed 上游缺少 response.completed 事件',
+                            });
                             upstreamDebug.finish({
                                 upstreamStatus: response.status,
                                 contentType: response.headers.get('content-type') || '',

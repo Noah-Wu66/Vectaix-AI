@@ -54,6 +54,7 @@ import {
     SSE_PADDING,
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
+import { consumeStrictResponsesStream } from '@/lib/server/chat/responsesStream';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -516,68 +517,17 @@ export async function POST(req) {
                             throw upstreamError;
                         }
 
-                        const reader = response.body.getReader();
-                        const decoder = new TextDecoder();
-                        let buffer = '';
-                        let accumulated = { reasoning: [], output: [] };
-
-                        while (true) {
-                            const { value, done } = await reader.read();
-                            if (done || clientAborted) break;
-
-                            buffer += decoder.decode(value, { stream: true });
-                            const lines = buffer.split('\n');
-                            buffer = lines.pop();
-
-                            for (const line of lines) {
-                                if (!line.trim() || line.startsWith(':')) continue;
-                                if (!line.startsWith('data: ')) continue;
-
-                                const dataStr = line.slice(6);
-                                if (dataStr === '[DONE]') continue;
-
-                                try {
-                                    const event = JSON.parse(dataStr);
-                                    if (event.type === 'response.reasoning.delta' || event.type === 'output.reasoning.delta'
-                                        || event.type === 'response.reasoning_summary_text.delta') {
-                                        const text = event.delta?.text || event.text || '';
-                                        if (text) {
-                                            accumulated.reasoning.push({ type: 'reasoning', text });
-                                            onThought?.(text);
-                                        }
-                                    } else if (event.type === 'response.output_text.delta' || event.type === 'output.text.delta') {
-                                        const text = event.delta?.text || event.text || '';
-                                        if (text) {
-                                            accumulated.output.push({ type: 'text', text });
-                                            onText?.(text);
-                                        }
-                                    } else if (event.type === 'response.output_text.done' || event.type === 'output.text.done') {
-                                        // GPT-5 style: collect the final text when output_text is done
-                                        if (event.text) {
-                                            accumulated.output.push({ type: 'text', text: event.text });
-                                        }
-                                    } else if (event.type === 'response.completed' || event.type === 'response.done' || event.type === 'done') {
-                                        return event.response || event;
-                                    }
-
-                                    // 兼容标准 OpenAI Chat Completions SSE 格式
-                                    if (Array.isArray(event.choices) && event.choices.length > 0) {
-                                        const delta = event.choices[0].delta;
-                                        if (delta?.content) {
-                                            accumulated.output.push({ type: 'text', text: delta.content });
-                                            onText?.(delta.content);
-                                        }
-                                        if (delta?.reasoning || delta?.reasoning_content) {
-                                            const reasoningText = delta.reasoning || delta.reasoning_content;
-                                            accumulated.reasoning.push({ type: 'reasoning', text: reasoningText });
-                                            onThought?.(reasoningText);
-                                        }
-                                    }
-                                } catch { }
-                            }
-                        }
-
-                        return { output: accumulated.output, reasoning: accumulated.reasoning };
+                        return consumeStrictResponsesStream({
+                            response,
+                            signal: req?.signal,
+                            onThoughtDelta: (text) => {
+                                onThought?.(text);
+                            },
+                            onTextDelta: (text) => {
+                                onText?.(text);
+                            },
+                            missingCompletedMessage: 'OpenAI 上游缺少 response.completed 事件',
+                        });
                     };
 
                     const usePreviousResponseId = Boolean(latestOpenAIResponseId && currentTurnInput);

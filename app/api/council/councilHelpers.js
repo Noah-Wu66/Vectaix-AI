@@ -33,9 +33,9 @@ import {
   getOpenAIWebTools,
   WEB_BROWSING_MAX_ROUNDS,
 } from "@/lib/server/webBrowsing/nativeTools";
+import { consumeStrictResponsesStream } from "@/lib/server/chat/responsesStream";
 import {
   extractOpenAIFunctionCalls,
-  extractOpenAIResponseReasoning,
   extractOpenAIResponseText,
 } from "@/app/api/openai/openaiHelpers";
 
@@ -455,77 +455,6 @@ function createGeminiClient(providerConfig) {
 
 function getGeminiModelId(expertModelId) {
   return expertModelId;
-}
-
-async function consumeOpenAIStream(response) {
-  if (!response.body) {
-    throw new Error("OpenAI 返回了空响应体");
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let fullText = "";
-
-  const consumeLine = (line) => {
-    if (!line.trim() || line.startsWith(":")) return;
-    if (!line.startsWith("data: ")) return;
-
-    const dataStr = line.slice(6);
-    if (dataStr === "[DONE]") return;
-
-    try {
-      const event = JSON.parse(dataStr);
-      if (event.type === "output.text.delta" || event.type === "response.output_text.delta") {
-        const delta = typeof event.delta === "string"
-          ? event.delta
-          : (typeof event.text === "string"
-            ? event.text
-            : (typeof event?.data?.text === "string" ? event.data.text : ""));
-        if (delta) fullText += delta;
-        return;
-      }
-
-      if (Array.isArray(event?.choices)) {
-        const choice = event.choices[0] || null;
-        const delta = choice?.delta?.content;
-        if (typeof delta === "string") {
-          fullText += delta;
-          return;
-        }
-        if (Array.isArray(delta)) {
-          fullText += delta
-            .map((item) => {
-              if (typeof item === "string") return item;
-              if (item && typeof item.text === "string") return item.text;
-              return "";
-            })
-            .join("");
-        }
-      }
-    } catch {
-      // ignore malformed SSE payloads
-    }
-  };
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() || "";
-
-    for (const line of lines) consumeLine(line);
-  }
-
-  buffer += decoder.decode();
-  if (buffer) {
-    const lines = buffer.split(/\r?\n/);
-    for (const line of lines) consumeLine(line);
-  }
-
-  return fullText.trim();
 }
 
 async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContextText, providerConfig, signal }) {
@@ -958,91 +887,16 @@ export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTe
     const errorText = await response.text();
     throw new Error(extractUpstreamErrorMessage(response.status, errorText));
   }
-  if (!response.body) {
-    throw new Error("Seed 未返回有效汇总内容");
-  }
+  const finalPayload = await consumeStrictResponsesStream({
+    response,
+    signal,
+    normalizeText: normalizeSeedChunkText,
+    onTextDelta,
+    emptyBodyMessage: "Seed 未返回有效汇总内容",
+    missingCompletedMessage: "Seed 上游缺少 response.completed 事件",
+  });
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let streamedText = "";
-  let completedText = "";
-
-  const emitDelta = (value) => {
-    const delta = normalizeSeedChunkText(value);
-    if (!delta) return;
-    streamedText += delta;
-    onTextDelta?.(delta);
-  };
-
-  const applyCompletedText = (value) => {
-    const nextText = typeof value === "string" ? value.trim() : "";
-    if (!nextText) return;
-    completedText = nextText;
-    if (!streamedText) {
-      streamedText = nextText;
-      onTextDelta?.(nextText);
-      return;
-    }
-    if (nextText.startsWith(streamedText) && nextText.length > streamedText.length) {
-      const tail = nextText.slice(streamedText.length);
-      streamedText = nextText;
-      onTextDelta?.(tail);
-    }
-  };
-
-  const handleEvent = (event) => {
-    const eventType = typeof event?.type === "string" ? event.type : "";
-    if (eventType === "response.output_text.delta" || eventType === "output.text.delta") {
-      emitDelta(event?.delta ?? event?.text ?? event?.data?.text);
-      return;
-    }
-    if (eventType === "response.completed") {
-      applyCompletedText(extractSeedResponseText(event?.response));
-    }
-  };
-
-  const consumeSseBuffer = (final = false) => {
-    const blocks = buffer.split(/\r?\n\r?\n/);
-    buffer = final ? "" : (blocks.pop() || "");
-
-    for (const block of blocks) {
-      const trimmedBlock = block.trim();
-      if (!trimmedBlock) continue;
-
-      const lines = trimmedBlock.split(/\r?\n/);
-      const dataLines = [];
-      for (const line of lines) {
-        if (!line || line.startsWith(":")) continue;
-        if (line.startsWith("data:")) {
-          dataLines.push(line.slice(5).replace(/^\s*/, ""));
-        }
-      }
-
-      if (!dataLines.length) continue;
-      const dataStr = dataLines.join("\n");
-      if (dataStr === "[DONE]") continue;
-
-      try {
-        handleEvent(JSON.parse(dataStr));
-      } catch {
-        // ignore malformed SSE payloads
-      }
-    }
-  };
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    consumeSseBuffer(false);
-  }
-
-  buffer += decoder.decode();
-  consumeSseBuffer(true);
-
-  const text = (streamedText || completedText).trim();
+  const text = extractSeedResponseText(finalPayload).trim();
   if (!text) {
     throw new Error("Seed 未返回有效汇总内容");
   }

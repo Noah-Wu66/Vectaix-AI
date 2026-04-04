@@ -8,7 +8,6 @@ import {
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
     estimateTokens,
-    getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
 import { QWEN_MODEL_ID } from '@/lib/shared/models';
 import { resolveQwenProviderConfig } from '@/lib/modelRoutes';
@@ -41,26 +40,28 @@ import {
     SSE_PADDING,
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
+import { consumeStrictResponsesStream } from '@/lib/server/chat/responsesStream';
+import {
+    buildResponsesInputFromHistory,
+    extractOpenAIFunctionCalls,
+    extractOpenAIResponseReasoning,
+    extractOpenAIResponseText,
+    normalizeOpenAIOutputItems,
+} from '@/app/api/openai/openaiHelpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function buildQwenMessagesFromHistory(messages) {
-    const result = [];
-    for (const msg of messages) {
-        if (msg?.role !== 'user' && msg?.role !== 'model') continue;
-
-        const storedParts = getStoredPartsFromMessage(msg);
-        if (!storedParts || storedParts.length === 0) continue;
-
-        const role = msg.role === 'model' ? 'assistant' : 'user';
-        const textParts = storedParts.filter(p => isNonEmptyString(p?.text)).map(p => p.text);
-        const text = textParts.join('\n');
-        if (text) {
-            result.push({ role, content: text });
-        }
+function findLatestQwenResponseId(messages) {
+    if (!Array.isArray(messages)) return '';
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        const responseId = typeof message?.providerState?.qwen?.responseId === 'string'
+            ? message.providerState.qwen.responseId.trim()
+            : '';
+        if (responseId) return responseId;
     }
-    return result;
+    return '';
 }
 
 export async function POST(req) {
@@ -139,7 +140,7 @@ export async function POST(req) {
         let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
         let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
-        let qwenMessages = [];
+        let qwenInput = [];
         let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
@@ -182,16 +183,19 @@ export async function POST(req) {
             effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
                 ? historyBeforeCurrentPrompt.slice(-limit)
                 : historyBeforeCurrentPrompt;
-            qwenMessages = await buildQwenMessagesFromHistory(effectiveMsgs);
+            qwenInput = await buildResponsesInputFromHistory(effectiveMsgs, { providerStateKey: 'qwen' });
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? safeHistory.slice(-limit) : safeHistory;
             effectiveHistoryMessages = effectiveHistory;
-            qwenMessages = await buildQwenMessagesFromHistory(effectiveHistory);
+            qwenInput = await buildResponsesInputFromHistory(effectiveHistory, { providerStateKey: 'qwen' });
         }
 
         if (!isRegenerateMode) {
-            qwenMessages.push({ role: 'user', content: prompt });
+            qwenInput.push({
+                role: 'user',
+                content: [{ type: 'input_text', text: prompt }],
+            });
         }
 
         let maxTokens;
@@ -203,6 +207,11 @@ export async function POST(req) {
 
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
+        const baseInput = Array.isArray(qwenInput) ? qwenInput : [];
+        const currentTurnInput = !isRegenerateMode && baseInput.length > 0
+            ? baseInput[baseInput.length - 1]
+            : null;
+        const latestQwenResponseId = isRegenerateMode ? '' : findLatestQwenResponseId(effectiveHistoryMessages);
 
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
@@ -268,6 +277,7 @@ export async function POST(req) {
         const responseStream = new ReadableStream({
             async start(controller) {
                 let fullText = '';
+                let fullThought = '';
                 let citations = [];
                 let searchContextTokens = 0;
                 const seenUrls = new Set();
@@ -317,181 +327,107 @@ export async function POST(req) {
                         enableWebSearch,
                         searchContextSection: '',
                     });
-                    const finalMessages = [
-                        { role: 'system', content: finalSystemPrompt },
-                        ...qwenMessages
-                    ];
                     const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
                     const toolRecords = [];
-
-                    if (enableWebSearch) {
-                        const loopMessages = [...finalMessages];
-                        let finished = false;
-
-                        for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
-                            const response = await fetch(`${qwenBaseUrl}/chat/completions`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${apiKey}`
-                                },
-                                body: JSON.stringify({
-                                    model: apiModel,
-                                    messages: loopMessages,
-                                    stream: true,
-                                    max_tokens: maxTokens,
-                                    tools: getOpenAIWebTools(),
-                                })
-                            });
-
-                            if (!response.ok) {
-                                const errorText = await response.text();
-                                throw new Error(`Qwen API Error: ${response.status} ${errorText}`);
-                            }
-
-                            const reader = response.body.getReader();
-                            const decoder = new TextDecoder();
-                            let buffer = '';
-                            let content = '';
-                            let toolCalls = [];
-                            const toolCallsMap = new Map();
-
-                            while (true) {
-                                const { value, done } = await reader.read();
-                                if (done || clientAborted) break;
-
-                                buffer += decoder.decode(value, { stream: true });
-                                const lines = buffer.split('\n');
-                                buffer = lines.pop();
-
-                                for (const line of lines) {
-                                    if (!line.trim() || line.startsWith(':')) continue;
-                                    if (!line.startsWith('data: ')) continue;
-
-                                    const dataStr = line.slice(6);
-                                    if (dataStr === '[DONE]') continue;
-
-                                    try {
-                                        const event = JSON.parse(dataStr);
-                                        const choice = event?.choices?.[0];
-                                        if (!choice) continue;
-
-                                        const delta = choice.delta;
-                                        if (delta?.content) {
-                                            content += delta.content;
-                                            sendEvent({ type: 'text', content: delta.content });
-                                        }
-                                        if (Array.isArray(delta?.tool_calls)) {
-                                            for (const tc of delta.tool_calls) {
-                                                const idx = tc.index;
-                                                if (!toolCallsMap.has(idx)) {
-                                                    toolCallsMap.set(idx, { id: tc.id || '', function: { name: '', arguments: '' } });
-                                                }
-                                                const existing = toolCallsMap.get(idx);
-                                                if (tc.id) existing.id = tc.id;
-                                                if (tc.function?.name) existing.function.name += tc.function.name;
-                                                if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
-                                            }
-                                        }
-                                    } catch { }
-                                }
-                            }
-
-                            toolCalls = Array.from(toolCallsMap.values())
-                                .filter((item) => item.function?.name)
-                                .map((item) => ({
-                                    id: item.id,
-                                    type: 'function',
-                                    function: item.function,
-                                }));
-
-                            if (toolCalls.length === 0) {
-                                fullText = content;
-                                finished = true;
-                                break;
-                            }
-
-                            loopMessages.push({
-                                role: 'assistant',
-                                content: content || '',
-                                tool_calls: toolCalls,
-                            });
-
-                            for (const toolCall of toolCalls) {
-                                const toolExecution = await executeWebBrowsingNativeToolCall({
-                                    apiName: toolCall?.function?.name,
-                                    argumentsInput: toolCall?.function?.arguments,
-                                    runtime,
-                                    sendEvent,
-                                    pushCitations,
-                                    round: round + 1,
-                                    signal: req?.signal,
-                                });
-                                toolRecords.push(toolExecution.toolRecord);
-                                loopMessages.push({
-                                    role: 'tool',
-                                    tool_call_id: toolCall.id,
-                                    content: toolExecution.outputText,
-                                });
-                            }
-                        }
-
-                        if (!finished && !clientAborted) {
-                            throw new Error('Qwen 工具循环未返回最终答案');
-                        }
-                    } else {
-                        const response = await fetch(`${qwenBaseUrl}/chat/completions`, {
+                    const requestResponsesStream = async (requestBody, onThought, onText) => {
+                        const request = async () => fetch(`${qwenBaseUrl}/responses`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${apiKey}`
                             },
-                            body: JSON.stringify({
-                                model: apiModel,
-                                messages: finalMessages,
-                                stream: true,
-                                max_tokens: maxTokens,
-                            })
+                            body: JSON.stringify({ ...requestBody, stream: true }),
+                            signal: req?.signal,
                         });
 
+                        let response = await request();
+                        if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
+                            await new Promise((resolve) => setTimeout(resolve, 800));
+                            response = await request();
+                        }
                         if (!response.ok) {
                             const errorText = await response.text();
                             throw new Error(`Qwen API Error: ${response.status} ${errorText}`);
                         }
 
-                        const reader = response.body.getReader();
-                        const decoder = new TextDecoder();
-                        let buffer = '';
+                        return consumeStrictResponsesStream({
+                            response,
+                            signal: req?.signal,
+                            onThoughtDelta: (text) => {
+                                onThought?.(text);
+                            },
+                            onTextDelta: (text) => {
+                                onText?.(text);
+                            },
+                            missingCompletedMessage: 'Qwen 上游缺少 response.completed 事件',
+                        });
+                    };
 
-                        while (true) {
-                            const { value, done } = await reader.read();
-                            if (done || clientAborted) break;
+                    const usePreviousResponseId = Boolean(latestQwenResponseId && currentTurnInput);
+                    let nextInput = usePreviousResponseId ? [currentTurnInput] : baseInput;
+                    let previousResponseId = usePreviousResponseId ? latestQwenResponseId : '';
+                    let finalPayload = null;
+                    const maxRounds = enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1;
 
-                            buffer += decoder.decode(value, { stream: true });
-                            const lines = buffer.split('\n');
-                            buffer = lines.pop();
-
-                            for (const line of lines) {
-                                if (!line.trim() || line.startsWith(':')) continue;
-                                if (!line.startsWith('data: ')) continue;
-
-                                const dataStr = line.slice(6);
-                                if (dataStr === '[DONE]') continue;
-
-                                try {
-                                    const event = JSON.parse(dataStr);
-                                    const choice = event?.choices?.[0];
-                                    if (!choice) continue;
-
-                                    const delta = choice.delta;
-                                    if (delta?.content) {
-                                        const text = delta.content;
-                                        fullText += text;
-                                        sendEvent({ type: 'text', content: text });
-                                    }
-                                } catch { }
-                            }
+                    for (let round = 0; round < maxRounds; round += 1) {
+                        const requestBody = {
+                            model: apiModel,
+                            stream: false,
+                            max_output_tokens: maxTokens,
+                            store: true,
+                            instructions: finalSystemPrompt,
+                            input: nextInput,
+                        };
+                        if (previousResponseId) {
+                            requestBody.previous_response_id = previousResponseId;
                         }
+                        if (enableWebSearch) {
+                            requestBody.tools = getOpenAIWebTools();
+                        }
+
+                        const payload = await requestResponsesStream(requestBody, (thought) => {
+                            sendEvent({ type: 'thought', content: thought });
+                        }, (text) => {
+                            sendEvent({ type: 'text', content: text });
+                        });
+                        if (clientAborted) break;
+
+                        const thought = extractOpenAIResponseReasoning(payload);
+                        if (thought) {
+                            fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
+                        }
+
+                        const functionCalls = enableWebSearch ? extractOpenAIFunctionCalls(payload) : [];
+                        if (functionCalls.length === 0) {
+                            finalPayload = payload;
+                            fullText = extractOpenAIResponseText(payload);
+                            break;
+                        }
+
+                        previousResponseId = typeof payload?.id === 'string' ? payload.id : previousResponseId;
+                        nextInput = [];
+
+                        for (const functionCall of functionCalls) {
+                            const toolExecution = await executeWebBrowsingNativeToolCall({
+                                apiName: functionCall.name,
+                                argumentsInput: functionCall.arguments,
+                                runtime,
+                                sendEvent,
+                                pushCitations,
+                                round: round + 1,
+                                signal: req?.signal,
+                            });
+                            toolRecords.push(toolExecution.toolRecord);
+                            nextInput.push({
+                                type: 'function_call_output',
+                                call_id: functionCall.call_id,
+                                output: toolExecution.outputText,
+                            });
+                        }
+                    }
+
+                    if (!finalPayload && !clientAborted) {
+                        throw new Error('Qwen 工具循环未返回最终答案');
                     }
 
                     if (enableWebSearch && toolRecords.length > 0) {
@@ -519,11 +455,20 @@ export async function POST(req) {
                             id: resolvedModelMessageId,
                             role: 'model',
                             content: fullText,
+                            thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
                             tools: enableWebSearch && toolRecords.length > 0 ? toolRecords : null,
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
-                            parts: [{ text: fullText }]
+                            parts: [{ text: fullText }],
+                            providerState: finalPayload
+                                ? {
+                                    qwen: {
+                                        responseId: typeof finalPayload?.id === 'string' ? finalPayload.id : '',
+                                        output: normalizeOpenAIOutputItems(finalPayload?.output),
+                                    },
+                                }
+                                : null,
                         };
                         const persistedConversation = await Conversation.findOneAndUpdate(
                             buildConversationWriteCondition(currentConversationId, user.userId, writePermitTime),

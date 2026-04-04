@@ -9,7 +9,6 @@ import {
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
     estimateTokens,
-    getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
 import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL } from '@/lib/shared/models';
 import { resolveDeepSeekProviderConfig } from '@/lib/modelRoutes';
@@ -34,7 +33,7 @@ import {
 import {
     createWebBrowsingRuntime,
     executeWebBrowsingNativeToolCall,
-    getDeepSeekWebTools,
+    getOpenAIWebTools,
     WEB_BROWSING_MAX_ROUNDS,
 } from '@/lib/server/webBrowsing/nativeTools';
 import {
@@ -43,57 +42,28 @@ import {
     SSE_PADDING,
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
+import { consumeStrictResponsesStream } from '@/lib/server/chat/responsesStream';
+import {
+    buildResponsesInputFromHistory,
+    extractOpenAIFunctionCalls,
+    extractOpenAIResponseReasoning,
+    extractOpenAIResponseText,
+    normalizeOpenAIOutputItems,
+} from '@/app/api/openai/openaiHelpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/**
- * 将存储的历史消息转换为 DeepSeek（OpenAI兼容）格式
- * DeepSeek 使用标准 OpenAI Chat Completions 消息格式：
- * { role: "user"|"assistant", content: "..." }
- * 
- * 关键：多轮对话中只传递 content，不传递 reasoning
- */
-async function buildDeepSeekMessagesFromHistory(messages) {
-    const result = [];
-    for (const msg of messages) {
-        if (msg?.role !== 'user' && msg?.role !== 'model') continue;
-
-        const storedParts = getStoredPartsFromMessage(msg);
-        if (!storedParts || storedParts.length === 0) continue;
-
-        const role = msg.role === 'model' ? 'assistant' : 'user';
-
-        // DeepSeek 支持图片：使用 content 数组格式
-        const hasImages = role === 'user' && storedParts.some(p => p?.inlineData?.url);
-
-        if (hasImages) {
-            const contentParts = [];
-            for (const part of storedParts) {
-                if (isNonEmptyString(part.text)) {
-                    contentParts.push({ type: 'text', text: part.text });
-                }
-                if (part?.inlineData?.url) {
-                    const { base64Data, mimeType } = await fetchImageAsBase64(part.inlineData.url);
-                    contentParts.push({
-                        type: 'image_url',
-                        image_url: { url: `data:${mimeType};base64,${base64Data}` }
-                    });
-                }
-            }
-            if (contentParts.length > 0) {
-                result.push({ role, content: contentParts });
-            }
-        } else {
-            // 纯文本消息
-            const textParts = storedParts.filter(p => isNonEmptyString(p?.text)).map(p => p.text);
-            const text = textParts.join('\n');
-            if (text) {
-                result.push({ role, content: text });
-            }
-        }
+function findLatestDeepSeekResponseId(messages) {
+    if (!Array.isArray(messages)) return '';
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        const responseId = typeof message?.providerState?.deepseek?.responseId === 'string'
+            ? message.providerState.deepseek.responseId.trim()
+            : '';
+        if (responseId) return responseId;
     }
-    return result;
+    return '';
 }
 
 export async function POST(req) {
@@ -173,7 +143,7 @@ export async function POST(req) {
         let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
         let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
-        let deepseekMessages = [];
+        let deepseekInput = [];
         let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
@@ -216,34 +186,34 @@ export async function POST(req) {
             effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
                 ? historyBeforeCurrentPrompt.slice(-limit)
                 : historyBeforeCurrentPrompt;
-            deepseekMessages = await buildDeepSeekMessagesFromHistory(effectiveMsgs);
+            deepseekInput = await buildResponsesInputFromHistory(effectiveMsgs, { providerStateKey: 'deepseek' });
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? safeHistory.slice(-limit) : safeHistory;
             effectiveHistoryMessages = effectiveHistory;
-            deepseekMessages = await buildDeepSeekMessagesFromHistory(effectiveHistory);
+            deepseekInput = await buildResponsesInputFromHistory(effectiveHistory, { providerStateKey: 'deepseek' });
         }
 
         let dbImageEntries = [];
 
         if (!isRegenerateMode) {
-            // 构建用户消息内容
+            const userContent = [];
+            if (isNonEmptyString(prompt)) {
+                userContent.push({ type: 'input_text', text: prompt });
+            }
             if (config?.images?.length > 0) {
-                const contentParts = [{ type: 'text', text: prompt }];
                 for (const img of config.images) {
                     if (img?.url) {
                         const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
-                        contentParts.push({
-                            type: 'image_url',
-                            image_url: { url: `data:${mimeType};base64,${base64Data}` }
+                        userContent.push({
+                            type: 'input_image',
+                            image_url: `data:${mimeType};base64,${base64Data}`,
                         });
                         dbImageEntries.push({ url: img.url, mimeType });
                     }
                 }
-                deepseekMessages.push({ role: 'user', content: contentParts });
-            } else {
-                deepseekMessages.push({ role: 'user', content: prompt });
             }
+            deepseekInput.push({ role: 'user', content: userContent });
         }
 
         let maxTokens;
@@ -255,6 +225,11 @@ export async function POST(req) {
 
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
+        const baseInput = Array.isArray(deepseekInput) ? deepseekInput : [];
+        const currentTurnInput = !isRegenerateMode && baseInput.length > 0
+            ? baseInput[baseInput.length - 1]
+            : null;
+        const latestDeepSeekResponseId = isRegenerateMode ? '' : findLatestDeepSeekResponseId(effectiveHistoryMessages);
 
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
@@ -379,196 +354,107 @@ export async function POST(req) {
                         enableWebSearch,
                         searchContextSection: '',
                     });
-                    const finalMessages = [
-                        { role: 'system', content: finalSystemPrompt },
-                        ...deepseekMessages
-                    ];
                     const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
                     const toolRecords = [];
-
-                    if (enableWebSearch) {
-                        const loopMessages = [...finalMessages];
-                        let finished = false;
-
-                        for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
-                            const response = await fetch(`${deepseekBaseUrl}/chat/completions`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${apiKey}`
-                                },
-                                body: JSON.stringify({
-                                    model: apiModel,
-                                    messages: loopMessages,
-                                    stream: true,
-                                    max_tokens: clampMaxTokens(maxTokens, 65536),
-                                    tools: getDeepSeekWebTools(),
-                                })
-                            });
-
-                            if (!response.ok) {
-                                const errorText = await response.text();
-                                throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
-                            }
-
-                            const reader = response.body.getReader();
-                            const decoder = new TextDecoder();
-                            let buffer = '';
-                            let thought = '';
-                            let content = '';
-                            let toolCalls = [];
-                            const toolCallsMap = new Map();
-
-                            while (true) {
-                                const { value, done } = await reader.read();
-                                if (done || clientAborted) break;
-
-                                buffer += decoder.decode(value, { stream: true });
-                                const lines = buffer.split('\n');
-                                buffer = lines.pop();
-
-                                for (const line of lines) {
-                                    if (!line.trim() || line.startsWith(':')) continue;
-                                    if (!line.startsWith('data: ')) continue;
-
-                                    const dataStr = line.slice(6);
-                                    if (dataStr === '[DONE]') continue;
-
-                                    try {
-                                        const event = JSON.parse(dataStr);
-                                        const choice = event?.choices?.[0];
-                                        if (!choice) continue;
-
-                                        const delta = choice.delta;
-                                        if (delta?.reasoning) {
-                                            thought += delta.reasoning;
-                                            sendEvent({ type: 'thought', content: delta.reasoning });
-                                        }
-                                        if (delta?.content) {
-                                            content += delta.content;
-                                            sendEvent({ type: 'text', content: delta.content });
-                                        }
-                                        if (Array.isArray(delta?.tool_calls)) {
-                                            for (const tc of delta.tool_calls) {
-                                                const idx = tc.index;
-                                                if (!toolCallsMap.has(idx)) {
-                                                    toolCallsMap.set(idx, { id: tc.id || '', function: { name: '', arguments: '' } });
-                                                }
-                                                const existing = toolCallsMap.get(idx);
-                                                if (tc.id) existing.id = tc.id;
-                                                if (tc.function?.name) existing.function.name += tc.function.name;
-                                                if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
-                                            }
-                                        }
-                                    } catch { }
-                                }
-                            }
-
-                            if (thought) {
-                                fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
-                            }
-
-                            toolCalls = Array.from(toolCallsMap.values())
-                                .filter((item) => item.function?.name)
-                                .map((item) => ({
-                                    id: item.id,
-                                    type: 'function',
-                                    function: item.function,
-                                }));
-
-                            if (toolCalls.length === 0) {
-                                fullText = content;
-                                finished = true;
-                                break;
-                            }
-
-                            loopMessages.push({
-                                role: 'assistant',
-                                content: content || '',
-                                ...(thought ? { reasoning: thought } : {}),
-                                tool_calls: toolCalls,
-                            });
-
-                            for (const toolCall of toolCalls) {
-                                const toolExecution = await executeWebBrowsingNativeToolCall({
-                                    apiName: toolCall?.function?.name,
-                                    argumentsInput: toolCall?.function?.arguments,
-                                    runtime,
-                                    sendEvent,
-                                    pushCitations,
-                                    round: round + 1,
-                                    signal: req?.signal,
-                                });
-                                toolRecords.push(toolExecution.toolRecord);
-                                loopMessages.push({
-                                    role: 'tool',
-                                    tool_call_id: toolCall.id,
-                                    content: toolExecution.outputText,
-                                });
-                            }
-                        }
-
-                        if (!finished && !clientAborted) {
-                            throw new Error('DeepSeek 工具循环未返回最终答案');
-                        }
-                    } else {
-                        const response = await fetch(`${deepseekBaseUrl}/chat/completions`, {
+                    const requestResponsesStream = async (requestBody, onThought, onText) => {
+                        const request = async () => fetch(`${deepseekBaseUrl}/responses`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${apiKey}`
                             },
-                            body: JSON.stringify({
-                                model: apiModel,
-                                messages: finalMessages,
-                                stream: true,
-                                max_tokens: clampMaxTokens(maxTokens, 65536),
-                            })
+                            body: JSON.stringify({ ...requestBody, stream: true }),
+                            signal: req?.signal,
                         });
 
+                        let response = await request();
+                        if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
+                            await new Promise((resolve) => setTimeout(resolve, 800));
+                            response = await request();
+                        }
                         if (!response.ok) {
                             const errorText = await response.text();
                             throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
                         }
 
-                        const reader = response.body.getReader();
-                        const decoder = new TextDecoder();
-                        let buffer = '';
+                        return consumeStrictResponsesStream({
+                            response,
+                            signal: req?.signal,
+                            onThoughtDelta: (text) => {
+                                onThought?.(text);
+                            },
+                            onTextDelta: (text) => {
+                                onText?.(text);
+                            },
+                            missingCompletedMessage: 'DeepSeek 上游缺少 response.completed 事件',
+                        });
+                    };
 
-                        while (true) {
-                            const { value, done } = await reader.read();
-                            if (done || clientAborted) break;
+                    const usePreviousResponseId = Boolean(latestDeepSeekResponseId && currentTurnInput);
+                    let nextInput = usePreviousResponseId ? [currentTurnInput] : baseInput;
+                    let previousResponseId = usePreviousResponseId ? latestDeepSeekResponseId : '';
+                    let finalPayload = null;
+                    const maxRounds = enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1;
 
-                            buffer += decoder.decode(value, { stream: true });
-                            const lines = buffer.split('\n');
-                            buffer = lines.pop();
-
-                            for (const line of lines) {
-                                if (!line.trim() || line.startsWith(':')) continue;
-                                if (!line.startsWith('data: ')) continue;
-
-                                const dataStr = line.slice(6);
-                                if (dataStr === '[DONE]') continue;
-
-                                try {
-                                    const event = JSON.parse(dataStr);
-                                    const choice = event?.choices?.[0];
-                                    if (!choice) continue;
-
-                                    const delta = choice.delta;
-                                    if (delta?.reasoning) {
-                                        const thought = delta.reasoning;
-                                        fullThought += thought;
-                                        sendEvent({ type: 'thought', content: thought });
-                                    }
-                                    if (delta?.content) {
-                                        const text = delta.content;
-                                        fullText += text;
-                                        sendEvent({ type: 'text', content: text });
-                                    }
-                                } catch { }
-                            }
+                    for (let round = 0; round < maxRounds; round += 1) {
+                        const requestBody = {
+                            model: apiModel,
+                            stream: false,
+                            max_output_tokens: clampMaxTokens(maxTokens, 65536),
+                            store: true,
+                            instructions: finalSystemPrompt,
+                            input: nextInput,
+                        };
+                        if (previousResponseId) {
+                            requestBody.previous_response_id = previousResponseId;
                         }
+                        if (enableWebSearch) {
+                            requestBody.tools = getOpenAIWebTools();
+                        }
+
+                        const payload = await requestResponsesStream(requestBody, (thought) => {
+                            sendEvent({ type: 'thought', content: thought });
+                        }, (text) => {
+                            sendEvent({ type: 'text', content: text });
+                        });
+                        if (clientAborted) break;
+
+                        const thought = extractOpenAIResponseReasoning(payload);
+                        if (thought) {
+                            fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
+                        }
+
+                        const functionCalls = enableWebSearch ? extractOpenAIFunctionCalls(payload) : [];
+                        if (functionCalls.length === 0) {
+                            finalPayload = payload;
+                            fullText = extractOpenAIResponseText(payload);
+                            break;
+                        }
+
+                        previousResponseId = typeof payload?.id === 'string' ? payload.id : previousResponseId;
+                        nextInput = [];
+
+                        for (const functionCall of functionCalls) {
+                            const toolExecution = await executeWebBrowsingNativeToolCall({
+                                apiName: functionCall.name,
+                                argumentsInput: functionCall.arguments,
+                                runtime,
+                                sendEvent,
+                                pushCitations,
+                                round: round + 1,
+                                signal: req?.signal,
+                            });
+                            toolRecords.push(toolExecution.toolRecord);
+                            nextInput.push({
+                                type: 'function_call_output',
+                                call_id: functionCall.call_id,
+                                output: toolExecution.outputText,
+                            });
+                        }
+                    }
+
+                    if (!finalPayload && !clientAborted) {
+                        throw new Error('DeepSeek 工具循环未返回最终答案');
                     }
 
                     if (enableWebSearch && toolRecords.length > 0) {
@@ -602,7 +488,15 @@ export async function POST(req) {
                             tools: enableWebSearch && toolRecords.length > 0 ? toolRecords : null,
                             searchContextTokens: searchContextTokens || null,
                             type: 'text',
-                            parts: [{ text: fullText }]
+                            parts: [{ text: fullText }],
+                            providerState: finalPayload
+                                ? {
+                                    deepseek: {
+                                        responseId: typeof finalPayload?.id === 'string' ? finalPayload.id : '',
+                                        output: normalizeOpenAIOutputItems(finalPayload?.output),
+                                    },
+                                }
+                                : null,
                         };
                         const persistedConversation = await Conversation.findOneAndUpdate(
                             buildConversationWriteCondition(currentConversationId, user.userId, writePermitTime),
