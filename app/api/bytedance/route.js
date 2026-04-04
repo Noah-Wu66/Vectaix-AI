@@ -31,6 +31,7 @@ import {
     extractSeedFunctionCalls,
     extractSeedResponseReasoning,
     extractSeedResponseText,
+    normalizeSeedChunkText,
     normalizeSeedOutputItems,
 } from '@/lib/server/seed/service';
 import { getAttachmentInputType } from '@/lib/shared/attachments';
@@ -57,6 +58,8 @@ import {
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
 
+const SEED_UPSTREAM_DEBUG_SAMPLE_LIMIT = 12;
+
 function findLatestSeedResponseId(messages) {
     if (!Array.isArray(messages)) return '';
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -69,11 +72,110 @@ function findLatestSeedResponseId(messages) {
     return '';
 }
 
+function buildSeedTraceId() {
+    return `seed_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function truncateSeedLogText(value, max = 240) {
+    const text = normalizeSeedChunkText(value).replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    if (text.length <= max) return text;
+    return `${text.slice(0, max)}...`;
+}
+
+function summarizeSeedEvent(event) {
+    const eventType = typeof event?.type === 'string'
+        ? event.type
+        : (Array.isArray(event?.choices) ? 'chat.completions.chunk' : 'unknown');
+    const responsePayload = event?.response || event;
+    const chatDelta = Array.isArray(event?.choices) ? event.choices[0]?.delta : null;
+
+    return {
+        type: eventType,
+        keys: event && typeof event === 'object' ? Object.keys(event).slice(0, 10) : [],
+        textPreview: truncateSeedLogText(
+            event?.delta
+            ?? event?.text
+            ?? event?.data?.text
+            ?? chatDelta?.content
+        ),
+        reasoningPreview: truncateSeedLogText(
+            event?.reasoning
+            ?? event?.reasoning_content
+            ?? chatDelta?.reasoning
+            ?? chatDelta?.reasoning_content
+        ),
+        completedTextPreview: truncateSeedLogText(extractSeedResponseText(responsePayload)),
+        responseId: typeof responsePayload?.id === 'string' ? responsePayload.id : '',
+        hasChoices: Array.isArray(event?.choices),
+    };
+}
+
+function createSeedUpstreamDebugSession(meta) {
+    const eventTypes = {};
+    const samples = [];
+    let parseErrorCount = 0;
+    let sawDone = false;
+
+    const pushSample = (sample) => {
+        if (samples.length >= SEED_UPSTREAM_DEBUG_SAMPLE_LIMIT) return;
+        samples.push(sample);
+    };
+
+    return {
+        start(extra = {}) {
+            console.log('[Seed upstream debug] start', JSON.stringify({ ...meta, ...extra }));
+        },
+        recordEvent(event) {
+            const summary = summarizeSeedEvent(event);
+            eventTypes[summary.type] = (eventTypes[summary.type] || 0) + 1;
+            pushSample(summary);
+        },
+        recordParseError(raw) {
+            parseErrorCount += 1;
+            pushSample({
+                type: 'parse_error',
+                rawPreview: typeof raw === 'string' ? raw.slice(0, 400) : '',
+            });
+        },
+        markDone() {
+            sawDone = true;
+        },
+        finish(extra = {}) {
+            console.log('[Seed upstream debug] summary', JSON.stringify({
+                ...meta,
+                ...extra,
+                sawDone,
+                parseErrorCount,
+                eventTypes,
+                samples,
+            }));
+        },
+        fail(error, extra = {}) {
+            console.error('[Seed upstream debug] error', JSON.stringify({
+                ...meta,
+                ...extra,
+                sawDone,
+                parseErrorCount,
+                eventTypes,
+                samples,
+                error: {
+                    message: error?.message || 'Unknown error',
+                    status: typeof error?.status === 'number' ? error.status : null,
+                    name: error?.name || '',
+                    code: error?.code || '',
+                },
+            }));
+        },
+    };
+}
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req) {
     let writePermitTime = null;
+    const seedTraceId = buildSeedTraceId();
 
     try {
         const contentLength = req.headers.get('content-length');
@@ -446,6 +548,22 @@ export async function POST(req) {
                     });
                     const requestSeedStream = async (requestBody, onThought, onText) => {
                         const url = `${seedBaseUrl}/responses`;
+                        const upstreamDebug = createSeedUpstreamDebugSession({
+                            traceId: seedTraceId,
+                            conversationId: currentConversationId || '',
+                            model: apiModel || SEED_MODEL_ID,
+                        });
+                        upstreamDebug.start({
+                            previousResponseId: typeof requestBody?.previous_response_id === 'string' ? requestBody.previous_response_id : '',
+                            inputCount: Array.isArray(requestBody?.input) ? requestBody.input.length : 0,
+                            hasTools: Array.isArray(requestBody?.tools) && requestBody.tools.length > 0,
+                            toolTypes: Array.isArray(requestBody?.tools)
+                                ? requestBody.tools.map((tool) => tool?.type || tool?.name || 'unknown').slice(0, 8)
+                                : [],
+                            maxOutputTokens: Number.isFinite(requestBody?.max_output_tokens) ? requestBody.max_output_tokens : null,
+                            thinkingType: requestBody?.thinking?.type || '',
+                            reasoningEffort: requestBody?.reasoning?.effort || '',
+                        });
                         let response = await fetch(url, {
                             method: 'POST',
                             headers: {
@@ -469,6 +587,11 @@ export async function POST(req) {
                         }
                         if (!response.ok) {
                             const errorText = await response.text();
+                            upstreamDebug.fail(new Error(`Seed APIError: ${response.status} ${errorText}`), {
+                                upstreamStatus: response.status,
+                                contentType: response.headers.get('content-type') || '',
+                                rawErrorPreview: typeof errorText === 'string' ? errorText.slice(0, 600) : '',
+                            });
                             throw new Error(`Seed APIError: ${response.status} ${errorText}`);
                         }
 
@@ -477,62 +600,137 @@ export async function POST(req) {
                         let buffer = '';
                         let accumulated = { reasoning: [], output: [] };
                         let lastResponseEvent = null;
+                        let streamedText = '';
 
-                        while (true) {
-                            const { value, done } = await reader.read();
-                            if (done || clientAborted) break;
+                        const emitThought = (value) => {
+                            const text = normalizeSeedChunkText(value);
+                            if (!text) return;
+                            accumulated.reasoning.push({ type: 'reasoning', text });
+                            onThought?.(text);
+                        };
 
-                            buffer += decoder.decode(value, { stream: true });
-                            const lines = buffer.split('\n');
-                            buffer = lines.pop();
+                        const emitText = (value) => {
+                            const text = normalizeSeedChunkText(value);
+                            if (!text) return;
+                            streamedText += text;
+                            accumulated.output.push({ type: 'text', text });
+                            onText?.(text);
+                        };
 
-                            for (const line of lines) {
-                                if (!line.trim() || line.startsWith(':')) continue;
-                                if (!line.startsWith('data: ')) continue;
+                        const applyCompletedText = (value) => {
+                            const nextText = normalizeSeedChunkText(value).trim();
+                            if (!nextText) return;
 
-                                const dataStr = line.slice(6);
-                                if (dataStr === '[DONE]') continue;
+                            if (!streamedText) {
+                                emitText(nextText);
+                                return;
+                            }
+
+                            if (nextText.startsWith(streamedText) && nextText.length > streamedText.length) {
+                                emitText(nextText.slice(streamedText.length));
+                            }
+                        };
+
+                        const handleEvent = (event) => {
+                            const eventType = typeof event?.type === 'string' ? event.type : '';
+
+                            if (eventType === 'response.reasoning.delta' || eventType === 'output.reasoning.delta') {
+                                emitThought(event?.delta ?? event?.text ?? event?.data?.text);
+                                return;
+                            }
+
+                            if (eventType === 'response.output_text.delta' || eventType === 'output.text.delta') {
+                                emitText(event?.delta ?? event?.text ?? event?.data?.text);
+                                return;
+                            }
+
+                            if (eventType === 'response.output_text.done' || eventType === 'output.text.done') {
+                                applyCompletedText(event.text);
+                                return;
+                            }
+
+                            if (eventType === 'response.completed' || eventType === 'response.done' || eventType === 'done') {
+                                lastResponseEvent = event.response || event;
+                                applyCompletedText(extractSeedResponseText(lastResponseEvent));
+                            }
+
+                            // 兼容标准 OpenAI Chat Completions SSE 格式
+                            if (Array.isArray(event.choices) && event.choices.length > 0) {
+                                const delta = event.choices[0].delta;
+                                if (delta?.content) {
+                                    emitText(delta.content);
+                                }
+                                if (delta?.reasoning || delta?.reasoning_content) {
+                                    emitThought(delta.reasoning || delta.reasoning_content);
+                                }
+                            }
+                        };
+
+                        const consumeSseBuffer = (final = false) => {
+                            const blocks = buffer.split(/\r?\n\r?\n/);
+                            buffer = final ? '' : (blocks.pop() || '');
+
+                            for (const block of blocks) {
+                                const trimmedBlock = block.trim();
+                                if (!trimmedBlock) continue;
+
+                                const lines = trimmedBlock.split(/\r?\n/);
+                                const dataLines = [];
+                                for (const line of lines) {
+                                    if (!line || line.startsWith(':')) continue;
+                                    if (line.startsWith('data:')) {
+                                        dataLines.push(line.slice(5).replace(/^\s*/, ''));
+                                    }
+                                }
+
+                                if (!dataLines.length) continue;
+                                const dataStr = dataLines.join('\n');
+                                if (dataStr === '[DONE]') {
+                                    upstreamDebug.markDone();
+                                    continue;
+                                }
 
                                 try {
                                     const event = JSON.parse(dataStr);
-                                    if (event.type === 'response.reasoning.delta' || event.type === 'output.reasoning.delta') {
-                                        const text = event.delta?.text || event.text || '';
-                                        if (text) {
-                                            accumulated.reasoning.push({ type: 'reasoning', text });
-                                            onThought?.(text);
-                                        }
-                                    } else if (event.type === 'response.output_text.delta' || event.type === 'output.text.delta') {
-                                        const text = event.delta?.text || event.text || '';
-                                        if (text) {
-                                            accumulated.output.push({ type: 'text', text });
-                                            onText?.(text);
-                                        }
-                                    } else if (event.type === 'response.output_text.done' || event.type === 'output.text.done') {
-                                        if (event.text) {
-                                            accumulated.output.push({ type: 'text', text: event.text });
-                                        }
-                                    } else if (event.type === 'response.completed' || event.type === 'response.done' || event.type === 'done') {
-                                        lastResponseEvent = event.response || event;
-                                    }
-
-                                    // 兼容标准 OpenAI Chat Completions SSE 格式
-                                    if (Array.isArray(event.choices) && event.choices.length > 0) {
-                                        const delta = event.choices[0].delta;
-                                        if (delta?.content) {
-                                            accumulated.output.push({ type: 'text', text: delta.content });
-                                            onText?.(delta.content);
-                                        }
-                                        if (delta?.reasoning || delta?.reasoning_content) {
-                                            const reasoningText = delta.reasoning || delta.reasoning_content;
-                                            accumulated.reasoning.push({ type: 'reasoning', text: reasoningText });
-                                            onThought?.(reasoningText);
-                                        }
-                                    }
-                                } catch { }
+                                    upstreamDebug.recordEvent(event);
+                                    handleEvent(event);
+                                } catch {
+                                    upstreamDebug.recordParseError(dataStr);
+                                }
                             }
-                        }
+                        };
 
-                        return lastResponseEvent || { output: accumulated.output, reasoning: accumulated.reasoning };
+                        try {
+                            while (true) {
+                                const { value, done } = await reader.read();
+                                if (done || clientAborted) break;
+
+                                buffer += decoder.decode(value, { stream: true });
+                                consumeSseBuffer(false);
+                            }
+
+                            buffer += decoder.decode();
+                            consumeSseBuffer(true);
+
+                            const finalPayload = lastResponseEvent || { output: accumulated.output, reasoning: accumulated.reasoning };
+                            upstreamDebug.finish({
+                                upstreamStatus: response.status,
+                                contentType: response.headers.get('content-type') || '',
+                                streamedTextLength: streamedText.length,
+                                finalTextLength: extractSeedResponseText(finalPayload).length,
+                                finalTextPreview: truncateSeedLogText(extractSeedResponseText(finalPayload), 400),
+                                finalResponseId: typeof finalPayload?.id === 'string' ? finalPayload.id : '',
+                            });
+
+                            return finalPayload;
+                        } catch (error) {
+                            upstreamDebug.fail(error, {
+                                upstreamStatus: response.status,
+                                contentType: response.headers.get('content-type') || '',
+                                streamedTextLength: streamedText.length,
+                            });
+                            throw error;
+                        }
                     };
 
                     const usePreviousResponseId = Boolean(latestSeedResponseId && currentTurnInput);
