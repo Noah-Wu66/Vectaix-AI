@@ -39,6 +39,16 @@ export function AIAvatar({ model, size = 24, animate = false, className = "" }) 
 }
 
 export function LoadingSweepText({ text = "加载中", className = "", ariaText }) {
+  // 如果是三个点，使用跳跃动画
+  if (text === "...") {
+    return (
+      <span className={`loading-sweep ${className}`.trim()} data-text={text} aria-label={ariaText || text}>
+        <span className="jump-dot">.</span>
+        <span className="jump-dot">.</span>
+        <span className="jump-dot">.</span>
+      </span>
+    );
+  }
   return (
     <span className={`loading-sweep ${className}`.trim()} data-text={text} aria-label={ariaText || text}>
       {text}

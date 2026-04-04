@@ -4,18 +4,16 @@ import User from '@/models/User';
 import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
-    fetchImageAsBase64,
     generateMessageId,
     isNonEmptyString,
     sanitizeStoredMessagesStrict,
     estimateTokens,
     getStoredPartsFromMessage
 } from '@/app/api/chat/utils';
-import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL } from '@/lib/shared/models';
-import { resolveDeepSeekProviderConfig } from '@/lib/modelRoutes';
+import { QWEN_MODEL_ID } from '@/lib/shared/models';
+import { resolveQwenProviderConfig } from '@/lib/modelRoutes';
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
-    clampMaxTokens,
     parseMaxTokens,
     parseSystemPrompt,
     parseWebSearchConfig,
@@ -34,7 +32,7 @@ import {
 import {
     createWebBrowsingRuntime,
     executeWebBrowsingNativeToolCall,
-    getDeepSeekWebTools,
+    getOpenAIWebTools,
     WEB_BROWSING_MAX_ROUNDS,
 } from '@/lib/server/webBrowsing/nativeTools';
 import {
@@ -47,14 +45,7 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/**
- * 将存储的历史消息转换为 DeepSeek（OpenAI兼容）格式
- * DeepSeek 使用标准 OpenAI Chat Completions 消息格式：
- * { role: "user"|"assistant", content: "..." }
- * 
- * 关键：多轮对话中只传递 content，不传递 reasoning
- */
-async function buildDeepSeekMessagesFromHistory(messages) {
+function buildQwenMessagesFromHistory(messages) {
     const result = [];
     for (const msg of messages) {
         if (msg?.role !== 'user' && msg?.role !== 'model') continue;
@@ -63,34 +54,10 @@ async function buildDeepSeekMessagesFromHistory(messages) {
         if (!storedParts || storedParts.length === 0) continue;
 
         const role = msg.role === 'model' ? 'assistant' : 'user';
-
-        // DeepSeek 支持图片：使用 content 数组格式
-        const hasImages = role === 'user' && storedParts.some(p => p?.inlineData?.url);
-
-        if (hasImages) {
-            const contentParts = [];
-            for (const part of storedParts) {
-                if (isNonEmptyString(part.text)) {
-                    contentParts.push({ type: 'text', text: part.text });
-                }
-                if (part?.inlineData?.url) {
-                    const { base64Data, mimeType } = await fetchImageAsBase64(part.inlineData.url);
-                    contentParts.push({
-                        type: 'image_url',
-                        image_url: { url: `data:${mimeType};base64,${base64Data}` }
-                    });
-                }
-            }
-            if (contentParts.length > 0) {
-                result.push({ role, content: contentParts });
-            }
-        } else {
-            // 纯文本消息
-            const textParts = storedParts.filter(p => isNonEmptyString(p?.text)).map(p => p.text);
-            const text = textParts.join('\n');
-            if (text) {
-                result.push({ role, content: text });
-            }
+        const textParts = storedParts.filter(p => isNonEmptyString(p?.text)).map(p => p.text);
+        const text = textParts.join('\n');
+        if (text) {
+            result.push({ role, content: text });
         }
     }
     return result;
@@ -117,7 +84,7 @@ export async function POST(req) {
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
         }
-        if (!prompt || typeof prompt !== 'string') {
+        if (typeof prompt !== 'string') {
             return Response.json({ error: 'Prompt is required' }, { status: 400 });
         }
         if (!Array.isArray(history)) {
@@ -159,21 +126,20 @@ export async function POST(req) {
             return Response.json({ error: 'Database connection failed' }, { status: 500 });
         }
 
-        const { baseUrl: deepseekBaseUrl, apiKey } = resolveDeepSeekProviderConfig();
-        const rawApiModel = model === DEEPSEEK_REASONER_MODEL ? DEEPSEEK_REASONER_MODEL : DEEPSEEK_CHAT_MODEL;
-        const apiModel = rawApiModel;
+        const { baseUrl: qwenBaseUrl, apiKey } = resolveQwenProviderConfig();
+        const apiModel = QWEN_MODEL_ID;
 
         let currentConversationId = conversationId;
         let currentConversation = await loadConversationForRoute({
             conversationId: currentConversationId,
             userId: user.userId,
-            expectedProvider: 'deepseek',
+            expectedProvider: 'qwen',
         });
         let createdConversationForRequest = false;
         let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
         let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
-        let deepseekMessages = [];
+        let qwenMessages = [];
         let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
@@ -216,34 +182,16 @@ export async function POST(req) {
             effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
                 ? historyBeforeCurrentPrompt.slice(-limit)
                 : historyBeforeCurrentPrompt;
-            deepseekMessages = await buildDeepSeekMessagesFromHistory(effectiveMsgs);
+            qwenMessages = await buildQwenMessagesFromHistory(effectiveMsgs);
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? safeHistory.slice(-limit) : safeHistory;
             effectiveHistoryMessages = effectiveHistory;
-            deepseekMessages = await buildDeepSeekMessagesFromHistory(effectiveHistory);
+            qwenMessages = await buildQwenMessagesFromHistory(effectiveHistory);
         }
 
-        let dbImageEntries = [];
-
         if (!isRegenerateMode) {
-            // 构建用户消息内容
-            if (config?.images?.length > 0) {
-                const contentParts = [{ type: 'text', text: prompt }];
-                for (const img of config.images) {
-                    if (img?.url) {
-                        const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
-                        contentParts.push({
-                            type: 'image_url',
-                            image_url: { url: `data:${mimeType};base64,${base64Data}` }
-                        });
-                        dbImageEntries.push({ url: img.url, mimeType });
-                    }
-                }
-                deepseekMessages.push({ role: 'user', content: contentParts });
-            } else {
-                deepseekMessages.push({ role: 'user', content: prompt });
-            }
+            qwenMessages.push({ role: 'user', content: prompt });
         }
 
         let maxTokens;
@@ -282,17 +230,6 @@ export async function POST(req) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
 
-            if (dbImageEntries.length > 0) {
-                for (const entry of dbImageEntries) {
-                    storedUserParts.push({
-                        inlineData: {
-                            mimeType: entry.mimeType,
-                            url: entry.url,
-                        },
-                    });
-                }
-            }
-
             const enrichedStoredUserParts = await enrichConversationPartsWithBlobIds(storedUserParts, {
                 userId: user.userId,
             });
@@ -304,12 +241,14 @@ export async function POST(req) {
                 type: 'parts',
                 parts: enrichedStoredUserParts
             };
-            const updatedConv = await Conversation.findOneAndUpdate({ _id: currentConversationId, userId: user.userId }, {
-                $push: {
-                    messages: userMessage
+            const updatedConv = await Conversation.findOneAndUpdate(
+                { _id: currentConversationId, userId: user.userId },
+                {
+                    $push: { messages: userMessage },
+                    updatedAt: userMsgTime
                 },
-                updatedAt: userMsgTime
-            }, { new: true }).select('updatedAt');
+                { new: true }
+            ).select('updatedAt');
             if (!updatedConv) {
                 return Response.json({ error: 'Not found' }, { status: 404 });
             }
@@ -329,7 +268,6 @@ export async function POST(req) {
         const responseStream = new ReadableStream({
             async start(controller) {
                 let fullText = '';
-                let fullThought = '';
                 let citations = [];
                 let searchContextTokens = 0;
                 const seenUrls = new Set();
@@ -381,7 +319,7 @@ export async function POST(req) {
                     });
                     const finalMessages = [
                         { role: 'system', content: finalSystemPrompt },
-                        ...deepseekMessages
+                        ...qwenMessages
                     ];
                     const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
                     const toolRecords = [];
@@ -391,7 +329,7 @@ export async function POST(req) {
                         let finished = false;
 
                         for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
-                            const response = await fetch(`${deepseekBaseUrl}/chat/completions`, {
+                            const response = await fetch(`${qwenBaseUrl}/chat/completions`, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -401,20 +339,19 @@ export async function POST(req) {
                                     model: apiModel,
                                     messages: loopMessages,
                                     stream: true,
-                                    max_tokens: clampMaxTokens(maxTokens, 65536),
-                                    tools: getDeepSeekWebTools(),
+                                    max_tokens: maxTokens,
+                                    tools: getOpenAIWebTools(),
                                 })
                             });
 
                             if (!response.ok) {
                                 const errorText = await response.text();
-                                throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
+                                throw new Error(`Qwen API Error: ${response.status} ${errorText}`);
                             }
 
                             const reader = response.body.getReader();
                             const decoder = new TextDecoder();
                             let buffer = '';
-                            let thought = '';
                             let content = '';
                             let toolCalls = [];
                             const toolCallsMap = new Map();
@@ -440,10 +377,6 @@ export async function POST(req) {
                                         if (!choice) continue;
 
                                         const delta = choice.delta;
-                                        if (delta?.reasoning) {
-                                            thought += delta.reasoning;
-                                            sendEvent({ type: 'thought', content: delta.reasoning });
-                                        }
                                         if (delta?.content) {
                                             content += delta.content;
                                             sendEvent({ type: 'text', content: delta.content });
@@ -464,10 +397,6 @@ export async function POST(req) {
                                 }
                             }
 
-                            if (thought) {
-                                fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
-                            }
-
                             toolCalls = Array.from(toolCallsMap.values())
                                 .filter((item) => item.function?.name)
                                 .map((item) => ({
@@ -485,7 +414,6 @@ export async function POST(req) {
                             loopMessages.push({
                                 role: 'assistant',
                                 content: content || '',
-                                ...(thought ? { reasoning: thought } : {}),
                                 tool_calls: toolCalls,
                             });
 
@@ -509,10 +437,10 @@ export async function POST(req) {
                         }
 
                         if (!finished && !clientAborted) {
-                            throw new Error('DeepSeek 工具循环未返回最终答案');
+                            throw new Error('Qwen 工具循环未返回最终答案');
                         }
                     } else {
-                        const response = await fetch(`${deepseekBaseUrl}/chat/completions`, {
+                        const response = await fetch(`${qwenBaseUrl}/chat/completions`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -522,13 +450,13 @@ export async function POST(req) {
                                 model: apiModel,
                                 messages: finalMessages,
                                 stream: true,
-                                max_tokens: clampMaxTokens(maxTokens, 65536),
+                                max_tokens: maxTokens,
                             })
                         });
 
                         if (!response.ok) {
                             const errorText = await response.text();
-                            throw new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
+                            throw new Error(`Qwen API Error: ${response.status} ${errorText}`);
                         }
 
                         const reader = response.body.getReader();
@@ -556,11 +484,6 @@ export async function POST(req) {
                                     if (!choice) continue;
 
                                     const delta = choice.delta;
-                                    if (delta?.reasoning) {
-                                        const thought = delta.reasoning;
-                                        fullThought += thought;
-                                        sendEvent({ type: 'thought', content: thought });
-                                    }
                                     if (delta?.content) {
                                         const text = delta.content;
                                         fullText += text;
@@ -591,13 +514,11 @@ export async function POST(req) {
 
                     controller.enqueue(encoder.encode('data: [DONE]\n\n'));
 
-                    // 存储 AI 回复到数据库
                     if (user && currentConversationId) {
                         const modelMessage = {
                             id: resolvedModelMessageId,
                             role: 'model',
                             content: fullText,
-                            thought: fullThought,
                             citations: citations.length > 0 ? citations : null,
                             tools: enableWebSearch && toolRecords.length > 0 ? toolRecords : null,
                             searchContextTokens: searchContextTokens || null,
@@ -607,9 +528,7 @@ export async function POST(req) {
                         const persistedConversation = await Conversation.findOneAndUpdate(
                             buildConversationWriteCondition(currentConversationId, user.userId, writePermitTime),
                             {
-                                $push: {
-                                    messages: modelMessage
-                                },
+                                $push: { messages: modelMessage },
                                 updatedAt: Date.now()
                             },
                             { new: true }
@@ -664,7 +583,7 @@ export async function POST(req) {
         return new Response(responseStream, { headers });
 
     } catch (error) {
-        console.error('DeepSeek API Error:', {
+        console.error('Qwen API Error:', {
             message: error?.message,
             status: error?.status,
             name: error?.name,

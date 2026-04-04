@@ -56,7 +56,7 @@ export function extractOpenAIResponseText(payload) {
   const outputs = Array.isArray(payload?.output) ? payload.output : [];
 
   // Try to extract text from output_text type items (GPT-5.4 style: response.output contains {type: "output_text", text: "..."} directly)
-  const outputTextItems = outputs.filter((item) => item?.type === "output_text");
+  const outputTextItems = outputs.filter((item) => item?.type === "output_text" || item?.type === "text");
   if (outputTextItems.length > 0) {
     return outputTextItems
       .map((item) => normalizeChunkText(item?.text ?? item))
@@ -79,7 +79,9 @@ export function extractOpenAIResponseText(payload) {
 
 export function extractOpenAIResponseReasoning(payload) {
   const outputs = Array.isArray(payload?.output) ? payload.output : [];
-  return outputs
+
+  // 从完整响应的 output 数组中提取 reasoning 项（response.completed 格式）
+  const fromOutput = outputs
     .filter((item) => item?.type === "reasoning")
     .flatMap((item) => {
       const summary = Array.isArray(item?.summary) ? item.summary : [];
@@ -87,6 +89,15 @@ export function extractOpenAIResponseReasoning(payload) {
       const content = Array.isArray(item?.content) ? item.content : [];
       return content;
     })
+    .map((item) => normalizeChunkText(item?.text ?? item))
+    .join("")
+    .trim();
+
+  if (fromOutput) return fromOutput;
+
+  // 从流式累积结果的独立 reasoning 数组中提取（accumulated 格式）
+  const reasoningItems = Array.isArray(payload?.reasoning) ? payload.reasoning : [];
+  return reasoningItems
     .map((item) => normalizeChunkText(item?.text ?? item))
     .join("")
     .trim();

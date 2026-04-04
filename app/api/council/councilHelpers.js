@@ -23,7 +23,6 @@ import {
   getCouncilExpertConfigs,
   getCouncilExpertDisplayLabel,
   SEED_MODEL_ID,
-  toZenmuxModel,
 } from "@/lib/shared/models";
 import { resolveSeedProviderConfig } from "@/lib/modelRoutes";
 import {
@@ -618,7 +617,7 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
 
   for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
     const response = await raceWithSignal(client.messages.create({
-      model: toZenmuxModel(CLAUDE_OPUS_MODEL),
+      model: CLAUDE_OPUS_MODEL,
       max_tokens: EXPERT_MAX_OUTPUT_TOKENS,
       system: [{ type: "text", text: systemPrompt }],
       messages: workingMessages,
@@ -677,7 +676,7 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
         Authorization: `Bearer ${providerConfig.apiKey}`,
       },
       body: JSON.stringify({
-        model: toZenmuxModel(expert.modelId),
+        model: expert.modelId,
         stream: false,
         store: true,
         max_output_tokens: EXPERT_MAX_OUTPUT_TOKENS,
@@ -864,7 +863,7 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
       apiKey: seedConfig.apiKey,
       baseUrl: seedConfig.baseUrl,
       requestBody: buildSeedRequestBody({
-        model: toZenmuxModel(SEED_MODEL_ID),
+        model: SEED_MODEL_ID,
         stream: false,
         maxTokens: TRIAGE_MAX_OUTPUT_TOKENS,
         thinkingLevel: "minimal",
@@ -935,7 +934,7 @@ export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTe
     apiKey: seedConfig.apiKey,
     baseUrl: seedConfig.baseUrl,
     requestBody: buildSeedRequestBody({
-      model: toZenmuxModel(SEED_MODEL_ID),
+      model: SEED_MODEL_ID,
       stream: true,
       input: [
         buildSeedMessageInput({

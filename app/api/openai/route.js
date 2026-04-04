@@ -20,7 +20,6 @@ import {
 } from '@/lib/server/chat/requestConfig';
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import { resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
-import { toZenmuxModel } from '@/lib/shared/models';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
     buildConversationWriteCondition,
@@ -60,7 +59,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
 const MODEL_REASONING_EFFORTS = {};
-const REASONING_SUMMARY_MODELS = new Set(['gpt-5.4']);
+const REASONING_SUMMARY_MODELS = new Set(['openai/gpt-5.4']);
 
 function findLatestOpenAIResponseId(messages) {
     if (!Array.isArray(messages)) return '';
@@ -172,7 +171,7 @@ export async function POST(req) {
         }
 
         const { baseUrl: apiBaseUrl, apiKey } = resolveOpenAIProviderConfig();
-        const apiModel = toZenmuxModel(model);
+        const apiModel = model;
 
         let currentConversationId = conversationId;
         let currentConversation = await loadConversationForRoute({
@@ -539,7 +538,8 @@ export async function POST(req) {
 
                                 try {
                                     const event = JSON.parse(dataStr);
-                                    if (event.type === 'response.reasoning.delta' || event.type === 'output.reasoning.delta') {
+                                    if (event.type === 'response.reasoning.delta' || event.type === 'output.reasoning.delta'
+                                        || event.type === 'response.reasoning_summary_text.delta') {
                                         const text = event.delta?.text || event.text || '';
                                         if (text) {
                                             accumulated.reasoning.push({ type: 'reasoning', text });
@@ -558,6 +558,20 @@ export async function POST(req) {
                                         }
                                     } else if (event.type === 'response.completed' || event.type === 'response.done' || event.type === 'done') {
                                         return event.response || event;
+                                    }
+
+                                    // 兼容标准 OpenAI Chat Completions SSE 格式
+                                    if (Array.isArray(event.choices) && event.choices.length > 0) {
+                                        const delta = event.choices[0].delta;
+                                        if (delta?.content) {
+                                            accumulated.output.push({ type: 'text', text: delta.content });
+                                            onText?.(delta.content);
+                                        }
+                                        if (delta?.reasoning || delta?.reasoning_content) {
+                                            const reasoningText = delta.reasoning || delta.reasoning_content;
+                                            accumulated.reasoning.push({ type: 'reasoning', text: reasoningText });
+                                            onThought?.(reasoningText);
+                                        }
                                     }
                                 } catch { }
                             }

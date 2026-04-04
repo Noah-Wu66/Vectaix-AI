@@ -16,7 +16,6 @@ import {
     SEED_MODEL_ID,
     isSeedModel,
     normalizeModelId,
-    toZenmuxModel,
 } from '@/lib/shared/models';
 import { resolveSeedProviderConfig } from '@/lib/modelRoutes';
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
@@ -151,7 +150,7 @@ export async function POST(req) {
         const { baseUrl: seedBaseUrl, apiKey } = resolveSeedProviderConfig();
 
         const conversationModel = normalizeModelId(model);
-        const apiModel = toZenmuxModel(conversationModel);
+        const apiModel = conversationModel;
         if (!isSeedModel(conversationModel)) {
             return Response.json({ error: '当前接口仅支持官方 Seed 模型' }, { status: 400 });
         }
@@ -514,6 +513,20 @@ export async function POST(req) {
                                         }
                                     } else if (event.type === 'response.completed' || event.type === 'response.done' || event.type === 'done') {
                                         lastResponseEvent = event.response || event;
+                                    }
+
+                                    // 兼容标准 OpenAI Chat Completions SSE 格式
+                                    if (Array.isArray(event.choices) && event.choices.length > 0) {
+                                        const delta = event.choices[0].delta;
+                                        if (delta?.content) {
+                                            accumulated.output.push({ type: 'text', text: delta.content });
+                                            onText?.(delta.content);
+                                        }
+                                        if (delta?.reasoning || delta?.reasoning_content) {
+                                            const reasoningText = delta.reasoning || delta.reasoning_content;
+                                            accumulated.reasoning.push({ type: 'reasoning', text: reasoningText });
+                                            onThought?.(reasoningText);
+                                        }
                                     }
                                 } catch { }
                             }

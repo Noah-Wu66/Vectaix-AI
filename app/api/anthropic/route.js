@@ -8,7 +8,6 @@ import {
     CLAUDE_OPUS_MODEL,
     getDefaultMaxTokensForModel,
     getModelConfig,
-    toZenmuxModel,
 } from '@/lib/shared/models';
 import {
     fetchImageAsBase64,
@@ -271,7 +270,7 @@ export async function POST(req) {
 
         const providerConfig = await resolveAnthropicProviderConfig();
         const { baseUrl: anthropicBaseUrl, apiKey } = providerConfig;
-        const apiModel = toZenmuxModel(resolveAnthropicApiModel(model));
+        const apiModel = resolveAnthropicApiModel(model);
         const client = new Anthropic({
             apiKey,
             baseURL: anthropicBaseUrl,

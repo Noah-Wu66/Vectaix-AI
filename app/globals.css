@@ -678,6 +678,11 @@ h1, h2, h3, h4, h5, h6 {
   100% { background-position: -40% 0; }
 }
 
+@keyframes jumpDot {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
+}
+
 .loading-sweep {
   position: relative;
   display: inline-block;
@@ -706,6 +711,27 @@ h1, h2, h3, h4, h5, h6 {
   --loading-sweep-line-height: 1;
   transform: translateY(-0.15em);
   padding-left: var(--loading-sweep-spacing);
+}
+
+.loading-sweep-dots::after {
+  display: none;
+}
+
+.loading-sweep-dots .jump-dot {
+  display: inline-block;
+  animation: jumpDot 1.2s ease-in-out infinite;
+}
+
+.loading-sweep-dots .jump-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.loading-sweep-dots .jump-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.loading-sweep-dots .jump-dot:nth-child(3) {
+  animation-delay: 0.3s;
 }
 
 .loading-sweep::after {

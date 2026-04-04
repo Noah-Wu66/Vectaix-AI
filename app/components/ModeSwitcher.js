@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, X } from "lucide-react";
 import {
   CHAT_RUNTIME_MODE_CHAT,
   COUNCIL_MODEL_ID,
@@ -52,23 +52,39 @@ export default function ModeSwitcher({
       <AnimatePresence>
         {ready && showModeMenu && (
           <>
+            {/* 背景遮罩 */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40"
+              className="fixed inset-0 z-40 bg-black/20"
               onClick={() => setShowModeMenu(false)}
             />
+            {/* 底部上拉菜单 */}
             <motion.div
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-0 mb-2 w-[min(90vw,240px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-2 z-50"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-zinc-900 rounded-t-2xl shadow-2xl border-t border-zinc-200 dark:border-zinc-700"
             >
-              <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 tracking-wider">
-                模式
+              {/* 拖拽把手 */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-zinc-300 dark:bg-zinc-600" />
               </div>
-              <div className="space-y-1">
+              {/* 标题栏 */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+                <span className="font-medium text-zinc-900 dark:text-zinc-100">选择模式</span>
+                <button
+                  onClick={() => setShowModeMenu(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  type="button"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              {/* 选项列表 */}
+              <div className="p-4 space-y-2 max-h-[50vh] overflow-auto">
                 {MODE_OPTIONS.map((item) => {
                   const active = currentModeId === item.id;
                   const disabled = item.disabled === true;
@@ -83,23 +99,28 @@ export default function ModeSwitcher({
                           setShowModeMenu(false);
                           onModeChange?.(item.id);
                         }}
-                        className={`w-full px-3 py-2.5 rounded-lg text-sm md:text-[13px] font-medium text-left transition-colors ${
+                        className={`w-full px-4 py-4 rounded-xl text-left transition-colors ${
                           active
                             ? "bg-zinc-600 text-white"
                             : disabled
                               ? "bg-zinc-100 dark:bg-zinc-800/60 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
-                              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                              : "text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                         }`}
                         type="button"
                         disabled={disabled}
                         aria-disabled={disabled}
                       >
-                        <div>{item.label}</div>
+                        <div className="font-medium text-base">{item.label}</div>
+                        <div className={`text-sm mt-1 ${active ? "text-zinc-200" : "text-zinc-500 dark:text-zinc-400"}`}>
+                          {item.description}
+                        </div>
                       </button>
                     </div>
                   );
                 })}
               </div>
+              {/* 底部安全区域 */}
+              <div className="h-6" />
             </motion.div>
           </>
         )}
