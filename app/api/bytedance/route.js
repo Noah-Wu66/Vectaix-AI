@@ -84,30 +84,16 @@ function truncateSeedLogText(value, max = 240) {
 }
 
 function summarizeSeedEvent(event) {
-    const eventType = typeof event?.type === 'string'
-        ? event.type
-        : (Array.isArray(event?.choices) ? 'chat.completions.chunk' : 'unknown');
-    const responsePayload = event?.response || event;
-    const chatDelta = Array.isArray(event?.choices) ? event.choices[0]?.delta : null;
+    const eventType = typeof event?.type === 'string' ? event.type : 'unknown';
+    const responsePayload = event?.response;
 
     return {
         type: eventType,
         keys: event && typeof event === 'object' ? Object.keys(event).slice(0, 10) : [],
-        textPreview: truncateSeedLogText(
-            event?.delta
-            ?? event?.text
-            ?? event?.data?.text
-            ?? chatDelta?.content
-        ),
-        reasoningPreview: truncateSeedLogText(
-            event?.reasoning
-            ?? event?.reasoning_content
-            ?? chatDelta?.reasoning
-            ?? chatDelta?.reasoning_content
-        ),
+        textPreview: truncateSeedLogText(event?.delta),
+        reasoningPreview: '',
         completedTextPreview: truncateSeedLogText(extractSeedResponseText(responsePayload)),
         responseId: typeof responsePayload?.id === 'string' ? responsePayload.id : '',
-        hasChoices: Array.isArray(event?.choices),
     };
 }
 
@@ -598,14 +584,12 @@ export async function POST(req) {
                         const reader = response.body.getReader();
                         const decoder = new TextDecoder();
                         let buffer = '';
-                        let accumulated = { reasoning: [], output: [] };
                         let lastResponseEvent = null;
                         let streamedText = '';
 
                         const emitThought = (value) => {
                             const text = normalizeSeedChunkText(value);
                             if (!text) return;
-                            accumulated.reasoning.push({ type: 'reasoning', text });
                             onThought?.(text);
                         };
 
@@ -613,60 +597,25 @@ export async function POST(req) {
                             const text = normalizeSeedChunkText(value);
                             if (!text) return;
                             streamedText += text;
-                            accumulated.output.push({ type: 'text', text });
                             onText?.(text);
-                        };
-
-                        const applyCompletedText = (value) => {
-                            const nextText = normalizeSeedChunkText(value).trim();
-                            if (!nextText) return;
-
-                            if (!streamedText) {
-                                emitText(nextText);
-                                return;
-                            }
-
-                            if (nextText.startsWith(streamedText) && nextText.length > streamedText.length) {
-                                emitText(nextText.slice(streamedText.length));
-                            }
                         };
 
                         const handleEvent = (event) => {
                             const eventType = typeof event?.type === 'string' ? event.type : '';
 
-                            if (
-                                eventType === 'response.reasoning.delta'
-                                || eventType === 'output.reasoning.delta'
-                                || eventType === 'response.reasoning_summary_text.delta'
-                            ) {
-                                emitThought(event?.delta ?? event?.text ?? event?.data?.text);
+                            if (eventType === 'response.reasoning_summary_text.delta') {
+                                emitThought(event?.delta);
                                 return;
                             }
 
-                            if (eventType === 'response.output_text.delta' || eventType === 'output.text.delta') {
-                                emitText(event?.delta ?? event?.text ?? event?.data?.text);
+                            if (eventType === 'response.output_text.delta') {
+                                emitText(event?.delta);
                                 return;
                             }
 
-                            if (eventType === 'response.output_text.done' || eventType === 'output.text.done') {
-                                applyCompletedText(event.text);
+                            if (eventType === 'response.completed') {
+                                lastResponseEvent = event.response;
                                 return;
-                            }
-
-                            if (eventType === 'response.completed' || eventType === 'response.done' || eventType === 'done') {
-                                lastResponseEvent = event.response || event;
-                                applyCompletedText(extractSeedResponseText(lastResponseEvent));
-                            }
-
-                            // 兼容标准 OpenAI Chat Completions SSE 格式
-                            if (Array.isArray(event.choices) && event.choices.length > 0) {
-                                const delta = event.choices[0].delta;
-                                if (delta?.content) {
-                                    emitText(delta.content);
-                                }
-                                if (delta?.reasoning || delta?.reasoning_content) {
-                                    emitThought(delta.reasoning || delta.reasoning_content);
-                                }
                             }
                         };
 
@@ -716,7 +665,11 @@ export async function POST(req) {
                             buffer += decoder.decode();
                             consumeSseBuffer(true);
 
-                            const finalPayload = lastResponseEvent || { output: accumulated.output, reasoning: accumulated.reasoning };
+                            if (!lastResponseEvent) {
+                                throw new Error('Seed 上游缺少 response.completed 事件');
+                            }
+
+                            const finalPayload = lastResponseEvent;
                             upstreamDebug.finish({
                                 upstreamStatus: response.status,
                                 contentType: response.headers.get('content-type') || '',
