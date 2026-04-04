@@ -387,6 +387,12 @@ export default function Composer({
         <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-900/30 rounded-t-[24px]">
           {!isCouncilSelected ? (
             <>
+              <ModelSelector
+                model={model}
+                onModelChange={onModelChange}
+                ready={modelReady}
+                includeCouncil={false}
+              />
               <SettingsMenu
                 model={model}
                 ready={modelReady}
@@ -398,12 +404,6 @@ export default function Composer({
                 addSystemPrompt={addSystemPrompt}
                 updateSystemPrompt={updateSystemPrompt}
                 deleteSystemPrompt={deleteSystemPrompt}
-              />
-              <ModelSelector
-                model={model}
-                onModelChange={onModelChange}
-                ready={modelReady}
-                includeCouncil={false}
               />
             </>
           ) : null}
