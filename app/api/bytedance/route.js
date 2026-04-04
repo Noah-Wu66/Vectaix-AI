@@ -634,7 +634,11 @@ export async function POST(req) {
                         const handleEvent = (event) => {
                             const eventType = typeof event?.type === 'string' ? event.type : '';
 
-                            if (eventType === 'response.reasoning.delta' || eventType === 'output.reasoning.delta') {
+                            if (
+                                eventType === 'response.reasoning.delta'
+                                || eventType === 'output.reasoning.delta'
+                                || eventType === 'response.reasoning_summary_text.delta'
+                            ) {
                                 emitThought(event?.delta ?? event?.text ?? event?.data?.text);
                                 return;
                             }
