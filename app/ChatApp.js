@@ -9,7 +9,6 @@ import {
   CHAT_MODELS,
   COUNCIL_MODEL_ID,
   DEFAULT_MODEL,
-  normalizeChatRuntimeMode,
   isCouncilModel,
   isPrimaryChatModelId,
 } from "@/lib/shared/models";
@@ -195,7 +194,6 @@ export default function ChatApp() {
   const mediaResolution = "media_resolution_high";
   const {
     model,
-    chatMode,
     isSettingsReady,
     setModel,
     setChatMode,
@@ -538,7 +536,7 @@ export default function ChatApp() {
     const settings = rawSettings && typeof rawSettings === "object"
       ? rawSettings
       : {};
-    setChatMode(normalizeChatRuntimeMode(settings.mode));
+    setChatMode(CHAT_RUNTIME_MODE_CHAT);
     setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
   };
 
@@ -606,7 +604,6 @@ export default function ChatApp() {
     loading,
     setLoading,
     model,
-    chatMode,
     thinkingLevels,
     mediaResolution,
     maxTokens,
@@ -807,24 +804,22 @@ export default function ChatApp() {
       return;
     }
 
-    const normalizedMode = normalizeChatRuntimeMode(nextMode);
-
+    // nextMode 是 chat（从 Council 切回普通模式）
     if (isCouncilModel(model)) {
       const fallbackModel = getLastStandardModel();
-      const nextModeLabel = normalizedMode === "agent" ? "Agent" : "Chat";
       const applyStandardMode = () => {
         userInterruptedRef.current = false;
         setCurrentConversationId(null);
         setMessages([]);
         setModel(fallbackModel);
         lastTextModelRef.current = fallbackModel;
-        setChatMode(normalizedMode);
+        setChatMode(CHAT_RUNTIME_MODE_CHAT);
       };
 
       if (messages.length > 0) {
         setConfirmModalConfig({
           title: "切换模式",
-          message: `切换到 ${nextModeLabel} 需要新建对话。Council 和普通模型不能在同一个会话里混用。\n\n是否新建对话并切换？`,
+          message: "切换到 Chat 需要新建对话。Council 和普通模型不能在同一个会话里混用。\n\n是否新建对话并切换？",
           onConfirm: applyStandardMode,
         });
         setShowConfirmModal(true);
@@ -834,11 +829,6 @@ export default function ChatApp() {
       applyStandardMode();
       return;
     }
-
-    if (normalizedMode === chatMode) return;
-
-    setChatMode(normalizedMode);
-    syncConversationSettings({ mode: normalizedMode });
   };
 
   const requestModelChange = (nextModel) => {
@@ -1071,7 +1061,6 @@ export default function ChatApp() {
             isStreaming,
             isWaitingForAI: loading && messages.length > 0,
             model,
-            chatMode,
             modelReady: isSettingsReady,
             onModelChange: requestModelChange,
             onModeChange: requestModeChange,

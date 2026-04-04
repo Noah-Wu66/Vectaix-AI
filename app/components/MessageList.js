@@ -37,8 +37,6 @@ import {
   ArtifactCards,
 } from "./MessageListHelpers";
 import {
-  CHAT_RUNTIME_MODE_CHAT,
-  CHAT_RUNTIME_MODE_AGENT,
   CHAT_MODELS,
   modelSupportsAvailableInput,
   isCouncilModel,
@@ -75,7 +73,6 @@ export default function MessageList({
   editingImage,
   fontSizeClass,
   model,
-  chatMode,
   modelReady = true,
   onEditingContentChange,
   onEditingImageSelect,
@@ -101,9 +98,8 @@ export default function MessageList({
   const [openExportMenuIndex, setOpenExportMenuIndex] = useState(null);
   const prevMessagesRef = useRef([]);
   const isCouncilConversation = isCouncilModel(model);
-  const isAgentConversation = !isCouncilConversation && chatMode === CHAT_RUNTIME_MODE_AGENT;
-  const canEditUserMessage = chatMode === CHAT_RUNTIME_MODE_CHAT;
-  const canEditImages = modelSupportsAvailableInput(model, "image", chatMode);
+  const canEditUserMessage = true;
+  const canEditImages = modelSupportsAvailableInput(model, "image");
   const toast = useToast();
   const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
   const hasStreamingContent = messages.some((message) => (message?.isStreaming && !message?.isWaitingFirstChunk) || message?.isSearching);
@@ -281,16 +277,14 @@ export default function MessageList({
                 className="relative inline-block"
               >
                 <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
-                <AIAvatar model={model} size={72} animate={isAgentConversation} className="relative z-10" />
+                <AIAvatar model={model} size={72} animate={false} className="relative z-10" />
               </motion.div>
               <div className="space-y-3 relative z-10">
                 <h2 className="text-3xl font-bold bg-gradient-to-b from-zinc-800 to-zinc-500 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent tracking-tight">
                   今天能帮您做点什么？
                 </h2>
                 <p className="text-zinc-400 dark:text-zinc-500 text-[15px] max-w-sm mx-auto leading-relaxed">
-                  {isAgentConversation
-                    ? "选择一个模型开始对话，复杂任务会按 Agent 流程处理。"
-                    : "选择一个模型开始对话，Chat 模式只保留原生聊天能力。"}
+                  选择一个模型开始对话
                 </p>
               </div>
             </div>

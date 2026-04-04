@@ -13,7 +13,6 @@ import { useToast } from "./ToastProvider";
 import ModeSwitcher from "./ModeSwitcher";
 import SettingsMenu from "./SettingsMenu";
 import {
-  CHAT_RUNTIME_MODE_AGENT,
   COUNCIL_MAX_ROUNDS,
   countCompletedCouncilRounds,
   getModelAttachmentSupport,
@@ -42,7 +41,6 @@ export default function Composer({
   isStreaming,
   isWaitingForAI,
   model,
-  chatMode,
   modelReady,
   onModelChange,
   onModeChange,
@@ -73,7 +71,7 @@ export default function Composer({
     supportsVideo,
     supportsAudio,
     supportsFilePicker,
-  } = getModelAttachmentSupport(model, chatMode);
+  } = getModelAttachmentSupport(model);
   const attachmentAccept = getAttachmentAcceptForModel({
     supportsDocuments,
     supportsImages,
@@ -292,7 +290,6 @@ export default function Composer({
         clientPayload: JSON.stringify({
           kind: "chat",
           model,
-          mode: chatMode,
           originalName: att.file.name,
           declaredMimeType: att.file.type || att.mimeType,
         }),
@@ -391,14 +388,12 @@ export default function Composer({
         <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-zinc-100/50 dark:border-zinc-800/50 bg-zinc-50/30 dark:bg-zinc-900/30 rounded-t-[24px]">
           <ModeSwitcher
             model={model}
-            chatMode={chatMode}
             onModeChange={onModeChange}
             ready={modelReady}
           />
           {!isCouncilSelected ? (
             <SettingsMenu
               model={model}
-              chatMode={chatMode}
               onModelChange={onModelChange}
               ready={modelReady}
               webSearch={webSearch}

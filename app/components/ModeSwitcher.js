@@ -4,14 +4,17 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp } from "lucide-react";
 import {
-  CHAT_RUNTIME_MODES,
+  CHAT_RUNTIME_MODE_CHAT,
   COUNCIL_MODEL_ID,
-  DEFAULT_CHAT_RUNTIME_MODE,
   isCouncilModel,
 } from "@/lib/shared/models";
 
 const MODE_OPTIONS = Object.freeze([
-  ...CHAT_RUNTIME_MODES,
+  {
+    id: CHAT_RUNTIME_MODE_CHAT,
+    label: "Chat",
+    description: "标准聊天模式",
+  },
   {
     id: COUNCIL_MODEL_ID,
     label: "Council",
@@ -21,12 +24,11 @@ const MODE_OPTIONS = Object.freeze([
 
 export default function ModeSwitcher({
   model,
-  chatMode,
   onModeChange,
   ready = true,
 }) {
   const [showModeMenu, setShowModeMenu] = useState(false);
-  const currentModeId = isCouncilModel(model) ? COUNCIL_MODEL_ID : (chatMode || DEFAULT_CHAT_RUNTIME_MODE);
+  const currentModeId = isCouncilModel(model) ? COUNCIL_MODEL_ID : CHAT_RUNTIME_MODE_CHAT;
   const currentMode = MODE_OPTIONS.find((item) => item.id === currentModeId) || MODE_OPTIONS[0];
 
   return (

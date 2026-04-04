@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Globe, Settings2, X, MessageSquareQuote } from "lucide-react";
-import { CHAT_RUNTIME_MODE_CHAT, getModelConfig } from "@/lib/shared/models";
+import { getModelConfig } from "@/lib/shared/models";
 import { DEFAULT_WEB_SEARCH_SETTINGS } from "@/lib/shared/webSearch";
 import ModelSelector from "./ModelSelector";
 import { useToast } from "./ToastProvider";
@@ -11,7 +11,6 @@ import SystemPromptModal from "./SystemPromptModal";
 
 export default function SettingsMenu({
   model,
-  chatMode,
   onModelChange,
   ready = true,
   webSearch,
@@ -28,7 +27,6 @@ export default function SettingsMenu({
   const [showPromptModal, setShowPromptModal] = useState(false);
   const modelConfig = getModelConfig(model);
   const supportsWebSearch = modelConfig?.supportsWebSearch === true;
-  const isChatMode = chatMode === CHAT_RUNTIME_MODE_CHAT;
   const webSearchSettings = webSearch && typeof webSearch === "object"
     ? { ...DEFAULT_WEB_SEARCH_SETTINGS, ...webSearch }
     : DEFAULT_WEB_SEARCH_SETTINGS;
@@ -114,26 +112,24 @@ export default function SettingsMenu({
                   </div>
                 ) : null}
 
-                {isChatMode ? (
-                  <div>
-                    <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
-                      系统提示词
-                    </label>
-                    <button
-                      onClick={() => setShowPromptModal(true)}
-                      type="button"
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors text-sm bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                    >
-                      <span className="flex items-center gap-2">
-                        <MessageSquareQuote size={14} />
-                        配置提示词
-                      </span>
-                      <span className="text-[10px] bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded text-zinc-500 font-medium">
-                        {chatSystemPrompt ? "已设置" : "默认无"}
-                      </span>
-                    </button>
-                  </div>
-                ) : null}
+                <div>
+                  <label className="text-xs text-zinc-500 font-medium uppercase tracking-wider mb-2 block">
+                    系统提示词
+                  </label>
+                  <button
+                    onClick={() => setShowPromptModal(true)}
+                    type="button"
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors text-sm bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                  >
+                    <span className="flex items-center gap-2">
+                      <MessageSquareQuote size={14} />
+                      配置提示词
+                    </span>
+                    <span className="text-[10px] bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded text-zinc-500 font-medium">
+                      {chatSystemPrompt ? "已设置" : "默认无"}
+                    </span>
+                  </button>
+                </div>
               </div>
             </motion.div>
           </>
