@@ -621,7 +621,10 @@ export async function POST(req) {
                             break;
                         }
 
-                        const lastParts = roundFullText ? [{ text: roundFullText }] : [];
+                        const lastParts = [
+                            ...(roundFullText ? [{ text: roundFullText }] : []),
+                            ...roundFunctionCalls.map((fc) => ({ functionCall: fc })),
+                        ];
                         workingContents.push({ role: 'model', parts: lastParts });
                         const functionResponseParts = [];
                         for (const functionCall of roundFunctionCalls) {

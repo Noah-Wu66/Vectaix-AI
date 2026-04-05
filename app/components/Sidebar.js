@@ -13,6 +13,7 @@ export default function Sidebar({
   user,
   avatar,
   nickname,
+  profileReady,
   onStartNewChat,
   onLoadConversation,
   onDeleteConversation,
@@ -208,37 +209,47 @@ export default function Sidebar({
         </div>
 
         <div className="p-4 border-t border-zinc-200/50 dark:border-zinc-800/50 bg-zinc-50/50 dark:bg-zinc-900/50">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onOpenProfile}
-              className="flex items-center gap-3 flex-1 hover:bg-white dark:hover:bg-zinc-800 p-2 rounded-xl transition-all active:scale-[0.98]"
-            >
-              {avatar ? (
-                <img
-                  src={avatar}
-                  alt=""
-                  className="w-10 h-10 rounded-xl object-cover ring-2 ring-zinc-200 dark:ring-zinc-700"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-xl bg-zinc-200 dark:bg-zinc-700" />
-              )}
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">
-                  {nickname || user?.email?.split('@')[0]}
-                </span>
-                <span className="text-[10px] text-zinc-400 truncate">
-                  {user?.email}
-                </span>
+          {profileReady ? (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onOpenProfile}
+                className="flex items-center gap-3 flex-1 hover:bg-white dark:hover:bg-zinc-800 p-2 rounded-xl transition-all active:scale-[0.98]"
+              >
+                {avatar ? (
+                  <img
+                    src={avatar}
+                    alt=""
+                    className="w-10 h-10 rounded-xl object-cover ring-2 ring-zinc-200 dark:ring-zinc-700"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-zinc-200 dark:bg-zinc-700" />
+                )}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+                    {nickname || user?.email?.split('@')[0]}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 truncate">
+                    {user?.email}
+                  </span>
+                </div>
+              </button>
+              <button
+                onClick={onLogout}
+                className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+                title="退出登录"
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 p-2">
+              <div className="w-10 h-10 rounded-xl bg-zinc-200 dark:bg-zinc-700 animate-pulse shrink-0" />
+              <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                <div className="h-4 w-20 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                <div className="h-3 w-32 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
               </div>
-            </button>
-            <button
-              onClick={onLogout}
-              className="p-2.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
-              title="退出登录"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
