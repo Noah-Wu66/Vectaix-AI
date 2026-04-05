@@ -400,7 +400,7 @@ export async function POST(req) {
                         const requestBody = {
                             model: apiModel,
                             stream: false,
-                            max_output_tokens: clampMaxTokens(maxTokens, 65536),
+                            max_output_tokens: clampMaxTokens(maxTokens, 64000),
                             store: true,
                             reasoning: { effort: 'high' },
                             instructions: finalSystemPrompt,
