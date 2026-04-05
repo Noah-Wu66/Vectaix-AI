@@ -393,7 +393,6 @@ export default function Composer({
                 ready={modelReady}
                 includeCouncil={false}
               />
-              <div className="flex-1" />
               <SettingsMenu
                 model={model}
                 ready={modelReady}

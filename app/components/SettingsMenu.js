@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Globe, Settings2, MessageSquareQuote } from "lucide-react";
+import { Globe, Settings2, MessageSquareQuote, X } from "lucide-react";
 import { getModelConfig } from "@/lib/shared/models";
 import { DEFAULT_WEB_SEARCH_SETTINGS } from "@/lib/shared/webSearch";
 import { useToast } from "./ToastProvider";
@@ -52,64 +52,81 @@ export default function SettingsMenu({
 
       <AnimatePresence>
         {showSettings && (
-          <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+            onClick={() => setShowSettings(false)}
+          >
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40"
-              onClick={() => setShowSettings(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full right-0 mb-2 w-[min(90vw,300px)] bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-3 z-50 space-y-3"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200/50 dark:border-zinc-700/50 overflow-hidden"
             >
-              {/* 联网搜索 */}
-              {supportsWebSearch ? (
-                <div>
-                  <label className="text-[10px] font-semibold text-zinc-400 tracking-wider px-1 mb-1.5 block">
-                    联网搜索
-                  </label>
-                  <button
-                    onClick={() => updateWebSearch({ enabled: !webSearchSettings.enabled })}
-                    type="button"
-                    className={`w-full px-3 py-2 rounded-lg border transition-colors text-sm flex items-center gap-2 ${webSearchSettings.enabled
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                      }`}
-                  >
-                    <Globe size={14} />
-                    {webSearchSettings.enabled ? "开启" : "关闭"}
-                  </button>
-                </div>
-              ) : null}
-
-              {/* 系统提示词 */}
-              <div>
-                <label className="text-[10px] font-semibold text-zinc-400 tracking-wider px-1 mb-1.5 block">
-                  系统提示词
-                </label>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
+                <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
+                  <Settings2 size={16} className="text-primary" />
+                  对话设置
+                </h3>
                 <button
-                  onClick={() => {
-                    setShowSettings(false);
-                    setShowPromptModal(true);
-                  }}
+                  onClick={() => setShowSettings(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   type="button"
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors text-sm bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
                 >
-                  <span className="flex items-center gap-2">
-                    <MessageSquareQuote size={14} />
-                    配置提示词
-                  </span>
-                  <span className="text-[10px] bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded-full text-zinc-500 font-medium">
-                    {chatSystemPrompt ? "已设置" : "默认无"}
-                  </span>
+                  <X size={16} />
                 </button>
               </div>
+
+              <div className="p-4 space-y-4">
+                {/* 智能联网 */}
+                {supportsWebSearch ? (
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 px-1 mb-2 block">
+                      智能联网
+                    </label>
+                    <button
+                      onClick={() => updateWebSearch({ enabled: !webSearchSettings.enabled })}
+                      type="button"
+                      className={`w-full px-3 py-2.5 rounded-xl border transition-colors text-sm flex items-center gap-2 ${webSearchSettings.enabled
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                        }`}
+                    >
+                      <Globe size={15} />
+                      {webSearchSettings.enabled ? "开启" : "关闭"}
+                    </button>
+                  </div>
+                ) : null}
+
+                {/* 系统提示词 */}
+                <div>
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 px-1 mb-2 block">
+                    系统提示词
+                  </label>
+                  <button
+                    onClick={() => {
+                      setShowSettings(false);
+                      setShowPromptModal(true);
+                    }}
+                    type="button"
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors text-sm bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                  >
+                    <span className="flex items-center gap-2">
+                      <MessageSquareQuote size={15} />
+                      配置提示词
+                    </span>
+                    <span className="text-[10px] bg-zinc-200/60 dark:bg-zinc-700 px-2 py-0.5 rounded-full text-zinc-500 dark:text-zinc-400 font-medium">
+                      {chatSystemPrompt ? "已设置" : "默认无"}
+                    </span>
+                  </button>
+                </div>
+              </div>
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
       <SystemPromptModal
