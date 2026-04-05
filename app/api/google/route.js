@@ -583,7 +583,6 @@ export async function POST(req) {
 
                         let roundFullText = '';
                         let roundFullThought = '';
-                        let roundStoredParts = [];
                         let roundFunctionCalls = [];
 
                         for await (const chunk of response) {
@@ -608,8 +607,6 @@ export async function POST(req) {
                                 } else {
                                     roundFullText += text;
                                     sendEvent({ type: 'text', content: text });
-                                    const storedPart = { text };
-                                    roundStoredParts.push(storedPart);
                                 }
                             }
                         }
@@ -622,14 +619,12 @@ export async function POST(req) {
 
                         if (!enableWebSearch || roundFunctionCalls.length === 0) {
                             fullText = roundFullText;
-                            storedModelParts = roundStoredParts.length > 0
-                                ? roundStoredParts
-                                : (fullText ? [{ text: fullText }] : []);
+                            storedModelParts = fullText ? [{ text: fullText }] : [];
                             finished = true;
                             break;
                         }
 
-                        const lastParts = roundStoredParts.length > 0 ? roundStoredParts : [{ text: roundFullText }];
+                        const lastParts = roundFullText ? [{ text: roundFullText }] : [];
                         workingContents.push({ role: 'model', parts: lastParts });
                         const functionResponseParts = [];
                         for (const functionCall of roundFunctionCalls) {

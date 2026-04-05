@@ -220,9 +220,7 @@ export default function Sidebar({
                   className="w-10 h-10 rounded-xl object-cover ring-2 ring-zinc-200 dark:ring-zinc-700"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center text-sm font-bold text-white shadow-sm">
-                  {nickname?.[0]?.toUpperCase?.() || user?.email?.[0]?.toUpperCase?.()}
-                </div>
+                <div className="w-10 h-10 rounded-xl bg-zinc-200 dark:bg-zinc-700" />
               )}
               <div className="flex flex-col min-w-0">
                 <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate">
