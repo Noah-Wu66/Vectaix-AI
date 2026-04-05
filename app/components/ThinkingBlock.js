@@ -335,7 +335,7 @@ export default function ThinkingBlock({
       const querySuffix = step.query ? `「${step.query}」` : "";
       const isOpen = hasLinkedToolPreview && isExpanded;
       return (
-        <div key={step.id || `search-${idx}`} className="w-full max-w-[760px]">
+        <div key={step.id || `search-${idx}`} className="w-full max-w-full md:max-w-[760px]">
           {hasLinkedToolPreview ? (
             <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
               {icon}
@@ -380,7 +380,7 @@ export default function ThinkingBlock({
       const urlSuffix = step.url ? `「${step.url}」` : "";
       const isOpen = hasLinkedToolPreview && isExpanded;
       return (
-        <div key={step.id || `reader-${idx}`} className="w-full max-w-[760px]">
+        <div key={step.id || `reader-${idx}`} className="w-full max-w-full md:max-w-[760px]">
           {hasLinkedToolPreview ? (
             <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
               {icon}
@@ -426,7 +426,7 @@ export default function ThinkingBlock({
       const titleText = getTitle();
       const isOpen = hasLinkedToolPreview && isExpanded;
       return (
-        <div key={step.id || `sandbox-${idx}`} className="w-full max-w-[760px]">
+        <div key={step.id || `sandbox-${idx}`} className="w-full max-w-full md:max-w-[760px]">
           {hasLinkedToolPreview ? (
             <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
               {icon}
@@ -462,7 +462,7 @@ export default function ThinkingBlock({
     if (step.kind === "planner") {
       const titleText = getTitle();
       return (
-        <div key={step.id || `planner-${idx}`} className="w-full max-w-[760px]">
+        <div key={step.id || `planner-${idx}`} className="w-full max-w-full md:max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
             <StepStatusText text={titleText} active={isRunning} />
@@ -477,7 +477,7 @@ export default function ThinkingBlock({
       const canExpand = Boolean(step.content);
       const isOpen = canExpand && isExpanded;
       return (
-        <div key={step.id || `${step.kind}-${idx}`} className="w-full max-w-[760px]">
+        <div key={step.id || `${step.kind}-${idx}`} className="w-full max-w-full md:max-w-[760px]">
           {canExpand ? (
             <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
               {icon}
@@ -523,7 +523,7 @@ export default function ThinkingBlock({
       const detail = step.message || step.title || "";
       const titleText = getTitle();
       return (
-        <div key={step.id || `${step.kind}-${idx}`} className="w-full max-w-[760px]">
+        <div key={step.id || `${step.kind}-${idx}`} className="w-full max-w-full md:max-w-[760px]">
           <div className={capsuleClass}>
             {icon}
             <StepStatusText text={detail || titleText} active={isRunning} />
@@ -536,7 +536,7 @@ export default function ThinkingBlock({
       const label = step.content || step.message || step.title || "沙箱执行";
       const isOpen = hasLinkedToolPreview && isExpanded;
       return (
-        <div key={step.id || `tool-${idx}`} className="w-full max-w-[760px]">
+        <div key={step.id || `tool-${idx}`} className="w-full max-w-full md:max-w-[760px]">
           {hasLinkedToolPreview ? (
             <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
               {icon}
@@ -600,7 +600,7 @@ export default function ThinkingBlock({
               ? "已完成"
               : expert.message || "等待中";
             return (
-              <div key={expertKey} className="w-full max-w-[760px]">
+              <div key={expertKey} className="w-full max-w-full md:max-w-[760px]">
                 <div
                   className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : isSkipped ? "text-zinc-300" : "text-zinc-500"} ${hasContent ? "cursor-pointer hover:text-zinc-700" : ""}`}
                   onClick={hasContent ? () => setOpenExpertKey(isOpen ? null : expertKey) : undefined}
@@ -628,7 +628,7 @@ export default function ThinkingBlock({
               ? "已完成"
               : s.message || "等待中";
             return (
-              <div className="w-full max-w-[760px]">
+              <div className="w-full max-w-full md:max-w-[760px]">
                 <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
                   <ModelGlyph model={s.modelId} size={14} />
                   <SplitStatusText prefix={`${s.label} · `} status={statusText} active={isRunning} />
@@ -690,7 +690,7 @@ export default function ThinkingBlock({
                   /* 简单模式：内嵌一个"思考过程"气泡（第二层） */
                   safeThought ? (
                     <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80 dark:border-zinc-700/80">
-                      <div className="w-full max-w-[760px]">
+                      <div className="w-full max-w-full md:max-w-[760px]">
                         <button
                           type="button"
                           onClick={() => {
@@ -704,7 +704,7 @@ export default function ThinkingBlock({
                         </button>
                         {expandedTimelineId === "__simple__" ? (
                           <div
-                            className="thinking-content thinking-content-panel bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-[760px] text-zinc-400"
+                            className="thinking-content thinking-content-panel bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-full md:max-w-[760px] text-zinc-400"
                             ref={containerRef}
                           >
                             <Markdown
@@ -720,7 +720,7 @@ export default function ThinkingBlock({
                     </div>
                   ) : isStreaming ? (
                     <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80 dark:border-zinc-700/80">
-                      <div className="w-full max-w-[760px]">
+                      <div className="w-full max-w-full md:max-w-[760px]">
                         <div className="thinking-capsule inline-flex w-fit max-w-full items-center font-medium text-zinc-500">
                           <LoadingSweepText text="···" className="loading-sweep-dots" />
                         </div>

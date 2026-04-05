@@ -120,7 +120,7 @@ export default function SystemPromptModal({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.96, opacity: 0, y: 20 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col md:flex-row overflow-hidden border border-zinc-200/50 dark:border-zinc-800/50 h-[80vh] min-h-[500px] max-h-[800px]"
+            className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col md:flex-row overflow-hidden border border-zinc-200/50 dark:border-zinc-800/50 h-[85vh] md:h-[80vh] min-h-[400px] md:min-h-[500px] max-h-[800px]"
           >
             {/* Left Panel: Presets */}
             <div className="w-full md:w-72 lg:w-80 bg-zinc-50/80 dark:bg-zinc-900/50 border-r border-zinc-200 dark:border-zinc-800 flex flex-col shrink-0 h-1/3 md:h-auto border-b md:border-b-0">

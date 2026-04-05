@@ -272,7 +272,7 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   .prose table {
-    width: max(100%, 34rem);
+    width: max(100%, 28rem);
     min-width: 100%;
     table-layout: fixed;
   }

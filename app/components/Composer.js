@@ -367,7 +367,7 @@ export default function Composer({
                 ) : (
                   <FileText size={14} className="text-primary" />
                 )}
-                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 truncate max-w-[120px]">
+                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300 truncate max-w-[80px] sm:max-w-[120px]">
                   {item.name}
                 </span>
                 <button
