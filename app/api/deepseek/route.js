@@ -402,6 +402,7 @@ export async function POST(req) {
                             stream: false,
                             max_output_tokens: clampMaxTokens(maxTokens, 65536),
                             store: true,
+                            reasoning: { effort: 'high' },
                             instructions: finalSystemPrompt,
                             input: nextInput,
                         };

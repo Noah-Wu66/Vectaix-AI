@@ -35,7 +35,6 @@ import {
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     clampMaxTokens,
-    parseClaudeThinkingLevel,
     parseMaxTokens,
     parseSystemPrompt,
     parseWebSearchConfig,
@@ -423,18 +422,13 @@ export async function POST(req) {
 
         // 构建请求参数（联网搜索上下文将在流式开始前注入）
         let maxTokens;
-        let thinkingLevel = null;
         const modelConfig = getModelConfig(model);
         const supportsMaxTokensControl = modelConfig?.supportsMaxTokensControl === true;
-        const supportsThinkingLevelControl = modelConfig?.supportsThinkingLevelControl === true;
         const maxTokenCap = model.startsWith(CLAUDE_OPUS_MODEL) ? 128000 : 64000;
         try {
             maxTokens = supportsMaxTokensControl
                 ? parseMaxTokens(config?.maxTokens)
                 : getDefaultMaxTokensForModel(model);
-            if (isClaudeModel(model)) {
-                thinkingLevel = parseClaudeThinkingLevel(config?.thinkingLevel);
-            }
         } catch (error) {
             return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
@@ -614,10 +608,8 @@ export async function POST(req) {
                         if (isClaudeModel(model)) {
                             requestParams.thinking = { type: "adaptive" };
                             requestParams.output_config = {
-                                effort: thinkingLevel
+                                effort: 'max'
                             };
-                        } else if (supportsThinkingLevelControl && thinkingLevel) {
-                            requestParams.thinking = { type: thinkingLevel };
                         }
 
                         const stream = await client.messages.stream(requestParams);

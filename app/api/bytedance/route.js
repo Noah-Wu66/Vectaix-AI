@@ -21,7 +21,6 @@ import { resolveSeedProviderConfig } from '@/lib/modelRoutes';
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     parseMaxTokens,
-    parseSeedThinkingLevel,
     parseSystemPrompt,
     parseWebSearchConfig,
     parseWebSearchEnabled,
@@ -371,10 +370,8 @@ export async function POST(req) {
         }
 
         let maxTokens;
-        let thinkingLevel;
         try {
             maxTokens = parseMaxTokens(config?.maxTokens);
-            thinkingLevel = parseSeedThinkingLevel(config?.thinkingLevel);
         } catch (error) {
             return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
@@ -641,7 +638,7 @@ export async function POST(req) {
                             input: nextInput,
                             instructions,
                             maxTokens,
-                            thinkingLevel,
+                            thinkingLevel: 'high',
                             stream: true,
                         });
                         requestBody.store = true;

@@ -13,7 +13,6 @@ import {
 import { getAttachmentInputType } from '@/lib/shared/attachments';
 import {
     parseMaxTokens,
-    parseOpenAIThinkingLevel,
     parseSystemPrompt,
     parseWebSearchConfig,
     parseWebSearchEnabled,
@@ -58,9 +57,6 @@ import { consumeStrictResponsesStream } from '@/lib/server/chat/responsesStream'
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-const DEFAULT_REASONING_EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
-const MODEL_REASONING_EFFORTS = {};
-const REASONING_SUMMARY_MODELS = new Set(['openai/gpt-5.4']);
 
 function findLatestOpenAIResponseId(messages) {
     if (!Array.isArray(messages)) return '';
@@ -316,12 +312,10 @@ export async function POST(req) {
 
         // 构建 Responses API 请求
         let maxTokens;
-        let thinkingLevel;
         try {
             maxTokens = parseMaxTokens(config?.maxTokens);
-            thinkingLevel = parseOpenAIThinkingLevel(config?.thinkingLevel);
         } catch (error) {
-            thinkingLevel = 'none';
+            return Response.json({ error: error?.message || '配置无效' }, { status: 400 });
         }
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
@@ -331,21 +325,11 @@ export async function POST(req) {
             : null;
         const latestOpenAIResponseId = isRegenerateMode ? '' : findLatestOpenAIResponseId(effectiveHistoryMessages);
 
-        const allowedEfforts = MODEL_REASONING_EFFORTS[model] || DEFAULT_REASONING_EFFORTS;
-        if (!allowedEfforts.has(thinkingLevel)) {
-            return Response.json({ error: 'thinkingLevel invalid' }, { status: 400 });
-        }
-        const reasoningConfig = {
-            effort: thinkingLevel
-        };
-        if (REASONING_SUMMARY_MODELS.has(model)) {
-            reasoningConfig.summary = 'auto';
-        }
         const baseRequestBody = {
             model: apiModel,
             stream: false,
             max_output_tokens: maxTokens,
-            reasoning: reasoningConfig,
+            reasoning: { effort: 'xhigh', summary: 'auto' },
             store: true,
         };
 

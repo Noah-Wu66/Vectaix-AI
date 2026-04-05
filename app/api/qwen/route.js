@@ -376,6 +376,7 @@ export async function POST(req) {
                             max_output_tokens: maxTokens,
                             store: true,
                             enable_thinking: true,
+                            reasoning: { effort: 'high' },
                             instructions: finalSystemPrompt,
                             input: nextInput,
                         };
