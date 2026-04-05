@@ -12,6 +12,8 @@ import {
   X,
   Camera,
   Volume2,
+  User,
+  Mail,
 } from "lucide-react";
 
 import { upload } from "@vercel/blob/client";
@@ -34,8 +36,10 @@ export default function ProfileModal({
   onAvatarChange,
   nickname,
   onNicknameChange,
+  onEmailChange,
 }) {
   const toast = useToast();
+  const [showPersonalInfo, setShowPersonalInfo] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
@@ -48,6 +52,10 @@ export default function ProfileModal({
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [nicknameDraft, setNicknameDraft] = useState("");
   const [nicknameSaving, setNicknameSaving] = useState(false);
+
+  const [emailDraft, setEmailDraft] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
   const normalizedVolume = Number.isFinite(Number(completionSoundVolume))
     ? Number(completionSoundVolume)
     : 60;
@@ -95,7 +103,9 @@ export default function ProfileModal({
   useEffect(() => {
     if (!open) return;
     setNicknameDraft(savedNickname);
-  }, [open, savedNickname]);
+    setEmailDraft(user?.email || "");
+    setEmailPassword("");
+  }, [open, savedNickname, user?.email]);
 
   const saveNickname = async () => {
     if (!hasNicknameChanges || !onNicknameChange) return;
@@ -106,6 +116,35 @@ export default function ProfileModal({
       toast.success("昵称已更新");
     } finally {
       setNicknameSaving(false);
+    }
+  };
+
+  const currentEmail = user?.email || "";
+  const hasEmailChanges = emailDraft.trim().toLowerCase() !== currentEmail;
+
+  const saveEmail = async () => {
+    if (!hasEmailChanges) return;
+    if (!emailPassword) {
+      toast.warning("请输入当前密码以验证身份");
+      return;
+    }
+    setEmailSaving(true);
+    try {
+      const data = await apiJson("/api/auth/change-email", {
+        method: "POST",
+        body: { newEmail: emailDraft.trim(), password: emailPassword },
+      });
+      if (data.success) {
+        toast.success("邮箱已更新");
+        setEmailPassword("");
+        onEmailChange?.(data.user);
+      } else {
+        toast.error(data.error);
+      }
+    } catch (err) {
+      toast.error(err?.message || "修改邮箱失败");
+    } finally {
+      setEmailSaving(false);
     }
   };
 
@@ -193,29 +232,94 @@ export default function ProfileModal({
                   </div>
                 )}
               </button>
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="昵称"
-                  value={nicknameDraft}
-                  onChange={(e) => setNicknameDraft(e.target.value)}
-                  className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none text-center"
-                />
-                {hasNicknameChanges && (
-                  <button
-                    type="button"
-                    onClick={saveNickname}
-                    disabled={nicknameSaving}
-                    className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-xs transition-colors"
-                  >
-                    {nicknameSaving ? "保存中..." : "保存昵称"}
-                  </button>
-                )}
-              </div>
-              <p className="text-sm text-zinc-500 mt-6">个人中心</p>
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                {savedNickname || currentEmail}
+              </p>
+              <p className="text-sm text-zinc-500 mt-1">个人中心</p>
             </div>
 
             <div className="space-y-3">
+              {/* 个人信息 */}
+              <button
+                onClick={() => setShowPersonalInfo(!showPersonalInfo)}
+                className="w-full flex items-center justify-between bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 transition-colors"
+              >
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                  <User size={14} /> 个人信息
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={`text-zinc-400 transition-transform ${showPersonalInfo ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {showPersonalInfo && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-zinc-50 dark:bg-zinc-800 rounded-xl p-4 border border-zinc-100 dark:border-zinc-700 space-y-4">
+                      {/* 昵称 */}
+                      <div>
+                        <label className="text-xs text-zinc-500 font-medium mb-1.5 block">昵称</label>
+                        <input
+                          type="text"
+                          placeholder="输入昵称"
+                          value={nicknameDraft}
+                          onChange={(e) => setNicknameDraft(e.target.value)}
+                          className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none"
+                        />
+                        {hasNicknameChanges && (
+                          <button
+                            type="button"
+                            onClick={saveNickname}
+                            disabled={nicknameSaving}
+                            className="mt-2 w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-xs transition-colors"
+                          >
+                            {nicknameSaving ? "保存中..." : "保存昵称"}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* 邮箱 */}
+                      <div>
+                        <label className="text-xs text-zinc-500 font-medium mb-1.5 block flex items-center gap-1">
+                          <Mail size={11} /> 邮箱
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="输入新邮箱"
+                          value={emailDraft}
+                          onChange={(e) => setEmailDraft(e.target.value)}
+                          className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none"
+                        />
+                        {hasEmailChanges && (
+                          <div className="mt-2 space-y-2">
+                            <input
+                              type="password"
+                              placeholder="输入当前密码以验证身份"
+                              value={emailPassword}
+                              onChange={(e) => setEmailPassword(e.target.value)}
+                              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={saveEmail}
+                              disabled={emailSaving}
+                              className="w-full bg-zinc-600 hover:bg-zinc-500 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-xs transition-colors"
+                            >
+                              {emailSaving ? "保存中..." : "保存邮箱"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               {/* 修改密码 */}
               <button
                 onClick={() => setShowChangePassword(!showChangePassword)}

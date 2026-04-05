@@ -84,20 +84,17 @@ export default function SettingsMenu({
               <div className="p-4 space-y-4">
                 {/* 智能联网 */}
                 {supportsWebSearch ? (
-                  <div>
-                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 px-1 mb-2 block">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
+                      <Globe size={15} className="text-blue-500" />
                       智能联网
-                    </label>
+                    </span>
                     <button
                       onClick={() => updateWebSearch({ enabled: !webSearchSettings.enabled })}
                       type="button"
-                      className={`w-full px-3 py-2.5 rounded-xl border transition-colors text-sm flex items-center gap-2 ${webSearchSettings.enabled
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                        }`}
+                      className={`relative w-10 h-[22px] rounded-full transition-colors ${webSearchSettings.enabled ? "bg-blue-600" : "bg-zinc-300 dark:bg-zinc-600"}`}
                     >
-                      <Globe size={15} />
-                      {webSearchSettings.enabled ? "开启" : "关闭"}
+                      <span className={`absolute top-0.5 left-0.5 w-[18px] h-[18px] rounded-full bg-white shadow transition-transform ${webSearchSettings.enabled ? "translate-x-[18px]" : ""}`} />
                     </button>
                   </div>
                 ) : null}

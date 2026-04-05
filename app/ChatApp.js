@@ -7,6 +7,7 @@ import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
 import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
 import {
   CHAT_MODELS,
+  CHAT_RUNTIME_MODE_CHAT,
   COUNCIL_MODEL_ID,
   DEFAULT_MODEL,
   isCouncilModel,
@@ -1018,6 +1019,7 @@ export default function ChatApp() {
           onCompletionSoundVolumeChange={setCompletionSoundVolume}
           nickname={nickname}
           onNicknameChange={setNickname}
+          onEmailChange={(updatedUser) => setUser((prev) => ({ ...prev, email: updatedUser.email }))}
           sidebarOpen={sidebarOpen}
           conversations={conversations}
           currentConversationId={currentConversationId}
