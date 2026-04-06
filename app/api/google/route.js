@@ -145,6 +145,49 @@ function extractGeminiResponseState(parts) {
     };
 }
 
+function buildGeminiHistoryPartFromChunk(part) {
+    if (!part || typeof part !== 'object') return null;
+
+    if (part.functionCall && typeof part.functionCall === 'object') {
+        const nextPart = {
+            functionCall: part.functionCall,
+        };
+        if (part.thought === true) nextPart.thought = true;
+        if (isNonEmptyString(part.thoughtSignature)) nextPart.thoughtSignature = part.thoughtSignature;
+        return nextPart;
+    }
+
+    if (typeof part.text === 'string' && part.text) {
+        const nextPart = { text: part.text };
+        if (part.thought === true) nextPart.thought = true;
+        if (isNonEmptyString(part.thoughtSignature)) nextPart.thoughtSignature = part.thoughtSignature;
+        return nextPart;
+    }
+
+    return null;
+}
+
+function getGeminiFunctionCallIdentity(part) {
+    if (!part?.functionCall || typeof part.functionCall !== 'object') return '';
+    const functionCall = part.functionCall;
+    const args = functionCall?.args && typeof functionCall.args === 'object'
+        ? JSON.stringify(functionCall.args)
+        : '';
+    return `${functionCall?.id || ''}::${functionCall?.name || ''}::${args}`;
+}
+
+function mergeGeminiHistoryPart(existingPart, nextPart) {
+    if (!existingPart || typeof existingPart !== 'object') return nextPart;
+    if (!nextPart || typeof nextPart !== 'object') return existingPart;
+    return {
+        ...existingPart,
+        ...nextPart,
+        thoughtSignature: isNonEmptyString(nextPart?.thoughtSignature)
+            ? nextPart.thoughtSignature
+            : existingPart.thoughtSignature,
+    };
+}
+
 export async function POST(req) {
     let writePermitTime = null;
 
@@ -581,6 +624,8 @@ export async function POST(req) {
                         let roundFullText = '';
                         let roundFullThought = '';
                         let roundFunctionCalls = [];
+                        const roundHistoryParts = [];
+                        const functionCallIndexes = new Map();
 
                         for await (const chunk of response) {
                             if (clientAborted) break;
@@ -592,8 +637,28 @@ export async function POST(req) {
                                 if (!part || typeof part !== 'object') continue;
 
                                 if (part.functionCall && typeof part.functionCall === 'object') {
-                                    roundFunctionCalls.push(part.functionCall);
+                                    const functionCallIdentity = getGeminiFunctionCallIdentity(part);
+                                    const historyPart = buildGeminiHistoryPartFromChunk(part);
+                                    if (!functionCallIdentity || !functionCallIndexes.has(functionCallIdentity)) {
+                                        if (functionCallIdentity) {
+                                            functionCallIndexes.set(functionCallIdentity, roundHistoryParts.length);
+                                        }
+                                        roundFunctionCalls.push(part.functionCall);
+                                        if (historyPart) roundHistoryParts.push(historyPart);
+                                    } else if (historyPart) {
+                                        const historyIndex = functionCallIndexes.get(functionCallIdentity);
+                                        if (Number.isInteger(historyIndex) && historyIndex >= 0) {
+                                            roundHistoryParts[historyIndex] = mergeGeminiHistoryPart(
+                                                roundHistoryParts[historyIndex],
+                                                historyPart
+                                            );
+                                        }
+                                    }
+                                    continue;
                                 }
+
+                                const historyPart = buildGeminiHistoryPartFromChunk(part);
+                                if (historyPart) roundHistoryParts.push(historyPart);
 
                                 const text = typeof part.text === 'string' ? part.text : '';
                                 if (!text) continue;
@@ -621,10 +686,12 @@ export async function POST(req) {
                             break;
                         }
 
-                        const lastParts = [
-                            ...(roundFullText ? [{ text: roundFullText }] : []),
-                            ...roundFunctionCalls.map((fc) => ({ functionCall: fc })),
-                        ];
+                        const lastParts = roundHistoryParts.length > 0
+                            ? roundHistoryParts
+                            : [
+                                ...(roundFullText ? [{ text: roundFullText }] : []),
+                                ...roundFunctionCalls.map((fc) => ({ functionCall: fc })),
+                            ];
                         workingContents.push({ role: 'model', parts: lastParts });
                         const functionResponseParts = [];
                         for (const functionCall of roundFunctionCalls) {

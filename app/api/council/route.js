@@ -4,7 +4,7 @@ import Conversation from "@/models/Conversation";
 import User from "@/models/User";
 import { getAuthPayload } from "@/lib/auth";
 import { getClientIP, rateLimit } from "@/lib/rateLimit";
-import { buildContextSafeHistoryMessages, generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
+import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
 import {
   COUNCIL_MAX_ROUNDS,
   COUNCIL_MODEL_ID,
@@ -13,16 +13,18 @@ import {
 } from "@/lib/shared/models";
 import { resolveCouncilProviderRoutes } from "@/lib/modelRoutes";
 import {
+  buildCouncilAnalysisState,
   buildCouncilExpertState,
   buildCouncilFinalMessage,
   buildCouncilHistoryMemo,
-  buildCouncilSummaryState,
+  buildCouncilResultState,
   buildCouncilUserInput,
   buildCouncilUserInputFromMessage,
   COUNCIL_EXPERT_CONFIGS,
   createCouncilStreamHelpers,
   runCouncilExpert,
-  runSeedCouncilSummary,
+  runSeedCouncilAnalysis,
+  runSeedCouncilFinalAnswer,
   runSeedTriage,
 } from "./councilHelpers";
 import {
@@ -44,6 +46,9 @@ const MAX_COUNCIL_EXPERTS = 3;
 const MAX_EXPERT_MODEL_CHARS = 100;
 const MAX_EXPERT_LABEL_CHARS = 120;
 const MAX_EXPERT_CONTENT_CHARS = 20000;
+const MAX_ANALYSIS_ITEM_CHARS = 2000;
+const COUNCIL_ANALYSIS_GROUP_KEYS = ["agreement", "keyDifferences", "partialCoverage", "uniqueInsights", "blindSpots"];
+const COUNCIL_ANALYSIS_MODELS = new Set(["GPT", "Claude", "Gemini"]);
 
 function buildTitle(prompt) {
   const text = typeof prompt === "string" ? prompt.trim() : "";
@@ -89,12 +94,43 @@ function sanitizeCouncilExperts(value, fieldPath) {
       throw new Error(`${fieldPath}[${index}].content invalid`);
     }
     const nextExpert = { modelId, label, content };
+    if (Number.isFinite(expert.durationMs) && expert.durationMs >= 0) {
+      nextExpert.durationMs = Math.max(0, Math.floor(expert.durationMs));
+    }
     if (Array.isArray(expert.citations) && expert.citations.length > 0) {
       nextExpert.citations = expert.citations;
     }
     experts.push(nextExpert);
   }
   return experts;
+}
+
+function sanitizeCouncilAnalysis(value, fieldPath) {
+  if (!isPlainObject(value)) return null;
+  const result = {};
+
+  for (const key of COUNCIL_ANALYSIS_GROUP_KEYS) {
+    const rawItems = Array.isArray(value[key]) ? value[key] : [];
+    result[key] = rawItems
+      .filter((item) => isPlainObject(item))
+      .map((item, index) => {
+        const text = typeof item.text === "string" ? item.text.trim().slice(0, MAX_ANALYSIS_ITEM_CHARS) : "";
+        if (!text) {
+          throw new Error(`${fieldPath}.${key}[${index}].text invalid`);
+        }
+        const models = Array.isArray(item.models)
+          ? Array.from(new Set(
+              item.models
+                .filter((model) => typeof model === "string")
+                .map((model) => model.trim())
+                .filter((model) => COUNCIL_ANALYSIS_MODELS.has(model))
+            ))
+          : [];
+        return { text, models };
+      });
+  }
+
+  return result;
 }
 
 async function sanitizeCouncilRegenerateMessages(messages, userId) {
@@ -106,6 +142,10 @@ async function sanitizeCouncilRegenerateMessages(messages, userId) {
     const experts = sanitizeCouncilExperts(original?.councilExperts, `messages[${index}].councilExperts`);
     if (experts.length > 0) {
       nextMessage.councilExperts = experts;
+    }
+    const analysis = sanitizeCouncilAnalysis(original?.councilAnalysis, `messages[${index}].councilAnalysis`);
+    if (analysis) {
+      nextMessage.councilAnalysis = analysis;
     }
     return nextMessage;
   });
@@ -248,7 +288,6 @@ export async function POST(req) {
 
   const currentConversationId = currentConversation._id.toString();
   const previousMessages = Array.isArray(currentConversation.messages) ? currentConversation.messages : [];
-  const safeRequestHistory = buildContextSafeHistoryMessages(history);
   const previousUpdatedAt = currentConversation.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
   const resolvedUserMessageId = normalizeMessageId(userMessageId);
   const resolvedModelMessageId = normalizeMessageId(modelMessageId);
@@ -408,47 +447,18 @@ export async function POST(req) {
         );
       };
 
+      let analysisState = buildCouncilAnalysisState({
+        status: "pending",
+        phase: "pending",
+        message: "等待来源完成",
+      });
+      let resultState = buildCouncilResultState({
+        status: "pending",
+        phase: "pending",
+        message: "等待对比分析完成",
+      });
+
       try {
-        const expertStateMap = new Map(
-          COUNCIL_EXPERT_CONFIGS.map((expert) => [expert.key, buildCouncilExpertState(expert, {
-            status: "pending",
-            phase: "pending",
-            message: "等待开始",
-          })])
-        );
-        let summaryState = buildCouncilSummaryState({
-          status: "pending",
-          phase: "pending",
-          message: "等待三位专家完成",
-        });
-
-        streamHelpers.sendCouncilExpertStates(Array.from(expertStateMap.values()));
-
-        const updateExpertState = (expert, patch) => {
-          const nextState = buildCouncilExpertState(expert, {
-            ...expertStateMap.get(expert.key),
-            ...patch,
-          });
-          expertStateMap.set(expert.key, nextState);
-          try {
-            streamHelpers.sendCouncilExpertState(nextState);
-          } catch {
-            // ignore stream state send failure
-          }
-        };
-
-        const updateSummaryState = (patch) => {
-          summaryState = buildCouncilSummaryState({
-            ...summaryState,
-            ...patch,
-          });
-          try {
-            streamHelpers.sendCouncilSummaryState(summaryState);
-          } catch {
-            // ignore stream state send failure
-          }
-        };
-
         // ── Seed Triage：预判是否需要启动 Council ──
         const hasImages = Array.isArray(councilInput.imagePayloads) && councilInput.imagePayloads.length > 0;
         const skipTriage = isRegenerateMode || hasImages;
@@ -459,32 +469,13 @@ export async function POST(req) {
         }
 
         if (!triageResult.needCouncil && triageResult.directAnswer) {
-          // ── 简单问题：跳过专家，Seed 直接回答 ──
-          for (const expert of COUNCIL_EXPERT_CONFIGS) {
-            updateExpertState(expert, {
-              status: "skipped",
-              phase: "skipped",
-              message: "已跳过",
-            });
-          }
-
-          streamHelpers.sendCouncilTriage({ skipped: true });
-
-          updateSummaryState({
+          resultState = buildCouncilResultState({
             status: "running",
             phase: "answering",
-            message: "回答中",
+            message: "正在生成正式回复",
           });
-
-          // 模拟流式输出 directAnswer
           const answer = triageResult.directAnswer;
-          const CHUNK_SIZE = 4;
-          for (let i = 0; i < answer.length; i += CHUNK_SIZE) {
-            streamHelpers.sendText(answer.slice(i, i + CHUNK_SIZE));
-            if (i + CHUNK_SIZE < answer.length) {
-              await new Promise((resolve) => setTimeout(resolve, 20));
-            }
-          }
+          streamHelpers.sendCouncilResultState(resultState);
 
           if (clientAborted) {
             throw new Error("COUNCIL_ABORTED");
@@ -510,16 +501,39 @@ export async function POST(req) {
           finalMessagePersisted = true;
           writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
-          streamHelpers.sendCitations(finalMessage.citations);
-          updateSummaryState({
+          streamHelpers.sendCouncilResult(finalMessage.content);
+          resultState = buildCouncilResultState({
             status: "done",
             phase: "done",
             message: "已完成",
           });
+          streamHelpers.sendCouncilResultState(resultState);
           streamHelpers.sendDone();
           controller.close();
           return;
         }
+
+        const expertStateMap = new Map(
+          COUNCIL_EXPERT_CONFIGS.map((expert) => [expert.key, buildCouncilExpertState(expert, {
+            status: "pending",
+            phase: "pending",
+            message: "等待开始",
+          })])
+        );
+        streamHelpers.sendCouncilExpertStates(Array.from(expertStateMap.values()));
+
+        const updateExpertState = (expert, patch) => {
+          const nextState = buildCouncilExpertState(expert, {
+            ...expertStateMap.get(expert.key),
+            ...patch,
+          });
+          expertStateMap.set(expert.key, nextState);
+          try {
+            streamHelpers.sendCouncilExpertState(nextState);
+          } catch {
+            // ignore stream state send failure
+          }
+        };
 
         // ── 复杂问题：走完整 Council 流程 ──
         const experts = await Promise.all(
@@ -529,12 +543,9 @@ export async function POST(req) {
               historyMemo,
               imagePayloads: councilInput.imagePayloads,
               expert,
-              userId: auth.userId,
-              conversationId: currentConversationId,
               clientAborted: () => clientAborted,
               updateStatus: (patch) => updateExpertState(expert, patch),
               providerRoutes,
-              history: safeRequestHistory,
               signal: councilSignal,
               onDone: (result) => {
                 try {
@@ -551,33 +562,42 @@ export async function POST(req) {
           throw new Error("COUNCIL_ABORTED");
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
-        streamHelpers.sendCouncilSummaryState(summaryState);
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        updateSummaryState({
+        analysisState = buildCouncilAnalysisState({
           status: "running",
           phase: "thinking",
-          message: "思考中",
+          message: "正在分析三位专家观点",
         });
-
-        let hasStartedStreaming = false;
-        const summary = await runSeedCouncilSummary({
+        streamHelpers.sendCouncilAnalysisState(analysisState);
+        const analysis = await runSeedCouncilAnalysis({
           historyMemo,
           prompt: promptText,
           experts,
-          onTextDelta: (delta) => {
-            if (!hasStartedStreaming) {
-              hasStartedStreaming = true;
-              updateSummaryState({
-                status: "running",
-                phase: "answering",
-                message: "回答中",
-              });
-            }
-            streamHelpers.sendText(delta);
-          },
+          signal: councilSignal,
+        });
+        streamHelpers.sendCouncilAnalysisResult(analysis);
+        analysisState = buildCouncilAnalysisState({
+          status: "done",
+          phase: "done",
+          message: "已完成",
+        });
+        streamHelpers.sendCouncilAnalysisState(analysisState);
+
+        if (clientAborted) {
+          throw new Error("COUNCIL_ABORTED");
+        }
+
+        resultState = buildCouncilResultState({
+          status: "running",
+          phase: "answering",
+          message: "正在生成正式回复",
+        });
+        streamHelpers.sendCouncilResultState(resultState);
+
+        const finalAnswer = await runSeedCouncilFinalAnswer({
+          historyMemo,
+          prompt: promptText,
+          experts,
+          analysis,
           signal: councilSignal,
         });
 
@@ -587,8 +607,9 @@ export async function POST(req) {
 
         const finalMessage = buildCouncilFinalMessage({
           modelMessageId: resolvedModelMessageId,
-          content: summary,
+          content: finalAnswer,
           experts,
+          analysis,
         });
 
         const persistedConversation = await Conversation.findOneAndUpdate(
@@ -605,24 +626,33 @@ export async function POST(req) {
         finalMessagePersisted = true;
         writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
-        streamHelpers.sendCouncilExperts(experts);
-        streamHelpers.sendCitations(finalMessage.citations);
-        updateSummaryState({
+        streamHelpers.sendCouncilResult(finalMessage.content);
+        resultState = buildCouncilResultState({
           status: "done",
           phase: "done",
           message: "已完成",
         });
+        streamHelpers.sendCouncilResultState(resultState);
         streamHelpers.sendDone();
         controller.close();
       } catch (error) {
         try {
-          streamHelpers.sendCouncilSummaryState(buildCouncilSummaryState({
-            status: "error",
-            phase: "error",
-            message: error?.message === "COUNCIL_ABORTED"
-              ? "已停止"
-              : (error?.message || "执行失败"),
-          }));
+          const errorMessage = error?.message === "COUNCIL_ABORTED"
+            ? "已停止"
+            : (error?.message || "执行失败");
+          if (resultState.status === "running" || resultState.phase === "answering") {
+            streamHelpers.sendCouncilResultState(buildCouncilResultState({
+              status: "error",
+              phase: "error",
+              message: errorMessage,
+            }));
+          } else if (analysisState.status === "running" || analysisState.phase === "thinking") {
+            streamHelpers.sendCouncilAnalysisState(buildCouncilAnalysisState({
+              status: "error",
+              phase: "error",
+              message: errorMessage,
+            }));
+          }
         } catch {
           // ignore stream state send failure
         }

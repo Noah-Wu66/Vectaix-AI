@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Markdown from "./Markdown";
 import ThinkingBlock from "./ThinkingBlock";
+import CouncilMessage from "./CouncilMessage";
 import ImageLightbox from "./ImageLightbox";
 import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./ToastProvider";
@@ -326,13 +327,24 @@ export default function MessageList({
           const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline)
             && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool" || step?.kind === "planner" || step?.kind === "writer");
           const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
-          const hasCouncilSummaryState = msg.councilSummaryState && typeof msg.councilSummaryState === "object";
+          const hasCouncilAnalysis = msg.councilAnalysis && typeof msg.councilAnalysis === "object";
+          const hasCouncilAnalysisState = msg.councilAnalysisState && typeof msg.councilAnalysisState === "object";
+          const hasCouncilResultState = msg.councilResultState && typeof msg.councilResultState === "object";
+          const shouldRenderCouncilMessage = isCouncilConversation && msg.role === "model" && (
+            hasCouncilExpertStates
+            || hasCouncilAnalysis
+            || hasCouncilAnalysisState
+            || hasCouncilResultState
+            || Array.isArray(msg.councilExperts)
+            || hasVisibleContent
+            || msg.isStreaming
+          );
           const hasToolRuns = Array.isArray(msg.tools) && msg.tools.length > 0;
           const hasArtifacts = Array.isArray(msg.artifacts) && msg.artifacts.length > 0;
           const shouldRenderToolCards = msg.role === "model" && hasToolRuns && !hasThinkingTimeline && msg.tools.some((t) => t?.id);
-          const shouldRenderBubble = hasParts || hasVisibleContent || shouldRenderToolCards || (msg.role === "model" && hasArtifacts);
+          const shouldRenderBubble = !shouldRenderCouncilMessage && (hasParts || hasVisibleContent || shouldRenderToolCards || (msg.role === "model" && hasArtifacts));
           
-          if (msg.role === "model" && !msg.thought && !hasVisibleContent && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilSummaryState && !hasToolRuns && !hasArtifacts && msg.isWaitingFirstChunk) {
+          if (msg.role === "model" && !msg.thought && !hasVisibleContent && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilAnalysis && !hasCouncilAnalysisState && !hasCouncilResultState && !hasToolRuns && !hasArtifacts && msg.isWaitingFirstChunk) {
             return null;
           }
 
@@ -343,7 +355,7 @@ export default function MessageList({
               animate={{ opacity: 1, y: 0 }}
               className={`flex flex-col gap-3 ${msg.role === "user" ? "items-end" : "items-start"} max-w-4xl mx-auto w-full group`}
             >
-              {msg.role === "model" && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState || hasToolRuns || hasArtifacts) && (
+              {msg.role === "model" && !shouldRenderCouncilMessage && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilAnalysis || hasCouncilAnalysisState || hasCouncilResultState || hasToolRuns || hasArtifacts) && (
                 <div className="flex items-center gap-2 pl-1">
                   <AIAvatar model={model} size={24} animate={msg.isStreaming} />
                   <span className="text-[11px] text-zinc-400 font-bold tracking-wider">
@@ -367,7 +379,18 @@ export default function MessageList({
                     )}
                   </div>
                 )}
-                {msg.role === "model" && (msg.thought || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilSummaryState) && (
+                {shouldRenderCouncilMessage ? (
+                  <CouncilMessage
+                    content={typeof msg.content === "string" ? msg.content : ""}
+                    councilExperts={msg.councilExperts}
+                    councilExpertStates={msg.councilExpertStates}
+                    councilAnalysis={msg.councilAnalysis}
+                    councilAnalysisState={msg.councilAnalysisState}
+                    councilResultState={msg.councilResultState}
+                  />
+                ) : null}
+
+                {msg.role === "model" && !shouldRenderCouncilMessage && (msg.thought || msg.isSearching || msg.searchError || hasThinkingTimeline || hasCouncilExpertStates || hasCouncilAnalysisState || hasCouncilResultState) && (
                   <ThinkingBlock
                     thought={msg.thought}
                     isStreaming={msg.isThinkingStreaming}
@@ -376,7 +399,7 @@ export default function MessageList({
                     searchError={msg.searchError}
                     timeline={msg.thinkingTimeline}
                     councilExpertStates={msg.councilExpertStates}
-                    councilSummaryState={msg.councilSummaryState}
+                    councilSummaryState={msg.councilResultState}
                     councilExperts={msg.councilExperts}
                     tools={msg.tools}
                     bodyText={hasBodyOutput ? "1" : ""}

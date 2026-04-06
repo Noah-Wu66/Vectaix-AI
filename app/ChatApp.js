@@ -52,7 +52,15 @@ function hasDisplayableModelProgress(message) {
     return true;
   }
 
-  if (message.councilSummaryState && typeof message.councilSummaryState === "object") {
+  if (message.councilAnalysis && typeof message.councilAnalysis === "object") {
+    return true;
+  }
+
+  if (message.councilAnalysisState && typeof message.councilAnalysisState === "object") {
+    return true;
+  }
+
+  if (message.councilResultState && typeof message.councilResultState === "object") {
     return true;
   }
 
@@ -143,8 +151,16 @@ function mergeConversationMessages(serverMessages, localMessages) {
       nextMessage.searchResults = localMessage.searchResults;
     }
 
-    if (!nextMessage.councilSummaryState && localMessage?.councilSummaryState) {
-      nextMessage.councilSummaryState = localMessage.councilSummaryState;
+    if (!nextMessage.councilAnalysis && localMessage?.councilAnalysis) {
+      nextMessage.councilAnalysis = localMessage.councilAnalysis;
+    }
+
+    if (!nextMessage.councilAnalysisState && localMessage?.councilAnalysisState) {
+      nextMessage.councilAnalysisState = localMessage.councilAnalysisState;
+    }
+
+    if (!nextMessage.councilResultState && localMessage?.councilResultState) {
+      nextMessage.councilResultState = localMessage.councilResultState;
     }
 
     if (serverMessage?.isStreaming) {

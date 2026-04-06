@@ -12,9 +12,7 @@ import {
 import {
   buildSeedRequestBody,
   extractSeedFunctionCalls,
-  extractSeedResponseReasoning,
   extractSeedResponseText,
-  normalizeSeedChunkText,
   requestSeedResponses,
 } from "@/lib/server/seed/service";
 import {
@@ -33,19 +31,28 @@ import {
   getOpenAIWebTools,
   WEB_BROWSING_MAX_ROUNDS,
 } from "@/lib/server/webBrowsing/nativeTools";
-import { consumeStrictResponsesStream } from "@/lib/server/chat/responsesStream";
 import {
   extractOpenAIFunctionCalls,
   extractOpenAIResponseText,
 } from "@/app/api/openai/openaiHelpers";
 
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
-const SEED_MAX_OUTPUT_TOKENS = 8000;
+const COUNCIL_ANALYSIS_MAX_OUTPUT_TOKENS = 4000;
+const COUNCIL_RESULT_MAX_OUTPUT_TOKENS = 8000;
 const TRIAGE_MAX_OUTPUT_TOKENS = 1200;
 const MAX_RAW_MARKDOWN_CHARS = 20000;
 const MAX_FINDING_TEXT_CHARS = 1000;
 const HISTORY_USER_SUMMARY_CHARS = 500;
 const HISTORY_MODEL_SUMMARY_CHARS = 1200;
+const COUNCIL_ANALYSIS_GROUP_KEYS = ["agreement", "keyDifferences", "partialCoverage", "uniqueInsights", "blindSpots"];
+const COUNCIL_ANALYSIS_MODEL_NAMES = new Set(["GPT", "Claude", "Gemini"]);
+const COUNCIL_ANALYSIS_SECTION_LABELS = {
+  agreement: "共识点",
+  keyDifferences: "关键分歧",
+  partialCoverage: "覆盖不全",
+  uniqueInsights: "独特洞察",
+  blindSpots: "盲点",
+};
 const COUNCIL_TRIAGE_GREETING_PATTERNS = [
   /^(你好|您好|嗨|哈喽|hi|hello|hey|在吗|早上好|中午好|下午好|晚上好)[\s!,.，。！？~]*$/i,
   /^(谢谢|谢了|多谢|辛苦了|明白了|收到|好的|好的呢|ok|okay)[\s!,.，。！？~]*$/i,
@@ -54,12 +61,6 @@ const COUNCIL_TRIAGE_COMPLEX_HINT_PATTERN =
   /(代码|编程|程序|脚本|报错|bug|错误|调试|分析|比较|对比|区别|优缺点|推荐|方案|策划|步骤|计划|原因|为什么|如何|怎么做|实现|设计|架构|优化|总结|复盘|写一篇|写个|生成|创作|文案|提示词|工作流|营销|研究|评估|审核|审查|review|debug|code)/i;
 
 export const COUNCIL_EXPERT_CONFIGS = getCouncilExpertConfigs();
-
-function assertConfigured(value, message) {
-  if (!value) {
-    throw new Error(message);
-  }
-}
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -223,7 +224,17 @@ export function buildCouncilExpertState(expert, patch = {}) {
   };
 }
 
-export function buildCouncilSummaryState(patch = {}) {
+export function buildCouncilAnalysisState(patch = {}) {
+  return {
+    modelId: SEED_MODEL_ID,
+    label: "分析",
+    status: typeof patch.status === "string" ? patch.status : "pending",
+    phase: typeof patch.phase === "string" ? patch.phase : "pending",
+    message: typeof patch.message === "string" ? patch.message : "",
+  };
+}
+
+export function buildCouncilResultState(patch = {}) {
   return {
     modelId: SEED_MODEL_ID,
     label: "Seed",
@@ -231,6 +242,92 @@ export function buildCouncilSummaryState(patch = {}) {
     phase: typeof patch.phase === "string" ? patch.phase : "pending",
     message: typeof patch.message === "string" ? patch.message : "",
   };
+}
+
+function normalizeCouncilAnalysisModels(models) {
+  if (!Array.isArray(models)) return [];
+  return Array.from(new Set(
+    models
+      .filter((model) => typeof model === "string")
+      .map((model) => model.trim())
+      .map((model) => {
+        if (/gpt|chatgpt/i.test(model)) return "GPT";
+        if (/claude/i.test(model)) return "Claude";
+        if (/gemini/i.test(model)) return "Gemini";
+        return model;
+      })
+      .filter((model) => COUNCIL_ANALYSIS_MODEL_NAMES.has(model))
+  ));
+}
+
+function normalizeCouncilAnalysisPayload(value) {
+  if (!isPlainObject(value)) {
+    throw new Error("Council 分析结果不是有效 JSON 对象");
+  }
+
+  const result = {};
+  for (const key of COUNCIL_ANALYSIS_GROUP_KEYS) {
+    const rawItems = Array.isArray(value[key]) ? value[key] : [];
+    result[key] = rawItems
+      .filter((item) => isPlainObject(item))
+      .map((item) => ({
+        text: normalizeString(item.text, 2000),
+        models: normalizeCouncilAnalysisModels(item.models),
+      }))
+      .filter((item) => item.text);
+  }
+
+  return result;
+}
+
+function extractJsonBlock(text) {
+  if (typeof text !== "string") return "";
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const match = trimmed.match(/\{[\s\S]*\}/);
+  return match?.[0] || "";
+}
+
+async function requestSeedTextResponse({
+  instructions,
+  payloadText,
+  maxTokens,
+  thinkingLevel,
+  temperature = 1,
+  signal,
+}) {
+  const seedConfig = resolveSeedProviderConfig();
+  const response = await requestSeedResponses({
+    apiKey: seedConfig.apiKey,
+    baseUrl: seedConfig.baseUrl,
+    requestBody: buildSeedRequestBody({
+      model: SEED_MODEL_ID,
+      stream: false,
+      input: [
+        buildSeedMessageInput({
+          role: "user",
+          content: [{ type: "input_text", text: payloadText }],
+        }),
+      ],
+      instructions,
+      maxTokens,
+      thinkingLevel,
+      temperature,
+    }),
+    req: { signal },
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(extractUpstreamErrorMessage(response.status, errorText));
+  }
+
+  const data = await response.json();
+  const text = extractSeedResponseText(data).trim();
+  if (!text) {
+    throw new Error("Seed 未返回有效内容");
+  }
+  return text;
 }
 
 function extractGeminiText(result) {
@@ -262,6 +359,54 @@ function extractGeminiResponseState(result) {
   return { parts, functionCalls, fullText: fullText.trim() };
 }
 
+function buildGeminiHistoryPart(part) {
+  if (!part || typeof part !== "object") return null;
+
+  if (part.functionCall && typeof part.functionCall === "object") {
+    const nextPart = {
+      functionCall: part.functionCall,
+    };
+    if (part.thought === true) nextPart.thought = true;
+    if (typeof part.thoughtSignature === "string" && part.thoughtSignature) {
+      nextPart.thoughtSignature = part.thoughtSignature;
+    }
+    return nextPart;
+  }
+
+  if (typeof part.text === "string" && part.text) {
+    const nextPart = { text: part.text };
+    if (part.thought === true) nextPart.thought = true;
+    if (typeof part.thoughtSignature === "string" && part.thoughtSignature) {
+      nextPart.thoughtSignature = part.thoughtSignature;
+    }
+    return nextPart;
+  }
+
+  return null;
+}
+
+function getGeminiFunctionCallIdentity(part) {
+  if (!part?.functionCall || typeof part.functionCall !== "object") return "";
+  const functionCall = part.functionCall;
+  const args = functionCall?.args && typeof functionCall.args === "object"
+    ? JSON.stringify(functionCall.args)
+    : "";
+  return `${functionCall?.id || ""}::${functionCall?.name || ""}::${args}`;
+}
+
+function mergeGeminiHistoryPart(existingPart, nextPart) {
+  if (!existingPart || typeof existingPart !== "object") return nextPart;
+  if (!nextPart || typeof nextPart !== "object") return existingPart;
+  return {
+    ...existingPart,
+    ...nextPart,
+    thoughtSignature:
+      typeof nextPart?.thoughtSignature === "string" && nextPart.thoughtSignature
+        ? nextPart.thoughtSignature
+        : existingPart.thoughtSignature,
+  };
+}
+
 function extractClaudeText(response) {
   return Array.isArray(response?.content)
     ? response.content
@@ -285,25 +430,6 @@ function extractClaudeResponseState(response) {
     }
   }
   return { content, toolUses, fullText: fullText.trim() };
-}
-
-function normalizeResponseText(value) {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item.text === "string") return item.text;
-        if (item && typeof item.content === "string") return item.content;
-        return "";
-      })
-      .join("");
-  }
-  if (value && typeof value === "object") {
-    if (typeof value.text === "string") return value.text;
-    if (typeof value.content === "string") return value.content;
-  }
-  return "";
 }
 
 function isCouncilGreetingPrompt(text) {
@@ -330,18 +456,6 @@ function isVerySimpleCouncilPrompt(text) {
 
 function shouldAllowCouncilDirectAnswer(text) {
   return isCouncilGreetingPrompt(text) || isVerySimpleCouncilPrompt(text);
-}
-
-function extractResponsesText(payload) {
-  if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
-    return payload.output_text.trim();
-  }
-  const outputs = Array.isArray(payload?.output) ? payload.output : [];
-  return outputs
-    .flatMap((item) => (Array.isArray(item?.content) ? item.content : []))
-    .map((item) => normalizeResponseText(item?.text ?? item))
-    .join("")
-    .trim();
 }
 
 async function loadImagePayloads(images) {
@@ -385,42 +499,55 @@ async function buildExpertSystemPrompt({ enableWebSearch, searchContextText }) {
   return `${base}${webSearchGuide}${searchContextSection}`;
 }
 
-async function buildSeedSystemPrompt() {
+async function buildSeedAnalysisSystemPrompt() {
   const [firstExpertLabel = "专家1", secondExpertLabel = "专家2", thirdExpertLabel = "专家3"] =
     COUNCIL_EXPERT_CONFIGS.map((expert) => getCouncilExpertDisplayLabel(expert));
-  return injectCurrentTimeSystemReminder(`你是 Council 的最终汇总模型 Seed。你会收到用户文字问题、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务不是单纯对比三位专家，而是基于三位专家已经给出的内容，整合观点后直接回答用户问题，并输出一份最终 Markdown 结论。
+  return injectCurrentTimeSystemReminder(`你是 Council 的对比分析器。你会收到用户问题、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务是把三位专家的观点差异整理成结构化 JSON，供后续正式回复使用。
 
 重要输入边界：
 - 你可能还会收到“历史对话纪要”。它只是此前 Council 已得出的背景结论，不代表这些内容在本轮已经被重新核验。
 - 你看到的是用户文字问题，不直接看到用户上传的原始图片或其他原始多模态内容。
 - 如果专家回答里涉及图片、图表、截图、文件等内容，你只能依据专家已经写出的描述、结论和引用资料进行汇总，不能假装自己也看过原始材料。
 - 判断某位专家的立场时，必须优先以该专家的最终回答内容为准；参考资料只用于补充证据、解释理由，不能拿参考资料反推一个专家没有明确说过的观点。
-- 你可以整合三位专家的建议，形成一份面向用户的最终答案；但这个最终答案必须建立在专家已经明确说过的观点、理由、证据之上，不能凭空增加新事实。
 
 必须严格遵守：
-1. 必须严格包含且只包含以下四个一级标题：
-- 模型共识
-- 模型分歧
-- 独特发现
-- 综合分析
-2. 第 1、2、3 节必须使用 Markdown 表格。
-3. 第 1 节表头固定为：
-发现 | ${firstExpertLabel} | ${secondExpertLabel} | ${thirdExpertLabel} | 证据
-4. 第 2 节表头固定为：
-主题 | ${firstExpertLabel} | ${secondExpertLabel} | ${thirdExpertLabel} | 分歧原因
-5. 第 3 节表头固定为：
-模型 | 独特发现 | 重要性
-6. 若某节没有内容，仍保留标题和表头，并补一行占位说明。
-7. 第 1 节（模型共识）中，只有当某位专家明确表达过该观点时，才用“✓”；没有明确表达就留空。
-8. 第 2 节（模型分歧）中禁止使用“✓”，必须直接写出各模型对该分歧主题的简短立场或结论。
-9. “证据”和“分歧原因”只能基于专家回答或提供的资料来写，不要脑补。
-10. “综合分析”不是做模型对比表总结，而是给用户的最终答复区。开头必须先直接回答用户当前问题，明确给出结论、建议、方案、判断或下一步做法。
-11. “综合分析”后续可以解释你为什么这样回答：要把三位专家的共识、分歧、独特发现整合起来，告诉用户哪些意见最值得采纳、哪些情况需要区分条件。
-12. 当三位专家意见不一致时，你要替用户做整合判断：可以给出更稳妥的主结论，也可以按条件分情况回答，但必须明确告诉用户最终该怎么理解、怎么做，而不是把分歧丢给用户自己消化。
-13. “综合分析”可以整合、提炼、重组专家建议，但不能加入任何专家都没提过的新事实、新证据；如果信息不足，可以明确说明“基于现有专家意见，更稳妥的结论是……”“目前只能先做到……”
-14. 不要编造不存在的共识或分歧；若信息不足，要明确写成占位说明。
-15. 不要泄露任何模型思维链，不要输出裸链接。
-16. 所有正文和表格里的模型名统一只写短名：${firstExpertLabel}、${secondExpertLabel}、${thirdExpertLabel}，不要写完整版本号。`);
+1. 你必须只输出 JSON，对象顶层只能包含这 5 个键：
+- agreement
+- keyDifferences
+- partialCoverage
+- uniqueInsights
+- blindSpots
+2. 这 5 个键的值都必须是数组。数组项必须是对象，且只能包含：
+- text: 字符串
+- models: 字符串数组
+3. models 里只允许出现这 3 个短名：${firstExpertLabel}、${secondExpertLabel}、${thirdExpertLabel}。
+4. agreement：写明确共识。只有在某位专家明确表达过这一点时，才把该专家写进 models。
+5. keyDifferences：写真正影响结论的关键分歧。
+6. partialCoverage：写只有部分专家覆盖到，或覆盖明显不完整的重要信息。
+7. uniqueInsights：写某个或某两个专家提供的独特价值信息。
+8. blindSpots：写三位专家整体遗漏掉、但会影响用户判断的重要空白。
+9. 所有 text 都必须基于专家回答或其参考资料，不能脑补，不能虚构。
+10. 如果某组没有内容，返回空数组，不要写占位文案。
+11. 不要输出 Markdown，不要输出代码块，不要输出解释文字。`);
+}
+
+async function buildSeedFinalAnswerSystemPrompt() {
+  return injectCurrentTimeSystemReminder(`你是 Council 的最终正式回复模型 Seed。你会收到用户问题、结构化对比分析、三位专家的完整原始回答，以及每位专家参考过的资料。你的任务是直接面向用户给出正式回复。
+
+重要输入边界：
+- 你可能还会收到“历史对话纪要”。它只是此前 Council 已得出的背景结论，不代表这些内容在本轮已经被重新核验。
+- 你看到的是用户文字问题，不直接看到用户上传的原始图片或其他原始多模态内容。
+- 如果专家回答里涉及图片、图表、截图、文件等内容，你只能依据专家已经写出的描述、结论和引用资料进行汇总，不能假装自己也看过原始材料。
+- 你的正式回复必须建立在专家已经明确说过的观点、理由、证据之上，不能凭空增加新事实、新证据。
+
+必须严格遵守：
+1. 输出必须是 Markdown。
+2. 第一行必须且只能是一个 H1 标题。
+3. H1 下面直接开始正文，不要再输出任何其他标题。
+4. 正文必须先直接回答用户当前问题，明确给出结论、建议、判断或做法。
+5. 你可以整合三位专家的共识、分歧、独特洞察和盲点，但不要把回答写成模型对比报告。
+6. 当专家意见不一致时，你要替用户做整合判断，给出更稳妥的理解或分情况建议。
+7. 不要泄露思维链，不要输出裸链接。`);
 }
 
 function extractUpstreamErrorMessage(status, rawText) {
@@ -496,7 +623,26 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
     if (state.functionCalls.length === 0) {
       return { rawText: state.fullText || extractGeminiText(result), citations: normalizeCitations(citations) };
     }
-    workingContents.push({ role: "model", parts: state.parts });
+    const historyParts = [];
+    const functionCallIndexes = new Map();
+    for (const part of state.parts) {
+      const identity = getGeminiFunctionCallIdentity(part);
+      const historyPart = buildGeminiHistoryPart(part);
+      if (identity) {
+        if (functionCallIndexes.has(identity)) {
+          if (historyPart) {
+            const historyIndex = functionCallIndexes.get(identity);
+            if (Number.isInteger(historyIndex) && historyIndex >= 0) {
+              historyParts[historyIndex] = mergeGeminiHistoryPart(historyParts[historyIndex], historyPart);
+            }
+          }
+          continue;
+        }
+        functionCallIndexes.set(identity, historyParts.length);
+      }
+      if (historyPart) historyParts.push(historyPart);
+    }
+    workingContents.push({ role: "model", parts: historyParts.length > 0 ? historyParts : state.parts });
     const functionResponseParts = [];
     for (const functionCall of state.functionCalls) {
       const toolExecution = await executeWebBrowsingNativeToolCall({
@@ -668,16 +814,14 @@ export async function runCouncilExpert({
   historyMemo,
   imagePayloads,
   expert,
-  userId,
-  conversationId,
   clientAborted,
   updateStatus,
   onDone,
   providerRoutes,
-  history,
   signal,
 }) {
   try {
+    const startedAt = Date.now();
     const finalPrompt = buildCouncilTurnPrompt({ historyMemo, prompt });
     throwIfAborted(signal);
     if (clientAborted()) throw new Error("COUNCIL_ABORTED");
@@ -728,13 +872,16 @@ export async function runCouncilExpert({
       throw new Error(`未知专家 provider：${expert.provider}`);
     }
 
-    const normalized = normalizeExpertOutput(rawText, expert, citations);
+    const normalized = {
+      ...normalizeExpertOutput(rawText, expert, citations),
+      durationMs: Math.max(0, Date.now() - startedAt),
+    };
+    onDone?.(normalized);
     updateStatus?.({
       status: "done",
       phase: "done",
       message: "已完成回答",
     });
-    onDone?.(normalized);
     return normalized;
   } catch (error) {
     if (error?.message !== "COUNCIL_ABORTED") {
@@ -748,7 +895,7 @@ export async function runCouncilExpert({
   }
 }
 
-function buildSeedPayload({ historyMemo, prompt, experts }) {
+function buildCouncilSeedSourcePayload({ historyMemo, prompt, experts }) {
   const sections = [
     ...(historyMemo ? ["# 历史对话纪要", historyMemo] : []),
     `# 用户问题\n${prompt}`,
@@ -774,6 +921,25 @@ function buildSeedPayload({ historyMemo, prompt, experts }) {
   }
 
   return sections.join("\n\n");
+}
+
+function buildCouncilAnalysisDigest(analysis) {
+  const lines = ["# 对比分析结果"];
+  for (const key of COUNCIL_ANALYSIS_GROUP_KEYS) {
+    lines.push(`## ${COUNCIL_ANALYSIS_SECTION_LABELS[key]}`);
+    const items = Array.isArray(analysis?.[key]) ? analysis[key] : [];
+    if (items.length === 0) {
+      lines.push("无");
+      continue;
+    }
+    for (const item of items) {
+      const models = Array.isArray(item?.models) && item.models.length > 0
+        ? `（${item.models.join(" / ")}）`
+        : "";
+      lines.push(`- ${item.text}${models}`);
+    }
+  }
+  return lines.join("\n");
 }
 
 export async function runSeedTriage({ prompt, hasImages, signal }) {
@@ -834,11 +1000,10 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
     const text = extractSeedResponseText(data);
     if (!text) return { needCouncil: true };
 
-    // 尝试从回复中提取 JSON（兼容模型在 JSON 前后加了额外文字的情况）
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return { needCouncil: true };
+    const jsonText = extractJsonBlock(text);
+    if (!jsonText) return { needCouncil: true };
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonText);
     if (
       parsed.needCouncil === false
       && shouldAllowCouncilDirectAnswer(trimmed)
@@ -856,51 +1021,54 @@ export async function runSeedTriage({ prompt, hasImages, signal }) {
   }
 }
 
-export async function runSeedCouncilSummary({ historyMemo, prompt, experts, onTextDelta, signal }) {
-  const seedConfig = resolveSeedProviderConfig();
-  const instructions = await buildSeedSystemPrompt();
-  const response = await requestSeedResponses({
-    apiKey: seedConfig.apiKey,
-    baseUrl: seedConfig.baseUrl,
-    requestBody: buildSeedRequestBody({
-      model: SEED_MODEL_ID,
-      stream: true,
-      input: [
-        buildSeedMessageInput({
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: buildSeedPayload({ historyMemo, prompt, experts }),
-            },
-          ],
-        }),
-      ],
-      instructions,
-      maxTokens: SEED_MAX_OUTPUT_TOKENS,
-      thinkingLevel: DEFAULT_SEED_THINKING_LEVEL,
-      temperature: 1,
-    }),
-    req: { signal },
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(extractUpstreamErrorMessage(response.status, errorText));
-  }
-  const finalPayload = await consumeStrictResponsesStream({
-    response,
+export async function runSeedCouncilAnalysis({ historyMemo, prompt, experts, signal }) {
+  const instructions = await buildSeedAnalysisSystemPrompt();
+  const text = await requestSeedTextResponse({
+    instructions,
+    payloadText: buildCouncilSeedSourcePayload({ historyMemo, prompt, experts }),
+    maxTokens: COUNCIL_ANALYSIS_MAX_OUTPUT_TOKENS,
+    thinkingLevel: DEFAULT_SEED_THINKING_LEVEL,
+    temperature: 0.4,
     signal,
-    normalizeText: normalizeSeedChunkText,
-    onTextDelta,
-    emptyBodyMessage: "Seed 未返回有效汇总内容",
-    missingCompletedMessage: "Seed 上游缺少 response.completed 事件",
   });
 
-  const text = extractSeedResponseText(finalPayload).trim();
-  if (!text) {
-    throw new Error("Seed 未返回有效汇总内容");
+  const jsonText = extractJsonBlock(text);
+  if (!jsonText) {
+    throw new Error("Seed 未返回有效的分析 JSON");
   }
-  return text;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error("Seed 返回的分析 JSON 无法解析");
+  }
+
+  return normalizeCouncilAnalysisPayload(parsed);
+}
+
+export async function runSeedCouncilFinalAnswer({ historyMemo, prompt, experts, analysis, signal }) {
+  const instructions = await buildSeedFinalAnswerSystemPrompt();
+  const text = await requestSeedTextResponse({
+    instructions,
+    payloadText: [
+      buildCouncilSeedSourcePayload({ historyMemo, prompt, experts }),
+      buildCouncilAnalysisDigest(analysis),
+    ].join("\n\n"),
+    maxTokens: COUNCIL_RESULT_MAX_OUTPUT_TOKENS,
+    thinkingLevel: DEFAULT_SEED_THINKING_LEVEL,
+    temperature: 1,
+    signal,
+  });
+
+  const normalized = normalizeString(text, MAX_RAW_MARKDOWN_CHARS);
+  if (!normalized) {
+    throw new Error("Seed 未返回有效正式回复");
+  }
+  if (!/^#\s+.+/m.test(normalized)) {
+    throw new Error("Seed 返回的正式回复缺少 H1 标题");
+  }
+  return normalized;
 }
 
 export async function buildCouncilUserInput({ prompt, images }) {
@@ -948,6 +1116,7 @@ export function buildCouncilFinalMessage({
   modelMessageId,
   content,
   experts,
+  analysis,
 }) {
   const safeExperts = Array.isArray(experts) ? experts : [];
   return {
@@ -962,7 +1131,9 @@ export function buildCouncilFinalMessage({
       label: expert.label,
       content: expert.rawMarkdown,
       citations: expert.citations,
+      durationMs: expert.durationMs,
     })),
+    ...(analysis ? { councilAnalysis: analysis } : {}),
   };
 }
 
@@ -986,9 +1157,9 @@ export function createCouncilStreamHelpers(controller) {
         encoder.encode(`data: ${JSON.stringify({ type: "council_expert_state", expert })}\n\n`)
       );
     },
-    sendCouncilSummaryState(summary) {
+    sendCouncilAnalysisState(analysis) {
       controller.enqueue(
-        encoder.encode(`data: ${JSON.stringify({ type: "council_summary_state", summary })}\n\n`)
+        encoder.encode(`data: ${JSON.stringify({ type: "council_analysis_state", analysis })}\n\n`)
       );
     },
     sendCouncilExperts(experts) {
@@ -1000,6 +1171,7 @@ export function createCouncilStreamHelpers(controller) {
             label: expert.label,
             content: expert.rawMarkdown,
             citations: expert.citations,
+            durationMs: expert.durationMs,
           })),
         })}\n\n`)
       );
@@ -1013,8 +1185,24 @@ export function createCouncilStreamHelpers(controller) {
             label: expert.label,
             content: expert.rawMarkdown,
             citations: expert.citations,
+            durationMs: expert.durationMs,
           },
         })}\n\n`)
+      );
+    },
+    sendCouncilAnalysisResult(analysis) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ type: "council_analysis_result", analysis })}\n\n`)
+      );
+    },
+    sendCouncilResultState(result) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ type: "council_result_state", result })}\n\n`)
+      );
+    },
+    sendCouncilResult(content) {
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ type: "council_result", content })}\n\n`)
       );
     },
     sendCitations(citations) {

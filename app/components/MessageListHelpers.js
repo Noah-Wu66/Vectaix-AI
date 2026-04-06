@@ -95,8 +95,56 @@ function stripThinkingBlocks(text) {
   return text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
 }
 
+const COUNCIL_ANALYSIS_LABELS = {
+  agreement: "共识点",
+  keyDifferences: "关键分歧",
+  partialCoverage: "覆盖不全",
+  uniqueInsights: "独特洞察",
+  blindSpots: "盲点",
+};
+
+function buildCouncilAnalysisText(analysis) {
+  if (!analysis || typeof analysis !== "object") return "";
+  const lines = ["# 对比分析"];
+
+  for (const [key, title] of Object.entries(COUNCIL_ANALYSIS_LABELS)) {
+    lines.push(`\n## ${title}`);
+    const items = Array.isArray(analysis[key]) ? analysis[key] : [];
+    if (items.length === 0) {
+      lines.push("- 暂无内容");
+      continue;
+    }
+    for (const item of items) {
+      const text = typeof item?.text === "string" ? item.text.trim() : "";
+      if (!text) continue;
+      const models = Array.isArray(item?.models) ? item.models.filter(Boolean) : [];
+      const prefix = models.length > 0 ? `【${models.join(" / ")}】` : "";
+      lines.push(`- ${prefix}${text}`);
+    }
+  }
+
+  return lines.join("\n").trim();
+}
+
+function buildCouncilExportText(msg) {
+  const sections = [];
+  const analysisText = buildCouncilAnalysisText(msg?.councilAnalysis);
+  const resultText = typeof msg?.content === "string" ? stripThinkingBlocks(msg.content).trim() : "";
+
+  if (analysisText) sections.push(analysisText);
+  if (resultText) sections.push(resultText);
+
+  if (sections.length > 0) {
+    return normalizeCopiedText(sections.join("\n\n"));
+  }
+
+  return "";
+}
+
 export function buildCopyText(msg) {
   if (!msg) return "";
+  const councilText = buildCouncilExportText(msg);
+  if (councilText) return councilText;
   const raw = getMessageText(msg);
   const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
   return normalizeCopiedText(cleaned);
@@ -125,6 +173,8 @@ function stripMarkdown(text) {
 
 export function buildPlainText(msg) {
   if (!msg) return "";
+  const councilText = buildCouncilExportText(msg);
+  if (councilText) return normalizeCopiedText(stripMarkdown(councilText));
   const raw = getMessageText(msg);
   const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
   return normalizeCopiedText(stripMarkdown(cleaned));
