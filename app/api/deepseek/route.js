@@ -33,7 +33,7 @@ import {
 import {
     createWebBrowsingRuntime,
     executeWebBrowsingNativeToolCall,
-    getOpenAIWebTools,
+    getDeepSeekWebTools,
     WEB_BROWSING_MAX_ROUNDS,
 } from '@/lib/server/webBrowsing/nativeTools';
 import {
@@ -53,18 +53,6 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function findLatestDeepSeekResponseId(messages) {
-    if (!Array.isArray(messages)) return '';
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-        const message = messages[index];
-        const responseId = typeof message?.providerState?.deepseek?.responseId === 'string'
-            ? message.providerState.deepseek.responseId.trim()
-            : '';
-        if (responseId) return responseId;
-    }
-    return '';
-}
 
 export async function POST(req) {
     let writePermitTime = null;
@@ -144,7 +132,6 @@ export async function POST(req) {
         let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
         let deepseekInput = [];
-        let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
@@ -180,17 +167,10 @@ export async function POST(req) {
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
-            const historyBeforeCurrentPrompt = Array.isArray(msgs) && msgs[msgs.length - 1]?.role === 'user'
-                ? msgs.slice(0, -1)
-                : msgs;
-            effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
-                ? historyBeforeCurrentPrompt.slice(-limit)
-                : historyBeforeCurrentPrompt;
             deepseekInput = await buildResponsesInputFromHistory(effectiveMsgs, { providerStateKey: 'deepseek' });
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? safeHistory.slice(-limit) : safeHistory;
-            effectiveHistoryMessages = effectiveHistory;
             deepseekInput = await buildResponsesInputFromHistory(effectiveHistory, { providerStateKey: 'deepseek' });
         }
 
@@ -226,11 +206,6 @@ export async function POST(req) {
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
         const baseInput = Array.isArray(deepseekInput) ? deepseekInput : [];
-        const currentTurnInput = !isRegenerateMode && baseInput.length > 0
-            ? baseInput[baseInput.length - 1]
-            : null;
-        const latestDeepSeekResponseId = isRegenerateMode ? '' : findLatestDeepSeekResponseId(effectiveHistoryMessages);
-
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
 
@@ -390,9 +365,7 @@ export async function POST(req) {
                         });
                     };
 
-                    const usePreviousResponseId = Boolean(latestDeepSeekResponseId && currentTurnInput);
-                    let nextInput = usePreviousResponseId ? [currentTurnInput] : baseInput;
-                    let previousResponseId = usePreviousResponseId ? latestDeepSeekResponseId : '';
+                    let nextInput = [...baseInput];
                     let finalPayload = null;
                     const maxRounds = enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1;
 
@@ -406,11 +379,8 @@ export async function POST(req) {
                             instructions: finalSystemPrompt,
                             input: nextInput,
                         };
-                        if (previousResponseId) {
-                            requestBody.previous_response_id = previousResponseId;
-                        }
                         if (enableWebSearch) {
-                            requestBody.tools = getOpenAIWebTools();
+                            requestBody.tools = getDeepSeekWebTools();
                         }
 
                         const payload = await requestResponsesStream(requestBody, (thought) => {
@@ -432,8 +402,8 @@ export async function POST(req) {
                             break;
                         }
 
-                        previousResponseId = typeof payload?.id === 'string' ? payload.id : previousResponseId;
-                        nextInput = [];
+                        const responseOutputItems = normalizeOpenAIOutputItems(payload?.output);
+                        const toolOutputItems = [];
 
                         for (const functionCall of functionCalls) {
                             const toolExecution = await executeWebBrowsingNativeToolCall({
@@ -446,12 +416,18 @@ export async function POST(req) {
                                 signal: req?.signal,
                             });
                             toolRecords.push(toolExecution.toolRecord);
-                            nextInput.push({
+                            toolOutputItems.push({
                                 type: 'function_call_output',
                                 call_id: functionCall.call_id,
                                 output: toolExecution.outputText,
                             });
                         }
+
+                        nextInput = [
+                            ...nextInput,
+                            ...responseOutputItems,
+                            ...toolOutputItems,
+                        ];
                     }
 
                     if (!finalPayload && !clientAborted) {
