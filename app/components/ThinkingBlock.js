@@ -225,7 +225,7 @@ export default function ThinkingBlock({
         const countLabel = Number.isFinite(step.resultCount) && step.resultCount > 0 ? `（${step.resultCount}页）` : "";
         if (isRunning) return `浏览页面中${target}`;
         if (isError) return `网页抓取失败${target}`;
-        return `网页抓取完成${target}${countLabel}`;
+        return `网页阅读完成${target}${countLabel}`;
       }
       if (step.kind === "planner") return isRunning ? "正在制定计划" : (isError ? "制定计划失败" : "执行计划已确定");
       if (step.kind === "writer") return isRunning ? "正在整理结果" : (isError ? "整理结果失败" : "最终结果已生成");
@@ -387,7 +387,7 @@ export default function ThinkingBlock({
               {isRunning ? (
                 <SplitStatusText status="浏览页面中" suffix={urlSuffix} active />
               ) : (
-                <span>{isError ? `网页抓取失败${urlSuffix}` : `网页抓取完成${urlSuffix}`}</span>
+                <span>{isError ? `网页抓取失败${urlSuffix}` : `网页阅读完成${urlSuffix}`}</span>
               )}
               <div className="ml-auto flex items-center gap-1">
                 {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -399,7 +399,7 @@ export default function ThinkingBlock({
               {isRunning ? (
                 <SplitStatusText status="浏览页面中" suffix={urlSuffix} active />
               ) : (
-                <span>{isError ? `网页抓取失败${urlSuffix}` : `网页抓取完成${urlSuffix}`}</span>
+                <span>{isError ? `网页抓取失败${urlSuffix}` : `网页阅读完成${urlSuffix}`}</span>
               )}
             </div>
           )}

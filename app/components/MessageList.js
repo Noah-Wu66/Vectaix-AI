@@ -416,24 +416,50 @@ export default function MessageList({
                               const ordered = isUser
                                 ? [...entries.filter(e => e.part?.inlineData?.url), ...entries.filter(e => e.part?.fileData?.name), ...entries.filter(e => e.part?.text)]
                                 : entries.filter(e => !e.part?.thought);
+                              const textEntryIndexes = ordered
+                                .filter(({ part }) => part?.text?.trim())
+                                .map(({ idx }) => idx);
+                              const lastTextEntryIndex = textEntryIndexes.length > 0
+                                ? textEntryIndexes[textEntryIndexes.length - 1]
+                                : -1;
 
                               return ordered.map(({ part, idx }) => {
                                 const url = part?.inlineData?.url;
                                 if (url) return <Thumb key={idx} src={url} onClick={openLightbox} />;
                                 if (part?.fileData?.name) return <AttachmentCard key={idx} file={part.fileData} compact={isUser} />;
                                 if (part?.text?.trim()) {
-                                  return <Markdown key={idx} enableHighlight={!msg.isStreaming} enableMath={true} className={isUser ? "prose-invert" : ""}>{part.text}</Markdown>;
+                                  const shouldShowInlineCitations = !isUser && !msg.isStreaming && idx === lastTextEntryIndex;
+                                  return (
+                                    <Markdown
+                                      key={idx}
+                                      enableHighlight={!msg.isStreaming}
+                                      enableMath={true}
+                                      className={isUser ? "prose-invert" : ""}
+                                      citations={shouldShowInlineCitations ? msg.citations : null}
+                                      showInlineCitations={shouldShowInlineCitations}
+                                    >
+                                      {part.text}
+                                    </Markdown>
+                                  );
                                 }
                                 return null;
                               });
                             })()}
                           </div>
                         ) : hasVisibleContent ? (
-                          <Markdown enableHighlight={!msg.isStreaming} enableMath={true} className={msg.role === "user" ? "prose-invert" : ""}>{msg.content}</Markdown>
+                          <Markdown
+                            enableHighlight={!msg.isStreaming}
+                            enableMath={true}
+                            className={msg.role === "user" ? "prose-invert" : ""}
+                            citations={msg.role === "model" && !msg.isStreaming ? msg.citations : null}
+                            showInlineCitations={msg.role === "model" && !msg.isStreaming}
+                          >
+                            {msg.content}
+                          </Markdown>
                         ) : null}
                         {shouldRenderToolCards && <ToolRunCards tools={msg.tools} />}
                         {msg.role === "model" && hasArtifacts && <ArtifactCards artifacts={msg.artifacts} />}
-                        {msg.role === "model" && !msg.isStreaming && msg.citations && <Citations citations={msg.citations} />}
+                        {msg.role === "model" && !msg.isStreaming && msg.citations && !hasBodyOutput && <Citations citations={msg.citations} />}
                       </div>
                     )}
 
