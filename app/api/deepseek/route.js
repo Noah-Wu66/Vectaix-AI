@@ -33,7 +33,7 @@ import {
 import {
     createWebBrowsingRuntime,
     executeWebBrowsingNativeToolCall,
-    getDeepSeekWebTools,
+    getOpenAIWebTools,
     WEB_BROWSING_MAX_ROUNDS,
 } from '@/lib/server/webBrowsing/nativeTools';
 import {
@@ -380,7 +380,7 @@ export async function POST(req) {
                             input: nextInput,
                         };
                         if (enableWebSearch) {
-                            requestBody.tools = getDeepSeekWebTools();
+                            requestBody.tools = getOpenAIWebTools();
                         }
 
                         const payload = await requestResponsesStream(requestBody, (thought) => {
