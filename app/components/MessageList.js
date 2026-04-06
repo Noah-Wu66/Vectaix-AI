@@ -439,27 +439,18 @@ export default function MessageList({
                               const ordered = isUser
                                 ? [...entries.filter(e => e.part?.inlineData?.url), ...entries.filter(e => e.part?.fileData?.name), ...entries.filter(e => e.part?.text)]
                                 : entries.filter(e => !e.part?.thought);
-                              const textEntryIndexes = ordered
-                                .filter(({ part }) => part?.text?.trim())
-                                .map(({ idx }) => idx);
-                              const lastTextEntryIndex = textEntryIndexes.length > 0
-                                ? textEntryIndexes[textEntryIndexes.length - 1]
-                                : -1;
 
                               return ordered.map(({ part, idx }) => {
                                 const url = part?.inlineData?.url;
                                 if (url) return <Thumb key={idx} src={url} onClick={openLightbox} />;
                                 if (part?.fileData?.name) return <AttachmentCard key={idx} file={part.fileData} compact={isUser} />;
                                 if (part?.text?.trim()) {
-                                  const shouldShowInlineCitations = !isUser && !msg.isStreaming && idx === lastTextEntryIndex;
                                   return (
                                     <Markdown
                                       key={idx}
                                       enableHighlight={!msg.isStreaming}
                                       enableMath={true}
                                       className={isUser ? "prose-invert" : ""}
-                                      citations={shouldShowInlineCitations ? msg.citations : null}
-                                      showInlineCitations={shouldShowInlineCitations}
                                     >
                                       {part.text}
                                     </Markdown>
@@ -474,8 +465,6 @@ export default function MessageList({
                             enableHighlight={!msg.isStreaming}
                             enableMath={true}
                             className={msg.role === "user" ? "prose-invert" : ""}
-                            citations={msg.role === "model" && !msg.isStreaming ? msg.citations : null}
-                            showInlineCitations={msg.role === "model" && !msg.isStreaming}
                           >
                             {msg.content}
                           </Markdown>
