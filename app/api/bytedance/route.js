@@ -52,7 +52,12 @@ import {
     executeWebBrowsingNativeToolCall,
     getOpenAIWebTools,
     WEB_BROWSING_MAX_ROUNDS,
+    WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND,
 } from '@/lib/server/webBrowsing/nativeTools';
+import {
+    createWebBrowsingRoundController,
+    getMaxWebBrowsingModelPasses,
+} from '@/lib/server/webBrowsing/roundControl';
 import {
     CHAT_RATE_LIMIT,
     MAX_REQUEST_BYTES,
@@ -638,9 +643,13 @@ export async function POST(req) {
                     let finalPayload = null;
                     const toolRecords = [];
                     const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
-                    const maxRounds = enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1;
+                    const roundController = enableWebSearch
+                        ? createWebBrowsingRoundController({ maxRounds: WEB_BROWSING_MAX_ROUNDS })
+                        : null;
+                    const maxPasses = enableWebSearch ? getMaxWebBrowsingModelPasses(WEB_BROWSING_MAX_ROUNDS) : 1;
 
-                    for (let round = 0; round < maxRounds; round += 1) {
+                    for (let pass = 0; pass < maxPasses; pass += 1) {
+                        const availableToolApiNames = enableWebSearch ? roundController.getAvailableToolApiNames() : [];
                         const requestBody = buildSeedRequestBody({
                             model: apiModel || SEED_MODEL_ID,
                             input: nextInput,
@@ -653,8 +662,8 @@ export async function POST(req) {
                         if (previousResponseId) {
                             requestBody.previous_response_id = previousResponseId;
                         }
-                        if (enableWebSearch) {
-                            requestBody.tools = getOpenAIWebTools();
+                        if (enableWebSearch && availableToolApiNames.length > 0) {
+                            requestBody.tools = getOpenAIWebTools(availableToolApiNames);
                         }
 
                         const payload = await requestSeedStream(requestBody, (thought) => {
@@ -678,14 +687,27 @@ export async function POST(req) {
 
                         previousResponseId = typeof payload?.id === 'string' ? payload.id : previousResponseId;
                         nextInput = [];
-                        for (const functionCall of functionCalls) {
+                        const selectedFunctionCalls = [];
+                        const selectedFunctionCallRounds = [];
+                        for (const functionCall of functionCalls.slice(0, WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND)) {
+                            const toolReservation = roundController?.reserve(functionCall.name);
+                            if (!toolReservation?.allowed) continue;
+                            selectedFunctionCalls.push(functionCall);
+                            selectedFunctionCallRounds.push(toolReservation.round);
+                        }
+                        if (selectedFunctionCalls.length === 0) {
+                            break;
+                        }
+
+                        for (let functionCallIndex = 0; functionCallIndex < selectedFunctionCalls.length; functionCallIndex += 1) {
+                            const functionCall = selectedFunctionCalls[functionCallIndex];
                             const toolExecution = await executeWebBrowsingNativeToolCall({
                                 apiName: functionCall.name,
                                 argumentsInput: functionCall.arguments,
                                 runtime,
                                 sendEvent,
                                 pushCitations,
-                                round: round + 1,
+                                round: selectedFunctionCallRounds[functionCallIndex] || 1,
                                 signal: req?.signal,
                             });
                             toolRecords.push(toolExecution.toolRecord);

@@ -31,7 +31,12 @@ import {
   getGeminiWebTools,
   getOpenAIWebTools,
   WEB_BROWSING_MAX_ROUNDS,
+  WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND,
 } from "@/lib/server/webBrowsing/nativeTools";
+import {
+  createWebBrowsingRoundController,
+  getMaxWebBrowsingModelPasses,
+} from "@/lib/server/webBrowsing/roundControl";
 import {
   extractOpenAIFunctionCalls,
   extractOpenAIResponseText,
@@ -364,6 +369,16 @@ function extractGeminiResponseState(result) {
   return { parts, functionCalls, fullText: fullText.trim() };
 }
 
+function filterGeminiHistoryParts(parts, functionCalls) {
+  const selectedIdentities = new Set(
+    (Array.isArray(functionCalls) ? functionCalls : []).map((item) => getGeminiFunctionCallIdentity({ functionCall: item }))
+  );
+  return (Array.isArray(parts) ? parts : []).filter((part) => {
+    if (!part?.functionCall) return true;
+    return selectedIdentities.has(getGeminiFunctionCallIdentity(part));
+  });
+}
+
 function buildGeminiHistoryPart(part) {
   if (!part || typeof part !== "object") return null;
 
@@ -422,7 +437,13 @@ function extractClaudeText(response) {
 }
 
 function extractClaudeResponseState(response) {
-  const content = Array.isArray(response?.content) ? response.content : [];
+  let remainingToolUses = WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND;
+  const content = (Array.isArray(response?.content) ? response.content : []).filter((block) => {
+    if (block?.type !== "tool_use") return true;
+    if (remainingToolUses <= 0) return false;
+    remainingToolUses -= 1;
+    return true;
+  });
   const toolUses = [];
   let fullText = "";
   for (const block of content) {
@@ -434,7 +455,11 @@ function extractClaudeResponseState(response) {
       fullText += block.text;
     }
   }
-  return { content, toolUses, fullText: fullText.trim() };
+  return {
+    content,
+    toolUses: toolUses.slice(0, WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND),
+    fullText: fullText.trim(),
+  };
 }
 
 function isCouncilGreetingPrompt(text) {
@@ -612,8 +637,11 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
   const citations = [];
   const runtime = createWebBrowsingRuntime();
   const workingContents = [{ role: "user", parts }];
+  const roundController = createWebBrowsingRoundController({ maxRounds: WEB_BROWSING_MAX_ROUNDS });
+  const maxPasses = getMaxWebBrowsingModelPasses(WEB_BROWSING_MAX_ROUNDS);
 
-  for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const availableToolApiNames = roundController.getAvailableToolApiNames();
     const result = await raceWithSignal(ai.models.generateContent({
       model: modelId,
       contents: workingContents,
@@ -625,12 +653,23 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
           thinkingLevel: expert.thinkingLevel,
           includeThoughts: false,
         },
-        tools: getGeminiWebTools(),
+        ...(availableToolApiNames.length > 0 ? { tools: getGeminiWebTools(availableToolApiNames) } : {}),
       },
     }), signal);
     const state = extractGeminiResponseState(result);
     if (state.functionCalls.length === 0) {
       return { rawText: state.fullText || extractGeminiText(result), citations: normalizeCitations(citations) };
+    }
+    const selectedFunctionCalls = [];
+    const selectedFunctionCallRounds = [];
+    for (const functionCall of state.functionCalls.slice(0, WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND)) {
+      const toolReservation = roundController.reserve(functionCall?.name);
+      if (!toolReservation?.allowed) continue;
+      selectedFunctionCalls.push(functionCall);
+      selectedFunctionCallRounds.push(toolReservation.round);
+    }
+    if (selectedFunctionCalls.length === 0) {
+      break;
     }
     const historyParts = [];
     const functionCallIndexes = new Map();
@@ -651,15 +690,17 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
       }
       if (historyPart) historyParts.push(historyPart);
     }
-    workingContents.push({ role: "model", parts: historyParts.length > 0 ? historyParts : state.parts });
+    const selectedHistoryParts = filterGeminiHistoryParts(historyParts, selectedFunctionCalls);
+    workingContents.push({ role: "model", parts: selectedHistoryParts.length > 0 ? selectedHistoryParts : filterGeminiHistoryParts(state.parts, selectedFunctionCalls) });
     const functionResponseParts = [];
-    for (const functionCall of state.functionCalls) {
+    for (let functionCallIndex = 0; functionCallIndex < selectedFunctionCalls.length; functionCallIndex += 1) {
+      const functionCall = selectedFunctionCalls[functionCallIndex];
       const toolExecution = await executeWebBrowsingNativeToolCall({
         apiName: functionCall?.name,
         argumentsInput: functionCall?.args,
         runtime,
         pushCitations: (items) => citations.push(...items),
-        round: round + 1,
+        round: selectedFunctionCallRounds[functionCallIndex] || 1,
         signal,
       });
       functionResponseParts.push({
@@ -699,14 +740,17 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
   const citations = [];
   const runtime = createWebBrowsingRuntime();
   const workingMessages = [{ role: "user", content }];
+  const roundController = createWebBrowsingRoundController({ maxRounds: WEB_BROWSING_MAX_ROUNDS });
+  const maxPasses = getMaxWebBrowsingModelPasses(WEB_BROWSING_MAX_ROUNDS);
 
-  for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const availableToolApiNames = roundController.getAvailableToolApiNames();
     const response = await raceWithSignal(client.messages.create({
       model: CLAUDE_OPUS_MODEL,
       max_tokens: EXPERT_MAX_OUTPUT_TOKENS,
       system: [{ type: "text", text: systemPrompt }],
       messages: workingMessages,
-      tools: getAnthropicWebTools(),
+      ...(availableToolApiNames.length > 0 ? { tools: getAnthropicWebTools(availableToolApiNames) } : {}),
       thinking: { type: "adaptive" },
       output_config: { effort: expert.thinkingLevel },
     }), signal);
@@ -714,15 +758,27 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
     if (state.toolUses.length === 0 || response?.stop_reason !== "tool_use") {
       return { rawText: state.fullText || extractClaudeText(response), citations: normalizeCitations(citations) };
     }
-    workingMessages.push({ role: "assistant", content: response.content });
+    workingMessages.push({ role: "assistant", content: state.content });
     const toolResultBlocks = [];
-    for (const toolUse of state.toolUses) {
+    const selectedToolUses = [];
+    const selectedToolUseRounds = [];
+    for (const toolUse of state.toolUses.slice(0, WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND)) {
+      const toolReservation = roundController.reserve(toolUse?.name);
+      if (!toolReservation?.allowed) continue;
+      selectedToolUses.push(toolUse);
+      selectedToolUseRounds.push(toolReservation.round);
+    }
+    if (selectedToolUses.length === 0) {
+      break;
+    }
+    for (let toolUseIndex = 0; toolUseIndex < selectedToolUses.length; toolUseIndex += 1) {
+      const toolUse = selectedToolUses[toolUseIndex];
       const toolExecution = await executeWebBrowsingNativeToolCall({
         apiName: toolUse?.name,
         argumentsInput: toolUse?.input,
         runtime,
         pushCitations: (items) => citations.push(...items),
-        round: round + 1,
+        round: selectedToolUseRounds[toolUseIndex] || 1,
         signal,
       });
       toolResultBlocks.push({
@@ -752,8 +808,11 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
   const runtime = createWebBrowsingRuntime();
   let nextInput = [{ role: "user", content }];
   let previousResponseId = "";
+  const roundController = createWebBrowsingRoundController({ maxRounds: WEB_BROWSING_MAX_ROUNDS });
+  const maxPasses = getMaxWebBrowsingModelPasses(WEB_BROWSING_MAX_ROUNDS);
 
-  for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const availableToolApiNames = roundController.getAvailableToolApiNames();
     const response = await fetchWithZenmuxRateLimit(`${providerConfig.baseUrl}/responses`, {
       method: "POST",
       headers: {
@@ -768,7 +827,7 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
         instructions: systemPrompt,
         input: nextInput,
         ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
-        tools: getOpenAIWebTools(),
+        ...(availableToolApiNames.length > 0 ? { tools: getOpenAIWebTools(availableToolApiNames) } : {}),
         reasoning: { effort: expert.thinkingLevel },
       }),
       signal,
@@ -789,13 +848,25 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
     }
     previousResponseId = typeof payload?.id === "string" ? payload.id : previousResponseId;
     nextInput = [];
-    for (const functionCall of functionCalls) {
+    const selectedFunctionCalls = [];
+    const selectedFunctionCallRounds = [];
+    for (const functionCall of functionCalls.slice(0, WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND)) {
+      const toolReservation = roundController.reserve(functionCall.name);
+      if (!toolReservation?.allowed) continue;
+      selectedFunctionCalls.push(functionCall);
+      selectedFunctionCallRounds.push(toolReservation.round);
+    }
+    if (selectedFunctionCalls.length === 0) {
+      break;
+    }
+    for (let functionCallIndex = 0; functionCallIndex < selectedFunctionCalls.length; functionCallIndex += 1) {
+      const functionCall = selectedFunctionCalls[functionCallIndex];
       const toolExecution = await executeWebBrowsingNativeToolCall({
         apiName: functionCall.name,
         argumentsInput: functionCall.arguments,
         runtime,
         pushCitations: (items) => citations.push(...items),
-        round: round + 1,
+        round: selectedFunctionCallRounds[functionCallIndex] || 1,
         signal,
       });
       nextInput.push({

@@ -50,7 +50,12 @@ import {
     executeWebBrowsingNativeToolCall,
     getAnthropicWebTools,
     WEB_BROWSING_MAX_ROUNDS,
+    WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND,
 } from '@/lib/server/webBrowsing/nativeTools';
+import {
+    createWebBrowsingRoundController,
+    getMaxWebBrowsingModelPasses,
+} from '@/lib/server/webBrowsing/roundControl';
 import {
     CHAT_RATE_LIMIT,
     MAX_REQUEST_BYTES,
@@ -161,8 +166,18 @@ function normalizeAnthropicAssistantContent(content) {
         .filter(Boolean);
 }
 
+function limitAnthropicToolUseBlocks(content) {
+    let remaining = WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND;
+    return (Array.isArray(content) ? content : []).filter((block) => {
+        if (block?.type !== 'tool_use') return true;
+        if (remaining <= 0) return false;
+        remaining -= 1;
+        return true;
+    });
+}
+
 function extractAnthropicResponseState(content) {
-    const safeContent = Array.isArray(content) ? content : [];
+    const safeContent = limitAnthropicToolUseBlocks(content);
     const toolUses = [];
     let fullThought = '';
     let fullText = '';
@@ -185,7 +200,7 @@ function extractAnthropicResponseState(content) {
     return {
         fullText: fullText.trim(),
         fullThought: fullThought.trim(),
-        toolUses,
+        toolUses: toolUses.slice(0, WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND),
         storedContent: normalizeAnthropicAssistantContent(safeContent),
     };
 }
@@ -588,8 +603,13 @@ export async function POST(req) {
                     const toolRecords = [];
                     let storedAssistantContent = [];
                     let finished = false;
+                    const roundController = enableWebSearch
+                        ? createWebBrowsingRoundController({ maxRounds: WEB_BROWSING_MAX_ROUNDS })
+                        : null;
+                    const maxPasses = enableWebSearch ? getMaxWebBrowsingModelPasses(WEB_BROWSING_MAX_ROUNDS) : 1;
 
-                    for (let round = 0; round < (enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1); round += 1) {
+                    for (let pass = 0; pass < maxPasses; pass += 1) {
+                        const availableToolApiNames = enableWebSearch ? roundController.getAvailableToolApiNames() : [];
                         const requestParams = {
                             model: apiModel,
                             max_tokens: normalizedMaxTokens,
@@ -604,7 +624,7 @@ export async function POST(req) {
                                 }
                             ],
                             messages: workingMessages,
-                            ...(enableWebSearch ? { tools: getAnthropicWebTools() } : {}),
+                            ...(enableWebSearch && availableToolApiNames.length > 0 ? { tools: getAnthropicWebTools(availableToolApiNames) } : {}),
                         };
 
                         if (isClaudeModel(model)) {
@@ -656,16 +676,29 @@ export async function POST(req) {
                             break;
                         }
 
-                        workingMessages.push({ role: 'assistant', content: responseContent });
+                        workingMessages.push({ role: 'assistant', content: state.storedContent });
                         const toolResultBlocks = [];
-                        for (const toolUse of state.toolUses) {
+                        const selectedToolUses = [];
+                        const selectedToolUseRounds = [];
+                        for (const toolUse of state.toolUses.slice(0, WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND)) {
+                            const toolReservation = roundController?.reserve(toolUse?.name);
+                            if (!toolReservation?.allowed) continue;
+                            selectedToolUses.push(toolUse);
+                            selectedToolUseRounds.push(toolReservation.round);
+                        }
+                        if (selectedToolUses.length === 0) {
+                            break;
+                        }
+
+                        for (let toolUseIndex = 0; toolUseIndex < selectedToolUses.length; toolUseIndex += 1) {
+                            const toolUse = selectedToolUses[toolUseIndex];
                             const toolExecution = await executeWebBrowsingNativeToolCall({
                                 apiName: toolUse?.name,
                                 argumentsInput: toolUse?.input,
                                 runtime,
                                 sendEvent,
                                 pushCitations,
-                                round: round + 1,
+                                round: selectedToolUseRounds[toolUseIndex] || 1,
                                 signal: req?.signal,
                             });
                             toolRecords.push(toolExecution.toolRecord);

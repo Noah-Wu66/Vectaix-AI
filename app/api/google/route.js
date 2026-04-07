@@ -41,7 +41,12 @@ import {
     executeWebBrowsingNativeToolCall,
     getGeminiWebTools,
     WEB_BROWSING_MAX_ROUNDS,
+    WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND,
 } from '@/lib/server/webBrowsing/nativeTools';
+import {
+    createWebBrowsingRoundController,
+    getMaxWebBrowsingModelPasses,
+} from '@/lib/server/webBrowsing/roundControl';
 import {
     CHAT_RATE_LIMIT,
     MAX_REQUEST_BYTES,
@@ -186,6 +191,16 @@ function mergeGeminiHistoryPart(existingPart, nextPart) {
             ? nextPart.thoughtSignature
             : existingPart.thoughtSignature,
     };
+}
+
+function filterGeminiHistoryParts(parts, functionCalls) {
+    const selectedIdentities = new Set(
+        (Array.isArray(functionCalls) ? functionCalls : []).map((item) => getGeminiFunctionCallIdentity({ functionCall: item }))
+    );
+    return (Array.isArray(parts) ? parts : []).filter((part) => {
+        if (!part?.functionCall) return true;
+        return selectedIdentities.has(getGeminiFunctionCallIdentity(part));
+    });
 }
 
 export async function POST(req) {
@@ -611,13 +626,18 @@ export async function POST(req) {
                     const toolRecords = [];
                     let storedModelParts = [];
                     let finished = false;
+                    const roundController = enableWebSearch
+                        ? createWebBrowsingRoundController({ maxRounds: WEB_BROWSING_MAX_ROUNDS })
+                        : null;
+                    const maxPasses = enableWebSearch ? getMaxWebBrowsingModelPasses(WEB_BROWSING_MAX_ROUNDS) : 1;
 
-                    for (let round = 0; round < (enableWebSearch ? WEB_BROWSING_MAX_ROUNDS : 1); round += 1) {
+                    for (let pass = 0; pass < maxPasses; pass += 1) {
+                        const availableToolApiNames = enableWebSearch ? roundController.getAvailableToolApiNames() : [];
                         const response = await ai.models.generateContentStream({
                             model: apiModel,
                             contents: workingContents,
-                            config: enableWebSearch
-                                ? { ...finalConfig, tools: getGeminiWebTools() }
+                            config: enableWebSearch && availableToolApiNames.length > 0
+                                ? { ...finalConfig, tools: getGeminiWebTools(availableToolApiNames) }
                                 : finalConfig,
                         });
 
@@ -686,22 +706,36 @@ export async function POST(req) {
                             break;
                         }
 
-                        const lastParts = roundHistoryParts.length > 0
-                            ? roundHistoryParts
+                        const selectedFunctionCalls = [];
+                        const selectedFunctionCallRounds = [];
+                        for (const functionCall of roundFunctionCalls.slice(0, WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND)) {
+                            const toolReservation = roundController?.reserve(functionCall?.name);
+                            if (!toolReservation?.allowed) continue;
+                            selectedFunctionCalls.push(functionCall);
+                            selectedFunctionCallRounds.push(toolReservation.round);
+                        }
+                        if (selectedFunctionCalls.length === 0) {
+                            break;
+                        }
+
+                        const selectedHistoryParts = filterGeminiHistoryParts(roundHistoryParts, selectedFunctionCalls);
+                        const lastParts = selectedHistoryParts.length > 0
+                            ? selectedHistoryParts
                             : [
                                 ...(roundFullText ? [{ text: roundFullText }] : []),
-                                ...roundFunctionCalls.map((fc) => ({ functionCall: fc })),
+                                ...selectedFunctionCalls.map((fc) => ({ functionCall: fc })),
                             ];
                         workingContents.push({ role: 'model', parts: lastParts });
                         const functionResponseParts = [];
-                        for (const functionCall of roundFunctionCalls) {
+                        for (let functionCallIndex = 0; functionCallIndex < selectedFunctionCalls.length; functionCallIndex += 1) {
+                            const functionCall = selectedFunctionCalls[functionCallIndex];
                             const toolExecution = await executeWebBrowsingNativeToolCall({
                                 apiName: functionCall?.name,
                                 argumentsInput: functionCall?.args,
                                 runtime,
                                 sendEvent,
                                 pushCitations,
-                                round: round + 1,
+                                round: selectedFunctionCallRounds[functionCallIndex] || 1,
                                 signal: req?.signal,
                             });
                             toolRecords.push(toolExecution.toolRecord);
