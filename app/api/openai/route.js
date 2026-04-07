@@ -17,7 +17,10 @@ import {
     parseWebSearchConfig,
     parseWebSearchEnabled,
 } from '@/lib/server/chat/requestConfig';
-import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
+import {
+    buildDirectChatSystemPrompt,
+    buildForcedFinalAnswerInstructions,
+} from '@/lib/server/chat/systemPromptBuilder';
 import { resolveOpenAIProviderConfig } from '@/lib/modelRoutes';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
@@ -580,6 +583,34 @@ export async function POST(req) {
                                 call_id: functionCall.call_id,
                                 output: toolExecution.outputText,
                             });
+                        }
+                    }
+
+                    const shouldForceFinalAnswer = enableWebSearch
+                        && !finalPayload
+                        && !clientAborted
+                        && previousResponseId
+                        && Array.isArray(nextInput)
+                        && nextInput.length > 0;
+
+                    if (shouldForceFinalAnswer) {
+                        const payload = await requestResponsesStream({
+                            ...baseRequestBody,
+                            instructions: buildForcedFinalAnswerInstructions(finalSystemPrompt),
+                            input: nextInput,
+                            previous_response_id: previousResponseId,
+                        }, (thought) => {
+                            sendEvent({ type: 'thought', content: thought });
+                        }, (text) => {
+                            sendEvent({ type: 'text', content: text });
+                        });
+                        if (!clientAborted) {
+                            const thought = extractOpenAIResponseReasoning(payload);
+                            if (thought) {
+                                fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
+                            }
+                            finalPayload = payload;
+                            fullText = extractOpenAIResponseText(payload);
                         }
                     }
 

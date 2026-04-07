@@ -18,7 +18,10 @@ import {
     normalizeModelId,
 } from '@/lib/shared/models';
 import { resolveSeedProviderConfig } from '@/lib/modelRoutes';
-import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
+import {
+    buildDirectChatSystemPrompt,
+    buildForcedFinalAnswerInstructions,
+} from '@/lib/server/chat/systemPromptBuilder';
 import {
     parseMaxTokens,
     parseSystemPrompt,
@@ -691,6 +694,40 @@ export async function POST(req) {
                                 call_id: functionCall.call_id,
                                 output: toolExecution.outputText,
                             });
+                        }
+                    }
+
+                    const shouldForceFinalAnswer = enableWebSearch
+                        && !finalPayload
+                        && !clientAborted
+                        && previousResponseId
+                        && Array.isArray(nextInput)
+                        && nextInput.length > 0;
+
+                    if (shouldForceFinalAnswer) {
+                        const requestBody = buildSeedRequestBody({
+                            model: apiModel || SEED_MODEL_ID,
+                            input: nextInput,
+                            instructions: buildForcedFinalAnswerInstructions(instructions),
+                            maxTokens,
+                            thinkingLevel: 'high',
+                            stream: true,
+                        });
+                        requestBody.store = true;
+                        requestBody.previous_response_id = previousResponseId;
+
+                        const payload = await requestSeedStream(requestBody, (thought) => {
+                            sendEvent({ type: 'thought', content: thought });
+                        }, (text) => {
+                            sendEvent({ type: 'text', content: text });
+                        });
+                        if (!clientAborted) {
+                            const thought = extractSeedResponseReasoning(payload);
+                            if (thought) {
+                                fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
+                            }
+                            finalPayload = payload;
+                            fullText = extractSeedResponseText(payload);
                         }
                     }
 

@@ -12,7 +12,10 @@ import {
 } from '@/app/api/chat/utils';
 import { DEEPSEEK_CHAT_MODEL, DEEPSEEK_REASONER_MODEL } from '@/lib/shared/models';
 import { resolveDeepSeekProviderConfig } from '@/lib/modelRoutes';
-import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
+import {
+    buildDirectChatSystemPrompt,
+    buildForcedFinalAnswerInstructions,
+} from '@/lib/server/chat/systemPromptBuilder';
 import {
     clampMaxTokens,
     parseMaxTokens,
@@ -431,6 +434,36 @@ export async function POST(req) {
                             ...responseOutputItems,
                             ...toolOutputItems,
                         ];
+                    }
+
+                    const shouldForceFinalAnswer = enableWebSearch
+                        && !finalPayload
+                        && !clientAborted
+                        && Array.isArray(nextInput)
+                        && nextInput.length > 0;
+
+                    if (shouldForceFinalAnswer) {
+                        const payload = await requestResponsesStream({
+                            model: apiModel,
+                            stream: false,
+                            max_output_tokens: clampMaxTokens(maxTokens, 64000),
+                            store: true,
+                            reasoning: { effort: 'high' },
+                            instructions: buildForcedFinalAnswerInstructions(finalSystemPrompt),
+                            input: nextInput,
+                        }, (thought) => {
+                            sendEvent({ type: 'thought', content: thought });
+                        }, (text) => {
+                            sendEvent({ type: 'text', content: text });
+                        });
+                        if (!clientAborted) {
+                            const thought = extractOpenAIResponseReasoning(payload);
+                            if (thought) {
+                                fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
+                            }
+                            finalPayload = payload;
+                            fullText = extractOpenAIResponseText(payload);
+                        }
                     }
 
                     if (!finalPayload && !clientAborted) {

@@ -9,6 +9,7 @@ import { buildSeedMessageInput } from "@/app/api/bytedance/bytedanceHelpers";
 import {
   buildWebSearchGuide,
 } from "@/lib/server/chat/webSearchConfig";
+import { buildForcedFinalAnswerInstructions } from "@/lib/server/chat/systemPromptBuilder";
 import {
   buildSeedRequestBody,
   extractSeedFunctionCalls,
@@ -804,6 +805,43 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
       });
     }
   }
+
+  const shouldForceFinalAnswer = previousResponseId
+    && Array.isArray(nextInput)
+    && nextInput.length > 0;
+
+  if (shouldForceFinalAnswer) {
+    const response = await fetchWithZenmuxRateLimit(`${providerConfig.baseUrl}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${providerConfig.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: expert.modelId,
+        stream: false,
+        store: true,
+        max_output_tokens: EXPERT_MAX_OUTPUT_TOKENS,
+        instructions: buildForcedFinalAnswerInstructions(systemPrompt),
+        input: nextInput,
+        previous_response_id: previousResponseId,
+        reasoning: { effort: expert.thinkingLevel },
+      }),
+      signal,
+    }, {
+      label: `zenmux:openai:${expert.modelId}`,
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(extractUpstreamErrorMessage(response.status, errorText));
+    }
+    const payload = await response.json();
+    return {
+      rawText: extractOpenAIResponseText(payload),
+      citations: normalizeCitations(citations),
+    };
+  }
+
   throw new Error(`${expert.label} 工具循环未返回最终答案`);
 }
 
