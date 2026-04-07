@@ -5,6 +5,7 @@ import { createChatAppActions } from "@/lib/client/chat/chatAppActions";
 import { useThemeMode } from "@/lib/client/hooks/useThemeMode";
 import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
 import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
+import { normalizeWebBrowsingIdentifier } from "@/lib/shared/webBrowsing";
 import {
   CHAT_MODELS,
   CHAT_RUNTIME_MODE_CHAT,
@@ -69,7 +70,19 @@ function hasDisplayableModelProgress(message) {
 
 function decorateConversationMessages(messages) {
   if (!Array.isArray(messages)) return [];
-  return messages.map((message) => ({ ...message, isStreaming: false, isWaitingFirstChunk: false, isThinkingStreaming: false }));
+  return messages.map((message) => ({
+    ...message,
+    tools: Array.isArray(message?.tools)
+      ? message.tools.map((tool) => (
+        tool && typeof tool === "object"
+          ? { ...tool, identifier: normalizeWebBrowsingIdentifier(tool.identifier) || tool.identifier }
+          : tool
+      ))
+      : message?.tools,
+    isStreaming: false,
+    isWaitingFirstChunk: false,
+    isThinkingStreaming: false,
+  }));
 }
 
 function mergeConversationMessages(serverMessages, localMessages) {

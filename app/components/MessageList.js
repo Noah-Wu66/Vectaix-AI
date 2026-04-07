@@ -42,6 +42,11 @@ import {
   modelSupportsAvailableInput,
   isCouncilModel,
 } from "@/lib/shared/models";
+import {
+  getWebBrowsingToolTitle,
+  isWebBrowsingIdentifier,
+  normalizeWebBrowsingIdentifier,
+} from "@/lib/shared/webBrowsing";
 
 const PENDING_RUN_TEXTS = new Set(["正在处理中...", "Council 正在处理中..."]);
 
@@ -60,6 +65,60 @@ function containsMarkdownTable(text) {
 
 function isPendingRunText(text) {
   return typeof text === "string" && PENDING_RUN_TEXTS.has(text.trim());
+}
+
+function normalizeFallbackToolTimeline(tools) {
+  if (!Array.isArray(tools) || tools.length === 0) return [];
+
+  return tools
+    .filter((tool) => tool && typeof tool === "object" && typeof tool.id === "string" && tool.id)
+    .map((tool) => {
+      const apiName = typeof tool.apiName === "string" ? tool.apiName : "";
+      const status = tool.status === "error" ? "error" : "done";
+      const resultCount = Array.isArray(tool.state?.results) ? tool.state.results.length : undefined;
+      const toolIdentifier = normalizeWebBrowsingIdentifier(tool.identifier);
+
+      if (apiName === "search") {
+        return {
+          id: `timeline_${tool.id}`,
+          kind: "search",
+          status,
+          query: typeof tool.arguments?.query === "string" ? tool.arguments.query : "",
+          resultCount,
+          message: typeof tool.content === "string" ? tool.content : "",
+        };
+      }
+
+      if (apiName === "crawlSinglePage" || apiName === "crawlMultiPages") {
+        const firstUrl = typeof tool.arguments?.url === "string" && tool.arguments.url
+          ? tool.arguments.url
+          : (
+            Array.isArray(tool.arguments?.urls)
+              ? tool.arguments.urls.find((item) => typeof item === "string" && item.trim())
+              : ""
+          ) || "";
+
+        return {
+          id: `timeline_${tool.id}`,
+          kind: "reader",
+          status,
+          url: firstUrl,
+          resultCount,
+          message: typeof tool.content === "string" ? tool.content : "",
+        };
+      }
+
+      return {
+        id: `timeline_${tool.id}`,
+        kind: "tool",
+        status,
+        content: typeof tool.title === "string" && tool.title
+          ? tool.title
+          : (isWebBrowsingIdentifier(toolIdentifier) ? getWebBrowsingToolTitle(apiName) : `${toolIdentifier || "tool"}.${tool.apiName || "run"}`),
+        message: typeof tool.content === "string" ? tool.content : "",
+      };
+    })
+    .filter(Boolean);
 }
 
 export default function MessageList({
@@ -310,6 +369,7 @@ export default function MessageList({
         )
       ) : (
         messages.map((msg, i) => {
+          const fallbackThinkingTimeline = normalizeFallbackToolTimeline(msg.tools);
           const displayParts = Array.isArray(msg.parts) && msg.role === "model"
             ? msg.parts.filter((part) => !(typeof part?.text === "string" && isPendingRunText(part.text)) && !part?.thought)
             : msg.parts;
@@ -324,8 +384,11 @@ export default function MessageList({
           const hasBodyOutput =
             hasVisibleContent
             || (hasParts && displayParts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
-          const hasThinkingTimeline = Array.isArray(msg.thinkingTimeline)
-            && msg.thinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool" || step?.kind === "planner" || step?.kind === "writer");
+          const resolvedThinkingTimeline = Array.isArray(msg.thinkingTimeline) && msg.thinkingTimeline.length > 0
+            ? msg.thinkingTimeline
+            : fallbackThinkingTimeline;
+          const hasThinkingTimeline = Array.isArray(resolvedThinkingTimeline)
+            && resolvedThinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool" || step?.kind === "planner" || step?.kind === "writer");
           const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
           const hasCouncilAnalysis = msg.councilAnalysis && typeof msg.councilAnalysis === "object";
           const hasCouncilAnalysisState = msg.councilAnalysisState && typeof msg.councilAnalysisState === "object";
@@ -397,7 +460,7 @@ export default function MessageList({
                     isSearching={msg.isSearching}
                     searchQuery={msg.searchQuery}
                     searchError={msg.searchError}
-                    timeline={msg.thinkingTimeline}
+                    timeline={resolvedThinkingTimeline}
                     councilExpertStates={msg.councilExpertStates}
                     councilSummaryState={msg.councilResultState}
                     councilExperts={msg.councilExperts}

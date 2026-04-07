@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Globe, Settings2, MessageSquareQuote, X } from "lucide-react";
+import { Search, Settings2, MessageSquareQuote, X } from "lucide-react";
 import { getModelConfig } from "@/lib/shared/models";
 import { DEFAULT_WEB_SEARCH_SETTINGS } from "@/lib/shared/webSearch";
 import SystemPromptModal from "./SystemPromptModal";
@@ -90,7 +90,7 @@ export default function SettingsMenu({
                   {supportsWebSearch ? (
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-zinc-600 dark:text-zinc-300 flex items-center gap-2">
-                        <Globe size={15} className="text-blue-500" />
+                        <Search size={15} className="text-blue-500" />
                         智能联网
                       </span>
                       <button

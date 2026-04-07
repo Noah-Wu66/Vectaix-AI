@@ -1,7 +1,12 @@
 import { useState } from "react";
-import { Download, ExternalLink, FileText, Globe, Search, Terminal, X } from "lucide-react";
+import { Download, ExternalLink, FileText, Search, Terminal, X } from "lucide-react";
 import { ModelAvatar } from "./ModelVisuals";
 import { formatAttachmentMeta } from "@/lib/shared/messageAttachments";
+import {
+  getWebBrowsingToolTitle,
+  isWebBrowsingIdentifier,
+  normalizeWebBrowsingIdentifier,
+} from "@/lib/shared/webBrowsing";
 
 const WEB_BROWSING_PREVIEW_LIMIT = 20;
 
@@ -12,7 +17,7 @@ function getDomainFromUrl(url) {
 function WebFavicon({ url, size = 12, className = "" }) {
   const [failed, setFailed] = useState(false);
   const domain = getDomainFromUrl(url);
-  if (!domain || failed) return <Globe size={size} className={className} />;
+  if (!domain || failed) return <Search size={size} className={className} />;
   return (
     <img
       src={`https://www.google.com/s2/favicons?domain=${domain}&sz=${size * 2}`}
@@ -268,7 +273,7 @@ export function Citations({ citations }) {
         className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 rounded-full text-xs transition-colors"
         title="查看全部来源"
       >
-        <Globe size={12} className="text-zinc-500" />
+        <Search size={12} className="text-zinc-500" />
         <span>信息来源</span>
         <span className="flex -space-x-1.5">
           {previewItems.map((citation, idx) => (
@@ -291,7 +296,7 @@ export function Citations({ citations }) {
           <div className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-700 w-full max-w-md p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 font-medium">
-                <Globe size={14} />
+                <Search size={14} />
                 信息来源
               </div>
               <button
@@ -343,8 +348,9 @@ function buildArtifactDownloadUrl(artifact) {
 
 export function hasToolRunPreview(tool) {
   if (!tool || typeof tool !== "object") return false;
+  const toolIdentifier = normalizeWebBrowsingIdentifier(tool.identifier);
 
-  if (tool.identifier === "lobe-web-browsing" && Array.isArray(tool.state?.results) && tool.state.results.length > 0) {
+  if (isWebBrowsingIdentifier(toolIdentifier) && Array.isArray(tool.state?.results) && tool.state.results.length > 0) {
     return true;
   }
 
@@ -356,8 +362,9 @@ export function hasToolRunPreview(tool) {
 
 export function ToolRunPreview({ tool }) {
   if (!hasToolRunPreview(tool)) return null;
+  const toolIdentifier = normalizeWebBrowsingIdentifier(tool.identifier);
 
-  if (tool.identifier === "lobe-web-browsing" && Array.isArray(tool.state?.results) && tool.state.results.length > 0) {
+  if (isWebBrowsingIdentifier(toolIdentifier) && Array.isArray(tool.state?.results) && tool.state.results.length > 0) {
     return (
       <div className="flex max-h-[320px] flex-col gap-1.5 overflow-y-auto pr-1 mobile-scroll overscroll-contain custom-scrollbar">
         {tool.state.results.slice(0, WEB_BROWSING_PREVIEW_LIMIT).map((item, index) => {
@@ -401,11 +408,12 @@ export function ToolRunCards({ tools }) {
     <div className="mt-3 flex flex-col gap-2">
       {tools.map((tool) => {
         if (!tool?.id) return null;
-        const isWeb = tool.identifier === "lobe-web-browsing";
+        const toolIdentifier = normalizeWebBrowsingIdentifier(tool.identifier);
+        const isWeb = isWebBrowsingIdentifier(toolIdentifier);
         const icon = isWeb ? <Search size={13} /> : <Terminal size={13} />;
         const title = typeof tool.title === "string" && tool.title
           ? tool.title
-          : `${tool.identifier || "tool"}.${tool.apiName || "run"}`;
+          : (isWeb ? getWebBrowsingToolTitle(tool.apiName) : `${toolIdentifier || "tool"}.${tool.apiName || "run"}`);
         const statusText = tool.status === "error" ? "失败" : (tool.status === "running" ? "运行中" : "完成");
 
         return (
