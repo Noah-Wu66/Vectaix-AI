@@ -43,6 +43,7 @@ import {
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
 import { consumeStrictResponsesStream } from '@/lib/server/chat/responsesStream';
+import { fetchWithZenmuxRateLimit } from '@/lib/server/providers/zenmuxRateLimit';
 import {
     buildResponsesInputFromHistory,
     extractOpenAIFunctionCalls,
@@ -332,7 +333,7 @@ export async function POST(req) {
                     const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
                     const toolRecords = [];
                     const requestResponsesStream = async (requestBody, onThought, onText) => {
-                        const request = async () => fetch(`${deepseekBaseUrl}/responses`, {
+                        const request = async () => fetchWithZenmuxRateLimit(`${deepseekBaseUrl}/responses`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -340,6 +341,8 @@ export async function POST(req) {
                             },
                             body: JSON.stringify({ ...requestBody, stream: true }),
                             signal: req?.signal,
+                        }, {
+                            label: `zenmux:deepseek:${apiModel}`,
                         });
 
                         let response = await request();

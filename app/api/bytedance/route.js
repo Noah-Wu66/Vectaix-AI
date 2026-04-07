@@ -57,6 +57,7 @@ import {
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
 import { consumeStrictResponsesStream } from '@/lib/server/chat/responsesStream';
+import { fetchWithZenmuxRateLimit } from '@/lib/server/providers/zenmuxRateLimit';
 
 const SEED_UPSTREAM_DEBUG_SAMPLE_LIMIT = 12;
 
@@ -548,7 +549,7 @@ export async function POST(req) {
                             thinkingType: requestBody?.thinking?.type || '',
                             reasoningEffort: requestBody?.reasoning?.effort || '',
                         });
-                        let response = await fetch(url, {
+                        let response = await fetchWithZenmuxRateLimit(url, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -556,10 +557,12 @@ export async function POST(req) {
                             },
                             body: JSON.stringify({ ...requestBody, stream: true }),
                             signal: req?.signal,
+                        }, {
+                            label: `zenmux:seed:${apiModel}`,
                         });
                         if (!response.ok && (response.status === 502 || response.status === 503 || response.status === 504)) {
                             await new Promise((resolve) => setTimeout(resolve, 800));
-                            response = await fetch(url, {
+                            response = await fetchWithZenmuxRateLimit(url, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
@@ -567,6 +570,8 @@ export async function POST(req) {
                                 },
                                 body: JSON.stringify({ ...requestBody, stream: true }),
                                 signal: req?.signal,
+                            }, {
+                                label: `zenmux:seed:${apiModel}`,
                             });
                         }
                         if (!response.ok) {

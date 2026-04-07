@@ -223,7 +223,7 @@ export default function ThinkingBlock({
         const truncatedUrl = url.length > 50 ? `${url.slice(0, 47)}...` : url;
         const target = truncatedUrl ? `「${truncatedUrl}」` : "";
         const countLabel = Number.isFinite(step.resultCount) && step.resultCount > 0 ? `（${step.resultCount}页）` : "";
-        if (isRunning) return `浏览页面中${target}`;
+        if (isRunning) return `浏览网页中${target}`;
         if (isError) return `网页抓取失败${target}`;
         return `网页阅读完成${target}${countLabel}`;
       }
@@ -281,7 +281,7 @@ export default function ThinkingBlock({
       const canExpandThought = showThoughtDetails && hasContent;
       const isThoughtOpen = canExpandThought && isExpanded;
       return (
-        <div key={step.id || `thought-${idx}`} className="w-full max-w-2xl mb-2">
+        <div key={step.id || `thought-${idx}`} className="w-full max-w-2xl">
           {canExpandThought ? (
             <button
               type="button"
@@ -385,7 +385,7 @@ export default function ThinkingBlock({
             <button type="button" onClick={() => toggleExpandedStep(step.id)} className={capsuleClass}>
               {icon}
               {isRunning ? (
-                <SplitStatusText status="浏览页面中" suffix={urlSuffix} active />
+                <SplitStatusText status="浏览网页中" suffix={urlSuffix} active />
               ) : (
                 <span>{isError ? `网页抓取失败${urlSuffix}` : `网页阅读完成${urlSuffix}`}</span>
               )}
@@ -397,7 +397,7 @@ export default function ThinkingBlock({
             <div className={capsuleClass}>
               {icon}
               {isRunning ? (
-                <SplitStatusText status="浏览页面中" suffix={urlSuffix} active />
+                <SplitStatusText status="浏览网页中" suffix={urlSuffix} active />
               ) : (
                 <span>{isError ? `网页抓取失败${urlSuffix}` : `网页阅读完成${urlSuffix}`}</span>
               )}

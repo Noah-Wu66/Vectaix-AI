@@ -54,6 +54,7 @@ import {
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
 import { consumeStrictResponsesStream } from '@/lib/server/chat/responsesStream';
+import { fetchWithZenmuxRateLimit } from '@/lib/server/providers/zenmuxRateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -82,6 +83,9 @@ function extractUpstreamErrorMessage(status, rawText) {
     }
     if (status === 504 || lower.includes('gateway timeout')) {
         return 'OpenAI 网关超时（504），请稍后重试';
+    }
+    if (status === 429 || lower.includes('too many request')) {
+        return '模型服务请求过于频繁，请稍后再试';
     }
 
     try {
@@ -479,13 +483,16 @@ export async function POST(req) {
                     });
 
                     const requestResponsesStream = async (requestBody, onThought, onText) => {
-                        const request = async () => fetch(`${apiBaseUrl}/responses`, {
+                        const request = async () => fetchWithZenmuxRateLimit(`${apiBaseUrl}/responses`, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${apiKey}`
                             },
-                            body: JSON.stringify({ ...requestBody, stream: true })
+                            body: JSON.stringify({ ...requestBody, stream: true }),
+                            signal: req?.signal,
+                        }, {
+                            label: `zenmux:openai:${apiModel}`,
                         });
 
                         let response = await request();

@@ -35,6 +35,10 @@ import {
   extractOpenAIFunctionCalls,
   extractOpenAIResponseText,
 } from "@/app/api/openai/openaiHelpers";
+import {
+  createZenmuxAwareFetch,
+  fetchWithZenmuxRateLimit,
+} from "@/lib/server/providers/zenmuxRateLimit";
 
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
 const COUNCIL_ANALYSIS_MAX_OUTPUT_TOKENS = 4000;
@@ -552,6 +556,10 @@ async function buildSeedFinalAnswerSystemPrompt() {
 
 function extractUpstreamErrorMessage(status, rawText) {
   const text = typeof rawText === "string" ? rawText.trim() : "";
+  const lower = text.toLowerCase();
+  if (status === 429 || lower.includes("too many request")) {
+    return "模型服务请求过于频繁，请稍后再试";
+  }
   if (!text) return `上游请求失败（${status}）`;
   try {
     const parsed = JSON.parse(text);
@@ -670,6 +678,7 @@ async function requestClaudeExpert({ prompt, imagePayloads, expert, searchContex
   const client = new Anthropic({
     apiKey: providerConfig.apiKey,
     baseURL: providerConfig.baseUrl,
+    fetch: createZenmuxAwareFetch({ label: `zenmux:claude:${expert.modelId}` }),
   });
   const content = [{ type: "text", text: prompt }];
   for (const image of imagePayloads) {
@@ -744,7 +753,7 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
   let previousResponseId = "";
 
   for (let round = 0; round < WEB_BROWSING_MAX_ROUNDS; round += 1) {
-    const response = await fetch(`${providerConfig.baseUrl}/responses`, {
+    const response = await fetchWithZenmuxRateLimit(`${providerConfig.baseUrl}/responses`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -762,6 +771,8 @@ async function requestOpenAIExpert({ prompt, imagePayloads, expert, searchContex
         reasoning: { effort: expert.thinkingLevel },
       }),
       signal,
+    }, {
+      label: `zenmux:openai:${expert.modelId}`,
     });
     if (!response.ok) {
       const errorText = await response.text();

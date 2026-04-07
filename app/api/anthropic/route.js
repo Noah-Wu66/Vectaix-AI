@@ -57,6 +57,7 @@ import {
     SSE_PADDING,
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
+import { createZenmuxAwareFetch } from '@/lib/server/providers/zenmuxRateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -273,6 +274,7 @@ export async function POST(req) {
         const client = new Anthropic({
             apiKey,
             baseURL: anthropicBaseUrl,
+            fetch: createZenmuxAwareFetch({ label: `zenmux:claude:${apiModel}` }),
         });
 
         const currentAttachments = Array.isArray(config?.attachments)
