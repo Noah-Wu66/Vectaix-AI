@@ -87,6 +87,17 @@ function SplitStatusText({ prefix = "", status = "", suffix = "", active = false
   );
 }
 
+function getDisplayHostname(url) {
+  if (typeof url !== "string") return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  try {
+    return new URL(trimmed).hostname.replace(/^www\./i, "");
+  } catch {
+    return "";
+  }
+}
+
 export default function ThinkingBlock({
   thought,
   isStreaming,
@@ -219,12 +230,11 @@ export default function ThinkingBlock({
         return `联网搜索完成${query}${countLabel}`;
       }
       if (step.kind === "reader") {
-        const url = step.url || "";
-        const truncatedUrl = url.length > 50 ? `${url.slice(0, 47)}...` : url;
-        const target = truncatedUrl ? `「${truncatedUrl}」` : "";
+        const hostname = getDisplayHostname(step.url);
+        const target = hostname ? `「${hostname}」` : "";
         const countLabel = Number.isFinite(step.resultCount) && step.resultCount > 0 ? `（${step.resultCount}页）` : "";
         if (isRunning) return `浏览网页中${target}`;
-        if (isError) return `网页抓取失败${target}`;
+        if (isError) return `网页获取失败${target}`;
         return `网页阅读完成${target}${countLabel}`;
       }
       if (step.kind === "planner") return isRunning ? "正在制定计划" : (isError ? "制定计划失败" : "执行计划已确定");
@@ -238,7 +248,7 @@ export default function ThinkingBlock({
     const hasDetail = (() => {
       if (step.kind === "thought") return Boolean(step.content);
       if (step.kind === "search") return Boolean(step.query || Number.isFinite(step.resultCount) || (isError && step.message));
-      if (step.kind === "reader") return Boolean(step.url || Number.isFinite(step.resultCount) || (isError && step.message));
+      if (step.kind === "reader") return Boolean(getDisplayHostname(step.url) || Number.isFinite(step.resultCount) || (isError && step.message));
       if (step.kind === "planner") return false;
       if (step.kind === "writer") return Boolean(step.content || step.message);
       if (step.kind === "sandbox") return Boolean(step.content || (isError && (step.message || step.title)));
@@ -377,7 +387,8 @@ export default function ThinkingBlock({
     }
 
     if (step.kind === "reader") {
-      const urlSuffix = step.url ? `「${step.url}」` : "";
+      const hostname = getDisplayHostname(step.url);
+      const urlSuffix = hostname ? `「${hostname}」` : "";
       const isOpen = hasLinkedToolPreview && isExpanded;
       return (
         <div key={step.id || `reader-${idx}`} className="w-full max-w-full md:max-w-[760px]">
@@ -387,7 +398,7 @@ export default function ThinkingBlock({
               {isRunning ? (
                 <SplitStatusText status="浏览网页中" suffix={urlSuffix} active />
               ) : (
-                <span>{isError ? `网页抓取失败${urlSuffix}` : `网页阅读完成${urlSuffix}`}</span>
+                <span>{isError ? `网页获取失败${urlSuffix}` : `网页阅读完成${urlSuffix}`}</span>
               )}
               <div className="ml-auto flex items-center gap-1">
                 {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -399,7 +410,7 @@ export default function ThinkingBlock({
               {isRunning ? (
                 <SplitStatusText status="浏览网页中" suffix={urlSuffix} active />
               ) : (
-                <span>{isError ? `网页抓取失败${urlSuffix}` : `网页阅读完成${urlSuffix}`}</span>
+                <span>{isError ? `网页获取失败${urlSuffix}` : `网页阅读完成${urlSuffix}`}</span>
               )}
             </div>
           )}
