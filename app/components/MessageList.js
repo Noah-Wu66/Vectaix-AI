@@ -471,7 +471,7 @@ export default function MessageList({
                         ) : null}
                         {shouldRenderToolCards && <ToolRunCards tools={msg.tools} />}
                         {msg.role === "model" && hasArtifacts && <ArtifactCards artifacts={msg.artifacts} />}
-                        {msg.role === "model" && !msg.isStreaming && msg.citations && !hasBodyOutput && <Citations citations={msg.citations} />}
+                        {msg.role === "model" && !msg.isStreaming && msg.citations && <Citations citations={msg.citations} />}
                       </div>
                     )}
 
