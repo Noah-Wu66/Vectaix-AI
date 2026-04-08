@@ -63,6 +63,18 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function findLatestDeepSeekResponseId(messages) {
+    if (!Array.isArray(messages)) return '';
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        const message = messages[index];
+        const responseId = typeof message?.providerState?.deepseek?.responseId === 'string'
+            ? message.providerState.deepseek.responseId.trim()
+            : '';
+        if (responseId) return responseId;
+    }
+    return '';
+}
+
 export async function POST(req) {
     let writePermitTime = null;
 
@@ -141,6 +153,7 @@ export async function POST(req) {
         let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
         let deepseekInput = [];
+        let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
@@ -176,10 +189,17 @@ export async function POST(req) {
         if (isRegenerateMode) {
             const msgs = storedMessagesForRegenerate;
             const effectiveMsgs = (limit > 0 && Number.isFinite(limit)) ? msgs.slice(-limit) : msgs;
+            const historyBeforeCurrentPrompt = Array.isArray(msgs) && msgs[msgs.length - 1]?.role === 'user'
+                ? msgs.slice(0, -1)
+                : msgs;
+            effectiveHistoryMessages = (limit > 0 && Number.isFinite(limit))
+                ? historyBeforeCurrentPrompt.slice(-limit)
+                : historyBeforeCurrentPrompt;
             deepseekInput = await buildResponsesInputFromHistory(effectiveMsgs, { providerStateKey: 'deepseek' });
         } else {
             const safeHistory = Array.isArray(history) ? history : [];
             const effectiveHistory = (limit > 0 && Number.isFinite(limit)) ? safeHistory.slice(-limit) : safeHistory;
+            effectiveHistoryMessages = effectiveHistory;
             deepseekInput = await buildResponsesInputFromHistory(effectiveHistory, { providerStateKey: 'deepseek' });
         }
 
@@ -215,6 +235,10 @@ export async function POST(req) {
         const userSystemPrompt = parseSystemPrompt(config?.systemPrompt);
         const systemPromptSuffix = parseSystemPrompt(config?.systemPromptSuffix);
         const baseInput = Array.isArray(deepseekInput) ? deepseekInput : [];
+        const currentTurnInput = !isRegenerateMode && baseInput.length > 0
+            ? baseInput[baseInput.length - 1]
+            : null;
+        const latestDeepSeekResponseId = isRegenerateMode ? '' : findLatestDeepSeekResponseId(effectiveHistoryMessages);
         const webSearchConfig = parseWebSearchConfig(config?.webSearch);
         const enableWebSearch = parseWebSearchEnabled(config?.webSearch);
 
@@ -376,7 +400,9 @@ export async function POST(req) {
                         });
                     };
 
-                    let nextInput = [...baseInput];
+                    const usePreviousResponseId = Boolean(latestDeepSeekResponseId && currentTurnInput);
+                    let nextInput = usePreviousResponseId ? [currentTurnInput] : baseInput;
+                    let previousResponseId = usePreviousResponseId ? latestDeepSeekResponseId : '';
                     let finalPayload = null;
                     const roundController = enableWebSearch
                         ? createWebBrowsingRoundController({ maxRounds: WEB_BROWSING_MAX_ROUNDS })
@@ -384,6 +410,7 @@ export async function POST(req) {
                     const maxPasses = enableWebSearch ? getMaxWebBrowsingModelPasses(WEB_BROWSING_MAX_ROUNDS) : 1;
 
                     for (let pass = 0; pass < maxPasses; pass += 1) {
+                        const shouldBufferTextDeltas = enableWebSearch;
                         const availableToolApiNames = enableWebSearch ? roundController.getAvailableToolApiNames() : [];
                         const requestBody = {
                             model: apiModel,
@@ -394,13 +421,21 @@ export async function POST(req) {
                             instructions: finalSystemPrompt,
                             input: nextInput,
                         };
+                        if (previousResponseId) {
+                            requestBody.previous_response_id = previousResponseId;
+                        }
                         if (enableWebSearch && availableToolApiNames.length > 0) {
                             requestBody.tools = getOpenAIWebTools(availableToolApiNames);
                         }
 
+                        let streamedPassText = '';
                         const payload = await requestResponsesStream(requestBody, (thought) => {
                             sendEvent({ type: 'thought', content: thought });
                         }, (text) => {
+                            if (shouldBufferTextDeltas) {
+                                streamedPassText += text;
+                                return;
+                            }
                             sendEvent({ type: 'text', content: text });
                         });
                         if (clientAborted) break;
@@ -413,10 +448,15 @@ export async function POST(req) {
                         const functionCalls = enableWebSearch ? extractOpenAIFunctionCalls(payload) : [];
                         if (functionCalls.length === 0) {
                             finalPayload = payload;
-                            fullText = extractOpenAIResponseText(payload);
+                            fullText = extractOpenAIResponseText(payload) || streamedPassText;
+                            if (shouldBufferTextDeltas && fullText) {
+                                sendEvent({ type: 'text', content: fullText });
+                            }
                             break;
                         }
 
+                        previousResponseId = typeof payload?.id === 'string' ? payload.id : previousResponseId;
+                        nextInput = [];
                         const selectedFunctionCalls = [];
                         const selectedFunctionCallRounds = [];
                         for (const functionCall of functionCalls.slice(0, WEB_BROWSING_MAX_TOOL_CALLS_PER_ROUND)) {
@@ -428,14 +468,6 @@ export async function POST(req) {
                         if (selectedFunctionCalls.length === 0) {
                             break;
                         }
-
-                        const selectedCallIds = new Set(selectedFunctionCalls.map((item) => item.call_id));
-                        const responseOutputItems = normalizeOpenAIOutputItems(payload?.output).filter((item) =>
-                            item?.type !== 'function_call'
-                            || !item?.call_id
-                            || selectedCallIds.has(item.call_id)
-                        );
-                        const toolOutputItems = [];
 
                         for (let functionCallIndex = 0; functionCallIndex < selectedFunctionCalls.length; functionCallIndex += 1) {
                             const functionCall = selectedFunctionCalls[functionCallIndex];
@@ -449,27 +481,24 @@ export async function POST(req) {
                                 signal: req?.signal,
                             });
                             toolRecords.push(toolExecution.toolRecord);
-                            toolOutputItems.push({
+                            nextInput.push({
                                 type: 'function_call_output',
                                 call_id: functionCall.call_id,
                                 output: toolExecution.outputText,
                             });
                         }
-
-                        nextInput = [
-                            ...nextInput,
-                            ...responseOutputItems,
-                            ...toolOutputItems,
-                        ];
                     }
 
                     const shouldForceFinalAnswer = enableWebSearch
                         && !finalPayload
                         && !clientAborted
+                        && previousResponseId
                         && Array.isArray(nextInput)
                         && nextInput.length > 0;
 
                     if (shouldForceFinalAnswer) {
+                        const shouldBufferTextDeltas = true;
+                        let streamedPassText = '';
                         const payload = await requestResponsesStream({
                             model: apiModel,
                             stream: false,
@@ -478,9 +507,14 @@ export async function POST(req) {
                             reasoning: { effort: 'high' },
                             instructions: buildForcedFinalAnswerInstructions(finalSystemPrompt),
                             input: nextInput,
+                            previous_response_id: previousResponseId,
                         }, (thought) => {
                             sendEvent({ type: 'thought', content: thought });
                         }, (text) => {
+                            if (shouldBufferTextDeltas) {
+                                streamedPassText += text;
+                                return;
+                            }
                             sendEvent({ type: 'text', content: text });
                         });
                         if (!clientAborted) {
@@ -489,7 +523,10 @@ export async function POST(req) {
                                 fullThought = fullThought ? `${fullThought}\n\n${thought}` : thought;
                             }
                             finalPayload = payload;
-                            fullText = extractOpenAIResponseText(payload);
+                            fullText = extractOpenAIResponseText(payload) || streamedPassText;
+                            if (shouldBufferTextDeltas && fullText) {
+                                sendEvent({ type: 'text', content: fullText });
+                            }
                         }
                     }
 
