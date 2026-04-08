@@ -179,7 +179,12 @@ export async function POST(request) {
                         },
                         { upsert: true }
                     );
-                } catch { }
+                } catch (error) {
+                    console.error('Blob upload completion sync failed:', error);
+                    throw error instanceof Error
+                        ? error
+                        : new Error('Blob upload completion sync failed');
+                }
             },
         });
 

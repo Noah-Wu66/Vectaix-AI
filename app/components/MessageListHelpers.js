@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Download, ExternalLink, FileText, Search, Terminal, X } from "lucide-react";
 import { ModelAvatar } from "./ModelVisuals";
 import { formatAttachmentMeta } from "@/lib/shared/messageAttachments";
+import { toBlobDownloadUrl } from "@/lib/shared/blobUrls";
 import {
   getWebBrowsingToolTitle,
   isWebBrowsingIdentifier,
@@ -218,7 +219,7 @@ export function AttachmentCard({ file, compact = false }) {
   if (!file?.name) return null;
   const canDownload = typeof file.url === "string" && /^https?:\/\//i.test(file.url);
   const downloadUrl = canDownload
-    ? `/api/files/download?url=${encodeURIComponent(file.url)}&name=${encodeURIComponent(file.name)}`
+    ? toBlobDownloadUrl(file.url)
     : null;
 
   return (
@@ -341,9 +342,7 @@ export function Citations({ citations }) {
 
 function buildArtifactDownloadUrl(artifact) {
   if (typeof artifact?.url !== "string" || !/^https?:\/\//i.test(artifact.url)) return null;
-  const title = typeof artifact?.title === "string" && artifact.title ? artifact.title : "artifact";
-  const extension = typeof artifact?.extension === "string" && artifact.extension ? artifact.extension : "txt";
-  return `/api/files/download?url=${encodeURIComponent(artifact.url)}&name=${encodeURIComponent(`${title}.${extension}`)}`;
+  return toBlobDownloadUrl(artifact.url);
 }
 
 export function hasToolRunPreview(tool) {

@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Download, X } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import { toBlobDownloadUrl } from "@/lib/shared/blobUrls";
 
 function isHttpUrl(src) {
   if (typeof src !== "string") return false;
@@ -14,14 +15,9 @@ function isHttpUrl(src) {
   }
 }
 
-function toDownloadHref(src) {
-  const u = new URL("/api/images/download", window.location.origin);
-  u.searchParams.set("url", src);
-  return u.toString();
-}
-
 export default function ImageLightbox({ open, onClose, src }) {
-  const canDownload = useMemo(() => isHttpUrl(src), [src]);
+  const downloadUrl = useMemo(() => toBlobDownloadUrl(src), [src]);
+  const canDownload = useMemo(() => isHttpUrl(src) && Boolean(downloadUrl), [downloadUrl, src]);
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +50,7 @@ export default function ImageLightbox({ open, onClose, src }) {
             <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
               {canDownload && (
                 <a
-                  href={toDownloadHref(src)}
+                  href={downloadUrl}
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white/90 bg-white/10 hover:bg-white/15 border border-white/10 rounded-lg transition-colors"
                   title="下载原图"
                 >
@@ -86,5 +82,4 @@ export default function ImageLightbox({ open, onClose, src }) {
     </AnimatePresence>
   );
 }
-
 
