@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Scale, Search, Terminal, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Loader2, Scale, Search, Terminal, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
 import { Citations, LoadingSweepText, ToolRunPreview, hasToolRunPreview } from "./MessageListHelpers";
@@ -323,7 +323,7 @@ export default function ThinkingBlock({
                 className="overflow-hidden"
               >
                 <div
-                  className="thinking-content mt-2 ml-4 p-4 glass-effect border-zinc-200/50 rounded-2xl text-sm leading-relaxed"
+                  className={`thinking-content mt-2 ml-4 p-4 glass-effect rounded-2xl text-sm leading-relaxed transition-all duration-500 ${isThoughtStreaming ? "border-primary/40 ring-1 ring-primary/20 shadow-[0_0_15px_rgba(37,99,235,0.12)] dark:shadow-[0_0_15px_rgba(37,99,235,0.1)]" : "border-zinc-200/50"}`}
                   ref={containerRef}
                 >
                   <Markdown
@@ -333,6 +333,14 @@ export default function ThinkingBlock({
                   >
                     {thoughtDetailText}
                   </Markdown>
+                  {isThoughtStreaming && (
+                    <div className="sticky bottom-2 flex justify-end mt-2 pointer-events-none">
+                      <div className="text-[10px] text-primary/70 flex items-center gap-1.5 backdrop-blur-md bg-white/80 dark:bg-black/80 px-2.5 py-1 rounded-full border border-primary/20 shadow-sm pointer-events-auto">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        思考过程中...
+                      </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -512,7 +520,7 @@ export default function ThinkingBlock({
                 className="overflow-hidden"
               >
                 <div
-                  className="thinking-content mt-2 ml-4 p-4 glass-effect border-zinc-200/50 rounded-2xl text-sm leading-relaxed"
+                  className={`thinking-content mt-2 ml-4 p-4 glass-effect rounded-2xl text-sm leading-relaxed transition-all duration-500 ${isRunning ? "border-primary/40 ring-1 ring-primary/20 shadow-[0_0_15px_rgba(37,99,235,0.12)] dark:shadow-[0_0_15px_rgba(37,99,235,0.1)]" : "border-zinc-200/50"}`}
                   ref={containerRef}
                 >
                   <Markdown
@@ -522,6 +530,14 @@ export default function ThinkingBlock({
                   >
                     {step.content}
                   </Markdown>
+                  {isRunning && (
+                    <div className="sticky bottom-2 flex justify-end mt-2 pointer-events-none">
+                      <div className="text-[10px] text-primary/70 flex items-center gap-1.5 backdrop-blur-md bg-white/80 dark:bg-black/80 px-2.5 py-1 rounded-full border border-primary/20 shadow-sm pointer-events-auto">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        思考过程中...
+                      </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ) : null}
@@ -715,7 +731,7 @@ export default function ThinkingBlock({
                         </button>
                         {expandedTimelineId === "__simple__" ? (
                           <div
-                            className="thinking-content thinking-content-panel bg-white/60 border border-zinc-200/60 overflow-y-auto w-full max-w-full md:max-w-[760px] text-zinc-400"
+                            className={`thinking-content thinking-content-panel bg-white/60 dark:bg-zinc-800/60 border overflow-y-auto w-full max-w-full md:max-w-[760px] text-zinc-400 transition-all duration-500 ${isStreaming ? "border-primary/40 ring-1 ring-primary/20 shadow-[0_0_15px_rgba(37,99,235,0.12)] dark:shadow-[0_0_15px_rgba(37,99,235,0.1)]" : "border-zinc-200/60 dark:border-zinc-700/60"}`}
                             ref={containerRef}
                           >
                             <Markdown
@@ -725,6 +741,14 @@ export default function ThinkingBlock({
                             >
                               {safeThought}
                             </Markdown>
+                            {isStreaming && (
+                              <div className="sticky bottom-2 flex justify-end mt-2 pointer-events-none">
+                                <div className="text-[10px] text-primary/70 flex items-center gap-1.5 backdrop-blur-md bg-white/80 dark:bg-black/80 px-2.5 py-1 rounded-full border border-primary/20 shadow-sm pointer-events-auto">
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  思考过程中...
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ) : null}
                       </div>
