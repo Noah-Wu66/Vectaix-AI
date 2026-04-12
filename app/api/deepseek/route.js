@@ -609,8 +609,18 @@ export async function POST(req) {
                             functionCallCount: functionCalls.length,
                         }));
                         if (functionCalls.length === 0) {
-                            finalPayload = payload;
-                            fullText = extractOpenAIResponseText(payload);
+                            const passText = extractOpenAIResponseText(payload);
+                            if (passText) {
+                                finalPayload = payload;
+                                fullText = passText;
+                                break;
+                            }
+                            console.warn('[DeepSeek debug] pass returned no text and no function calls', JSON.stringify({
+                                traceId: deepSeekTraceId,
+                                conversationId: currentConversationId || '',
+                                pass: pass + 1,
+                                thoughtLength: thought.length,
+                            }));
                             break;
                         }
 
