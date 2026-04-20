@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, Eraser, KeyRound, RefreshCw, Search, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Copy, KeyRound, RefreshCw, Search, Sparkles, Trash2, Users, X } from "lucide-react";
 import { apiJson } from "@/lib/client/apiClient";
 import { useToast } from "./ToastProvider";
 import ConfirmModal from "./ConfirmModal";
@@ -146,27 +146,6 @@ export default function UserManagementModal({ open, onClose }) {
     setConfirmOpen(true);
   };
 
-  // 清除全部用户旧版加密残留数据
-  const requestCleanAllEncrypted = () => {
-    confirmActionRef.current = async () => {
-      setActionLoading("clean-all");
-      try {
-        const data = await apiJson("/api/admin/users", { method: "POST" });
-        toast.success(`已清除 ${data.deletedConversations || 0} 个残留会话、${data.deletedSettings || 0} 份残留设置`);
-        fetchUsers(page, search.trim());
-      } catch (e) {
-        toast.error(e?.message);
-      } finally {
-        setActionLoading(null);
-      }
-    };
-    setConfirmTitle("清除旧版残留数据");
-    setConfirmMessage("将删除所有用户残留的旧版加密会话（含侧边栏乱码标题）和系统提示词，此操作不可撤销。");
-    setConfirmButtonText("清除");
-    setConfirmDanger(true);
-    setConfirmOpen(true);
-  };
-
   const copyToClipboard = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -236,15 +215,6 @@ export default function UserManagementModal({ open, onClose }) {
                     className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 focus:border-zinc-400 outline-none"
                   />
                 </div>
-
-                <button
-                  onClick={requestCleanAllEncrypted}
-                  disabled={actionLoading !== null || loading}
-                  className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 text-sm font-semibold text-amber-700 dark:text-amber-400 transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-50"
-                >
-                  <Eraser size={16} />
-                  清除旧版残留数据（乱码会话/提示词）
-                </button>
               </div>
 
               {/* 重置密码结果 */}

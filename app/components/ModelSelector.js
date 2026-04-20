@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronUp } from "lucide-react";
 import {
-  CHAT_MODELS,
+  getModelConfig,
   getSelectableChatModels,
   isCouncilModel,
 } from "@/lib/shared/models";
@@ -18,7 +18,7 @@ export default function ModelSelector({
   fullWidth = false,
 }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
-  const currentModel = ready ? CHAT_MODELS.find((item) => item.id === model) : null;
+  const currentModel = ready ? getModelConfig(model) : null;
   const currentModelLabel = currentModel?.name || "模型";
   const selectableModels = getSelectableChatModels().filter((item) => includeCouncil || !isCouncilModel(item.id));
 

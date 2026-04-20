@@ -1,18 +1,23 @@
 import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
-import { getAuthPayload } from '@/lib/auth';
 import { sanitizeImportedConversation } from '@/lib/server/conversations/sanitize';
 import { enrichStoredMessagesWithBlobIds } from '@/lib/server/conversations/blobReferences';
 import { MAX_REQUEST_BYTES } from '@/lib/server/chat/routeConstants';
+import {
+    assertRequestSize,
+    parseJsonRequest,
+    requireUserRecord,
+    unauthorizedResponse,
+} from '@/lib/server/api/routeHelpers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
     try {
-        await dbConnect();
-        const user = await getAuthPayload();
-        if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        const auth = await requireUserRecord({ connectDb: true, select: null });
+        const user = auth?.payload;
+        if (!user) return unauthorizedResponse();
 
         const conversations = await Conversation.find({ userId: user.userId })
             .sort({ pinned: -1, updatedAt: -1 })
@@ -28,21 +33,16 @@ export async function GET() {
 
 export async function POST(req) {
     try {
-        const contentLength = req.headers.get('content-length');
-        if (contentLength && Number(contentLength) > MAX_REQUEST_BYTES) {
-            return Response.json({ error: 'Request too large' }, { status: 413 });
-        }
+        const oversizeResponse = assertRequestSize(req, MAX_REQUEST_BYTES);
+        if (oversizeResponse) return oversizeResponse;
 
-        await dbConnect();
-        const user = await getAuthPayload();
-        if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        const auth = await requireUserRecord({ connectDb: true, select: null });
+        const user = auth?.payload;
+        if (!user) return unauthorizedResponse();
 
-        let body = null;
-        try {
-            body = await req.json();
-        } catch {
-            return Response.json({ error: 'Invalid JSON' }, { status: 400 });
-        }
+        const parsed = await parseJsonRequest(req);
+        if (!parsed.ok) return parsed.response;
+        const body = parsed.body;
 
         const conversationInput = sanitizeImportedConversation(body, 0, user.userId);
         if (Array.isArray(conversationInput.messages) && conversationInput.messages.length > 0) {

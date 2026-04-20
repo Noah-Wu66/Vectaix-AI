@@ -1,5 +1,3 @@
-import dbConnect from "@/lib/db";
-import { getAuthPayload } from "@/lib/auth";
 import {
   deleteConversationForUser,
   getConversationForUser,
@@ -7,10 +5,16 @@ import {
   updateConversationForUser,
 } from "@/lib/server/conversations/service";
 import { MAX_REQUEST_BYTES } from '@/lib/server/chat/routeConstants';
+import {
+  assertRequestSize,
+  parseJsonRequest,
+  requireUserRecord,
+  unauthorizedResponse,
+} from "@/lib/server/api/routeHelpers";
 
 async function requireConversationUser() {
-  await dbConnect();
-  return getAuthPayload();
+  const auth = await requireUserRecord({ connectDb: true, select: null });
+  return auth?.payload || null;
 }
 
 async function getRouteId(context) {
@@ -25,7 +29,7 @@ export async function GET(req, context) {
   }
 
   const user = await requireConversationUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorizedResponse();
 
   const conversation = await getConversationForUser(id, user.userId);
   if (!conversation) return Response.json({ error: "Not found" }, { status: 404 });
@@ -40,7 +44,7 @@ export async function DELETE(req, context) {
   }
 
   const user = await requireConversationUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorizedResponse();
 
   const conversation = await getConversationForUser(id, user.userId);
   if (!conversation) {
@@ -57,20 +61,15 @@ export async function PUT(req, context) {
     return Response.json({ error: "Invalid id" }, { status: 400 });
   }
 
-  const contentLength = req.headers.get("content-length");
-  if (contentLength && Number(contentLength) > MAX_REQUEST_BYTES) {
-    return Response.json({ error: "Request too large" }, { status: 413 });
-  }
+  const oversizeResponse = assertRequestSize(req, MAX_REQUEST_BYTES);
+  if (oversizeResponse) return oversizeResponse;
 
   const user = await requireConversationUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorizedResponse();
 
-  let body;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  const parsed = await parseJsonRequest(req);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
   try {
     const conversation = await updateConversationForUser(id, user.userId, body);

@@ -1,9 +1,5 @@
 import mongoose from "mongoose";
-import dbConnect from "@/lib/db";
 import Conversation from "@/models/Conversation";
-import User from "@/models/User";
-import { getAuthPayload } from "@/lib/auth";
-import { getClientIP, rateLimit } from "@/lib/rateLimit";
 import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
 import {
   COUNCIL_MAX_ROUNDS,
@@ -39,6 +35,11 @@ import {
   CHAT_RATE_LIMIT,
   MAX_REQUEST_BYTES,
 } from '@/lib/server/chat/routeConstants';
+import {
+  buildSseResponseHeaders,
+  requireChatUser,
+} from "@/lib/server/chat/routeHelpers";
+import { assertRequestSize, parseJsonRequest } from "@/lib/server/api/routeHelpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -152,17 +153,12 @@ async function sanitizeCouncilRegenerateMessages(messages, userId) {
 }
 
 export async function POST(req) {
-  const contentLength = req.headers.get("content-length");
-  if (contentLength && Number(contentLength) > MAX_REQUEST_BYTES) {
-    return Response.json({ error: "Request too large" }, { status: 413 });
-  }
+  const oversizeResponse = assertRequestSize(req, MAX_REQUEST_BYTES);
+  if (oversizeResponse) return oversizeResponse;
 
-  let body;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: "Invalid JSON in request body" }, { status: 400 });
-  }
+  const parsed = await parseJsonRequest(req, "Invalid JSON in request body");
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
   const {
     prompt,
@@ -196,34 +192,9 @@ export async function POST(req) {
     return Response.json({ error: "Council 当前只支持文字和图片输入" }, { status: 400 });
   }
 
-  const auth = await getAuthPayload();
-  if (!auth) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const clientIP = getClientIP(req);
-  const rateLimitKey = `chat:${auth.userId}:${clientIP}`;
-  const { success, resetTime } = rateLimit(rateLimitKey, CHAT_RATE_LIMIT);
-  if (!success) {
-    const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
-    return Response.json(
-      { error: "请求过于频繁，请稍后再试" },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(retryAfter),
-          "X-RateLimit-Remaining": "0",
-        },
-      }
-    );
-  }
-
-  await dbConnect();
-
-  const userDoc = await User.findById(auth.userId).select("_id");
-  if (!userDoc) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const authResult = await requireChatUser(req, CHAT_RATE_LIMIT);
+  if (authResult?.response) return authResult.response;
+  const auth = authResult.auth;
 
   let providerRoutes;
   try {
@@ -690,11 +661,6 @@ export async function POST(req) {
   });
 
   return new Response(responseStream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Conversation-Id": currentConversationId,
-    },
+    headers: buildSseResponseHeaders(currentConversationId),
   });
 }

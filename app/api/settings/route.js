@@ -1,5 +1,9 @@
-import dbConnect from "@/lib/db";
-import { getAuthPayload } from "@/lib/auth";
+import {
+  invalidJsonResponse,
+  parseJsonRequest,
+  requireUserRecord,
+  unauthorizedResponse,
+} from "@/lib/server/api/routeHelpers";
 import {
   addUserPrompt,
   deleteUserPrompt,
@@ -8,26 +12,14 @@ import {
   updateUserPrompt,
 } from "@/lib/server/settings/service";
 
-async function parseJsonBody(req) {
-  try {
-    return { ok: true, body: await req.json() };
-  } catch {
-    return { ok: false };
-  }
-}
-
 async function requireUser() {
-  await dbConnect();
-  const user = await getAuthPayload();
-  if (!user) {
-    return null;
-  }
-  return user;
+  const auth = await requireUserRecord({ connectDb: true, select: null });
+  return auth?.payload || null;
 }
 
 export async function GET() {
   const user = await requireUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorizedResponse();
 
   const settings = await getUserSettings(user.userId);
   return Response.json({ settings });
@@ -35,10 +27,10 @@ export async function GET() {
 
 export async function POST(req) {
   const user = await requireUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorizedResponse();
 
-  const parsed = await parseJsonBody(req);
-  if (!parsed.ok) return Response.json({ error: "请求体格式错误" }, { status: 400 });
+  const parsed = await parseJsonRequest(req);
+  if (!parsed.ok) return invalidJsonResponse();
 
   try {
     const settings = await addUserPrompt(user.userId, parsed.body || {});
@@ -50,10 +42,10 @@ export async function POST(req) {
 
 export async function DELETE(req) {
   const user = await requireUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorizedResponse();
 
-  const parsed = await parseJsonBody(req);
-  if (!parsed.ok) return Response.json({ error: "请求体格式错误" }, { status: 400 });
+  const parsed = await parseJsonRequest(req);
+  if (!parsed.ok) return invalidJsonResponse();
 
   try {
     const settings = await deleteUserPrompt(user.userId, parsed.body?.promptId);
@@ -66,10 +58,10 @@ export async function DELETE(req) {
 
 export async function PUT(req) {
   const user = await requireUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorizedResponse();
 
-  const parsed = await parseJsonBody(req);
-  if (!parsed.ok) return Response.json({ error: "请求体格式错误" }, { status: 400 });
+  const parsed = await parseJsonRequest(req);
+  if (!parsed.ok) return invalidJsonResponse();
 
   try {
     const settings = await updateUserProfileSettings(user.userId, parsed.body || {});
@@ -81,10 +73,10 @@ export async function PUT(req) {
 
 export async function PATCH(req) {
   const user = await requireUser();
-  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return unauthorizedResponse();
 
-  const parsed = await parseJsonBody(req);
-  if (!parsed.ok) return Response.json({ error: "请求体格式错误" }, { status: 400 });
+  const parsed = await parseJsonRequest(req);
+  if (!parsed.ok) return invalidJsonResponse();
 
   try {
     const settings = await updateUserPrompt(user.userId, parsed.body || {});

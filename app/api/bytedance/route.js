@@ -1,8 +1,4 @@
-import dbConnect from '@/lib/db';
 import Conversation from '@/models/Conversation';
-import User from '@/models/User';
-import { getAuthPayload } from '@/lib/auth';
-import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import {
     fetchBlobAsBase64,
     fetchImageAsBase64,
@@ -40,7 +36,6 @@ import { getAttachmentInputType } from '@/lib/shared/attachments';
 import {
     CONVERSATION_WRITE_CONFLICT_ERROR,
     buildConversationWriteCondition,
-    loadConversationForRoute,
     rollbackConversationTurn,
 } from '@/app/api/chat/conversationState';
 import {
@@ -66,6 +61,15 @@ import {
 } from '@/lib/server/chat/routeConstants';
 import { consumeStrictResponsesStream } from '@/lib/server/chat/responsesStream';
 import { fetchWithZenmuxRateLimit } from '@/lib/server/providers/zenmuxRateLimit';
+import {
+    buildSseResponseHeaders,
+    ensureConversationForChatRequest,
+    persistRegenerateConversationMessages,
+    persistUserConversationMessage,
+    requireChatUser,
+    validateChatRequestBody,
+} from '@/lib/server/chat/routeHelpers';
+import { assertRequestSize, parseJsonRequest } from '@/lib/server/api/routeHelpers';
 
 const SEED_UPSTREAM_DEBUG_SAMPLE_LIMIT = 12;
 
@@ -173,17 +177,12 @@ export async function POST(req) {
     const seedTraceId = buildSeedTraceId();
 
     try {
-        const contentLength = req.headers.get('content-length');
-        if (contentLength && Number(contentLength) > MAX_REQUEST_BYTES) {
-            return Response.json({ error: 'Request too large' }, { status: 413 });
-        }
+        const oversizeResponse = assertRequestSize(req, MAX_REQUEST_BYTES);
+        if (oversizeResponse) return oversizeResponse;
 
-        let body;
-        try {
-            body = await req.json();
-        } catch {
-            return Response.json({ error: 'Invalid JSON in request body' }, { status: 400 });
-        }
+        const parsed = await parseJsonRequest(req, 'Invalid JSON in request body');
+        if (!parsed.ok) return parsed.response;
+        const body = parsed.body;
 
         const {
             prompt,
@@ -199,50 +198,12 @@ export async function POST(req) {
             modelMessageId,
         } = body;
 
-        if (!model || typeof model !== 'string') {
-            return Response.json({ error: 'Model is required' }, { status: 400 });
-        }
-        if (typeof prompt !== 'string') {
-            return Response.json({ error: 'Prompt is required' }, { status: 400 });
-        }
-        if (!Array.isArray(history)) {
-            return Response.json({ error: 'history must be an array' }, { status: 400 });
-        }
+        const invalidBodyResponse = validateChatRequestBody(body);
+        if (invalidBodyResponse) return invalidBodyResponse;
 
-        const auth = await getAuthPayload();
-        if (!auth) {
-            return Response.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const clientIP = getClientIP(req);
-        const rateLimitKey = `chat:${auth.userId}:${clientIP}`;
-        const { success, resetTime } = rateLimit(rateLimitKey, CHAT_RATE_LIMIT);
-        if (!success) {
-            const retryAfter = Math.ceil((resetTime - Date.now()) / 1000);
-            return Response.json(
-                { error: '请求过于频繁，请稍后再试' },
-                {
-                    status: 429,
-                    headers: {
-                        'Retry-After': String(retryAfter),
-                        'X-RateLimit-Remaining': '0',
-                    },
-                }
-            );
-        }
-
-        let user = null;
-        try {
-            await dbConnect();
-            const userDoc = await User.findById(auth.userId);
-            if (!userDoc) {
-                return Response.json({ error: 'Unauthorized' }, { status: 401 });
-            }
-            user = auth;
-        } catch (dbError) {
-            console.error('Database connection error:', dbError?.message);
-            return Response.json({ error: 'Database connection failed' }, { status: 500 });
-        }
+        const authResult = await requireChatUser(req, CHAT_RATE_LIMIT);
+        if (authResult?.response) return authResult.response;
+        const user = authResult.auth;
 
         const { baseUrl: seedBaseUrl, apiKey } = resolveSeedProviderConfig();
 
@@ -252,23 +213,13 @@ export async function POST(req) {
             return Response.json({ error: '当前接口仅支持官方 Seed 模型' }, { status: 400 });
         }
 
-        let currentConversationId = conversationId;
-        let currentConversation = await loadConversationForRoute({
-            conversationId: currentConversationId,
-            userId: user.userId,
-            expectedProvider: 'seed',
-        });
-        let createdConversationForRequest = false;
-        let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
-        let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
-
         let seedInput = [];
         let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);
         if (!Number.isFinite(limit) || limit < 0) {
             return Response.json({ error: 'historyLimit invalid' }, { status: 400 });
         }
-        const isRegenerateMode = mode === 'regenerate' && user && currentConversationId && Array.isArray(messages);
+        const isRegenerateMode = mode === 'regenerate' && user && conversationId && Array.isArray(messages);
         let storedMessagesForRegenerate = null;
         const resolvedUserMessageId = (typeof userMessageId === 'string' && userMessageId.trim())
             ? userMessageId.trim()
@@ -286,20 +237,39 @@ export async function POST(req) {
             }
 
             sanitized = await enrichStoredMessagesWithBlobIds(sanitized, { userId: user.userId });
-            const regenerateTime = Date.now();
-            const conv = await Conversation.findOneAndUpdate(
-                { _id: currentConversationId, userId: user.userId },
-                { $set: { messages: sanitized, updatedAt: regenerateTime } },
-                { new: true }
-            ).select('messages updatedAt');
+            const persisted = await persistRegenerateConversationMessages({
+                conversationId,
+                userId: user.userId,
+                messages: sanitized,
+            });
+            const conv = persisted?.conversation;
 
             if (!conv) {
                 return Response.json({ error: 'Not found' }, { status: 404 });
             }
 
             storedMessagesForRegenerate = sanitized;
-            writePermitTime = conv.updatedAt?.getTime?.();
+            writePermitTime = persisted.writePermitTime;
         }
+
+        const {
+            currentConversationId,
+            currentConversation,
+            createdConversationForRequest,
+            previousMessages,
+            previousUpdatedAt,
+        } = await ensureConversationForChatRequest({
+            userId: user.userId,
+            conversationId: conversationId || null,
+            expectedProvider: 'seed',
+            prompt,
+            fallbackTitle: isNonEmptyString(prompt)
+                ? prompt
+                : ((Array.isArray(config?.attachments) && config.attachments[0]?.name) || 'New Chat'),
+            model: conversationModel,
+            settings,
+            webSearch: config?.webSearch,
+        });
 
         if (isRegenerateMode) {
             const effectiveMessages = (limit > 0 && Number.isFinite(limit))
@@ -393,30 +363,6 @@ export async function POST(req) {
             : null;
         const latestSeedResponseId = isRegenerateMode ? '' : findLatestSeedResponseId(effectiveHistoryMessages);
 
-        if (user && !currentConversationId) {
-            const titleSource = isNonEmptyString(prompt)
-                ? prompt
-                : (Array.isArray(config?.attachments) && config.attachments[0]?.name
-                    ? `附件：${config.attachments[0].name}`
-                    : 'New Chat');
-            const title = titleSource.length > 30 ? `${titleSource.substring(0, 30)}...` : titleSource;
-            const newConv = await Conversation.create({
-                userId: user.userId,
-                title,
-                model: conversationModel,
-                settings: {
-                    ...(settings && typeof settings === 'object' ? settings : {}),
-                    webSearch: parseWebSearchConfig(config?.webSearch),
-                },
-                messages: [],
-            });
-            currentConversationId = newConv._id.toString();
-            currentConversation = newConv.toObject();
-            createdConversationForRequest = true;
-            previousMessages = [];
-            previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
-        }
-
         if (user && !isRegenerateMode) {
             const storedUserParts = [];
             if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
@@ -449,7 +395,6 @@ export async function POST(req) {
             const enrichedStoredUserParts = await enrichConversationPartsWithBlobIds(storedUserParts, {
                 userId: user.userId,
             });
-            const userMsgTime = Date.now();
             const userMessage = {
                 id: resolvedUserMessageId,
                 role: 'user',
@@ -457,21 +402,18 @@ export async function POST(req) {
                 type: 'parts',
                 parts: enrichedStoredUserParts,
             };
-
-            const updatedConv = await Conversation.findOneAndUpdate(
-                { _id: currentConversationId, userId: user.userId },
-                {
-                    $push: { messages: userMessage },
-                    updatedAt: userMsgTime,
-                },
-                { new: true }
-            ).select('updatedAt');
+            const persisted = await persistUserConversationMessage({
+                conversationId: currentConversationId,
+                userId: user.userId,
+                userMessage,
+            });
+            const updatedConv = persisted?.conversation;
 
             if (!updatedConv) {
                 return Response.json({ error: 'Not found' }, { status: 404 });
             }
 
-            writePermitTime = updatedConv.updatedAt?.getTime?.() ?? userMsgTime;
+            writePermitTime = persisted.writePermitTime;
         }
 
         const encoder = new TextEncoder();
@@ -848,18 +790,7 @@ export async function POST(req) {
             }
         });
 
-        const headers = {
-            'Content-Type': 'text/event-stream; charset=utf-8',
-            'Cache-Control': 'no-cache, no-transform',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no',
-        };
-
-        if (currentConversationId) {
-            headers['X-Conversation-Id'] = currentConversationId;
-        }
-
-        return new Response(responseStream, { headers });
+        return new Response(responseStream, { headers: buildSseResponseHeaders(currentConversationId) });
     } catch (error) {
         console.error('Seed API Error:', {
             message: error?.message,

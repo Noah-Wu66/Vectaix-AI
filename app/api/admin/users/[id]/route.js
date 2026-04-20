@@ -8,10 +8,9 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { del } from '@vercel/blob';
+import { forbiddenResponse } from '@/lib/server/api/routeHelpers';
 
 export const dynamic = 'force-dynamic';
-
-const ENCRYPTION_PREFIX = 'enc:v1:';
 
 async function parseJsonBody(req) {
     try {
@@ -21,80 +20,11 @@ async function parseJsonBody(req) {
     }
 }
 
-function hasEncryptedData(obj) {
-    if (typeof obj === 'string') {
-        return obj.startsWith(ENCRYPTION_PREFIX);
-    }
-    if (!obj || typeof obj !== 'object') return false;
-    if (Array.isArray(obj)) {
-        return obj.some(item => hasEncryptedData(item));
-    }
-    return Object.values(obj).some(val => hasEncryptedData(val));
-}
-
-// 清除用户的加密数据
-export async function POST(req, context) {
-    const admin = await requireAdmin();
-    if (!admin) {
-        return Response.json({ error: '无权限' }, { status: 403 });
-    }
-
-    const { id } = await context.params;
-    if (!mongoose.isValidObjectId(id)) {
-        return Response.json({ error: '无效的用户 ID' }, { status: 400 });
-    }
-
-    await dbConnect();
-
-    const user = await User.findById(id);
-    if (!user) {
-        return Response.json({ error: '用户不存在' }, { status: 404 });
-    }
-
-    const userId = user._id;
-
-    // 查找并删除包含加密数据的会话
-    const conversations = await Conversation.find({ userId })
-        .select('_id title messages settings')
-        .lean();
-    let deletedConversations = 0;
-
-    for (const conv of conversations) {
-        const shouldDelete = hasEncryptedData({
-            title: conv.title,
-            messages: conv.messages,
-            settings: conv.settings,
-        });
-
-        if (shouldDelete) {
-            await Conversation.deleteOne({ _id: conv._id });
-            deletedConversations++;
-        }
-    }
-
-    // 查找并删除包含加密数据的设置
-    const settings = await UserSettings.findOne({ userId }).lean();
-    let deletedSettings = false;
-
-    if (settings) {
-        if (hasEncryptedData(settings.systemPrompts)) {
-            await UserSettings.deleteOne({ userId });
-            deletedSettings = true;
-        }
-    }
-
-    return Response.json({ 
-        success: true, 
-        deletedConversations,
-        deletedSettings
-    });
-}
-
 // 重置用户密码
 export async function PATCH(req, context) {
     const admin = await requireAdmin();
     if (!admin) {
-        return Response.json({ error: '无权限' }, { status: 403 });
+        return forbiddenResponse();
     }
 
     const { id } = await context.params;
@@ -142,7 +72,7 @@ export async function PATCH(req, context) {
 export async function DELETE(req, context) {
     const admin = await requireAdmin();
     if (!admin) {
-        return Response.json({ error: '无权限' }, { status: 403 });
+        return forbiddenResponse();
     }
 
     const { id } = await context.params;
