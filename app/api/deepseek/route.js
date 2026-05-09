@@ -864,7 +864,7 @@ export async function POST(req) {
                         fullThoughtLength: fullThought.length,
                         citationCount: citations.length,
                         toolRecordCount: toolRecords.length,
-                    }));
+                    });
                     try { await rollbackCurrentTurn(); } catch { }
                     try {
                         const errorPayload = JSON.stringify({ type: 'stream_error', message: err?.message || 'Unknown error' });
