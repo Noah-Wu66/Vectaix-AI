@@ -71,6 +71,120 @@ import { assertRequestSize, parseJsonRequest } from '@/lib/server/api/routeHelpe
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const CLAUDE_UPSTREAM_DEBUG_SAMPLE_LIMIT = 12;
+
+function buildClaudeTraceId() {
+    return `claude_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function safeJson(value) {
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return '"[unserializable]"';
+    }
+}
+
+function summarizeAnthropicError(error) {
+    return {
+        message: error?.message || 'Unknown error',
+        status: typeof error?.status === 'number' ? error.status : null,
+        name: error?.name || '',
+        type: error?.type || error?.error?.type || '',
+        code: error?.code || error?.error?.code || '',
+        requestId: error?.request_id || error?.requestId || error?.headers?.['request-id'] || error?.headers?.['anthropic-request-id'] || '',
+        upstreamErrorType: error?.error?.type || '',
+        upstreamErrorMessage: error?.error?.message || '',
+    };
+}
+
+function createClaudeUpstreamDebugSession(meta) {
+    const eventTypes = {};
+    const contentBlockTypes = {};
+    const samples = [];
+    let textDeltaChars = 0;
+    let thinkingDeltaChars = 0;
+    let toolUseBlocks = 0;
+    let stopReason = '';
+
+    const pushSample = (sample) => {
+        if (samples.length >= CLAUDE_UPSTREAM_DEBUG_SAMPLE_LIMIT) return;
+        samples.push(sample);
+    };
+
+    return {
+        start(extra = {}) {
+            console.info('[Claude upstream debug] start', safeJson({ ...meta, ...extra }));
+        },
+        recordEvent(event) {
+            const eventType = typeof event?.type === 'string' ? event.type : 'unknown';
+            eventTypes[eventType] = (eventTypes[eventType] || 0) + 1;
+
+            if (eventType === 'content_block_start') {
+                const blockType = typeof event?.content_block?.type === 'string' ? event.content_block.type : 'unknown';
+                contentBlockTypes[blockType] = (contentBlockTypes[blockType] || 0) + 1;
+                if (blockType === 'tool_use') toolUseBlocks += 1;
+                pushSample({
+                    type: eventType,
+                    blockType,
+                    name: typeof event?.content_block?.name === 'string' ? event.content_block.name : '',
+                });
+                return;
+            }
+
+            if (eventType === 'content_block_delta') {
+                if (typeof event?.delta?.text === 'string') textDeltaChars += event.delta.text.length;
+                if (typeof event?.delta?.thinking === 'string') thinkingDeltaChars += event.delta.thinking.length;
+                pushSample({
+                    type: eventType,
+                    deltaType: typeof event?.delta?.type === 'string' ? event.delta.type : '',
+                    textChars: typeof event?.delta?.text === 'string' ? event.delta.text.length : 0,
+                    thinkingChars: typeof event?.delta?.thinking === 'string' ? event.delta.thinking.length : 0,
+                });
+                return;
+            }
+
+            if (eventType === 'message_delta') {
+                if (typeof event?.delta?.stop_reason === 'string') stopReason = event.delta.stop_reason;
+                pushSample({
+                    type: eventType,
+                    stopReason,
+                });
+                return;
+            }
+
+            pushSample({ type: eventType });
+        },
+        finish(extra = {}) {
+            console.info('[Claude upstream debug] summary', safeJson({
+                ...meta,
+                ...extra,
+                stopReason,
+                eventTypes,
+                contentBlockTypes,
+                textDeltaChars,
+                thinkingDeltaChars,
+                toolUseBlocks,
+                samples,
+            }));
+        },
+        fail(error, extra = {}) {
+            console.error('[Claude upstream debug] error', safeJson({
+                ...meta,
+                ...extra,
+                stopReason,
+                eventTypes,
+                contentBlockTypes,
+                textDeltaChars,
+                thinkingDeltaChars,
+                toolUseBlocks,
+                samples,
+                error: summarizeAnthropicError(error),
+            }));
+        },
+    };
+}
+
 async function storedPartToClaudePart(part, options = {}) {
     if (!part || typeof part !== 'object') return null;
 
@@ -211,6 +325,7 @@ function extractAnthropicResponseState(content) {
 
 export async function POST(req) {
     let writePermitTime = null;
+    const claudeTraceId = buildClaudeTraceId();
 
     try {
         const oversizeResponse = assertRequestSize(req, MAX_REQUEST_BYTES);
@@ -237,6 +352,18 @@ export async function POST(req) {
         const providerConfig = await resolveAnthropicProviderConfig(model);
         const { baseUrl: anthropicBaseUrl, apiKey } = providerConfig;
         const apiModel = resolveAnthropicApiModel(model);
+        console.info('[Claude debug] request', safeJson({
+            traceId: claudeTraceId,
+            model,
+            apiModel,
+            baseUrl: anthropicBaseUrl,
+            mode: mode === 'regenerate' ? 'regenerate' : 'chat',
+            promptLength: typeof prompt === 'string' ? prompt.length : 0,
+            historyCount: Array.isArray(history) ? history.length : 0,
+            imageCount: Array.isArray(config?.images) ? config.images.length : 0,
+            attachmentCount: Array.isArray(config?.attachments) ? config.attachments.length : 0,
+            webSearchEnabled: config?.webSearch?.enabled === true,
+        }));
         const client = new Anthropic({
             apiKey,
             baseURL: anthropicBaseUrl,
@@ -579,37 +706,84 @@ export async function POST(req) {
                             };
                         }
 
-                        const stream = await client.messages.stream(requestParams);
+                        const upstreamDebug = createClaudeUpstreamDebugSession({
+                            traceId: claudeTraceId,
+                            conversationId: currentConversationId || '',
+                            model,
+                            apiModel,
+                            pass: pass + 1,
+                        });
+                        upstreamDebug.start({
+                            baseUrl: anthropicBaseUrl,
+                            maxTokens: requestParams.max_tokens,
+                            messageCount: Array.isArray(requestParams.messages) ? requestParams.messages.length : 0,
+                            systemBlockCount: Array.isArray(requestParams.system) ? requestParams.system.length : 0,
+                            systemTextLength: typeof systemPrompt === 'string' ? systemPrompt.length : 0,
+                            hasTools: Array.isArray(requestParams.tools) && requestParams.tools.length > 0,
+                            toolNames: Array.isArray(requestParams.tools)
+                                ? requestParams.tools.map((tool) => tool?.name || '').filter(Boolean).slice(0, 8)
+                                : [],
+                            thinkingType: requestParams.thinking?.type || '',
+                            thinkingDisplay: requestParams.thinking?.display || '',
+                            outputEffort: requestParams.output_config?.effort || '',
+                            firstMessageRole: requestParams.messages?.[0]?.role || '',
+                            lastMessageRole: requestParams.messages?.[requestParams.messages.length - 1]?.role || '',
+                            availableToolApiNames,
+                        });
+
+                        let stream;
+                        try {
+                            stream = await client.messages.stream(requestParams);
+                        } catch (error) {
+                            upstreamDebug.fail(error, { stage: 'stream_create' });
+                            throw error;
+                        }
                         if (clientAborted) break;
 
                         let responseContent = [];
                         let stopReason = null;
+                        let finalMessage = null;
 
-                        for await (const event of stream) {
-                            if (clientAborted) break;
+                        try {
+                            for await (const event of stream) {
+                                if (clientAborted) break;
 
-                            if (event.type === 'content_block_delta') {
-                                if (event.delta?.type === 'thinking_delta' && event.delta?.thinking) {
-                                    sendEvent({ type: 'thought', content: event.delta.thinking });
-                                } else if (event.delta?.type === 'text_delta' && event.delta?.text) {
-                                    sendEvent({ type: 'text', content: event.delta.text });
-                                }
-                            } else if (event.type === 'content_block_start') {
-                                responseContent.push(event.content_block);
-                            } else if (event.type === 'content_block_stop') {
-                                // Content block completed
-                            } else if (event.type === 'message_delta') {
-                                if (event.delta?.stop_reason) {
-                                    stopReason = event.delta.stop_reason;
+                                upstreamDebug.recordEvent(event);
+                                if (event.type === 'content_block_delta') {
+                                    if (event.delta?.type === 'thinking_delta' && event.delta?.thinking) {
+                                        sendEvent({ type: 'thought', content: event.delta.thinking });
+                                    } else if (event.delta?.type === 'text_delta' && event.delta?.text) {
+                                        sendEvent({ type: 'text', content: event.delta.text });
+                                    }
+                                } else if (event.type === 'content_block_start') {
+                                    responseContent.push(event.content_block);
+                                } else if (event.type === 'content_block_stop') {
+                                    // Content block completed
+                                } else if (event.type === 'message_delta') {
+                                    if (event.delta?.stop_reason) {
+                                        stopReason = event.delta.stop_reason;
+                                    }
                                 }
                             }
-                        }
 
-                        const finalMessage = await stream.finalMessage();
+                            finalMessage = await stream.finalMessage();
+                        } catch (error) {
+                            upstreamDebug.fail(error, { stage: 'stream_iterate' });
+                            throw error;
+                        }
                         responseContent = finalMessage.content || responseContent;
                         stopReason = finalMessage.stop_reason || stopReason;
 
                         const state = extractAnthropicResponseState(responseContent);
+                        upstreamDebug.finish({
+                            stage: 'stream_complete',
+                            stopReason,
+                            finalMessageId: typeof finalMessage?.id === 'string' ? finalMessage.id : '',
+                            responseBlockCount: Array.isArray(responseContent) ? responseContent.length : 0,
+                            textLength: state.fullText.length,
+                            thoughtLength: state.fullThought.length,
+                            toolUseCount: state.toolUses.length,
+                        });
                         if (state.fullThought) {
                             fullThought = fullThought ? `${fullThought}\n\n${state.fullThought}` : state.fullThought;
                         }
@@ -723,6 +897,17 @@ export async function POST(req) {
                         try { controller.close(); } catch { /* ignore */ }
                         return;
                     }
+                    console.error('[Claude debug] stream error', safeJson({
+                        traceId: claudeTraceId,
+                        conversationId: currentConversationId || '',
+                        model,
+                        apiModel,
+                        finalMessagePersisted,
+                        fullTextLength: fullText.length,
+                        fullThoughtLength: fullThought.length,
+                        citationCount: citations.length,
+                        error: summarizeAnthropicError(err),
+                    }));
                     // 将错误作为 SSE 事件发送给客户端（而非 controller.error），保留原始错误信息
                     try { await rollbackCurrentTurn(); } catch { /* ignore */ }
                     try {
@@ -751,10 +936,14 @@ export async function POST(req) {
 
     } catch (error) {
         console.error("Anthropic-compatible API Error:", {
+            traceId: claudeTraceId,
             message: error?.message,
             status: error?.status,
             name: error?.name,
-            code: error?.code
+            code: error?.code,
+            type: error?.type || error?.error?.type || '',
+            requestId: error?.request_id || error?.requestId || error?.headers?.['request-id'] || error?.headers?.['anthropic-request-id'] || '',
+            upstreamErrorMessage: error?.error?.message || '',
         });
 
         const rawStatus = typeof error?.status === 'number' ? error.status : 500;
