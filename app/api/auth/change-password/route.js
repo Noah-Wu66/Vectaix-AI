@@ -74,7 +74,10 @@ export async function POST(req) {
     return Response.json({ success: true });
 
   } catch (error) {
-    console.error('Change password error:', error?.message);
+    console.error('[Auth] Change password error:', {
+      errorType: error?.name || 'Error',
+      code: error?.code || '',
+    });
     return Response.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

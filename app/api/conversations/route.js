@@ -26,7 +26,10 @@ export async function GET() {
 
         return Response.json({ conversations });
     } catch (error) {
-        console.error('Failed to fetch conversations:', error?.message);
+        console.error('[Conversations] Fetch failed:', {
+            errorType: error?.name || 'Error',
+            code: error?.code || '',
+        });
         return Response.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

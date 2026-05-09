@@ -103,9 +103,8 @@ export async function POST(req) {
         return Response.json({ summary: summary.trim() });
 
     } catch (error) {
-        console.error("Compress API Error:", {
-            message: error?.message,
-            name: error?.name,
+        console.error('[Compress] API error:', {
+            errorType: error?.name || 'Error',
         });
         return Response.json(
             { error: error?.message || '压缩失败' },

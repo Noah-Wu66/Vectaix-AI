@@ -72,7 +72,10 @@ export async function POST(req) {
         });
 
     } catch (error) {
-        console.error('Login error:', error?.message);
+        console.error('[Auth] Login error:', {
+            errorType: error?.name || 'Error',
+            code: error?.code || '',
+        });
         return Response.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

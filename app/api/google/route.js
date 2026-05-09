@@ -778,8 +778,7 @@ export async function POST(req) {
         return new Response(stream, { headers: buildSseResponseHeaders(currentConversationId) });
 
     } catch (error) {
-        console.error("Gemini API Error:", {
-            message: error?.message,
+        console.error('[Gemini] API error:', {
             status: error?.status,
             name: error?.name,
             code: error?.code

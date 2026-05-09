@@ -102,7 +102,10 @@ export async function DELETE(req, context) {
             await del(urls);
         }
     } catch (e) {
-        console.error('清理 Blob 文件失败:', e?.message);
+        console.error('[AdminUsers] Blob cleanup failed:', {
+            errorType: e?.name || 'Error',
+            code: e?.code || '',
+        });
     }
 
     // 级联删除所有关联数据

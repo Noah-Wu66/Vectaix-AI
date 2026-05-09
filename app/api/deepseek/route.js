@@ -59,108 +59,8 @@ import { assertRequestSize, parseJsonRequest } from '@/lib/server/api/routeHelpe
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const DEEPSEEK_UPSTREAM_DEBUG_SAMPLE_LIMIT = 12;
-
 function buildDeepSeekTraceId() {
     return `deepseek_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function normalizeDeepSeekChunkText(value) {
-    if (typeof value === 'string') return value;
-    if (Array.isArray(value)) {
-        return value
-            .map((item) => {
-                if (typeof item === 'string') return item;
-                if (item && typeof item.text === 'string') return item.text;
-                if (item && typeof item.content === 'string') return item.content;
-                return '';
-            })
-            .join('');
-    }
-    if (value && typeof value === 'object') {
-        if (typeof value.text === 'string') return value.text;
-        if (typeof value.content === 'string') return value.content;
-    }
-    return '';
-}
-
-function truncateDeepSeekLogText(value, max = 240) {
-    const text = normalizeDeepSeekChunkText(value).replace(/\s+/g, ' ').trim();
-    if (!text) return '';
-    if (text.length <= max) return text;
-    return `${text.slice(0, max)}...`;
-}
-
-function summarizeDeepSeekEvent(event) {
-    const eventType = typeof event?.type === 'string' ? event.type : 'unknown';
-    const responsePayload = event?.response;
-
-    return {
-        type: eventType,
-        keys: event && typeof event === 'object' ? Object.keys(event).slice(0, 10) : [],
-        deltaPreview: truncateDeepSeekLogText(event?.delta ?? event?.text ?? event?.part),
-        responseId: typeof responsePayload?.id === 'string' ? responsePayload.id : '',
-        outputIndex: Number.isInteger(event?.output_index) ? event.output_index : null,
-    };
-}
-
-function createDeepSeekUpstreamDebugSession(meta) {
-    const eventTypes = {};
-    const samples = [];
-    let parseErrorCount = 0;
-    let sawDone = false;
-
-    const pushSample = (sample) => {
-        if (samples.length >= DEEPSEEK_UPSTREAM_DEBUG_SAMPLE_LIMIT) return;
-        samples.push(sample);
-    };
-
-    return {
-        start(extra = {}) {
-            console.info('[DeepSeek upstream debug] start', JSON.stringify({ ...meta, ...extra }));
-        },
-        recordEvent(event) {
-            const summary = summarizeDeepSeekEvent(event);
-            eventTypes[summary.type] = (eventTypes[summary.type] || 0) + 1;
-            pushSample(summary);
-        },
-        recordParseError(raw) {
-            parseErrorCount += 1;
-            pushSample({
-                type: 'parse_error',
-                rawPreview: typeof raw === 'string' ? raw.slice(0, 400) : '',
-            });
-        },
-        markDone() {
-            sawDone = true;
-        },
-        finish(extra = {}) {
-            console.info('[DeepSeek upstream debug] summary', JSON.stringify({
-                ...meta,
-                ...extra,
-                sawDone,
-                parseErrorCount,
-                eventTypes,
-                samples,
-            }));
-        },
-        fail(error, extra = {}) {
-            console.error('[DeepSeek upstream debug] error', JSON.stringify({
-                ...meta,
-                ...extra,
-                sawDone,
-                parseErrorCount,
-                eventTypes,
-                samples,
-                error: {
-                    message: error?.message || 'Unknown error',
-                    status: typeof error?.status === 'number' ? error.status : null,
-                    name: error?.name || '',
-                    code: error?.code || '',
-                },
-            }));
-        },
-    };
 }
 
 function extractDeepSeekContentText(content) {
@@ -664,28 +564,10 @@ export async function POST(req) {
             writePermitTime = persisted.writePermitTime;
         }
 
-        console.info('[DeepSeek debug] request', JSON.stringify({
-            traceId: deepSeekTraceId,
-            conversationId: currentConversationId || '',
-            model: apiModel,
-            mode: isRegenerateMode ? 'regenerate' : 'chat',
-            enableWebSearch,
-            promptLength: prompt.length,
-            historyCount: Array.isArray(history) ? history.length : 0,
-            inputCount: Array.isArray(baseInput) ? baseInput.length : 0,
-            imageCount: dbImageEntries.length,
-            maxTokens: clampMaxTokens(maxTokens, 384000),
-        }));
-
         const encoder = new TextEncoder();
         let clientAborted = false;
         const onAbort = () => {
             clientAborted = true;
-            console.warn('[DeepSeek debug] client aborted', JSON.stringify({
-                traceId: deepSeekTraceId,
-                conversationId: currentConversationId || '',
-                model: apiModel,
-            }));
         };
         try {
             req?.signal?.addEventListener?.('abort', onAbort, { once: true });
@@ -749,22 +631,7 @@ export async function POST(req) {
                     });
                     const runtime = createWebBrowsingRuntime({ webSearchOptions: webSearchConfig });
                     const toolRecords = [];
-                    const requestChatCompletionsStream = async (requestBody, onThought, onText, debugMeta = {}) => {
-                        const upstreamDebug = createDeepSeekUpstreamDebugSession({
-                            traceId: deepSeekTraceId,
-                            conversationId: currentConversationId || '',
-                            model: apiModel,
-                            ...debugMeta,
-                        });
-                        upstreamDebug.start({
-                            messageCount: Array.isArray(requestBody?.messages) ? requestBody.messages.length : 0,
-                            hasTools: Array.isArray(requestBody?.tools) && requestBody.tools.length > 0,
-                            toolTypes: Array.isArray(requestBody?.tools)
-                                ? requestBody.tools.map((tool) => tool?.function?.name || tool?.type || 'unknown').slice(0, 8)
-                                : [],
-                            maxTokens: Number.isFinite(requestBody?.max_tokens) ? requestBody.max_tokens : null,
-                            reasoningEffort: requestBody?.reasoning_effort || '',
-                        });
+                    const requestChatCompletionsStream = async (requestBody, onThought, onText) => {
                         const request = async () => fetch(`${deepseekBaseUrl}/chat/completions`, {
                             method: 'POST',
                             headers: {
@@ -783,55 +650,20 @@ export async function POST(req) {
                         if (!response.ok) {
                             const errorText = await response.text();
                             const error = new Error(`DeepSeek API Error: ${response.status} ${errorText}`);
-                            upstreamDebug.fail(error, {
-                                upstreamStatus: response.status,
-                                contentType: response.headers.get('content-type') || '',
-                                rawErrorPreview: typeof errorText === 'string' ? errorText.slice(0, 600) : '',
-                            });
+                            error.status = response.status;
                             throw error;
                         }
 
-                        let streamedText = '';
-
-                        try {
-                            const finalPayload = await consumeDeepSeekChatCompletionStream({
-                                response,
-                                signal: req?.signal,
-                                onEvent: (event) => {
-                                    upstreamDebug.recordEvent(event);
-                                },
-                                onParseError: (dataStr) => {
-                                    upstreamDebug.recordParseError(dataStr);
-                                },
-                                onDone: () => {
-                                    upstreamDebug.markDone();
-                                },
-                                onThoughtDelta: (text) => {
-                                    onThought?.(text);
-                                },
-                                onTextDelta: (text) => {
-                                    streamedText += text;
-                                    onText?.(text);
-                                },
-                            });
-                            upstreamDebug.finish({
-                                upstreamStatus: response.status,
-                                contentType: response.headers.get('content-type') || '',
-                                streamedTextLength: streamedText.length,
-                                finalTextLength: extractDeepSeekContentText(finalPayload?.content).length,
-                                finalTextPreview: truncateDeepSeekLogText(finalPayload?.content, 400),
-                                functionCallCount: extractDeepSeekFunctionCalls(finalPayload).length,
-                                finalResponseId: typeof finalPayload?.id === 'string' ? finalPayload.id : '',
-                            });
-                            return finalPayload;
-                        } catch (error) {
-                            upstreamDebug.fail(error, {
-                                upstreamStatus: response.status,
-                                contentType: response.headers.get('content-type') || '',
-                                streamedTextLength: streamedText.length,
-                            });
-                            throw error;
-                        }
+                        return consumeDeepSeekChatCompletionStream({
+                            response,
+                            signal: req?.signal,
+                            onThoughtDelta: (text) => {
+                                onThought?.(text);
+                            },
+                            onTextDelta: (text) => {
+                                onText?.(text);
+                            },
+                        });
                     };
 
                     let nextMessages = [
@@ -857,22 +689,10 @@ export async function POST(req) {
                             requestBody.tools = getDeepSeekChatTools(availableToolApiNames);
                         }
 
-                        console.info('[DeepSeek debug] pass start', JSON.stringify({
-                            traceId: deepSeekTraceId,
-                            conversationId: currentConversationId || '',
-                            pass: pass + 1,
-                            maxPasses,
-                            availableToolApiNames,
-                            messageCount: Array.isArray(nextMessages) ? nextMessages.length : 0,
-                        }));
-
                         const payload = await requestChatCompletionsStream(requestBody, (thought) => {
                             sendEvent({ type: 'thought', content: thought });
                         }, (text) => {
                             sendEvent({ type: 'text', content: text });
-                        }, {
-                            stage: 'loop',
-                            pass: pass + 1,
                         });
                         if (clientAborted) break;
 
@@ -883,27 +703,12 @@ export async function POST(req) {
 
                         const functionCalls = enableWebSearch ? extractDeepSeekFunctionCalls(payload) : [];
                         const passText = extractDeepSeekContentText(payload?.content);
-                        console.info('[DeepSeek debug] pass result', JSON.stringify({
-                            traceId: deepSeekTraceId,
-                            conversationId: currentConversationId || '',
-                            pass: pass + 1,
-                            responseId: typeof payload?.id === 'string' ? payload.id : '',
-                            textLength: passText.length,
-                            thoughtLength: thought.length,
-                            functionCallCount: functionCalls.length,
-                        }));
                         if (functionCalls.length === 0) {
                             if (passText) {
                                 finalPayload = payload;
                                 fullText = passText;
                                 break;
                             }
-                            console.warn('[DeepSeek debug] pass returned no text and no function calls', JSON.stringify({
-                                traceId: deepSeekTraceId,
-                                conversationId: currentConversationId || '',
-                                pass: pass + 1,
-                                thoughtLength: thought.length,
-                            }));
                             break;
                         }
 
@@ -916,12 +721,6 @@ export async function POST(req) {
                             selectedFunctionCallRounds.push(toolReservation.round);
                         }
                         if (selectedFunctionCalls.length === 0) {
-                            console.warn('[DeepSeek debug] tool calls skipped', JSON.stringify({
-                                traceId: deepSeekTraceId,
-                                conversationId: currentConversationId || '',
-                                pass: pass + 1,
-                                requestedToolNames: functionCalls.map((item) => item?.name || '').filter(Boolean),
-                            }));
                             break;
                         }
 
@@ -939,15 +738,6 @@ export async function POST(req) {
                                 signal: req?.signal,
                             });
                             toolRecords.push(toolExecution.toolRecord);
-                            console.info('[DeepSeek debug] tool result', JSON.stringify({
-                                traceId: deepSeekTraceId,
-                                conversationId: currentConversationId || '',
-                                pass: pass + 1,
-                                round: selectedFunctionCallRounds[functionCallIndex] || 1,
-                                apiName: functionCall.name,
-                                status: toolExecution?.toolRecord?.status || '',
-                                outputLength: typeof toolExecution?.outputText === 'string' ? toolExecution.outputText.length : 0,
-                            }));
                             nextMessages.push({
                                 role: 'tool',
                                 tool_call_id: functionCall.call_id,
@@ -963,12 +753,6 @@ export async function POST(req) {
                         && nextMessages.length > 1;
 
                     if (shouldForceFinalAnswer) {
-                        console.info('[DeepSeek debug] force final answer', JSON.stringify({
-                            traceId: deepSeekTraceId,
-                            conversationId: currentConversationId || '',
-                            messageCount: Array.isArray(nextMessages) ? nextMessages.length : 0,
-                            toolRecordCount: toolRecords.length,
-                        }));
                         const forcedMessages = [
                             {
                                 role: 'system',
@@ -986,8 +770,6 @@ export async function POST(req) {
                             sendEvent({ type: 'thought', content: thought });
                         }, (text) => {
                             sendEvent({ type: 'text', content: text });
-                        }, {
-                            stage: 'forced_final',
                         });
                         if (!clientAborted) {
                             const thought = typeof payload?.reasoning_content === 'string' ? payload.reasoning_content : '';
@@ -1000,12 +782,6 @@ export async function POST(req) {
                     }
 
                     if (!finalPayload && !clientAborted) {
-                        console.error('[DeepSeek debug] missing final payload', JSON.stringify({
-                            traceId: deepSeekTraceId,
-                            conversationId: currentConversationId || '',
-                            toolRecordCount: toolRecords.length,
-                            nextMessageCount: Array.isArray(nextMessages) ? nextMessages.length : 0,
-                        }));
                         throw new Error('DeepSeek 工具循环未返回最终答案');
                     }
 
@@ -1017,13 +793,6 @@ export async function POST(req) {
                     }
 
                     if (clientAborted) {
-                        console.warn('[DeepSeek debug] aborted before completion', JSON.stringify({
-                            traceId: deepSeekTraceId,
-                            conversationId: currentConversationId || '',
-                            fullTextLength: fullText.length,
-                            fullThoughtLength: fullThought.length,
-                            toolRecordCount: toolRecords.length,
-                        }));
                         await rollbackCurrentTurn();
                         try { controller.close(); } catch { }
                         return;
@@ -1078,34 +847,18 @@ export async function POST(req) {
                         finalMessagePersisted = true;
                         writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
                     }
-                    console.info('[DeepSeek debug] completed', JSON.stringify({
-                        traceId: deepSeekTraceId,
-                        conversationId: currentConversationId || '',
-                        responseId: typeof finalPayload?.id === 'string' ? finalPayload.id : '',
-                        fullTextLength: fullText.length,
-                        fullThoughtLength: fullThought.length,
-                        citationCount: citations.length,
-                        toolRecordCount: toolRecords.length,
-                        searchContextTokens,
-                    }));
                     controller.close();
                 } catch (err) {
                     if (clientAborted) {
-                        console.warn('[DeepSeek debug] closed after client abort', JSON.stringify({
-                            traceId: deepSeekTraceId,
-                            conversationId: currentConversationId || '',
-                            message: err?.message || '',
-                        }));
                         try { await rollbackCurrentTurn(); } catch { }
                         try { controller.close(); } catch { }
                         return;
                     }
-                    console.error('[DeepSeek debug] stream error', JSON.stringify({
+                    console.error('[DeepSeek] Stream error:', {
                         traceId: deepSeekTraceId,
-                        conversationId: currentConversationId || '',
-                        message: err?.message || 'Unknown error',
                         name: err?.name || '',
                         status: typeof err?.status === 'number' ? err.status : null,
+                        code: err?.code || '',
                         finalMessagePersisted,
                         fullTextLength: fullText.length,
                         fullThoughtLength: fullThought.length,
@@ -1138,9 +891,8 @@ export async function POST(req) {
         return new Response(responseStream, { headers: buildSseResponseHeaders(currentConversationId) });
 
     } catch (error) {
-        console.error('DeepSeek API Error:', {
+        console.error('[DeepSeek] API error:', {
             traceId: deepSeekTraceId,
-            message: error?.message,
             status: error?.status,
             name: error?.name,
             code: error?.code

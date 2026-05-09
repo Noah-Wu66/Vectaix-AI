@@ -70,7 +70,10 @@ export async function POST(req) {
       },
     });
   } catch (error) {
-    console.error('Change email error:', error?.message);
+    console.error('[Auth] Change email error:', {
+      errorType: error?.name || 'Error',
+      code: error?.code || '',
+    });
     return Response.json({ error: '修改邮箱失败' }, { status: 500 });
   }
 }

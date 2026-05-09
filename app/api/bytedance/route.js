@@ -71,8 +71,6 @@ import {
 } from '@/lib/server/chat/routeHelpers';
 import { assertRequestSize, parseJsonRequest } from '@/lib/server/api/routeHelpers';
 
-const SEED_UPSTREAM_DEBUG_SAMPLE_LIMIT = 12;
-
 function findLatestSeedResponseId(messages) {
     if (!Array.isArray(messages)) return '';
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -87,86 +85,6 @@ function findLatestSeedResponseId(messages) {
 
 function buildSeedTraceId() {
     return `seed_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function truncateSeedLogText(value, max = 240) {
-    const text = normalizeSeedChunkText(value).replace(/\s+/g, ' ').trim();
-    if (!text) return '';
-    if (text.length <= max) return text;
-    return `${text.slice(0, max)}...`;
-}
-
-function summarizeSeedEvent(event) {
-    const eventType = typeof event?.type === 'string' ? event.type : 'unknown';
-    const responsePayload = event?.response;
-
-    return {
-        type: eventType,
-        keys: event && typeof event === 'object' ? Object.keys(event).slice(0, 10) : [],
-        textPreview: truncateSeedLogText(event?.delta),
-        reasoningPreview: '',
-        completedTextPreview: truncateSeedLogText(extractSeedResponseText(responsePayload)),
-        responseId: typeof responsePayload?.id === 'string' ? responsePayload.id : '',
-    };
-}
-
-function createSeedUpstreamDebugSession(meta) {
-    const eventTypes = {};
-    const samples = [];
-    let parseErrorCount = 0;
-    let sawDone = false;
-
-    const pushSample = (sample) => {
-        if (samples.length >= SEED_UPSTREAM_DEBUG_SAMPLE_LIMIT) return;
-        samples.push(sample);
-    };
-
-    return {
-        start(extra = {}) {
-            console.log('[Seed upstream debug] start', JSON.stringify({ ...meta, ...extra }));
-        },
-        recordEvent(event) {
-            const summary = summarizeSeedEvent(event);
-            eventTypes[summary.type] = (eventTypes[summary.type] || 0) + 1;
-            pushSample(summary);
-        },
-        recordParseError(raw) {
-            parseErrorCount += 1;
-            pushSample({
-                type: 'parse_error',
-                rawPreview: typeof raw === 'string' ? raw.slice(0, 400) : '',
-            });
-        },
-        markDone() {
-            sawDone = true;
-        },
-        finish(extra = {}) {
-            console.log('[Seed upstream debug] summary', JSON.stringify({
-                ...meta,
-                ...extra,
-                sawDone,
-                parseErrorCount,
-                eventTypes,
-                samples,
-            }));
-        },
-        fail(error, extra = {}) {
-            console.error('[Seed upstream debug] error', JSON.stringify({
-                ...meta,
-                ...extra,
-                sawDone,
-                parseErrorCount,
-                eventTypes,
-                samples,
-                error: {
-                    message: error?.message || 'Unknown error',
-                    status: typeof error?.status === 'number' ? error.status : null,
-                    name: error?.name || '',
-                    code: error?.code || '',
-                },
-            }));
-        },
-    };
 }
 
 export const runtime = 'nodejs';
@@ -483,22 +401,6 @@ export async function POST(req) {
                     });
                     const requestSeedStream = async (requestBody, onThought, onText) => {
                         const url = `${seedBaseUrl}/responses`;
-                        const upstreamDebug = createSeedUpstreamDebugSession({
-                            traceId: seedTraceId,
-                            conversationId: currentConversationId || '',
-                            model: apiModel || SEED_MODEL_ID,
-                        });
-                        upstreamDebug.start({
-                            previousResponseId: typeof requestBody?.previous_response_id === 'string' ? requestBody.previous_response_id : '',
-                            inputCount: Array.isArray(requestBody?.input) ? requestBody.input.length : 0,
-                            hasTools: Array.isArray(requestBody?.tools) && requestBody.tools.length > 0,
-                            toolTypes: Array.isArray(requestBody?.tools)
-                                ? requestBody.tools.map((tool) => tool?.type || tool?.name || 'unknown').slice(0, 8)
-                                : [],
-                            maxOutputTokens: Number.isFinite(requestBody?.max_output_tokens) ? requestBody.max_output_tokens : null,
-                            thinkingType: requestBody?.thinking?.type || '',
-                            reasoningEffort: requestBody?.reasoning?.effort || '',
-                        });
                         let response = await fetchWithZenmuxRateLimit(url, {
                             method: 'POST',
                             headers: {
@@ -526,57 +428,23 @@ export async function POST(req) {
                         }
                         if (!response.ok) {
                             const errorText = await response.text();
-                            upstreamDebug.fail(new Error(`Seed APIError: ${response.status} ${errorText}`), {
-                                upstreamStatus: response.status,
-                                contentType: response.headers.get('content-type') || '',
-                                rawErrorPreview: typeof errorText === 'string' ? errorText.slice(0, 600) : '',
-                            });
-                            throw new Error(`Seed APIError: ${response.status} ${errorText}`);
-                        }
-
-                        let streamedText = '';
-
-                        try {
-                            const finalPayload = await consumeStrictResponsesStream({
-                                response,
-                                signal: req?.signal,
-                                normalizeText: normalizeSeedChunkText,
-                                onEvent: (event) => {
-                                    upstreamDebug.recordEvent(event);
-                                },
-                                onParseError: (dataStr) => {
-                                    upstreamDebug.recordParseError(dataStr);
-                                },
-                                onDone: () => {
-                                    upstreamDebug.markDone();
-                                },
-                                onThoughtDelta: (text) => {
-                                    onThought?.(text);
-                                },
-                                onTextDelta: (text) => {
-                                    streamedText += text;
-                                    onText?.(text);
-                                },
-                                missingCompletedMessage: 'Seed 上游缺少 response.completed 事件',
-                            });
-                            upstreamDebug.finish({
-                                upstreamStatus: response.status,
-                                contentType: response.headers.get('content-type') || '',
-                                streamedTextLength: streamedText.length,
-                                finalTextLength: extractSeedResponseText(finalPayload).length,
-                                finalTextPreview: truncateSeedLogText(extractSeedResponseText(finalPayload), 400),
-                                finalResponseId: typeof finalPayload?.id === 'string' ? finalPayload.id : '',
-                            });
-
-                            return finalPayload;
-                        } catch (error) {
-                            upstreamDebug.fail(error, {
-                                upstreamStatus: response.status,
-                                contentType: response.headers.get('content-type') || '',
-                                streamedTextLength: streamedText.length,
-                            });
+                            const error = new Error(`Seed APIError: ${response.status} ${errorText}`);
+                            error.status = response.status;
                             throw error;
                         }
+
+                        return consumeStrictResponsesStream({
+                            response,
+                            signal: req?.signal,
+                            normalizeText: normalizeSeedChunkText,
+                            onThoughtDelta: (text) => {
+                                onThought?.(text);
+                            },
+                            onTextDelta: (text) => {
+                                onText?.(text);
+                            },
+                            missingCompletedMessage: 'Seed 上游缺少 response.completed 事件',
+                        });
                     };
 
                     const usePreviousResponseId = Boolean(latestSeedResponseId && currentTurnInput);
@@ -792,8 +660,8 @@ export async function POST(req) {
 
         return new Response(responseStream, { headers: buildSseResponseHeaders(currentConversationId) });
     } catch (error) {
-        console.error('Seed API Error:', {
-            message: error?.message,
+        console.error('[Seed] API error:', {
+            traceId: seedTraceId,
             status: error?.status,
             name: error?.name,
             code: error?.code,

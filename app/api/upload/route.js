@@ -180,7 +180,11 @@ export async function POST(request) {
                         { upsert: true }
                     );
                 } catch (error) {
-                    console.error('Blob upload completion sync failed:', error);
+                    console.error('[Upload] Blob completion sync failed:', {
+                        errorType: error?.name || 'Error',
+                        status: error?.status || null,
+                        code: error?.code || '',
+                    });
                     throw error instanceof Error
                         ? error
                         : new Error('Blob upload completion sync failed');

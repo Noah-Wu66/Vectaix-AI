@@ -693,8 +693,7 @@ export async function POST(req) {
         return new Response(responseStream, { headers: buildSseResponseHeaders(currentConversationId) });
 
     } catch (error) {
-        console.error("OpenAI API Error:", {
-            message: error?.message,
+        console.error('[OpenAI] API error:', {
             status: error?.status,
             name: error?.name,
             code: error?.code

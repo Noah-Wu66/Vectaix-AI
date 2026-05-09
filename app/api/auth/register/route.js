@@ -118,7 +118,10 @@ export async function POST(req) {
         });
 
     } catch (error) {
-        console.error('Register error:', error?.message);
+        console.error('[Auth] Register error:', {
+            errorType: error?.name || 'Error',
+            code: error?.code || '',
+        });
         return Response.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }
