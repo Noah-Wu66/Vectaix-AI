@@ -21,6 +21,7 @@ import ImageLightbox from "./ImageLightbox";
 import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./ToastProvider";
 import { exportMessageContent } from "@/lib/client/messageExport";
+import { toBlobDownloadUrl } from "@/lib/shared/blobUrls";
 import { getMessageImageSrc, isKeepableImageSrc } from "@/lib/shared/messageImage";
 import { getMessageFileAttachments } from "@/lib/shared/messageAttachments";
 import {
@@ -66,6 +67,41 @@ function containsMarkdownTable(text) {
 
 function isPendingRunText(text) {
   return typeof text === "string" && PENDING_RUN_TEXTS.has(text.trim());
+}
+
+function getFirstImagePart(msg) {
+  if (!Array.isArray(msg?.parts)) return null;
+  return msg.parts.find((part) => typeof part?.inlineData?.url === "string" && part.inlineData.url) || null;
+}
+
+function getImageExtensionFromType(mimeType) {
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/gif") return "gif";
+  return "png";
+}
+
+function buildImageDownloadName(part) {
+  const mimeType = typeof part?.inlineData?.mimeType === "string" ? part.inlineData.mimeType : "image/png";
+  return `vectaix-ai-image.${getImageExtensionFromType(mimeType)}`;
+}
+
+async function copyImageToClipboard(part) {
+  const imageUrl = part?.inlineData?.url;
+  if (!imageUrl) throw new Error("图片地址不存在");
+  if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+    throw new Error("当前浏览器不支持复制图片");
+  }
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error("读取图片失败");
+
+  const blob = await response.blob();
+  const mimeType = blob.type || part?.inlineData?.mimeType || "image/png";
+  const imageBlob = blob.type ? blob : blob.slice(0, blob.size, mimeType);
+  await navigator.clipboard.write([
+    new ClipboardItem({ [mimeType]: imageBlob }),
+  ]);
 }
 
 function normalizeFallbackToolTimeline(tools) {
@@ -146,6 +182,7 @@ export default function MessageList({
   onDeleteUserMessage,
   onRegenerateModelMessage,
   onStartEdit,
+  onUseImageAsAttachment,
   userAvatar,
   userNickname,
   onSendStarterPrompt,
@@ -303,6 +340,29 @@ export default function MessageList({
     }
   };
 
+  const handleCopyImage = async (part) => {
+    try {
+      await copyImageToClipboard(part);
+      toast.success("已复制图片");
+    } catch (error) {
+      toast.error(error?.message || "复制图片失败");
+    }
+  };
+
+  const handleUseImageAsAttachment = (part) => {
+    const url = part?.inlineData?.url;
+    const mimeType = part?.inlineData?.mimeType;
+    if (!url || !mimeType) {
+      toast.error("图片信息不完整，无法加入附件");
+      return;
+    }
+    onUseImageAsAttachment?.({
+      url,
+      mimeType,
+      name: buildImageDownloadName(part),
+    });
+  };
+
   return (
     <div
       ref={listRef}
@@ -407,6 +467,8 @@ export default function MessageList({
           const hasArtifacts = Array.isArray(msg.artifacts) && msg.artifacts.length > 0;
           const shouldRenderToolCards = msg.role === "model" && hasToolRuns && !hasThinkingTimeline && msg.tools.some((t) => t?.id);
           const shouldRenderBubble = !shouldRenderCouncilMessage && (hasParts || hasVisibleContent || shouldRenderToolCards || (msg.role === "model" && hasArtifacts));
+          const imageGenPart = msg.role === "model" && isImageGenModel(model) ? getFirstImagePart(msg) : null;
+          const imageGenDownloadUrl = imageGenPart ? toBlobDownloadUrl(imageGenPart.inlineData.url) : null;
           
           if (msg.role === "model" && !msg.thought && !hasVisibleContent && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilAnalysis && !hasCouncilAnalysisState && !hasCouncilResultState && !hasToolRuns && !hasArtifacts && msg.isWaitingFirstChunk) {
             return null;
@@ -541,7 +603,16 @@ export default function MessageList({
 
                     {!msg.isStreaming && (
                       <div className={`flex flex-wrap gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                        {msg.role === "model" && (hasParts || hasVisibleContent) && (
+                        {imageGenDownloadUrl ? (
+                          <a
+                            href={imageGenDownloadUrl}
+                            download={buildImageDownloadName(imageGenPart)}
+                            className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"
+                            title="下载图片"
+                          >
+                            <Download size={14} />
+                          </a>
+                        ) : msg.role === "model" && (hasParts || hasVisibleContent) && (
                           <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
                             <button onClick={() => setOpenExportMenuIndex(prev => prev === i ? null : i)} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg">
                               <Download size={14} />
@@ -557,7 +628,22 @@ export default function MessageList({
                             </AnimatePresence>
                           </div>
                         )}
-                        <button onClick={() => onCopy(buildCopyText(msg))} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Copy size={14} /></button>
+                        {imageGenPart ? (
+                          <button
+                            onClick={() => handleUseImageAsAttachment(imageGenPart)}
+                            className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"
+                            title="作为附件使用"
+                          >
+                            <Paperclip size={14} />
+                          </button>
+                        ) : null}
+                        <button
+                          onClick={() => imageGenPart ? handleCopyImage(imageGenPart) : onCopy(buildCopyText(msg))}
+                          className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"
+                          title={imageGenPart ? "复制图片" : "复制内容"}
+                        >
+                          <Copy size={14} />
+                        </button>
                         <button onClick={() => handleDeleteClick(i, msg.role)} className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
                         {msg.role === "user" && canEditUserMessage && (
                           <button onClick={() => onStartEdit(i, msg)} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"><Edit3 size={14} /></button>

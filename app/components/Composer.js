@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUp,
@@ -27,6 +27,11 @@ import {
   MAX_CHAT_ATTACHMENTS,
 } from "@/lib/shared/attachments";
 import { createLocalAttachment, isImageAttachment } from "@/lib/shared/messageAttachments";
+import {
+  IMAGE_GEN_RESOLUTION_OPTIONS,
+  getImageGenSizeOptionsForResolution,
+  isImageGenSizeSupportedAtResolution,
+} from "@/lib/shared/imageGenOptions";
 
 function readAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -56,6 +61,7 @@ export default function Composer({
   onSend,
   onStop,
   prefill,
+  attachmentRequest,
 }) {
   const toast = useToast();
   const [input, setInput] = useState("");
@@ -64,10 +70,15 @@ export default function Composer({
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const mountedRef = useRef(true);
+  const handledAttachmentRequestNonceRef = useRef(null);
   const isCouncilSelected = isCouncilModel(model);
   const isImageGenSelected = isImageGenModel(model);
   const [imageGenSize, setImageGenSize] = useState("1:1");
   const [imageGenResolution, setImageGenResolution] = useState("1k");
+  const imageGenSizeOptions = useMemo(
+    () => getImageGenSizeOptionsForResolution(imageGenResolution),
+    [imageGenResolution]
+  );
   const {
     supportsImages,
     supportsDocuments,
@@ -133,6 +144,56 @@ export default function Composer({
       el.style.overflowY = sh > 160 ? "auto" : "hidden";
     }
   }, [prefill?.nonce]);
+
+  useEffect(() => {
+    const nonce = attachmentRequest?.nonce;
+    if (!nonce || handledAttachmentRequestNonceRef.current === nonce) return;
+    handledAttachmentRequestNonceRef.current = nonce;
+
+    if (!supportsFilePicker || !supportsImages) {
+      toast.warning("当前模型不支持图片附件");
+      return;
+    }
+
+    if (selectedAttachments.length >= MAX_CHAT_ATTACHMENTS) {
+      toast.warning(`一次最多添加 ${MAX_CHAT_ATTACHMENTS} 个文件`);
+      return;
+    }
+
+    const url = typeof attachmentRequest.url === "string" ? attachmentRequest.url : "";
+    const mimeType = typeof attachmentRequest.mimeType === "string" ? attachmentRequest.mimeType : "";
+    if (!url || !mimeType) {
+      toast.error("图片信息不完整，无法加入附件");
+      return;
+    }
+
+    const extension = mimeType === "image/jpeg"
+      ? "jpg"
+      : (mimeType === "image/webp" ? "webp" : "png");
+    setSelectedAttachments((prev) => [
+      ...prev,
+      {
+        id: `message-image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        file: null,
+        preview: url,
+        blobUrl: url,
+        uploadStatus: "ready",
+        name: attachmentRequest.name || `生成图片.${extension}`,
+        size: Number(attachmentRequest.size) || 0,
+        mimeType,
+        extension,
+        category: "image",
+      },
+    ].slice(0, MAX_CHAT_ATTACHMENTS));
+    toast.success("已添加到输入框附件");
+  }, [attachmentRequest, selectedAttachments.length, supportsFilePicker, supportsImages, toast]);
+
+  useEffect(() => {
+    if (!isImageGenSelected) return;
+    if (isImageGenSizeSupportedAtResolution(imageGenSize, imageGenResolution)) return;
+    const nextSize = imageGenSizeOptions[0]?.value;
+    if (nextSize) setImageGenSize(nextSize);
+  }, [imageGenResolution, imageGenSize, imageGenSizeOptions, isImageGenSelected]);
 
   useEffect(() => {
     if (!supportsFilePicker) {
@@ -322,6 +383,13 @@ export default function Composer({
     setSelectedAttachments([]);
   };
 
+  const handleImageGenResolutionChange = (nextResolution) => {
+    setImageGenResolution(nextResolution);
+    if (isImageGenSizeSupportedAtResolution(imageGenSize, nextResolution)) return;
+    const nextSize = getImageGenSizeOptionsForResolution(nextResolution)[0]?.value;
+    if (nextSize) setImageGenSize(nextSize);
+  };
+
   const isUploading = selectedAttachments.some((item) => item.uploadStatus === "uploading");
 
   const handleKeyDown = (e) => {
@@ -408,24 +476,18 @@ export default function Composer({
                     onChange={(e) => setImageGenSize(e.target.value)}
                     className="px-1.5 sm:px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs sm:text-sm bg-transparent text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer"
                   >
-                    <option value="1:1">1:1</option>
-                    <option value="16:9">16:9</option>
-                    <option value="9:16">9:16</option>
-                    <option value="4:3">4:3</option>
-                    <option value="3:4">3:4</option>
-                    <option value="3:2">3:2</option>
-                    <option value="2:3">2:3</option>
-                    <option value="2:1">2:1</option>
-                    <option value="1:2">1:2</option>
+                    {imageGenSizeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                   <select
                     value={imageGenResolution}
-                    onChange={(e) => setImageGenResolution(e.target.value)}
+                    onChange={(e) => handleImageGenResolutionChange(e.target.value)}
                     className="px-1.5 sm:px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs sm:text-sm bg-transparent text-zinc-600 dark:text-zinc-400 outline-none cursor-pointer"
                   >
-                    <option value="1k">1K</option>
-                    <option value="2k">2K</option>
-                    <option value="4k">4K</option>
+                    {IMAGE_GEN_RESOLUTION_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                 </div>
               ) : (

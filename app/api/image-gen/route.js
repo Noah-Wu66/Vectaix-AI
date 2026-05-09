@@ -29,6 +29,12 @@ import {
     SSE_PADDING,
     HEARTBEAT_INTERVAL_MS,
 } from '@/lib/server/chat/routeConstants';
+import {
+    IMAGE_GEN_RESOLUTION_VALUES,
+    IMAGE_GEN_SIZE_VALUES,
+    IMAGE_GEN_SIZE_VALUES_BY_RESOLUTION,
+    isImageGenSizeSupportedAtResolution,
+} from '@/lib/shared/imageGenOptions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,20 +43,32 @@ const MAX_POLL_ITERATIONS = 120;
 const POLL_INTERVAL_MS = 3000;
 
 const VALID_SIZES = new Set([
-    'auto', '1:1', '3:2', '2:3', '4:3', '3:4',
-    '5:4', '4:5', '16:9', '9:16', '2:1', '1:2', '21:9', '9:21',
+    'auto',
+    ...IMAGE_GEN_SIZE_VALUES,
 ]);
 
-const VALID_RESOLUTIONS = new Set(['1k', '2k', '4k']);
+const VALID_RESOLUTIONS = new Set(IMAGE_GEN_RESOLUTION_VALUES);
 
-function normalizeSize(size) {
+function resolveSize(size) {
+    if (size === undefined || size === null || size === '') return '1:1';
     if (typeof size === 'string' && VALID_SIZES.has(size)) return size;
-    return '1:1';
+    return null;
 }
 
-function normalizeResolution(resolution) {
+function resolveResolution(resolution) {
+    if (resolution === undefined || resolution === null || resolution === '') return '1k';
     if (typeof resolution === 'string' && VALID_RESOLUTIONS.has(resolution)) return resolution;
-    return '1k';
+    return null;
+}
+
+function formatSupportedSizes(resolution) {
+    const values = IMAGE_GEN_SIZE_VALUES_BY_RESOLUTION[resolution] || [];
+    return values.join('、');
+}
+
+function isSupportedSizeResolutionPair(size, resolution) {
+    if (size === 'auto') return resolution !== '4k';
+    return isImageGenSizeSupportedAtResolution(size, resolution);
 }
 
 export async function POST(req) {
@@ -77,10 +95,23 @@ export async function POST(req) {
         if (authResult?.response) return authResult.response;
         const user = authResult.auth;
 
-        const { baseUrl: apiBaseUrl, apiKey } = resolveImageGenProviderConfig();
+        const size = resolveSize(config?.size);
+        if (!size) {
+            return Response.json({ error: '图片比例不支持，请重新选择比例' }, { status: 400 });
+        }
 
-        const size = normalizeSize(config?.size);
-        const resolution = normalizeResolution(config?.resolution);
+        const resolution = resolveResolution(config?.resolution);
+        if (!resolution) {
+            return Response.json({ error: '图片分辨率不支持，请重新选择分辨率' }, { status: 400 });
+        }
+
+        if (!isSupportedSizeResolutionPair(size, resolution)) {
+            return Response.json({
+                error: `${resolution.toUpperCase()} 不支持 ${size} 比例，请选择：${formatSupportedSizes(resolution)}`,
+            }, { status: 400 });
+        }
+
+        const { baseUrl: apiBaseUrl, apiKey } = resolveImageGenProviderConfig();
 
         const {
             currentConversationId,

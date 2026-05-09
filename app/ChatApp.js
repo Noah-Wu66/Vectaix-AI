@@ -80,6 +80,7 @@ export default function ChatApp() {
   const [editingImage, setEditingImage] = useState(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [composerPrefill, setComposerPrefill] = useState({ text: "", nonce: 0 });
+  const [composerAttachmentRequest, setComposerAttachmentRequest] = useState(null);
   const [serverSettingsReady, setServerSettingsReady] = useState(false);
 
   const chatEndRef = useRef(null);
@@ -446,6 +447,13 @@ export default function ChatApp() {
     if (shouldPrefill && typeof promptText === "string" && promptText.trim()) {
       setComposerPrefill({ text: promptText, nonce: Date.now() });
     }
+  };
+
+  const handleUseImageAsAttachment = (image) => {
+    setComposerAttachmentRequest({
+      ...image,
+      nonce: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    });
   };
 
   const actions = createChatAppActions({
@@ -914,6 +922,7 @@ export default function ChatApp() {
           onDeleteUserMessage={actions.deleteUserMessage}
           onRegenerateModelMessage={actions.regenerateModelMessage}
           onStartEdit={actions.startEdit}
+          onUseImageAsAttachment={handleUseImageAsAttachment}
           userAvatar={avatar}
           onAvatarChange={setAvatar}
           composerProps={{
@@ -940,6 +949,7 @@ export default function ChatApp() {
             onSend: actions.handleSendFromComposer,
             onStop: actions.stopStreaming,
             prefill: composerPrefill,
+            attachmentRequest: composerAttachmentRequest,
           }}
         />
       )}

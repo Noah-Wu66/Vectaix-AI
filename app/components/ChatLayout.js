@@ -58,6 +58,7 @@ export default function ChatLayout({
   onDeleteUserMessage,
   onRegenerateModelMessage,
   onStartEdit,
+  onUseImageAsAttachment,
   composerProps,
   userAvatar,
   onAvatarChange,
@@ -99,6 +100,7 @@ export default function ChatLayout({
             onDeleteUserMessage={onDeleteUserMessage}
             onRegenerateModelMessage={onRegenerateModelMessage}
             onStartEdit={onStartEdit}
+            onUseImageAsAttachment={onUseImageAsAttachment}
             userAvatar={userAvatar}
             userNickname={nickname}
           />
