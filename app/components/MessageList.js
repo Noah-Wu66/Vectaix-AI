@@ -41,6 +41,7 @@ import {
   CHAT_MODELS,
   modelSupportsAvailableInput,
   isCouncilModel,
+  isImageGenModel,
 } from "@/lib/shared/models";
 import {
   getWebBrowsingToolTitle,
@@ -388,7 +389,7 @@ export default function MessageList({
             ? msg.thinkingTimeline
             : fallbackThinkingTimeline;
           const hasThinkingTimeline = Array.isArray(resolvedThinkingTimeline)
-            && resolvedThinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool" || step?.kind === "planner" || step?.kind === "writer");
+            && resolvedThinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool" || step?.kind === "planner" || step?.kind === "writer" || step?.kind === "image_gen");
           const hasCouncilExpertStates = Array.isArray(msg.councilExpertStates) && msg.councilExpertStates.length > 0;
           const hasCouncilAnalysis = msg.councilAnalysis && typeof msg.councilAnalysis === "object";
           const hasCouncilAnalysisState = msg.councilAnalysisState && typeof msg.councilAnalysisState === "object";
@@ -490,7 +491,7 @@ export default function MessageList({
                     {shouldRenderBubble && (
                       <div
                         className={`relative group/bubble px-4 py-3 sm:px-5 sm:py-4 transition-all duration-300 ${
-                          msg.role === "user" ? "msg-bubble-user max-w-[92%] sm:max-w-[85%] md:max-w-[75%]" : "msg-bubble-ai max-w-full md:max-w-[95%] w-full"
+                          msg.role === "user" ? "msg-bubble-user max-w-[92%] sm:max-w-[85%] md:max-w-[75%]" : isImageGenModel(model) ? "msg-bubble-ai w-fit" : "msg-bubble-ai max-w-full md:max-w-[95%] w-full"
                         } ${msg.isStreaming ? "ai-glow ai-glow-active" : ""}`}
                         onCopy={handleBubbleCopy}
                       >

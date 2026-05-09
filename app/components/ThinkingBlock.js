@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Loader2, Scale, Search, Terminal, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Loader2, Paintbrush, Scale, Search, Terminal, Zap } from "lucide-react";
 import Markdown from "./Markdown";
 import { ModelGlyph } from "./ModelVisuals";
 import { Citations, LoadingSweepText, ToolRunPreview, hasToolRunPreview } from "./MessageListHelpers";
@@ -25,7 +25,7 @@ function normalizeTimeline(timeline) {
       resultCount: Number.isFinite(step.resultCount) ? step.resultCount : null,
       synthetic: step.synthetic === true,
     }))
-    .filter((step) => step.kind === "thought" || step.kind === "search" || step.kind === "reader" || step.kind === "sandbox" || step.kind === "tool" || step.kind === "upload" || step.kind === "parse" || step.kind === "planner");
+    .filter((step) => step.kind === "thought" || step.kind === "search" || step.kind === "reader" || step.kind === "sandbox" || step.kind === "tool" || step.kind === "upload" || step.kind === "parse" || step.kind === "planner" || step.kind === "image_gen");
 
   return normalized.reduce((acc, step) => {
     const last = acc[acc.length - 1];
@@ -335,7 +335,7 @@ export default function ThinkingBlock({
                   </Markdown>
                   {isThoughtStreaming && (
                     <div className="sticky bottom-2 flex justify-end mt-2 pointer-events-none">
-                      <div className="text-[10px] text-primary/70 flex items-center gap-1.5 backdrop-blur-md bg-white/80 dark:bg-black/80 px-2.5 py-1 rounded-full border border-primary/20 shadow-sm pointer-events-auto">
+                      <div className="text-[10px] text-primary/70 flex items-center gap-1.5 backdrop-blur-md bg-white/80 dark:bg-zinc-800/90 px-2.5 py-1 rounded-full border border-primary/20 dark:border-primary/30 shadow-sm dark:shadow-none pointer-events-auto">
                         <Loader2 className="w-3 h-3 animate-spin" />
                         思考过程中...
                       </div>
@@ -532,7 +532,7 @@ export default function ThinkingBlock({
                   </Markdown>
                   {isRunning && (
                     <div className="sticky bottom-2 flex justify-end mt-2 pointer-events-none">
-                      <div className="text-[10px] text-primary/70 flex items-center gap-1.5 backdrop-blur-md bg-white/80 dark:bg-black/80 px-2.5 py-1 rounded-full border border-primary/20 shadow-sm pointer-events-auto">
+                      <div className="text-[10px] text-primary/70 flex items-center gap-1.5 backdrop-blur-md bg-white/80 dark:bg-zinc-800/90 px-2.5 py-1 rounded-full border border-primary/20 dark:border-primary/30 shadow-sm dark:shadow-none pointer-events-auto">
                         <Loader2 className="w-3 h-3 animate-spin" />
                         思考过程中...
                       </div>
@@ -554,6 +554,22 @@ export default function ThinkingBlock({
           <div className={capsuleClass}>
             {icon}
             <StepStatusText text={detail || titleText} active={isRunning} />
+          </div>
+        </div>
+      );
+    }
+
+    if (step.kind === "image_gen") {
+      const progressMatch = typeof step.content === "string" && step.content.match(/(\d+)%/);
+      const progressText = progressMatch ? ` (${progressMatch[1]}%)` : "";
+      const label = isRunning ? `生成中${progressText}` : (isError ? "生成失败" : "已生成");
+      return (
+        <div key={step.id || `image_gen-${idx}`} className="w-full max-w-full md:max-w-[760px]">
+          <div className={`thinking-capsule flex w-fit max-w-full items-center gap-2 font-medium py-1.5 px-3 rounded-full ${isError ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+            <div className={`p-1 rounded-md ${isRunning ? "bg-primary/10 text-primary animate-pulse" : "bg-zinc-200 dark:bg-zinc-700"}`}>
+              <Paintbrush className="thinking-icon-step" />
+            </div>
+            <StepStatusText text={label} active={isRunning} />
           </div>
         </div>
       );
@@ -743,7 +759,7 @@ export default function ThinkingBlock({
                             </Markdown>
                             {isStreaming && (
                               <div className="sticky bottom-2 flex justify-end mt-2 pointer-events-none">
-                                <div className="text-[10px] text-primary/70 flex items-center gap-1.5 backdrop-blur-md bg-white/80 dark:bg-black/80 px-2.5 py-1 rounded-full border border-primary/20 shadow-sm pointer-events-auto">
+                                <div className="text-[10px] text-primary/70 flex items-center gap-1.5 backdrop-blur-md bg-white/80 dark:bg-zinc-800/90 px-2.5 py-1 rounded-full border border-primary/20 dark:border-primary/30 shadow-sm dark:shadow-none pointer-events-auto">
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                   思考过程中...
                                 </div>
