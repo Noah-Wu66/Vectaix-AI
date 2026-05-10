@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, ExternalLink, FileText, Search, Terminal, X } from "lucide-react";
 import { ModelAvatar } from "./ModelVisuals";
 import { formatAttachmentMeta } from "@/lib/shared/messageAttachments";
@@ -195,17 +195,46 @@ export function isSelectionFullyInsideElement(el) {
   return el.contains(anchor) && el.contains(focus);
 }
 
-export function Thumb({ src, className = "", onClick }) {
+export function Thumb({ src, previewSrc = "", className = "", onClick }) {
+  const [displaySrc, setDisplaySrc] = useState(previewSrc || src || "");
+
+  useEffect(() => {
+    if (!src) {
+      setDisplaySrc("");
+      return;
+    }
+
+    if (!previewSrc || previewSrc === src) {
+      setDisplaySrc(src);
+      return;
+    }
+
+    let cancelled = false;
+    setDisplaySrc(previewSrc);
+
+    const image = new Image();
+    image.onload = () => {
+      if (!cancelled) setDisplaySrc(src);
+    };
+    image.src = src;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src, previewSrc]);
+
   if (!src) return null;
+  const activeSrc = displaySrc || previewSrc || src;
+
   return (
     <button
       type="button"
-      onClick={() => onClick?.(src)}
+      onClick={() => onClick?.(activeSrc)}
       className={`block text-left ${className}`}
       title="点击查看"
     >
       <img
-        src={src}
+        src={activeSrc}
         alt=""
         className="block max-w-[280px] sm:max-w-[240px] max-h-[240px] sm:max-h-[180px] w-auto h-auto object-cover rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800"
         loading="eager"

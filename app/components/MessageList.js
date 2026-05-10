@@ -8,6 +8,7 @@ import {
   Download,
   Edit3,
   Paperclip,
+  RefreshCw,
   Trash2,
   Type,
   User,
@@ -196,7 +197,7 @@ export default function MessageList({
   const [openExportMenuIndex, setOpenExportMenuIndex] = useState(null);
   const prevMessagesRef = useRef([]);
   const isCouncilConversation = isCouncilModel(model);
-  const canEditUserMessage = true;
+  const canEditUserMessage = !isCouncilConversation;
   const canEditImages = modelSupportsAvailableInput(model, "image");
   const toast = useToast();
   const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
@@ -263,6 +264,11 @@ export default function MessageList({
     if (!canEditImages) return;
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.warning("请选择图片文件");
+      if (editFileInputRef.current) editFileInputRef.current.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => {
       onEditingImageSelect?.({
@@ -271,6 +277,7 @@ export default function MessageList({
         name: file.name,
         mimeType: file.type,
       });
+      if (editFileInputRef.current) editFileInputRef.current.value = "";
     };
     reader.readAsDataURL(file);
   };
@@ -285,6 +292,12 @@ export default function MessageList({
   };
 
   const isEditingImageUploading = editingImageAction === "new" && editingImage?.uploadStatus === "uploading";
+
+  const getEditingImagePreview = (msg) => {
+    if (editingImageAction === "new") return editingImage?.preview || "";
+    if (editingImageAction === "keep") return getMessageImageSrc(msg) || "";
+    return "";
+  };
 
   const resizeEditTextarea = () => {
     const el = editTextareaRef.current;
@@ -469,6 +482,7 @@ export default function MessageList({
           const shouldRenderBubble = !shouldRenderCouncilMessage && (hasParts || hasVisibleContent || shouldRenderToolCards || (msg.role === "model" && hasArtifacts));
           const imageGenPart = msg.role === "model" && isImageGenModel(model) ? getFirstImagePart(msg) : null;
           const imageGenDownloadUrl = imageGenPart ? toBlobDownloadUrl(imageGenPart.inlineData.url) : null;
+          const canRegenerateMessage = !isCouncilConversation && msg.role === "model" && messages[i - 1]?.role === "user";
           
           if (msg.role === "model" && !msg.thought && !hasVisibleContent && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasCouncilExpertStates && !hasCouncilAnalysis && !hasCouncilAnalysisState && !hasCouncilResultState && !hasToolRuns && !hasArtifacts && msg.isWaitingFirstChunk) {
             return null;
@@ -536,6 +550,42 @@ export default function MessageList({
                 {editingMsgIndex === i && msg.role === "user" && canEditUserMessage ? (
                   <div className="w-full flex flex-col items-end gap-2">
                     <div className="msg-bubble-user w-full max-w-full glass-effect !bg-white dark:!bg-zinc-800 border-primary/20">
+                      {canEditImages ? (
+                        <>
+                          <input
+                            type="file"
+                            ref={editFileInputRef}
+                            onChange={handleEditFileSelect}
+                            className="hidden"
+                            accept="image/*"
+                          />
+                          <div className="mb-3 flex items-center gap-2">
+                            {getEditingImagePreview(msg) ? (
+                              <div className="relative h-16 w-16 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-900">
+                                <img src={getEditingImagePreview(msg)} alt="" className="h-full w-full object-cover" />
+                              </div>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => editFileInputRef.current?.click()}
+                              className="p-2 text-zinc-500 hover:text-primary hover:bg-primary/5 rounded-lg"
+                              title="更换图片"
+                            >
+                              <Paperclip size={14} />
+                            </button>
+                            {hasEditingImage() ? (
+                              <button
+                                type="button"
+                                onClick={onEditingImageRemove}
+                                className="p-2 text-zinc-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg"
+                                title="移除图片"
+                              >
+                                <X size={14} />
+                              </button>
+                            ) : null}
+                          </div>
+                        </>
+                      ) : null}
                       <textarea
                         ref={editTextareaRef}
                         value={editingContent}
@@ -545,7 +595,13 @@ export default function MessageList({
                     </div>
                     <div className="flex gap-2">
                       <button onClick={onCancelEdit} className="px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-100 rounded-lg">取消</button>
-                      <button onClick={() => onSubmitEdit(i)} className="px-3 py-1.5 text-xs text-white bg-primary rounded-lg">提交</button>
+                      <button
+                        onClick={() => onSubmitEdit(i)}
+                        disabled={isEditingImageUploading}
+                        className="px-3 py-1.5 text-xs text-white bg-primary rounded-lg disabled:opacity-40"
+                      >
+                        {isEditingImageUploading ? "上传中" : "提交"}
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -568,7 +624,8 @@ export default function MessageList({
 
                               return ordered.map(({ part, idx }) => {
                                 const url = part?.inlineData?.url;
-                                if (url) return <Thumb key={idx} src={url} onClick={openLightbox} />;
+                                const previewUrl = part?.inlineData?.localPreviewUrl;
+                                if (url) return <Thumb key={idx} src={url} previewSrc={previewUrl} onClick={openLightbox} />;
                                 if (part?.fileData?.name) return <AttachmentCard key={idx} file={part.fileData} compact={isUser} />;
                                 if (part?.text?.trim()) {
                                   return (
@@ -635,6 +692,15 @@ export default function MessageList({
                             title="作为附件使用"
                           >
                             <Paperclip size={14} />
+                          </button>
+                        ) : null}
+                        {canRegenerateMessage ? (
+                          <button
+                            onClick={() => onRegenerateModelMessage?.(i)}
+                            className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"
+                            title="重新生成"
+                          >
+                            <RefreshCw size={14} />
                           </button>
                         ) : null}
                         <button

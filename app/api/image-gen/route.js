@@ -5,6 +5,7 @@ import {
     fetchImageAsBase64,
     generateMessageId,
     isNonEmptyString,
+    sanitizeStoredMessagesStrict,
 } from '@/app/api/chat/utils';
 import { resolveImageGenProviderConfig } from '@/lib/modelRoutes';
 import {
@@ -14,11 +15,13 @@ import {
 } from '@/app/api/chat/conversationState';
 import {
     enrichConversationPartsWithBlobIds,
+    enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
 import dbConnect from '@/lib/db';
 import {
     buildSseResponseHeaders,
     ensureConversationForChatRequest,
+    persistRegenerateConversationMessages,
     persistUserConversationMessage,
     requireChatUser,
 } from '@/lib/server/chat/routeHelpers';
@@ -71,6 +74,14 @@ function isSupportedSizeResolutionPair(size, resolution) {
     return isImageGenSizeSupportedAtResolution(size, resolution);
 }
 
+function getLastUserMessage(messages) {
+    if (!Array.isArray(messages)) return null;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i]?.role === 'user') return messages[i];
+    }
+    return null;
+}
+
 export async function POST(req) {
     let writePermitTime = null;
 
@@ -82,7 +93,7 @@ export async function POST(req) {
         if (!parsed.ok) return parsed.response;
         const body = parsed.body;
 
-        const { prompt, model, config, conversationId, settings, userMessageId, modelMessageId } = body;
+        const { prompt, model, config, conversationId, settings, userMessageId, modelMessageId, mode, messages } = body;
 
         if (!model || typeof model !== 'string') {
             return Response.json({ error: 'Model is required' }, { status: 400 });
@@ -135,45 +146,85 @@ export async function POST(req) {
             ? modelMessageId.trim()
             : generateMessageId();
 
+        const isRegenerateMode = mode === 'regenerate' && conversationId && Array.isArray(messages);
+        let storedMessagesForRegenerate = null;
+        let regenerateUserMessage = null;
+        if (isRegenerateMode) {
+            let sanitized;
+            try {
+                sanitized = sanitizeStoredMessagesStrict(messages);
+            } catch (e) {
+                return Response.json({ error: e?.message || 'messages invalid' }, { status: 400 });
+            }
+
+            sanitized = await enrichStoredMessagesWithBlobIds(sanitized, { userId: user.userId });
+            const persisted = await persistRegenerateConversationMessages({
+                conversationId,
+                userId: user.userId,
+                messages: sanitized,
+            });
+            if (!persisted?.conversation) {
+                return Response.json({ error: 'Not found' }, { status: 404 });
+            }
+
+            storedMessagesForRegenerate = sanitized;
+            regenerateUserMessage = getLastUserMessage(storedMessagesForRegenerate);
+            writePermitTime = persisted.writePermitTime;
+        }
+
         // 持久化用户消息
         const storedUserParts = [];
         if (isNonEmptyString(prompt)) storedUserParts.push({ text: prompt });
 
         const imageUrls = [];
-        if (Array.isArray(config?.images) && config.images.length > 0) {
-            for (const img of config.images) {
+        const imageInputs = isRegenerateMode
+            ? (Array.isArray(regenerateUserMessage?.parts)
+                ? regenerateUserMessage.parts
+                    .filter((part) => isNonEmptyString(part?.inlineData?.url))
+                    .map((part) => ({
+                        url: part.inlineData.url,
+                        mimeType: part.inlineData.mimeType || 'image/png',
+                    }))
+                : [])
+            : (Array.isArray(config?.images) ? config.images : []);
+        if (imageInputs.length > 0) {
+            for (const img of imageInputs) {
                 if (img?.url) {
-                    storedUserParts.push({
-                        inlineData: {
-                            mimeType: img.mimeType || 'image/png',
-                            url: img.url,
-                        },
-                    });
+                    if (!isRegenerateMode) {
+                        storedUserParts.push({
+                            inlineData: {
+                                mimeType: img.mimeType || 'image/png',
+                                url: img.url,
+                            },
+                        });
+                    }
                     const { base64Data, mimeType } = await fetchImageAsBase64(img.url);
                     imageUrls.push(`data:${mimeType};base64,${base64Data}`);
                 }
             }
         }
 
-        const enrichedStoredUserParts = await enrichConversationPartsWithBlobIds(storedUserParts, {
-            userId: user.userId,
-        });
-        const userMessage = {
-            id: resolvedUserMessageId,
-            role: 'user',
-            content: prompt,
-            type: 'parts',
-            parts: enrichedStoredUserParts,
-        };
-        const persisted = await persistUserConversationMessage({
-            conversationId: currentConversationId,
-            userId: user.userId,
-            userMessage,
-        });
-        if (!persisted?.conversation) {
-            return Response.json({ error: 'Not found' }, { status: 404 });
+        if (!isRegenerateMode) {
+            const enrichedStoredUserParts = await enrichConversationPartsWithBlobIds(storedUserParts, {
+                userId: user.userId,
+            });
+            const userMessage = {
+                id: resolvedUserMessageId,
+                role: 'user',
+                content: prompt,
+                type: 'parts',
+                parts: enrichedStoredUserParts,
+            };
+            const persisted = await persistUserConversationMessage({
+                conversationId: currentConversationId,
+                userId: user.userId,
+                userMessage,
+            });
+            if (!persisted?.conversation) {
+                return Response.json({ error: 'Not found' }, { status: 404 });
+            }
+            writePermitTime = persisted.writePermitTime;
         }
-        writePermitTime = persisted.writePermitTime;
 
         const encoder = new TextEncoder();
         let clientAborted = false;
@@ -195,7 +246,7 @@ export async function POST(req) {
                         conversationId: currentConversationId,
                         userId: user.userId,
                         createdConversationForRequest,
-                        isRegenerateMode: false,
+                        isRegenerateMode,
                         previousMessages,
                         previousUpdatedAt,
                         userMessageId: resolvedUserMessageId,
