@@ -119,7 +119,7 @@ export default function Sidebar({
   return (
     <>
       <div
-        className={`fixed md:relative z-50 md:z-40 w-72 max-w-[85vw] h-full glass-effect border-r border-zinc-200/50 flex-col transition-all duration-300 ${isOpen ? "translate-x-0 flex" : "-translate-x-full md:translate-x-0 hidden md:flex"
+        className={`fixed md:relative z-50 md:z-40 flex w-72 max-w-[85vw] h-full glass-effect border-r border-zinc-200/50 flex-col transform-gpu transition-transform duration-300 ease-out will-change-transform ${isOpen ? "translate-x-0" : "-translate-x-full pointer-events-none md:pointer-events-auto md:translate-x-0"
           }`}
       >
         <div className="p-3 border-b border-zinc-200/50 dark:border-zinc-800/50 flex items-center gap-2">

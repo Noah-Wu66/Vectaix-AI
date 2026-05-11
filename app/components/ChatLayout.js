@@ -68,6 +68,14 @@ export default function ChatLayout({
     <div className="app-root flex font-sans overflow-hidden" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <ProfileModal open={showProfileModal} onClose={onCloseProfile} user={user} isAdmin={isAdmin} themeMode={themeMode} fontSize={fontSize} onThemeModeChange={onThemeModeChange} onFontSizeChange={onFontSizeChange} completionSoundVolume={completionSoundVolume} onCompletionSoundVolumeChange={onCompletionSoundVolumeChange} avatar={userAvatar} onAvatarChange={onAvatarChange} nickname={nickname} onNicknameChange={onNicknameChange} onEmailChange={onEmailChange} />
       <Sidebar isOpen={sidebarOpen} conversations={conversations} currentConversationId={currentConversationId} user={user} avatar={userAvatar} nickname={nickname} profileReady={isSettingsReady} onStartNewChat={onStartNewChat} onLoadConversation={onLoadConversation} onDeleteConversation={onDeleteConversation} onRenameConversation={onRenameConversation} onTogglePinConversation={onTogglePinConversation} onDuplicateConversation={onDuplicateConversation} onOpenProfile={onOpenProfile} onLogout={onLogout} onClose={onCloseSidebar} />
+      {sidebarOpen ? (
+        <button
+          onClick={onCloseSidebar}
+          type="button"
+          aria-label="收起对话列表"
+          className="fixed inset-0 z-[45] cursor-default bg-transparent md:hidden"
+        />
+      ) : null}
       <div className="flex-1 flex flex-col w-full h-full relative overflow-hidden">
         <ChatHeader
           onToggleSidebar={onToggleSidebar}
