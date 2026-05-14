@@ -2,8 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Download, X } from "lucide-react";
-import { useEffect, useMemo } from "react";
-import { toBlobDownloadUrl } from "@/lib/shared/blobUrls";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 function isHttpUrl(src) {
   if (typeof src !== "string") return false;
@@ -15,9 +14,64 @@ function isHttpUrl(src) {
   }
 }
 
+function extractFilename(src) {
+  try {
+    const pathname = new URL(src).pathname;
+    const name = pathname.split("/").pop();
+    return name && /\.\w{2,4}$/.test(name) ? name : "image.png";
+  } catch {
+    return "image.png";
+  }
+}
+
 export default function ImageLightbox({ open, onClose, src }) {
-  const downloadUrl = useMemo(() => toBlobDownloadUrl(src), [src]);
-  const canDownload = useMemo(() => isHttpUrl(src) && Boolean(downloadUrl), [downloadUrl, src]);
+  const canDownload = isHttpUrl(src);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = useCallback(async () => {
+    if (!src || downloading) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(src);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = extractFilename(src);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(src, "_blank");
+    } finally {
+      setDownloading(false);
+    }
+  }, [src, downloading]);
+  const [naturalSize, setNaturalSize] = useState(null);
+
+  useEffect(() => {
+    if (!open || !src) return;
+    setNaturalSize(null);
+    const img = new Image();
+    img.onload = () => setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+    img.src = src;
+  }, [open, src]);
+
+  const displayStyle = useMemo(() => {
+    if (!naturalSize) return {};
+    const VW = window.innerWidth * 0.9;
+    const VH = window.innerHeight * 0.8;
+    const PAD = 24;
+    const maxW = VW - PAD;
+    const maxH = VH - PAD;
+    const ratio = naturalSize.w / naturalSize.h;
+    let w = naturalSize.w;
+    let h = naturalSize.h;
+    if (w > maxW) { w = maxW; h = w / ratio; }
+    if (h > maxH) { h = maxH; w = h * ratio; }
+    return { width: Math.round(w), height: Math.round(h) };
+  }, [naturalSize]);
 
   useEffect(() => {
     if (!open) return;
@@ -35,7 +89,7 @@ export default function ImageLightbox({ open, onClose, src }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3"
           onClick={onClose}
         >
           <div className="absolute inset-0 bg-black/60" />
@@ -45,18 +99,21 @@ export default function ImageLightbox({ open, onClose, src }) {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.98, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[90vw] max-h-[80vh] bg-black/30 rounded-2xl border border-white/10 shadow-2xl backdrop-blur"
+            style={displayStyle}
+            className="relative flex items-center justify-center bg-black/30 rounded-2xl border border-white/10 shadow-2xl backdrop-blur overflow-hidden"
           >
-            <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+            <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
               {canDownload && (
-                <a
-                  href={downloadUrl}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white/90 bg-white/10 hover:bg-white/15 border border-white/10 rounded-lg transition-colors"
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-white/90 bg-white/10 hover:bg-white/15 border border-white/10 rounded-lg transition-colors disabled:opacity-50"
                   title="下载原图"
                 >
                   <Download size={14} />
-                  下载
-                </a>
+                  {downloading ? "下载中…" : "下载"}
+                </button>
               )}
               <button
                 type="button"
@@ -68,14 +125,14 @@ export default function ImageLightbox({ open, onClose, src }) {
               </button>
             </div>
 
-            <div className="w-full h-full max-h-[80vh] flex items-center justify-center p-3">
+            {src && (
               <img
                 src={src}
                 alt=""
-                className="max-w-[90vw] max-h-[80vh] object-contain rounded-xl bg-black/40"
+                className="block w-full h-full object-contain rounded-xl"
                 draggable={false}
               />
-            </div>
+            )}
           </motion.div>
         </motion.div>
       )}
