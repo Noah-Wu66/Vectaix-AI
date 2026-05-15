@@ -22,7 +22,6 @@ import {
     enrichConversationPartsWithBlobIds,
     enrichStoredMessagesWithBlobIds,
 } from '@/lib/server/conversations/blobReferences';
-import { resolveGeminiProviderConfig } from '@/lib/modelRoutes';
 import { buildDirectChatSystemPrompt } from '@/lib/server/chat/systemPromptBuilder';
 import {
     clampMaxTokens,
@@ -230,8 +229,7 @@ export async function POST(req) {
         const user = authResult.auth;
 
         const apiModel = resolveGeminiApiModel(model);
-        const providerConfig = resolveGeminiProviderConfig();
-        const ai = await createGeminiClient();
+        const ai = createGeminiClient();
         let contents = [];
         let effectiveHistoryMessages = [];
         const limit = Number.parseInt(historyLimit, 10);

@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   fetchImageAsBase64,
@@ -44,8 +43,10 @@ import {
   createZenmuxAwareFetch,
   fetchWithZenmuxRateLimit,
 } from "@/lib/server/providers/zenmuxRateLimit";
+import { createGeminiClient } from "@/lib/server/chat/providerAdapters";
 
 const EXPERT_MAX_OUTPUT_TOKENS = 4000;
+const GEMINI_EXPERT_MAX_OUTPUT_TOKENS = 65536;
 const COUNCIL_ANALYSIS_MAX_OUTPUT_TOKENS = 4000;
 const COUNCIL_RESULT_MAX_OUTPUT_TOKENS = 8000;
 const TRIAGE_MAX_OUTPUT_TOKENS = 1200;
@@ -598,21 +599,6 @@ function extractUpstreamErrorMessage(status, rawText) {
   return text.length > 600 ? `${text.slice(0, 600)}...` : text;
 }
 
-function createGeminiClient(providerConfig) {
-  if (!providerConfig?.apiKey) {
-    throw new Error("Gemini provider apiKey is not set");
-  }
-  if (providerConfig?.baseUrl) {
-    return new GoogleGenAI({
-      apiKey: providerConfig.apiKey,
-      httpOptions: {
-        baseUrl: providerConfig.baseUrl,
-      },
-    });
-  }
-  return new GoogleGenAI({ apiKey: providerConfig.apiKey });
-}
-
 function getGeminiModelId(expertModelId) {
   return expertModelId;
 }
@@ -646,7 +632,7 @@ async function requestGeminiExpert({ prompt, imagePayloads, expert, searchContex
       contents: workingContents,
       config: {
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        maxOutputTokens: EXPERT_MAX_OUTPUT_TOKENS,
+        maxOutputTokens: GEMINI_EXPERT_MAX_OUTPUT_TOKENS,
         temperature: 1,
         thinkingConfig: {
           thinkingLevel: expert.thinkingLevel,

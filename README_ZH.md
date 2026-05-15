@@ -354,7 +354,7 @@ npm run dev
 |:---|:---:|:---|
 | `MONGODB_URI` | ✅ | MongoDB 连接字符串 |
 | `JWT_SECRET` | ✅ | JWT 令牌签名密钥 |
-| `GOOGLE_AI_API_KEY` | — | Google Gemini API 密钥 |
+| `GEMINI_API_KEY` | — | Google Gemini API 密钥 |
 | `ANTHROPIC_API_KEY` | — | Anthropic Claude API 密钥 |
 | `OPENAI_API_KEY` | — | OpenAI GPT API 密钥 |
 | `DEEPSEEK_API_KEY` | — | DeepSeek API 密钥 |
