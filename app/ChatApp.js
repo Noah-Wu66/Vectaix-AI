@@ -35,7 +35,7 @@ export default function ChatApp() {
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
-  const mediaResolution = "MEDIA_RESOLUTION_HIGH";
+  const mediaResolution = "media_resolution_high";
   const {
     model,
     isSettingsReady,

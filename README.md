@@ -79,7 +79,7 @@ Access 6 frontier AI models from 5 leading providers through a unified interface
 | **GPT-5.5** | OpenAI | 1M | Text, Image, File | ✅ | ✅ |
 | **Claude Opus 4.7** | Anthropic | 1M | Text, Image, File | ✅ | ✅ |
 | **Claude Opus 4.6** | Anthropic | 1M | Text, Image, File | ✅ | ✅ |
-| **Gemini 3.1 Pro** | Google | 1M | Text, Image, File, Video, Audio | ✅ | ✅ |
+| **Gemini 3.5 Flash** | Google | 1M | Text, Image, File, Video, Audio | ✅ | ✅ |
 | **DeepSeek V4 Pro** | DeepSeek | 1M | Text | — | ✅ |
 | **Doubao-Seed 2.0** | ByteDance | 256K | Text, Image, Video | ✅ | ✅ |
 
@@ -118,7 +118,7 @@ The crown jewel of Vectaix AI. Inspired by the deliberative processes of real-wo
 
 **How it works:**
 
-1. **Parallel Generation** — Your query is simultaneously sent to GPT-5.5, Claude Opus 4.7, and Gemini 3.1 Pro
+1. **Parallel Generation** — Your query is simultaneously sent to GPT-5.5, Claude Opus 4.7, and Gemini 3.5 Flash
 2. **Independent Reasoning** — Each expert reasons independently with its own strengths and knowledge
 3. **Structured Synthesis** — A consensus model analyzes all responses, identifying:
    - ✅ **Agreement** — Points where all experts converge

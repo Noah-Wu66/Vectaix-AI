@@ -2,14 +2,14 @@ import { getAuthPayload } from '@/lib/auth';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
 import dbConnect from '@/lib/db';
 import User from '@/models/User';
-import { GEMINI_PRO_MODEL } from '@/lib/shared/models';
+import { GEMINI_FLASH_MODEL } from '@/lib/shared/models';
 import { createGeminiClient, resolveGeminiApiModel } from '@/lib/server/chat/providerAdapters';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const COMPRESS_RATE_LIMIT = { limit: 10, windowMs: 60 * 1000 };
-const COMPRESS_MODEL = resolveGeminiApiModel(GEMINI_PRO_MODEL);
+const COMPRESS_MODEL = resolveGeminiApiModel(GEMINI_FLASH_MODEL);
 
 const COMPRESS_SYSTEM_PROMPT = `你是一个对话历史压缩器。你的任务是将一段多轮对话压缩成一份简洁的摘要，保留所有关键信息。
 
