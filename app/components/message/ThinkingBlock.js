@@ -4,15 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronUp, FileScan, FileUp, Lightbulb, Loader2, Paintbrush, Scale, Search, Terminal, Zap } from "lucide-react";
 import Markdown from "../common/Markdown";
-import { ModelGlyph } from "../common/ModelVisuals";
-import { Citations, LoadingSweepText, ToolRunPreview, hasToolRunPreview } from "./MessageListHelpers";
-import { getCouncilExpertDisplayLabel } from "@/lib/shared/models";
+import { LoadingSweepText, ToolRunPreview, hasToolRunPreview } from "./MessageListHelpers";
 import {
   SplitStatusText,
   StepStatusText,
   getDisplayHostname,
-  normalizeCouncilExpertStates,
-  normalizeCouncilSummaryState,
   normalizeTimeline,
 } from "./thinkingBlockUtils";
 
@@ -23,16 +19,12 @@ export default function ThinkingBlock({
   searchQuery,
   searchError,
   timeline,
-  councilExpertStates,
-  councilSummaryState,
-  councilExperts,
   tools,
   bodyText,
   showThoughtDetails = true,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [expandedTimelineId, setExpandedTimelineId] = useState(null);
-  const [openExpertKey, setOpenExpertKey] = useState(null);
   const containerRef = useRef(null);
   const autoCollapsedRef = useRef(false);
   const manualExpandedStepIdRef = useRef(null);
@@ -41,9 +33,6 @@ export default function ThinkingBlock({
   const safeBodyText = typeof bodyText === "string" ? bodyText : "";
   const safeSearchError = typeof searchError === "string" ? searchError : "";
   const timelineItems = normalizeTimeline(timeline);
-  const normalizedCouncilExpertStates = normalizeCouncilExpertStates(councilExpertStates);
-  const normalizedCouncilSummaryState = normalizeCouncilSummaryState(councilSummaryState);
-  const hasCouncilMode = normalizedCouncilExpertStates.length > 0 || normalizedCouncilSummaryState !== null;
   const hasTimeline = timelineItems.length > 0;
   const toolsByTimelineId = new Map(
     (Array.isArray(tools) ? tools : [])
@@ -63,7 +52,6 @@ export default function ThinkingBlock({
 
   // 时间线模式：自动展开最新的思考步骤
   useEffect(() => {
-    if (hasCouncilMode) return;
     if (!hasTimeline) return;
     if (autoCollapsedRef.current) return;
 
@@ -88,17 +76,16 @@ export default function ThinkingBlock({
       if (prev === lastThoughtStep.id) return prev;
       return lastThoughtStep.id;
     });
-  }, [hasCouncilMode, hasTimeline, timeline]);
+  }, [hasTimeline, timeline]);
 
   // 简单模式：思考流式输出时自动展开内层思考气泡
   useEffect(() => {
-    if (hasCouncilMode) return;
     if (hasTimeline) return;
     if (autoCollapsedRef.current) return;
     if (isStreaming || safeThought) {
       setExpandedTimelineId("__simple__");
     }
-  }, [hasCouncilMode, hasTimeline, isStreaming, safeThought]);
+  }, [hasTimeline, isStreaming, safeThought]);
 
   // 正文开始输出后，自动折叠外层容器
   useEffect(() => {
@@ -538,69 +525,7 @@ export default function ThinkingBlock({
   // ══════════════════════════════════════════
   return (
     <div className="thinking-block mb-2 w-full max-w-full">
-      {hasCouncilMode ? (
-        /* ── Council 模式：直接以内联胶囊显示，不包裹折叠按钮 ── */
-        <div className="thinking-timeline flex flex-col border-l-2 border-zinc-200/80 dark:border-zinc-700/80">
-          {normalizedCouncilExpertStates.map((expert) => {
-            const isRunning = expert.status === "running";
-            const isError = expert.status === "error";
-            const isDone = expert.status === "done";
-            const isSkipped = expert.status === "skipped";
-            const expertKey = expert.key || expert.label;
-            const expertData = Array.isArray(councilExperts)
-              ? councilExperts.find((e) => e.label === expert.label)
-              : null;
-            const displayLabel = getCouncilExpertDisplayLabel(expert);
-            const hasContent = isDone && expertData && typeof expertData.content === "string" && expertData.content.trim();
-            const isOpen = openExpertKey === expertKey;
-            const statusText = isSkipped
-              ? "已跳过"
-              : isError
-              ? (expert.message || "回答失败")
-              : isDone
-              ? "已完成"
-              : expert.message || "等待中";
-            return (
-              <div key={expertKey} className="w-full max-w-full md:max-w-[760px]">
-                <div
-                  className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : isSkipped ? "text-zinc-300" : "text-zinc-500"} ${hasContent ? "cursor-pointer hover:text-zinc-700" : ""}`}
-                  onClick={hasContent ? () => setOpenExpertKey(isOpen ? null : expertKey) : undefined}
-                >
-                  <ModelGlyph model={expert.modelId} size={14} />
-                  <SplitStatusText prefix={`${displayLabel} · `} status={statusText} active={isRunning} />
-                  {hasContent ? (isOpen ? <ChevronUp size={12} className="ml-1 shrink-0" /> : <ChevronDown size={12} className="ml-1 shrink-0" />) : null}
-                </div>
-                {isOpen && expertData && (
-                  <div className="mt-2 mb-1 ml-1 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200">
-                    <Markdown enableHighlight={true} enableMath={true}>{expertData.content}</Markdown>
-                    <Citations citations={expertData.citations} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {normalizedCouncilSummaryState ? (() => {
-            const s = normalizedCouncilSummaryState;
-            const isRunning = s.status === "running";
-            const isError = s.status === "error";
-            const statusText = isError
-              ? (s.message || "汇总失败")
-              : s.status === "done"
-              ? "已完成"
-              : s.message || "等待中";
-            return (
-              <div className="w-full max-w-full md:max-w-[760px]">
-                <div className={`thinking-capsule inline-flex w-fit max-w-full items-center font-medium transition-colors ${isError ? "thinking-step-error text-red-600" : "text-zinc-500"}`}>
-                  <ModelGlyph model={s.modelId} size={14} />
-                  <SplitStatusText prefix={`${s.label} · `} status={statusText} active={isRunning} />
-                </div>
-              </div>
-            );
-          })() : null}
-        </div>
-      ) : (
-        /* ── 非 Council 模式：外层折叠按钮 + 内层步骤 ── */
-        <>
+      <>
           {/* 第一层：外层折叠按钮 */}
           <button
             onClick={() => {
@@ -701,7 +626,6 @@ export default function ThinkingBlock({
             )}
           </AnimatePresence>
         </>
-      )}
     </div>
   );
 }

@@ -97,14 +97,15 @@ Vectaix AI 的核心亮点。灵感来源于现实世界中理事会的审议机
                           ┌────────────┼────────────┐
                           ▼            ▼            ▼
                    ┌────────────┐┌────────────┐┌────────────┐
-                   │  GPT-5.5   ││Claude Opus ││Gemini 3.1  │
-                   │  （专家）   ││ （专家）    ││ （专家）    │
+                   │  GPT 5.5   ││Claude Opus ││Gemini 3.5  │
+                   │  （专家）   ││ 4.8（专家） ││ Flash（专家）│
                    └─────┬──────┘└─────┬──────┘└─────┬──────┘
                          │             │             │
                          └─────────────┼─────────────┘
                                        ▼
                               ┌─────────────────┐
-                              │    共识综合       │
+                              │ DeepSeek V4 Pro │
+                              │   （汇总分析）    │
                               └────────┬─────────┘
                                        │
                          ┌─────────────┼─────────────┐
@@ -116,13 +117,15 @@ Vectaix AI 的核心亮点。灵感来源于现实世界中理事会的审议机
 
 **工作原理：**
 
-1. **并行生成** — 你的问题同时发送给 GPT-5.5、Claude Opus 4.7 和 Gemini 3.5 Flash
+1. **并行生成** — 你的问题同时发送给 GPT 5.5、Claude Opus 4.8 和 Gemini 3.5 Flash
 2. **独立推理** — 每位专家利用自身优势和知识独立思考
-3. **结构化综合** — 共识模型分析所有回答，识别出：
+3. **结构化综合** — DeepSeek V4 Pro 汇总模型分析所有回答，识别出：
    - ✅ **共识要点** — 所有专家达成一致的观点
    - ⚖️ **关键分歧** — 专家之间的不同意见及原因
    - 💡 **独特见解** — 单个专家提供的有价值观点
    - 🔍 **盲区发现** — 只有跨模型分析才能揭示的遗漏
+
+> Council Mode 当前版本暂不支持联网搜索，专注于多模型纯文本/图片推理。
 
 **论文核心成果：**
 
@@ -246,26 +249,19 @@ Vectaix AI 的核心亮点。灵感来源于现实世界中理事会的审议机
 vectaix-ai/
 ├── app/
 │   ├── api/
-│   │   ├── anthropic/        # Claude Opus API 路由
-│   │   ├── google/           # Gemini API 路由
-│   │   ├── openai/           # GPT API 路由
-│   │   ├── deepseek/         # DeepSeek API 路由
-│   │   ├── bytedance/        # 豆包-Seed API 路由
 │   │   ├── council/          # Council Mode 编排
-│   │   ├── chat/             # 共享聊天工具与压缩
+│   │   ├── chat/             # ZenMux 聊天与压缩
 │   │   ├── auth/             # 认证端点
 │   │   ├── conversations/    # 对话 CRUD
+│   │   ├── media/            # 图片/视频生成
 │   │   ├── upload/           # Blob 文件上传
 │   │   └── admin/            # 管理后台
 │   ├── components/           # React UI 组件
-│   │   ├── ChatLayout.js     # 主布局框架
-│   │   ├── Composer.js       # 消息输入与附件
-│   │   ├── MessageList.js    # 聊天消息展示
-│   │   ├── CouncilMessage.js # Council Mode 结果渲染
-│   │   ├── Markdown.js       # 富文本 Markdown 渲染器
-│   │   ├── ModelSelector.js  # 模型切换 UI
-│   │   ├── Sidebar.js        # 对话侧边栏
-│   │   └── ...
+│   │   ├── chat/             # 聊天输入与模型选择
+│   │   ├── message/          # 消息展示组件
+│   │   │   ├── CouncilMessage.js # Council Mode 结果渲染
+│   │   │   ├── MessageList.js
+│   │   │   └── ...
 │   └── ChatApp.js            # 根应用组件
 ├── lib/
 │   ├── client/               # 客户端工具

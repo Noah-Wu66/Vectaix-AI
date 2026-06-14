@@ -1,4 +1,3 @@
-import { DEFAULT_MODEL } from "@/lib/shared/models";
 import { LoadingSweepText } from "./MessageListHelpers";
 
 export function normalizeTimeline(timeline) {
@@ -35,32 +34,6 @@ export function normalizeTimeline(timeline) {
     acc.push(step);
     return acc;
   }, []);
-}
-
-export function normalizeCouncilExpertStates(states) {
-  if (!Array.isArray(states)) return [];
-  return states
-    .filter((item) => item && typeof item === "object")
-    .map((item) => ({
-      key: typeof item.key === "string" ? item.key : "",
-      modelId: typeof item.modelId === "string" ? item.modelId : "",
-      label: typeof item.label === "string" ? item.label : "专家",
-      status: typeof item.status === "string" ? item.status : "pending",
-      phase: typeof item.phase === "string" ? item.phase : "pending",
-      message: typeof item.message === "string" ? item.message : "",
-    }))
-    .filter((item) => item.key || item.modelId || item.label);
-}
-
-export function normalizeCouncilSummaryState(state) {
-  if (!state || typeof state !== "object") return null;
-  return {
-    modelId: typeof state.modelId === "string" ? state.modelId : DEFAULT_MODEL,
-    label: typeof state.label === "string" ? state.label : "Seed",
-    status: typeof state.status === "string" ? state.status : "pending",
-    phase: typeof state.phase === "string" ? state.phase : "pending",
-    message: typeof state.message === "string" ? state.message : "",
-  };
 }
 
 function StepStatusText({ text, active = false }) {

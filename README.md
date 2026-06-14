@@ -97,15 +97,15 @@ The crown jewel of Vectaix AI. Inspired by the deliberative processes of real-wo
                           ┌────────────┼────────────┐
                           ▼            ▼            ▼
                    ┌────────────┐┌────────────┐┌────────────┐
-                   │  GPT-5.5   ││Claude Opus ││Gemini 3.1  │
-                   │  (Expert)  ││  (Expert)  ││  (Expert)  │
+                   │  GPT 5.5   ││Claude Opus ││Gemini 3.5  │
+                   │  (Expert)  ││ 4.8(Expert)││Flash(Expert)│
                    └─────┬──────┘└─────┬──────┘└─────┬──────┘
                          │             │             │
                          └─────────────┼─────────────┘
                                        ▼
                               ┌─────────────────┐
-                              │   Consensus      │
-                              │   Synthesis      │
+                              │ DeepSeek V4 Pro │
+                              │  (Synthesis)    │
                               └────────┬─────────┘
                                        │
                          ┌─────────────┼─────────────┐
@@ -118,13 +118,15 @@ The crown jewel of Vectaix AI. Inspired by the deliberative processes of real-wo
 
 **How it works:**
 
-1. **Parallel Generation** — Your query is simultaneously sent to GPT-5.5, Claude Opus 4.7, and Gemini 3.5 Flash
+1. **Parallel Generation** — Your query is simultaneously sent to GPT 5.5, Claude Opus 4.8, and Gemini 3.5 Flash
 2. **Independent Reasoning** — Each expert reasons independently with its own strengths and knowledge
-3. **Structured Synthesis** — A consensus model analyzes all responses, identifying:
+3. **Structured Synthesis** — DeepSeek V4 Pro analyzes all responses, identifying:
    - ✅ **Agreement** — Points where all experts converge
    - ⚖️ **Key Differences** — Where experts disagree and why
    - 💡 **Unique Insights** — Valuable perspectives from individual experts
    - 🔍 **Blind Spots** — Gaps that only cross-model analysis reveals
+
+> Council Mode currently does not support web search; it focuses on multi-model text/image reasoning.
 
 **Key Results from Research:**
 
@@ -248,26 +250,19 @@ Execute code in a secure, isolated environment powered by **Vercel Sandbox**.
 vectaix-ai/
 ├── app/
 │   ├── api/
-│   │   ├── anthropic/        # Claude Opus API route
-│   │   ├── google/           # Gemini API route
-│   │   ├── openai/           # GPT API route
-│   │   ├── deepseek/         # DeepSeek API route
-│   │   ├── bytedance/        # Doubao-Seed API route
 │   │   ├── council/          # Council Mode orchestration
-│   │   ├── chat/             # Shared chat utilities & compression
+│   │   ├── chat/             # ZenMux chat & compression
 │   │   ├── auth/             # Authentication endpoints
 │   │   ├── conversations/    # Conversation CRUD
+│   │   ├── media/            # Image/video generation
 │   │   ├── upload/           # Blob file upload
 │   │   └── admin/            # Admin management
 │   ├── components/           # React UI components
-│   │   ├── ChatLayout.js     # Main layout shell
-│   │   ├── Composer.js       # Message input with attachments
-│   │   ├── MessageList.js    # Chat message display
-│   │   ├── CouncilMessage.js # Council Mode result rendering
-│   │   ├── Markdown.js       # Rich markdown renderer
-│   │   ├── ModelSelector.js  # Model switching UI
-│   │   ├── Sidebar.js        # Conversation sidebar
-│   │   └── ...
+│   │   ├── chat/             # Chat input & model selector
+│   │   ├── message/          # Message display components
+│   │   │   ├── CouncilMessage.js # Council Mode result rendering
+│   │   │   ├── MessageList.js
+│   │   │   └── ...
 │   └── ChatApp.js            # Root application component
 ├── lib/
 │   ├── client/               # Client-side utilities
