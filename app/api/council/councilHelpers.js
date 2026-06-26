@@ -4,7 +4,7 @@ import {
   injectCurrentTimeSystemReminder,
 } from "@/app/api/chat/utils";
 import {
-  COUNCIL_EXPERT_CONFIGS,
+  COUNCIL_EXPERTS,
   COUNCIL_SYNTHESIS_MODEL,
   getCouncilExpertDisplayLabel,
 } from "@/lib/shared/models";
@@ -36,6 +36,8 @@ const COUNCIL_TRIAGE_GREETING_PATTERNS = [
 ];
 const COUNCIL_TRIAGE_COMPLEX_HINT_PATTERN =
   /(代码|编程|程序|脚本|报错|bug|错误|调试|分析|比较|对比|区别|优缺点|推荐|方案|策划|步骤|计划|原因|为什么|如何|怎么做|实现|设计|架构|优化|总结|复盘|写一篇|写个|生成|创作|文案|提示词|工作流|营销|研究|评估|审核|审查|review|debug|code)/i;
+
+const COUNCIL_EXPERT_CONFIGS = COUNCIL_EXPERTS;
 
 export { COUNCIL_EXPERT_CONFIGS };
 
@@ -194,7 +196,7 @@ export function buildCouncilAnalysisState(patch = {}) {
 export function buildCouncilResultState(patch = {}) {
   return {
     modelId: COUNCIL_SYNTHESIS_MODEL,
-    label: "DeepSeek",
+    label: "Doubao",
     status: typeof patch.status === "string" ? patch.status : "pending",
     phase: typeof patch.phase === "string" ? patch.phase : "pending",
     message: typeof patch.message === "string" ? patch.message : "",
@@ -383,7 +385,7 @@ async function requestSynthesisText({
   });
   const text = getChatCompletionOutputText(response);
   if (!text) {
-    throw new Error("DeepSeek 未返回有效内容");
+    throw new Error("Doubao 未返回有效内容");
   }
   return text;
 }
@@ -564,14 +566,14 @@ export async function runCouncilAnalysis({ historyMemo, prompt, experts, signal 
 
   const jsonText = extractJsonBlock(text);
   if (!jsonText) {
-    throw new Error("DeepSeek 未返回有效的分析 JSON");
+    throw new Error("Doubao 未返回有效的分析 JSON");
   }
 
   let parsed;
   try {
     parsed = JSON.parse(jsonText);
   } catch {
-    throw new Error("DeepSeek 返回的分析 JSON 无法解析");
+    throw new Error("Doubao 返回的分析 JSON 无法解析");
   }
 
   return normalizeCouncilAnalysisPayload(parsed);
@@ -592,10 +594,10 @@ export async function runCouncilFinalAnswer({ historyMemo, prompt, experts, anal
 
   const normalized = normalizeString(text, MAX_RAW_MARKDOWN_CHARS);
   if (!normalized) {
-    throw new Error("DeepSeek 未返回有效正式回复");
+    throw new Error("Doubao 未返回有效正式回复");
   }
   if (!/^#\s+.+/m.test(normalized)) {
-    throw new Error("DeepSeek 返回的正式回复缺少 H1 标题");
+    throw new Error("Doubao 返回的正式回复缺少 H1 标题");
   }
   return normalized;
 }

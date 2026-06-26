@@ -277,7 +277,7 @@ function ResultCard({ content }) {
           <ModelGlyph model={COUNCIL_SYNTHESIS_MODEL} size={20} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[18px] font-semibold text-zinc-900 dark:text-zinc-100">DeepSeek</div>
+          <div className="text-[18px] font-semibold text-zinc-900 dark:text-zinc-100">Doubao</div>
           <div className="mt-1 text-sm text-zinc-400 dark:text-zinc-500">正式回复</div>
         </div>
       </div>

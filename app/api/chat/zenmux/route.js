@@ -28,7 +28,7 @@ import { buildDirectChatSystemPrompt } from "@/lib/server/chat/systemPromptBuild
 import { parseSystemPrompt } from "@/lib/server/chat/requestConfig";
 import {
   buildChatCompletionsRequest,
-  createZenMuxOpenAIClient,
+  createChatOpenAIClient,
   getChatCompletionChunkDelta,
   getChatCompletionChunkThoughtDelta,
   getChatCompletionCompletedUsage,
@@ -126,7 +126,7 @@ export async function POST(req) {
     let previousMessages = Array.isArray(currentConversation?.messages) ? currentConversation.messages : [];
     let previousUpdatedAt = currentConversation?.updatedAt ? new Date(currentConversation.updatedAt) : new Date();
 
-    const zenMuxClient = createZenMuxOpenAIClient();
+    const zenMuxClient = createChatOpenAIClient(model);
     const apiModel = model;
 
     const currentAttachments = Array.isArray(config?.attachments)
@@ -433,7 +433,7 @@ export async function POST(req) {
     const status = isUpstreamAuthError ? 500 : rawStatus;
     let errorMessage = error?.message;
     if (isUpstreamAuthError) {
-      errorMessage = "模型服务认证失败，请检查 ZenMux 接口配置";
+      errorMessage = "模型服务认证失败，请检查接口配置";
     } else if (error?.message?.includes("API_KEY") || error?.message?.includes("ZENMUX")) {
       errorMessage = "API configuration error. Please check your API keys.";
     }
