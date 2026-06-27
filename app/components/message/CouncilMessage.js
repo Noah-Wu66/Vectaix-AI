@@ -14,7 +14,7 @@ import {
 import Markdown from "../common/Markdown";
 import { Citations } from "./MessageListHelpers";
 import { ModelGlyph } from "../common/ModelVisuals";
-import { COUNCIL_EXPERTS, COUNCIL_SYNTHESIS_MODEL } from "@/lib/shared/models";
+import { COUNCIL_EXPERTS, COUNCIL_SYNTHESIS_LABEL, COUNCIL_SYNTHESIS_MODEL } from "@/lib/shared/models";
 
 const ANALYSIS_SECTIONS = [
   { key: "agreement", title: "共识点", emptyText: "暂未形成明确共识。" },
@@ -277,7 +277,7 @@ function ResultCard({ content }) {
           <ModelGlyph model={COUNCIL_SYNTHESIS_MODEL} size={20} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[18px] font-semibold text-zinc-900 dark:text-zinc-100">Doubao</div>
+          <div className="text-[18px] font-semibold text-zinc-900 dark:text-zinc-100">{COUNCIL_SYNTHESIS_LABEL}</div>
           <div className="mt-1 text-sm text-zinc-400 dark:text-zinc-500">正式回复</div>
         </div>
       </div>

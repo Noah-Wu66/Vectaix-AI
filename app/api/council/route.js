@@ -6,20 +6,14 @@ import {
   COUNCIL_MAX_ROUNDS,
   COUNCIL_MODEL_ID,
   countCompletedCouncilRounds,
-  modelSupportsAvailableInput,
 } from "@/lib/shared/models";
 import {
-  buildCouncilAnalysisState,
-  buildCouncilExpertState,
   buildCouncilFinalMessage,
   buildCouncilHistoryMemo,
   buildCouncilResultState,
   buildCouncilUserInput,
   buildCouncilUserInputFromMessage,
-  COUNCIL_EXPERT_CONFIGS,
-  runCouncilAnalysis,
-  runCouncilExpert,
-  runCouncilFinalAnswer,
+  runCouncilFusionAnswer,
   runCouncilTriage,
 } from "./councilHelpers";
 import { createCouncilStreamHelpers } from "./streamHelpers";
@@ -54,7 +48,7 @@ const COUNCIL_ANALYSIS_MODELS = new Set(["GPT", "Claude", "Gemini"]);
 
 function buildTitle(prompt) {
   const text = typeof prompt === "string" ? prompt.trim() : "";
-  if (!text) return "Council";
+  if (!text) return "Fusion";
   return text.length > 30 ? `${text.slice(0, 30)}...` : text;
 }
 
@@ -188,11 +182,11 @@ export async function POST(req) {
     return Response.json({ error: "Council 模式不支持该操作" }, { status: 400 });
   }
   const isRegenerateMode = false;
-  if (requestImages.length > 0 && !modelSupportsAvailableInput(COUNCIL_MODEL_ID, "image")) {
-    return Response.json({ error: "Council 当前不支持图片输入" }, { status: 400 });
+  if (requestImages.length > 0) {
+    return Response.json({ error: "Council 当前只支持文字输入" }, { status: 400 });
   }
   if (requestAttachments.length > 0) {
-    return Response.json({ error: "Council 当前只支持文字和图片输入" }, { status: 400 });
+    return Response.json({ error: "Council 当前只支持文字输入" }, { status: 400 });
   }
 
   const authResult = await requireChatUser(req, CHAT_RATE_LIMIT);
@@ -308,7 +302,7 @@ export async function POST(req) {
     const completedRounds = countCompletedCouncilRounds(previousMessages);
     if (completedRounds >= COUNCIL_MAX_ROUNDS) {
       return Response.json(
-        { error: `Council 最多支持 ${COUNCIL_MAX_ROUNDS} 轮对话，请新建对话继续。` },
+        { error: "Fusion 只支持一轮会话，请新建对话继续。" },
         { status: 400 }
       );
     }
@@ -414,11 +408,6 @@ export async function POST(req) {
         );
       };
 
-      let analysisState = buildCouncilAnalysisState({
-        status: "pending",
-        phase: "pending",
-        message: "等待来源完成",
-      });
       let resultState = buildCouncilResultState({
         status: "pending",
         phase: "pending",
@@ -479,77 +468,6 @@ export async function POST(req) {
           return;
         }
 
-        const expertStateMap = new Map(
-          COUNCIL_EXPERT_CONFIGS.map((expert) => [expert.key, buildCouncilExpertState(expert, {
-            status: "pending",
-            phase: "pending",
-            message: "等待开始",
-          })])
-        );
-        streamHelpers.sendCouncilExpertStates(Array.from(expertStateMap.values()));
-
-        const updateExpertState = (expert, patch) => {
-          const nextState = buildCouncilExpertState(expert, {
-            ...expertStateMap.get(expert.key),
-            ...patch,
-          });
-          expertStateMap.set(expert.key, nextState);
-          try {
-            streamHelpers.sendCouncilExpertState(nextState);
-          } catch {
-            // ignore stream state send failure
-          }
-        };
-
-        const experts = await Promise.all(
-          COUNCIL_EXPERT_CONFIGS.map((expert) =>
-            runCouncilExpert({
-              prompt: promptText,
-              historyMemo,
-              imagePayloads: councilInput.imagePayloads,
-              expert,
-              clientAborted: () => clientAborted,
-              updateStatus: (patch) => updateExpertState(expert, patch),
-              signal: councilSignal,
-              onDone: (result) => {
-                try {
-                  streamHelpers.sendCouncilExpertResult(result);
-                } catch {
-                  // ignore
-                }
-              },
-            })
-          )
-        );
-
-        if (clientAborted) {
-          throw new Error("COUNCIL_ABORTED");
-        }
-
-        analysisState = buildCouncilAnalysisState({
-          status: "running",
-          phase: "thinking",
-          message: "正在分析三位专家观点",
-        });
-        streamHelpers.sendCouncilAnalysisState(analysisState);
-        const analysis = await runCouncilAnalysis({
-          historyMemo,
-          prompt: promptText,
-          experts,
-          signal: councilSignal,
-        });
-        streamHelpers.sendCouncilAnalysisResult(analysis);
-        analysisState = buildCouncilAnalysisState({
-          status: "done",
-          phase: "done",
-          message: "已完成",
-        });
-        streamHelpers.sendCouncilAnalysisState(analysisState);
-
-        if (clientAborted) {
-          throw new Error("COUNCIL_ABORTED");
-        }
-
         resultState = buildCouncilResultState({
           status: "running",
           phase: "answering",
@@ -557,11 +475,9 @@ export async function POST(req) {
         });
         streamHelpers.sendCouncilResultState(resultState);
 
-        const finalAnswer = await runCouncilFinalAnswer({
+        const finalAnswer = await runCouncilFusionAnswer({
           historyMemo,
           prompt: promptText,
-          experts,
-          analysis,
           signal: councilSignal,
         });
 
@@ -572,8 +488,7 @@ export async function POST(req) {
         const finalMessage = buildCouncilFinalMessage({
           modelMessageId: resolvedModelMessageId,
           content: finalAnswer,
-          experts,
-          analysis,
+          experts: [],
         });
 
         const persistedConversation = await Conversation.findOneAndUpdate(
@@ -606,12 +521,6 @@ export async function POST(req) {
             : (error?.message || "执行失败");
           if (resultState.status === "running" || resultState.phase === "answering") {
             streamHelpers.sendCouncilResultState(buildCouncilResultState({
-              status: "error",
-              phase: "error",
-              message: errorMessage,
-            }));
-          } else if (analysisState.status === "running" || analysisState.phase === "thinking") {
-            streamHelpers.sendCouncilAnalysisState(buildCouncilAnalysisState({
               status: "error",
               phase: "error",
               message: errorMessage,

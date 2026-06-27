@@ -5,6 +5,7 @@ import {
 } from "@/app/api/chat/utils";
 import {
   COUNCIL_EXPERTS,
+  COUNCIL_SYNTHESIS_LABEL,
   COUNCIL_SYNTHESIS_MODEL,
   getCouncilExpertDisplayLabel,
 } from "@/lib/shared/models";
@@ -196,7 +197,7 @@ export function buildCouncilAnalysisState(patch = {}) {
 export function buildCouncilResultState(patch = {}) {
   return {
     modelId: COUNCIL_SYNTHESIS_MODEL,
-    label: "Doubao",
+    label: COUNCIL_SYNTHESIS_LABEL,
     status: typeof patch.status === "string" ? patch.status : "pending",
     phase: typeof patch.phase === "string" ? patch.phase : "pending",
     message: typeof patch.message === "string" ? patch.message : "",
@@ -367,6 +368,17 @@ async function buildCouncilFinalAnswerSystemPrompt() {
 7. 不要泄露思维链，不要输出裸链接`);
 }
 
+async function buildCouncilFusionSystemPrompt() {
+  return injectCurrentTimeSystemReminder(`你是 Council。请直接面向用户给出高质量正式回复。
+
+重要要求：
+1. 输出 Markdown
+2. 优先回答用户当前问题，必要时结合历史对话纪要保持上下文连续
+3. 如果历史纪要与当前问题冲突，以当前问题为准
+4. 结论要明确，步骤要可执行，解释要让普通用户能听懂
+5. 不要泄露思维链，不要提及内部路由、Fusion、OpenRouter 或模型协作机制`);
+}
+
 async function requestSynthesisText({
   instructions,
   payloadText,
@@ -385,7 +397,7 @@ async function requestSynthesisText({
   });
   const text = getChatCompletionOutputText(response);
   if (!text) {
-    throw new Error("Doubao 未返回有效内容");
+    throw new Error(`${COUNCIL_SYNTHESIS_LABEL} 未返回有效内容`);
   }
   return text;
 }
@@ -566,14 +578,14 @@ export async function runCouncilAnalysis({ historyMemo, prompt, experts, signal 
 
   const jsonText = extractJsonBlock(text);
   if (!jsonText) {
-    throw new Error("Doubao 未返回有效的分析 JSON");
+    throw new Error(`${COUNCIL_SYNTHESIS_LABEL} 未返回有效的分析 JSON`);
   }
 
   let parsed;
   try {
     parsed = JSON.parse(jsonText);
   } catch {
-    throw new Error("Doubao 返回的分析 JSON 无法解析");
+    throw new Error(`${COUNCIL_SYNTHESIS_LABEL} 返回的分析 JSON 无法解析`);
   }
 
   return normalizeCouncilAnalysisPayload(parsed);
@@ -594,10 +606,27 @@ export async function runCouncilFinalAnswer({ historyMemo, prompt, experts, anal
 
   const normalized = normalizeString(text, MAX_RAW_MARKDOWN_CHARS);
   if (!normalized) {
-    throw new Error("Doubao 未返回有效正式回复");
+    throw new Error(`${COUNCIL_SYNTHESIS_LABEL} 未返回有效正式回复`);
   }
   if (!/^#\s+.+/m.test(normalized)) {
-    throw new Error("Doubao 返回的正式回复缺少 H1 标题");
+    throw new Error(`${COUNCIL_SYNTHESIS_LABEL} 返回的正式回复缺少 H1 标题`);
+  }
+  return normalized;
+}
+
+export async function runCouncilFusionAnswer({ historyMemo, prompt, signal }) {
+  const instructions = await buildCouncilFusionSystemPrompt();
+  const text = await requestSynthesisText({
+    instructions,
+    payloadText: buildCouncilTurnPrompt({ historyMemo, prompt }),
+    maxTokens: COUNCIL_RESULT_MAX_OUTPUT_TOKENS,
+    reasoningEffort: "high",
+    signal,
+  });
+
+  const normalized = normalizeString(text, MAX_RAW_MARKDOWN_CHARS);
+  if (!normalized) {
+    throw new Error(`${COUNCIL_SYNTHESIS_LABEL} 未返回有效正式回复`);
   }
   return normalized;
 }
@@ -614,7 +643,7 @@ export async function buildCouncilUserInput({ prompt, images }) {
 export async function buildCouncilUserInputFromMessage(message) {
   const parts = getStoredPartsFromMessage(message) || [];
   if (parts.some((part) => part?.fileData?.url)) {
-    throw new Error("Council 当前只支持文字和图片输入");
+    throw new Error("Council 当前只支持文字输入");
   }
   const prompt = extractTextFromStoredParts(parts);
   const images = parts
