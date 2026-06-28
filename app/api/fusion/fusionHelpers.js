@@ -10,6 +10,8 @@ import {
   getFusionExpertDisplayLabel,
 } from "@/lib/shared/models";
 import {
+  OPENROUTER_WEB_SEARCH_TOOL,
+  getChatCompletionAnnotations,
   getChatCompletionOutputText,
   requestZenMuxChatCompletionResponse,
 } from "@/lib/server/zenmux/openai";
@@ -375,8 +377,9 @@ async function buildFusionSystemPrompt() {
 1. 输出 Markdown
 2. 优先回答用户当前问题，必要时结合历史对话纪要保持上下文连续
 3. 如果历史纪要与当前问题冲突，以当前问题为准
-4. 结论要明确，步骤要可执行，解释要让普通用户能听懂
-5. 不要泄露思维链，不要提及内部路由、OpenRouter 或模型协作机制`);
+4. 当问题涉及实时信息、最新动态、具体数据或你不确定的事实时，主动联网搜索核实，并在正文中用 Markdown 链接标注来源；对于常识或你已确定的内容则无需搜索
+5. 结论要明确，步骤要可执行，解释要让普通用户能听懂
+6. 不要泄露思维链，不要提及内部路由、OpenRouter 或模型协作机制`);
 }
 
 async function requestSynthesisText({
@@ -384,6 +387,7 @@ async function requestSynthesisText({
   payloadText,
   maxTokens,
   reasoningEffort = "high",
+  enableWebSearch = false,
   signal,
 }) {
   throwIfAborted(signal);
@@ -393,13 +397,17 @@ async function requestSynthesisText({
     messages: [{ role: "user", content: payloadText }],
     maxTokens,
     reasoningEffort,
+    ...(enableWebSearch ? { tools: [OPENROUTER_WEB_SEARCH_TOOL] } : {}),
     signal,
   });
   const text = getChatCompletionOutputText(response);
   if (!text) {
     throw new Error(`${FUSION_SYNTHESIS_LABEL} 未返回有效内容`);
   }
-  return text;
+  return {
+    text,
+    citations: enableWebSearch ? getChatCompletionAnnotations(response) : [],
+  };
 }
 
 function normalizeExpertOutput(rawText, expert) {
@@ -518,7 +526,7 @@ export async function runFusionTriage({ prompt, hasImages, signal }) {
   }
 
   try {
-    const text = await requestSynthesisText({
+    const { text } = await requestSynthesisText({
       instructions: `你是 Fusion 路由判断器。Fusion 会并行调用三位专家模型讨论。你的判断必须非常保守，只有在用户消息明显属于"打招呼 / 非常简单的一句话小问题"时，才允许跳过专家。
 
 只有以下两类，才可以不调用 Fusion（直接回答）：
@@ -568,7 +576,7 @@ export async function runFusionTriage({ prompt, hasImages, signal }) {
 
 export async function runFusionAnalysis({ historyMemo, prompt, experts, signal }) {
   const instructions = await buildFusionAnalysisSystemPrompt();
-  const text = await requestSynthesisText({
+  const { text } = await requestSynthesisText({
     instructions,
     payloadText: buildFusionSourcePayload({ historyMemo, prompt, experts }),
     maxTokens: FUSION_ANALYSIS_MAX_OUTPUT_TOKENS,
@@ -593,7 +601,7 @@ export async function runFusionAnalysis({ historyMemo, prompt, experts, signal }
 
 export async function runFusionFinalAnswer({ historyMemo, prompt, experts, analysis, signal }) {
   const instructions = await buildFusionFinalAnswerSystemPrompt();
-  const text = await requestSynthesisText({
+  const { text } = await requestSynthesisText({
     instructions,
     payloadText: [
       buildFusionSourcePayload({ historyMemo, prompt, experts }),
@@ -616,11 +624,12 @@ export async function runFusionFinalAnswer({ historyMemo, prompt, experts, analy
 
 export async function runFusionAnswer({ historyMemo, prompt, signal }) {
   const instructions = await buildFusionSystemPrompt();
-  const text = await requestSynthesisText({
+  const { text, citations } = await requestSynthesisText({
     instructions,
     payloadText: buildFusionTurnPrompt({ historyMemo, prompt }),
     maxTokens: FUSION_RESULT_MAX_OUTPUT_TOKENS,
     reasoningEffort: "high",
+    enableWebSearch: true,
     signal,
   });
 
@@ -628,7 +637,7 @@ export async function runFusionAnswer({ historyMemo, prompt, signal }) {
   if (!normalized) {
     throw new Error(`${FUSION_SYNTHESIS_LABEL} 未返回有效正式回复`);
   }
-  return normalized;
+  return { text: normalized, citations: normalizeCitations(citations) };
 }
 
 export async function buildFusionUserInput({ prompt, images }) {
@@ -677,15 +686,20 @@ export function buildFusionFinalMessage({
   content,
   experts,
   analysis,
+  citations,
 }) {
   const safeExperts = Array.isArray(experts) ? experts : [];
+  const expertCitations = safeExperts.length > 0
+    ? mergeCitations(...safeExperts.map((expert) => expert.citations))
+    : [];
+  const finalCitations = mergeCitations(expertCitations, normalizeCitations(citations));
   return {
     id: modelMessageId,
     role: "model",
     content,
     type: "text",
     parts: [{ text: content }],
-    citations: safeExperts.length > 0 ? mergeCitations(...safeExperts.map((expert) => expert.citations)) : [],
+    citations: finalCitations,
     fusionExperts: safeExperts.map((expert) => ({
       modelId: expert.modelId,
       label: expert.label,

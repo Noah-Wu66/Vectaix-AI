@@ -475,7 +475,7 @@ export async function POST(req) {
         });
         streamHelpers.sendFusionResultState(resultState);
 
-        const finalAnswer = await runFusionAnswer({
+        const { text: finalAnswer, citations: finalCitations } = await runFusionAnswer({
           historyMemo,
           prompt: promptText,
           signal: fusionSignal,
@@ -489,6 +489,7 @@ export async function POST(req) {
           modelMessageId: resolvedModelMessageId,
           content: finalAnswer,
           experts: [],
+          citations: finalCitations,
         });
 
         const persistedConversation = await Conversation.findOneAndUpdate(
@@ -506,6 +507,7 @@ export async function POST(req) {
         writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
         streamHelpers.sendFusionResult(finalMessage.content);
+        streamHelpers.sendCitations(finalMessage.citations);
         resultState = buildFusionResultState({
           status: "done",
           phase: "done",
