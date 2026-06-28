@@ -15,8 +15,8 @@ const MessageSchema = new mongoose.Schema({
   // - text parts: { text, thought?, thoughtSignature? }
   // - image parts: { inlineData: { mimeType, url }, thoughtSignature? }
   parts: { type: [mongoose.Schema.Types.Mixed] },
-  councilExperts: { type: [mongoose.Schema.Types.Mixed] },
-  councilAnalysis: { type: mongoose.Schema.Types.Mixed },
+  fusionExperts: { type: [mongoose.Schema.Types.Mixed] },
+  fusionAnalysis: { type: mongoose.Schema.Types.Mixed },
   searchContextTokens: { type: Number },
   createdAt: { type: Date, default: Date.now }
 });

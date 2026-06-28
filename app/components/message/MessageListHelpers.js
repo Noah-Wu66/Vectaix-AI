@@ -101,7 +101,7 @@ function stripThinkingBlocks(text) {
   return text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, "");
 }
 
-const COUNCIL_ANALYSIS_LABELS = {
+const FUSION_ANALYSIS_LABELS = {
   agreement: "共识点",
   keyDifferences: "关键分歧",
   partialCoverage: "覆盖不全",
@@ -109,11 +109,11 @@ const COUNCIL_ANALYSIS_LABELS = {
   blindSpots: "盲点",
 };
 
-function buildCouncilAnalysisText(analysis) {
+function buildFusionAnalysisText(analysis) {
   if (!analysis || typeof analysis !== "object") return "";
   const lines = ["# 对比分析"];
 
-  for (const [key, title] of Object.entries(COUNCIL_ANALYSIS_LABELS)) {
+  for (const [key, title] of Object.entries(FUSION_ANALYSIS_LABELS)) {
     lines.push(`\n## ${title}`);
     const items = Array.isArray(analysis[key]) ? analysis[key] : [];
     if (items.length === 0) {
@@ -132,9 +132,9 @@ function buildCouncilAnalysisText(analysis) {
   return lines.join("\n").trim();
 }
 
-function buildCouncilExportText(msg) {
+function buildFusionExportText(msg) {
   const sections = [];
-  const analysisText = buildCouncilAnalysisText(msg?.councilAnalysis);
+  const analysisText = buildFusionAnalysisText(msg?.fusionAnalysis);
   const resultText = typeof msg?.content === "string" ? stripThinkingBlocks(msg.content).trim() : "";
 
   if (analysisText) sections.push(analysisText);
@@ -149,8 +149,8 @@ function buildCouncilExportText(msg) {
 
 export function buildCopyText(msg) {
   if (!msg) return "";
-  const councilText = buildCouncilExportText(msg);
-  if (councilText) return councilText;
+  const fusionText = buildFusionExportText(msg);
+  if (fusionText) return fusionText;
   const raw = getMessageText(msg);
   const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
   return normalizeCopiedText(cleaned);
@@ -179,8 +179,8 @@ function stripMarkdown(text) {
 
 export function buildPlainText(msg) {
   if (!msg) return "";
-  const councilText = buildCouncilExportText(msg);
-  if (councilText) return normalizeCopiedText(stripMarkdown(councilText));
+  const fusionText = buildFusionExportText(msg);
+  if (fusionText) return normalizeCopiedText(stripMarkdown(fusionText));
   const raw = getMessageText(msg);
   const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
   return normalizeCopiedText(stripMarkdown(cleaned));

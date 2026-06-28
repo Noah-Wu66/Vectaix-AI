@@ -14,7 +14,7 @@ import {
 import Markdown from "../common/Markdown";
 import { Citations } from "./MessageListHelpers";
 import { ModelGlyph } from "../common/ModelVisuals";
-import { COUNCIL_EXPERTS, COUNCIL_SYNTHESIS_LABEL, COUNCIL_SYNTHESIS_MODEL } from "@/lib/shared/models";
+import { FUSION_EXPERTS, FUSION_SYNTHESIS_LABEL, FUSION_SYNTHESIS_MODEL } from "@/lib/shared/models";
 
 const ANALYSIS_SECTIONS = [
   { key: "agreement", title: "共识点", emptyText: "暂未形成明确共识。" },
@@ -24,7 +24,7 @@ const ANALYSIS_SECTIONS = [
   { key: "blindSpots", title: "盲点", emptyText: "暂未发现明显盲点。" },
 ];
 
-const EXPERT_ORDER = COUNCIL_EXPERTS.map((expert) => expert.label);
+const EXPERT_ORDER = FUSION_EXPERTS.map((expert) => expert.label);
 const TERMINAL_EXPERT_STATUSES = new Set(["done", "skipped", "error"]);
 
 function formatDuration(durationMs) {
@@ -67,15 +67,15 @@ function extractResultPreview(markdown) {
   return { title, previewParagraphs };
 }
 
-function buildExpertCards(councilExperts, councilExpertStates) {
+function buildExpertCards(fusionExperts, fusionExpertStates) {
   const expertMap = new Map(
-    (Array.isArray(councilExperts) ? councilExperts : [])
+    (Array.isArray(fusionExperts) ? fusionExperts : [])
       .filter((expert) => expert && typeof expert === "object" && typeof expert.label === "string")
       .map((expert) => [expert.label, expert])
   );
 
   const stateMap = new Map(
-    (Array.isArray(councilExpertStates) ? councilExpertStates : [])
+    (Array.isArray(fusionExpertStates) ? fusionExpertStates : [])
       .filter((expert) => expert && typeof expert === "object" && typeof expert.label === "string")
       .map((expert) => [expert.label, expert])
   );
@@ -274,10 +274,10 @@ function ResultCard({ content }) {
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-center gap-3 border-b border-zinc-100 px-4 py-4 dark:border-zinc-800">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-950">
-          <ModelGlyph model={COUNCIL_SYNTHESIS_MODEL} size={20} />
+          <ModelGlyph model={FUSION_SYNTHESIS_MODEL} size={20} />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[18px] font-semibold text-zinc-900 dark:text-zinc-100">{COUNCIL_SYNTHESIS_LABEL}</div>
+          <div className="text-[18px] font-semibold text-zinc-900 dark:text-zinc-100">{FUSION_SYNTHESIS_LABEL}</div>
           <div className="mt-1 text-sm text-zinc-400 dark:text-zinc-500">正式回复</div>
         </div>
       </div>
@@ -316,31 +316,31 @@ function ResultCard({ content }) {
   );
 }
 
-export default function CouncilMessage({
+export default function FusionMessage({
   content,
-  councilExperts,
-  councilExpertStates,
-  councilAnalysis,
-  councilAnalysisState,
-  councilResultState,
+  fusionExperts,
+  fusionExpertStates,
+  fusionAnalysis,
+  fusionAnalysisState,
+  fusionResultState,
 }) {
   const [openExpertKey, setOpenExpertKey] = useState(null);
   const [openAnalysisKeys, setOpenAnalysisKeys] = useState(() => new Set(ANALYSIS_SECTIONS.map((section) => section.key)));
 
   const expertCards = useMemo(
-    () => buildExpertCards(councilExperts, councilExpertStates),
-    [councilExperts, councilExpertStates]
+    () => buildExpertCards(fusionExperts, fusionExpertStates),
+    [fusionExperts, fusionExpertStates]
   );
 
-  const hasSourceStage = expertCards.length > 0 || (Array.isArray(councilExpertStates) && councilExpertStates.length > 0);
-  const hasAnalysisStage = Boolean(councilAnalysis) || Boolean(councilAnalysisState);
+  const hasSourceStage = expertCards.length > 0 || (Array.isArray(fusionExpertStates) && fusionExpertStates.length > 0);
+  const hasAnalysisStage = Boolean(fusionAnalysis) || Boolean(fusionAnalysisState);
   const isDirectResultOnly = !hasSourceStage && !hasAnalysisStage;
   const sourceReady = expertCards.length > 0 && expertCards.every((expert) => TERMINAL_EXPERT_STATUSES.has(expert.status));
   const sourceError = expertCards.find((expert) => expert.status === "error") || null;
-  const analysisReady = Boolean(councilAnalysis);
-  const analysisError = councilAnalysisState?.status === "error" ? councilAnalysisState?.message || "分析失败" : "";
+  const analysisReady = Boolean(fusionAnalysis);
+  const analysisError = fusionAnalysisState?.status === "error" ? fusionAnalysisState?.message || "分析失败" : "";
   const resultReady = typeof content === "string" && content.trim().length > 0;
-  const resultError = councilResultState?.status === "error" ? councilResultState?.message || "结果生成失败" : "";
+  const resultError = fusionResultState?.status === "error" ? fusionResultState?.message || "结果生成失败" : "";
 
   const toggleAnalysisKey = (key) => {
     setOpenAnalysisKeys((prev) => {
@@ -360,7 +360,7 @@ export default function CouncilMessage({
         ) : (
           <StepState
             status={resultError ? "error" : "loading"}
-            text={resultError || councilResultState?.message || "正在整理正式回复..."}
+            text={resultError || fusionResultState?.message || "正在整理正式回复..."}
           />
         )}
       </div>
@@ -390,13 +390,13 @@ export default function CouncilMessage({
         )}
       </div>
 
-      {(sourceReady || analysisReady || councilAnalysisState) ? (
+      {(sourceReady || analysisReady || fusionAnalysisState) ? (
         <div className="space-y-3">
           <StepHeader step="步骤 2/3" title="对比分析" />
           {analysisReady ? (
             <div className="space-y-3">
               {ANALYSIS_SECTIONS.map((section) => {
-                const items = Array.isArray(councilAnalysis?.[section.key]) ? councilAnalysis[section.key] : [];
+                const items = Array.isArray(fusionAnalysis?.[section.key]) ? fusionAnalysis[section.key] : [];
                 return (
                   <AnalysisGroup
                     key={section.key}
@@ -411,13 +411,13 @@ export default function CouncilMessage({
           ) : (
             <StepState
               status={analysisError ? "error" : "loading"}
-              text={analysisError || councilAnalysisState?.message || "正在汇总三位专家的异同点..."}
+              text={analysisError || fusionAnalysisState?.message || "正在汇总三位专家的异同点..."}
             />
           )}
         </div>
       ) : null}
 
-      {(analysisReady || resultReady || councilResultState) ? (
+      {(analysisReady || resultReady || fusionResultState) ? (
         <div className="space-y-3">
           <StepHeader step="步骤 3/3" title="正式回复" />
           {resultReady ? (
@@ -425,7 +425,7 @@ export default function CouncilMessage({
           ) : (
             <StepState
               status={resultError ? "error" : "loading"}
-              text={resultError || councilResultState?.message || "正在整理正式回复..."}
+              text={resultError || fusionResultState?.message || "正在整理正式回复..."}
             />
           )}
         </div>

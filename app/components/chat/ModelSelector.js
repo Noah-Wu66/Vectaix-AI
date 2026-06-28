@@ -6,7 +6,7 @@ import { ChevronUp } from "lucide-react";
 import {
   getModelConfig,
   getSelectableChatModels,
-  isCouncilModel,
+  isFusionModel,
   MODEL_GROUP_ORDER,
   MODEL_GROUP_TITLES,
   MODEL_DISPLAY_GROUP,
@@ -17,13 +17,13 @@ export default function ModelSelector({
   model,
   onModelChange,
   ready = true,
-  includeCouncil = true,
+  includeFusion = true,
   fullWidth = false,
 }) {
   const [showModelMenu, setShowModelMenu] = useState(false);
   const currentModel = ready ? getModelConfig(model) : null;
   const currentModelLabel = currentModel?.name || "模型";
-  const selectableModels = getSelectableChatModels().filter((item) => includeCouncil || !isCouncilModel(item.id));
+  const selectableModels = getSelectableChatModels().filter((item) => includeFusion || !isFusionModel(item.id));
 
   return (
     <div className="relative">

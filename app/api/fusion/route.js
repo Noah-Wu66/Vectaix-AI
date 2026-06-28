@@ -3,20 +3,20 @@ import dbConnect from "@/lib/db";
 import Conversation from "@/models/Conversation";
 import { generateMessageId, sanitizeStoredMessagesStrict } from "@/app/api/chat/utils";
 import {
-  COUNCIL_MAX_ROUNDS,
-  COUNCIL_MODEL_ID,
-  countCompletedCouncilRounds,
+  FUSION_MAX_ROUNDS,
+  FUSION_MODEL_ID,
+  countCompletedFusionRounds,
 } from "@/lib/shared/models";
 import {
-  buildCouncilFinalMessage,
-  buildCouncilHistoryMemo,
-  buildCouncilResultState,
-  buildCouncilUserInput,
-  buildCouncilUserInputFromMessage,
-  runCouncilFusionAnswer,
-  runCouncilTriage,
-} from "./councilHelpers";
-import { createCouncilStreamHelpers } from "./streamHelpers";
+  buildFusionFinalMessage,
+  buildFusionHistoryMemo,
+  buildFusionResultState,
+  buildFusionUserInput,
+  buildFusionUserInputFromMessage,
+  runFusionAnswer,
+  runFusionTriage,
+} from "./fusionHelpers";
+import { createFusionStreamHelpers } from "./streamHelpers";
 import {
   enrichConversationPartsWithBlobIds,
   enrichStoredMessagesWithBlobIds,
@@ -38,13 +38,13 @@ import { assertRequestSize, parseJsonRequest } from "@/lib/server/api/routeHelpe
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_COUNCIL_EXPERTS = 3;
+const MAX_FUSION_EXPERTS = 3;
 const MAX_EXPERT_MODEL_CHARS = 100;
 const MAX_EXPERT_LABEL_CHARS = 120;
 const MAX_EXPERT_CONTENT_CHARS = 20000;
 const MAX_ANALYSIS_ITEM_CHARS = 2000;
-const COUNCIL_ANALYSIS_GROUP_KEYS = ["agreement", "keyDifferences", "partialCoverage", "uniqueInsights", "blindSpots"];
-const COUNCIL_ANALYSIS_MODELS = new Set(["GPT", "Claude", "Gemini"]);
+const FUSION_ANALYSIS_GROUP_KEYS = ["agreement", "keyDifferences", "partialCoverage", "uniqueInsights", "blindSpots"];
+const FUSION_ANALYSIS_MODELS = new Set(["GPT", "Claude", "Gemini"]);
 
 function buildTitle(prompt) {
   const text = typeof prompt === "string" ? prompt.trim() : "";
@@ -69,9 +69,9 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function sanitizeCouncilExperts(value, fieldPath) {
+function sanitizeFusionExperts(value, fieldPath) {
   if (!Array.isArray(value)) return [];
-  if (value.length > MAX_COUNCIL_EXPERTS) {
+  if (value.length > MAX_FUSION_EXPERTS) {
     throw new Error(`${fieldPath} too many`);
   }
   const experts = [];
@@ -101,11 +101,11 @@ function sanitizeCouncilExperts(value, fieldPath) {
   return experts;
 }
 
-function sanitizeCouncilAnalysis(value, fieldPath) {
+function sanitizeFusionAnalysis(value, fieldPath) {
   if (!isPlainObject(value)) return null;
   const result = {};
 
-  for (const key of COUNCIL_ANALYSIS_GROUP_KEYS) {
+  for (const key of FUSION_ANALYSIS_GROUP_KEYS) {
     const rawItems = Array.isArray(value[key]) ? value[key] : [];
     result[key] = rawItems
       .filter((item) => isPlainObject(item))
@@ -119,7 +119,7 @@ function sanitizeCouncilAnalysis(value, fieldPath) {
             item.models
               .filter((model) => typeof model === "string")
               .map((model) => model.trim())
-              .filter((model) => COUNCIL_ANALYSIS_MODELS.has(model))
+              .filter((model) => FUSION_ANALYSIS_MODELS.has(model))
           ))
           : [];
         return { text, models };
@@ -129,19 +129,19 @@ function sanitizeCouncilAnalysis(value, fieldPath) {
   return result;
 }
 
-async function sanitizeCouncilRegenerateMessages(messages, userId) {
+async function sanitizeFusionRegenerateMessages(messages, userId) {
   const sanitized = sanitizeStoredMessagesStrict(messages);
   const enrichedMessages = await enrichStoredMessagesWithBlobIds(sanitized, { userId });
   return enrichedMessages.map((message, index) => {
     const original = messages[index];
     const nextMessage = { ...message };
-    const experts = sanitizeCouncilExperts(original?.councilExperts, `messages[${index}].councilExperts`);
+    const experts = sanitizeFusionExperts(original?.fusionExperts, `messages[${index}].fusionExperts`);
     if (experts.length > 0) {
-      nextMessage.councilExperts = experts;
+      nextMessage.fusionExperts = experts;
     }
-    const analysis = sanitizeCouncilAnalysis(original?.councilAnalysis, `messages[${index}].councilAnalysis`);
+    const analysis = sanitizeFusionAnalysis(original?.fusionAnalysis, `messages[${index}].fusionAnalysis`);
     if (analysis) {
-      nextMessage.councilAnalysis = analysis;
+      nextMessage.fusionAnalysis = analysis;
     }
     return nextMessage;
   });
@@ -171,22 +171,22 @@ export async function POST(req) {
   const requestImages = Array.isArray(config?.images) ? config.images : [];
   const requestAttachments = Array.isArray(config?.attachments) ? config.attachments : [];
 
-  if (model !== COUNCIL_MODEL_ID) {
-    return Response.json({ error: "Council 模式请求无效" }, { status: 400 });
+  if (model !== FUSION_MODEL_ID) {
+    return Response.json({ error: "Fusion 模式请求无效" }, { status: 400 });
   }
   if (!Array.isArray(history)) {
     return Response.json({ error: "history must be an array" }, { status: 400 });
   }
 
   if (mode) {
-    return Response.json({ error: "Council 模式不支持该操作" }, { status: 400 });
+    return Response.json({ error: "Fusion 模式不支持该操作" }, { status: 400 });
   }
   const isRegenerateMode = false;
   if (requestImages.length > 0) {
-    return Response.json({ error: "Council 当前只支持文字输入" }, { status: 400 });
+    return Response.json({ error: "Fusion 当前只支持文字输入" }, { status: 400 });
   }
   if (requestAttachments.length > 0) {
-    return Response.json({ error: "Council 当前只支持文字输入" }, { status: 400 });
+    return Response.json({ error: "Fusion 当前只支持文字输入" }, { status: 400 });
   }
 
   const authResult = await requireChatUser(req, CHAT_RATE_LIMIT);
@@ -194,7 +194,7 @@ export async function POST(req) {
   const auth = authResult.auth;
 
   let promptText = typeof prompt === "string" ? prompt : "";
-  let councilInput = null;
+  let fusionInput = null;
   let currentConversation = null;
   let createdConversationForRequest = false;
 
@@ -203,15 +203,15 @@ export async function POST(req) {
       return Response.json({ error: "Prompt is required" }, { status: 400 });
     }
     try {
-      councilInput = await buildCouncilUserInput({
+      fusionInput = await buildFusionUserInput({
         prompt: promptText,
         images: requestImages,
       });
     } catch (error) {
       return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
     }
-    if (!Array.isArray(councilInput.userParts) || councilInput.userParts.length === 0) {
-      return Response.json({ error: "Council 输入不能为空" }, { status: 400 });
+    if (!Array.isArray(fusionInput.userParts) || fusionInput.userParts.length === 0) {
+      return Response.json({ error: "Fusion 输入不能为空" }, { status: 400 });
     }
   }
 
@@ -226,8 +226,8 @@ export async function POST(req) {
     if (!currentConversation) {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
-    if (currentConversation.model !== COUNCIL_MODEL_ID) {
-      return Response.json({ error: "Council 对话不存在" }, { status: 400 });
+    if (currentConversation.model !== FUSION_MODEL_ID) {
+      return Response.json({ error: "Fusion 对话不存在" }, { status: 400 });
     }
   }
 
@@ -235,7 +235,7 @@ export async function POST(req) {
     const createdConversation = await Conversation.create({
       userId: auth.userId,
       title: buildTitle(promptText),
-      model: COUNCIL_MODEL_ID,
+      model: FUSION_MODEL_ID,
       messages: [],
       settings: {},
     });
@@ -258,30 +258,30 @@ export async function POST(req) {
   if (isRegenerateMode) {
     let sanitizedMessages;
     try {
-      sanitizedMessages = await sanitizeCouncilRegenerateMessages(messages, auth.userId);
+      sanitizedMessages = await sanitizeFusionRegenerateMessages(messages, auth.userId);
     } catch (error) {
-      return Response.json({ error: error?.message || "Council 快照无效" }, { status: 400 });
+      return Response.json({ error: error?.message || "Fusion 快照无效" }, { status: 400 });
     }
     if (sanitizedMessages.length === 0) {
-      return Response.json({ error: "Council 快照不能为空" }, { status: 400 });
+      return Response.json({ error: "Fusion 快照不能为空" }, { status: 400 });
     }
 
     const lastMessage = sanitizedMessages[sanitizedMessages.length - 1];
     if (lastMessage?.role !== "user") {
-      return Response.json({ error: "Council 重开快照必须以用户消息结尾" }, { status: 400 });
+      return Response.json({ error: "Fusion 重开快照必须以用户消息结尾" }, { status: 400 });
     }
 
     try {
-      councilInput = await buildCouncilUserInputFromMessage(lastMessage);
+      fusionInput = await buildFusionUserInputFromMessage(lastMessage);
     } catch (error) {
       return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
     }
-    if (!Array.isArray(councilInput.userParts) || councilInput.userParts.length === 0) {
-      return Response.json({ error: "Council 输入不能为空" }, { status: 400 });
+    if (!Array.isArray(fusionInput.userParts) || fusionInput.userParts.length === 0) {
+      return Response.json({ error: "Fusion 输入不能为空" }, { status: 400 });
     }
 
-    promptText = councilInput.prompt || "";
-    historyMemo = buildCouncilHistoryMemo(sanitizedMessages.slice(0, -1));
+    promptText = fusionInput.prompt || "";
+    historyMemo = buildFusionHistoryMemo(sanitizedMessages.slice(0, -1));
 
     const regenerateTime = Date.now();
     const updatedConversation = await Conversation.findOneAndUpdate(
@@ -299,34 +299,34 @@ export async function POST(req) {
     }
     writePermitTime = updatedConversation.updatedAt?.getTime?.() ?? regenerateTime;
   } else {
-    const completedRounds = countCompletedCouncilRounds(previousMessages);
-    if (completedRounds >= COUNCIL_MAX_ROUNDS) {
+    const completedRounds = countCompletedFusionRounds(previousMessages);
+    if (completedRounds >= FUSION_MAX_ROUNDS) {
       return Response.json(
         { error: "Fusion 只支持一轮会话，请新建对话继续。" },
         { status: 400 }
       );
     }
 
-    if (!councilInput) {
+    if (!fusionInput) {
       if (!promptText.trim() && requestImages.length === 0) {
         return Response.json({ error: "Prompt is required" }, { status: 400 });
       }
       try {
-        councilInput = await buildCouncilUserInput({
+        fusionInput = await buildFusionUserInput({
           prompt: promptText,
           images: requestImages,
         });
       } catch (error) {
         return Response.json({ error: error?.message || "图片处理失败" }, { status: 400 });
       }
-      if (!Array.isArray(councilInput.userParts) || councilInput.userParts.length === 0) {
-        return Response.json({ error: "Council 输入不能为空" }, { status: 400 });
+      if (!Array.isArray(fusionInput.userParts) || fusionInput.userParts.length === 0) {
+        return Response.json({ error: "Fusion 输入不能为空" }, { status: 400 });
       }
     }
 
-    historyMemo = buildCouncilHistoryMemo(previousMessages);
+    historyMemo = buildFusionHistoryMemo(previousMessages);
 
-    const enrichedUserParts = await enrichConversationPartsWithBlobIds(councilInput.userParts, {
+    const enrichedUserParts = await enrichConversationPartsWithBlobIds(fusionInput.userParts, {
       userId: auth.userId,
     });
 
@@ -365,10 +365,10 @@ export async function POST(req) {
 
   const responseStream = new ReadableStream({
     async start(controller) {
-      const streamHelpers = createCouncilStreamHelpers(controller);
+      const streamHelpers = createFusionStreamHelpers(controller);
       let finalMessagePersisted = false;
-      const councilSignal = req?.signal;
-      const rollbackCouncilTurn = async () => {
+      const fusionSignal = req?.signal;
+      const rollbackFusionTurn = async () => {
         if (finalMessagePersisted) return;
 
         const writeCondition = buildConversationWriteCondition(
@@ -408,35 +408,35 @@ export async function POST(req) {
         );
       };
 
-      let resultState = buildCouncilResultState({
+      let resultState = buildFusionResultState({
         status: "pending",
         phase: "pending",
         message: "等待对比分析完成",
       });
 
       try {
-        const hasImages = Array.isArray(councilInput.imagePayloads) && councilInput.imagePayloads.length > 0;
+        const hasImages = Array.isArray(fusionInput.imagePayloads) && fusionInput.imagePayloads.length > 0;
         const skipTriage = isRegenerateMode || hasImages;
-        let triageResult = { needCouncil: true };
+        let triageResult = { needFusion: true };
 
         if (!skipTriage) {
-          triageResult = await runCouncilTriage({ prompt: promptText, hasImages, signal: councilSignal });
+          triageResult = await runFusionTriage({ prompt: promptText, hasImages, signal: fusionSignal });
         }
 
-        if (!triageResult.needCouncil && triageResult.directAnswer) {
-          resultState = buildCouncilResultState({
+        if (!triageResult.needFusion && triageResult.directAnswer) {
+          resultState = buildFusionResultState({
             status: "running",
             phase: "answering",
             message: "正在生成正式回复",
           });
           const answer = triageResult.directAnswer;
-          streamHelpers.sendCouncilResultState(resultState);
+          streamHelpers.sendFusionResultState(resultState);
 
           if (clientAborted) {
-            throw new Error("COUNCIL_ABORTED");
+            throw new Error("FUSION_ABORTED");
           }
 
-          const finalMessage = buildCouncilFinalMessage({
+          const finalMessage = buildFusionFinalMessage({
             modelMessageId: resolvedModelMessageId,
             content: answer,
             experts: [],
@@ -456,36 +456,36 @@ export async function POST(req) {
           finalMessagePersisted = true;
           writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
-          streamHelpers.sendCouncilResult(finalMessage.content);
-          resultState = buildCouncilResultState({
+          streamHelpers.sendFusionResult(finalMessage.content);
+          resultState = buildFusionResultState({
             status: "done",
             phase: "done",
             message: "已完成",
           });
-          streamHelpers.sendCouncilResultState(resultState);
+          streamHelpers.sendFusionResultState(resultState);
           streamHelpers.sendDone();
           controller.close();
           return;
         }
 
-        resultState = buildCouncilResultState({
+        resultState = buildFusionResultState({
           status: "running",
           phase: "answering",
           message: "正在生成正式回复",
         });
-        streamHelpers.sendCouncilResultState(resultState);
+        streamHelpers.sendFusionResultState(resultState);
 
-        const finalAnswer = await runCouncilFusionAnswer({
+        const finalAnswer = await runFusionAnswer({
           historyMemo,
           prompt: promptText,
-          signal: councilSignal,
+          signal: fusionSignal,
         });
 
         if (clientAborted) {
-          throw new Error("COUNCIL_ABORTED");
+          throw new Error("FUSION_ABORTED");
         }
 
-        const finalMessage = buildCouncilFinalMessage({
+        const finalMessage = buildFusionFinalMessage({
           modelMessageId: resolvedModelMessageId,
           content: finalAnswer,
           experts: [],
@@ -505,22 +505,22 @@ export async function POST(req) {
         finalMessagePersisted = true;
         writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
-        streamHelpers.sendCouncilResult(finalMessage.content);
-        resultState = buildCouncilResultState({
+        streamHelpers.sendFusionResult(finalMessage.content);
+        resultState = buildFusionResultState({
           status: "done",
           phase: "done",
           message: "已完成",
         });
-        streamHelpers.sendCouncilResultState(resultState);
+        streamHelpers.sendFusionResultState(resultState);
         streamHelpers.sendDone();
         controller.close();
       } catch (error) {
         try {
-          const errorMessage = error?.message === "COUNCIL_ABORTED"
+          const errorMessage = error?.message === "FUSION_ABORTED"
             ? "已停止"
             : (error?.message || "执行失败");
           if (resultState.status === "running" || resultState.phase === "answering") {
-            streamHelpers.sendCouncilResultState(buildCouncilResultState({
+            streamHelpers.sendFusionResultState(buildFusionResultState({
               status: "error",
               phase: "error",
               message: errorMessage,
@@ -530,11 +530,11 @@ export async function POST(req) {
           // ignore stream state send failure
         }
         try {
-          await rollbackCouncilTurn();
+          await rollbackFusionTurn();
         } catch {
           // ignore rollback failure
         }
-        if (clientAborted || error?.message === "COUNCIL_ABORTED") {
+        if (clientAborted || error?.message === "FUSION_ABORTED") {
           try {
             controller.close();
           } catch {
@@ -545,7 +545,7 @@ export async function POST(req) {
         try {
           const encoder = new TextEncoder();
           controller.enqueue(
-            encoder.encode(`data: ${createStreamErrorEvent(error?.message || "Council 执行失败")}\n\n`)
+            encoder.encode(`data: ${createStreamErrorEvent(error?.message || "Fusion 执行失败")}\n\n`)
           );
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();

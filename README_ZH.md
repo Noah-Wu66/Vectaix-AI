@@ -9,11 +9,10 @@
 
 <br/><br/>
 
-**多模型 AI 聊天平台 · 内置 Council Mode 共识驱动智能框架**
+**多模型 AI 聊天平台 · 内置 Fusion Mode 共识驱动智能框架**
 
 <br/>
 
-[![arXiv 论文](https://img.shields.io/badge/arXiv-2604.02923-b31b1b.svg?style=flat-square&logo=arxiv&logoColor=white)](http://arxiv.org/abs/2604.02923)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
@@ -51,16 +50,7 @@
 
 **Vectaix AI** 是一个生产级的多模型 AI 聊天平台，将全球最强大的语言模型汇聚于一个优雅的统一界面。不再局限于单一 AI 服务商，Vectaix 让你自由地在多个前沿模型之间切换，甚至可以组合使用。
 
-其核心是 **Council Mode（理事会模式）**—— 一种新颖的多智能体共识框架，能够将查询并行分发至多个前沿大模型，并通过结构化讨论综合它们的输出，从而大幅减少幻觉和偏见。
-
-<br/>
-
-> [!NOTE]
-> **研究论文** — *Council Mode: Mitigating Hallucination and Bias in LLMs via Multi-Agent Consensus*
->
-> **作者：** 吴帅、李雪、冯雅娜、李宇芳、王志军
->
-> [![在 arXiv 上阅读](https://img.shields.io/badge/在%20arXiv%20上阅读%20%E2%86%92-2604.02923-b31b1b?style=flat-square&logo=arxiv&logoColor=white)](http://arxiv.org/abs/2604.02923)
+其核心是 **Fusion Mode**—— 一种新颖的多智能体共识框架，能够将查询并行分发至多个前沿大模型，并通过结构化讨论综合它们的输出，从而大幅减少幻觉和偏见。
 
 <br/>
 
@@ -85,9 +75,9 @@
 
 <br/>
 
-### 🏛️ Council Mode —— 多智能体共识
+### 🏛️ Fusion Mode —— 多智能体共识
 
-Vectaix AI 的核心亮点。灵感来源于现实世界中理事会的审议机制，该模式协调多个 AI 专家共同推理，得出更真实、更均衡的答案。
+Vectaix AI 的核心亮点。该模式协调多个 AI 专家共同推理，得出更真实、更均衡的答案。
 
 ```
                               ┌─────────────────┐
@@ -125,7 +115,7 @@ Vectaix AI 的核心亮点。灵感来源于现实世界中理事会的审议机
    - 💡 **独特见解** — 单个专家提供的有价值观点
    - 🔍 **盲区发现** — 只有跨模型分析才能揭示的遗漏
 
-> Council Mode 当前版本暂不支持联网搜索，专注于多模型纯文本/图片推理。
+> Fusion Mode 当前版本暂不支持联网搜索，专注于多模型纯文本/图片推理。
 
 **论文核心成果：**
 
@@ -249,7 +239,7 @@ Vectaix AI 的核心亮点。灵感来源于现实世界中理事会的审议机
 vectaix-ai/
 ├── app/
 │   ├── api/
-│   │   ├── council/          # Council Mode 编排
+│   │   ├── fusion/           # Fusion Mode 编排
 │   │   ├── chat/             # ZenMux 聊天与压缩
 │   │   ├── auth/             # 认证端点
 │   │   ├── conversations/    # 对话 CRUD
@@ -259,7 +249,7 @@ vectaix-ai/
 │   ├── components/           # React UI 组件
 │   │   ├── chat/             # 聊天输入与模型选择
 │   │   ├── message/          # 消息展示组件
-│   │   │   ├── CouncilMessage.js # Council Mode 结果渲染
+│   │   │   ├── FusionMessage.js # Fusion Mode 结果渲染
 │   │   │   ├── MessageList.js
 │   │   │   └── ...
 │   └── ChatApp.js            # 根应用组件
@@ -358,28 +348,7 @@ npm run dev
 | `BLOB_READ_WRITE_TOKEN` | — | Vercel Blob 存储令牌 |
 
 > [!TIP]
-> 你只需要配置想使用的供应商的 API 密钥，平台会优雅地处理缺失的供应商配置。
-
-<br/>
-
----
-
-<br/>
-
-## 研究与引用
-
-本项目是 **Council Mode** 框架的参考实现。如果你在研究中使用了 Vectaix AI 或 Council Mode，请引用我们的论文：
-
-```bibtex
-@article{wu2026council,
-  title     = {Council Mode: Mitigating Hallucination and Bias in LLMs 
-               via Multi-Agent Consensus},
-  author    = {Wu, Shuai and Li, Xue and Feng, Yanna and Li, Yufang 
-               and Wang, Zhijun},
-  journal   = {arXiv preprint arXiv:2604.02923},
-  year      = {2026}
-}
-```
+> 你只需为想用的服务商配置 API 密钥。平台会自动处理缺失的服务商配置。
 
 <br/>
 

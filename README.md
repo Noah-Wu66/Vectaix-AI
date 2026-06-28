@@ -9,11 +9,10 @@
 
 <br/><br/>
 
-**Multi-Model AI Chat Platform with Council Mode for Consensus-Driven Intelligence**
+**Multi-Model AI Chat Platform with Fusion Mode for Consensus-Driven Intelligence**
 
 <br/>
 
-[![arXiv Paper](https://img.shields.io/badge/arXiv-2604.02923-b31b1b.svg?style=flat-square&logo=arxiv&logoColor=white)](http://arxiv.org/abs/2604.02923)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
@@ -51,16 +50,7 @@
 
 **Vectaix AI** is a production-grade, multi-model AI chat platform that unifies the world's most powerful language models under a single, elegant interface. Rather than locking users into one AI provider, Vectaix gives you the freedom to switch between — or even combine — frontier models seamlessly.
 
-At its core is **Council Mode**, a novel multi-agent consensus framework that dispatches queries to multiple frontier LLMs in parallel and synthesizes their outputs through structured deliberation — dramatically reducing hallucination and bias.
-
-<br/>
-
-> [!NOTE]
-> **Research Paper** — *Council Mode: Mitigating Hallucination and Bias in LLMs via Multi-Agent Consensus*
->
-> **Authors:** Shuai Wu, Xue Li, Yanna Feng, Yufang Li, Zhijun Wang
->
-> [![Read on arXiv](https://img.shields.io/badge/Read%20on%20arXiv%20%E2%86%92-2604.02923-b31b1b?style=flat-square&logo=arxiv&logoColor=white)](http://arxiv.org/abs/2604.02923)
+At its core is **Fusion Mode**, a novel multi-agent consensus framework that dispatches queries to multiple frontier LLMs in parallel and synthesizes their outputs through structured deliberation — dramatically reducing hallucination and bias.
 
 <br/>
 
@@ -85,7 +75,7 @@ Access 6 frontier AI models from 5 leading providers through a unified interface
 
 <br/>
 
-### 🏛️ Council Mode — Multi-Agent Consensus
+### 🏛️ Fusion Mode — Multi-Agent Consensus
 
 The crown jewel of Vectaix AI. Inspired by the deliberative processes of real-world councils, this mode orchestrates multiple AI experts to arrive at a more truthful, balanced answer.
 
@@ -126,7 +116,7 @@ The crown jewel of Vectaix AI. Inspired by the deliberative processes of real-wo
    - 💡 **Unique Insights** — Valuable perspectives from individual experts
    - 🔍 **Blind Spots** — Gaps that only cross-model analysis reveals
 
-> Council Mode currently does not support web search; it focuses on multi-model text/image reasoning.
+> Fusion Mode currently does not support web search; it focuses on multi-model text/image reasoning.
 
 **Key Results from Research:**
 
@@ -250,7 +240,7 @@ Execute code in a secure, isolated environment powered by **Vercel Sandbox**.
 vectaix-ai/
 ├── app/
 │   ├── api/
-│   │   ├── council/          # Council Mode orchestration
+│   │   ├── fusion/           # Fusion Mode orchestration
 │   │   ├── chat/             # ZenMux chat & compression
 │   │   ├── auth/             # Authentication endpoints
 │   │   ├── conversations/    # Conversation CRUD
@@ -260,7 +250,7 @@ vectaix-ai/
 │   ├── components/           # React UI components
 │   │   ├── chat/             # Chat input & model selector
 │   │   ├── message/          # Message display components
-│   │   │   ├── CouncilMessage.js # Council Mode result rendering
+│   │   │   ├── FusionMessage.js # Fusion Mode result rendering
 │   │   │   ├── MessageList.js
 │   │   │   └── ...
 │   └── ChatApp.js            # Root application component
@@ -360,27 +350,6 @@ npm run dev
 
 > [!TIP]
 > You only need API keys for the providers you want to use. The platform gracefully handles missing provider configurations.
-
-<br/>
-
----
-
-<br/>
-
-## Research & Citation
-
-This project is the reference implementation of the **Council Mode** framework. If you use Vectaix AI or Council Mode in your research, please cite our paper:
-
-```bibtex
-@article{wu2026council,
-  title     = {Council Mode: Mitigating Hallucination and Bias in LLMs 
-               via Multi-Agent Consensus},
-  author    = {Wu, Shuai and Li, Xue and Feng, Yanna and Li, Yufang 
-               and Wang, Zhijun},
-  journal   = {arXiv preprint arXiv:2604.02923},
-  year      = {2026}
-}
-```
 
 <br/>
 

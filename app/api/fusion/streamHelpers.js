@@ -1,6 +1,6 @@
 import { createSseWriter } from "@/lib/server/chat/sse";
 
-export function createCouncilStreamHelpers(controller) {
+export function createFusionStreamHelpers(controller) {
   const sse = createSseWriter(controller);
   return {
     sendEvent(payload) {
@@ -10,18 +10,18 @@ export function createCouncilStreamHelpers(controller) {
       if (!content) return;
       sse.send({ type: "text", content });
     },
-    sendCouncilExpertStates(experts) {
-      sse.send({ type: "council_expert_states", experts });
+    sendFusionExpertStates(experts) {
+      sse.send({ type: "fusion_expert_states", experts });
     },
-    sendCouncilExpertState(expert) {
-      sse.send({ type: "council_expert_state", expert });
+    sendFusionExpertState(expert) {
+      sse.send({ type: "fusion_expert_state", expert });
     },
-    sendCouncilAnalysisState(analysis) {
-      sse.send({ type: "council_analysis_state", analysis });
+    sendFusionAnalysisState(analysis) {
+      sse.send({ type: "fusion_analysis_state", analysis });
     },
-    sendCouncilExperts(experts) {
+    sendFusionExperts(experts) {
       sse.send({
-        type: "council_experts",
+        type: "fusion_experts",
         experts: experts.map((expert) => ({
           modelId: expert.modelId,
           label: expert.label,
@@ -31,9 +31,9 @@ export function createCouncilStreamHelpers(controller) {
         })),
       });
     },
-    sendCouncilExpertResult(expert) {
+    sendFusionExpertResult(expert) {
       sse.send({
-        type: "council_expert_result",
+        type: "fusion_expert_result",
         expert: {
           modelId: expert.modelId,
           label: expert.label,
@@ -43,14 +43,14 @@ export function createCouncilStreamHelpers(controller) {
         },
       });
     },
-    sendCouncilAnalysisResult(analysis) {
-      sse.send({ type: "council_analysis_result", analysis });
+    sendFusionAnalysisResult(analysis) {
+      sse.send({ type: "fusion_analysis_result", analysis });
     },
-    sendCouncilResultState(result) {
-      sse.send({ type: "council_result_state", result });
+    sendFusionResultState(result) {
+      sse.send({ type: "fusion_result_state", result });
     },
-    sendCouncilResult(content) {
-      sse.send({ type: "council_result", content });
+    sendFusionResult(content) {
+      sse.send({ type: "fusion_result", content });
     },
     sendCitations(citations) {
       if (!Array.isArray(citations) || citations.length === 0) return;
@@ -59,8 +59,8 @@ export function createCouncilStreamHelpers(controller) {
     sendDone() {
       sse.done();
     },
-    sendCouncilTriage(payload) {
-      sse.send({ type: "council_triage", ...payload });
+    sendFusionTriage(payload) {
+      sse.send({ type: "fusion_triage", ...payload });
     },
   };
 }
