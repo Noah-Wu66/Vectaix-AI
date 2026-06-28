@@ -13,6 +13,7 @@ import {
   buildFusionResultState,
   buildFusionUserInput,
   buildFusionUserInputFromMessage,
+  parseNativeFusionMarkdown,
   runFusionAnswer,
   runFusionTriage,
 } from "./fusionHelpers";
@@ -475,11 +476,13 @@ export async function POST(req) {
         });
         streamHelpers.sendFusionResultState(resultState);
 
-        const { text: finalAnswer, citations: finalCitations } = await runFusionAnswer({
+        const { text: rawFusionAnswer, citations: finalCitations } = await runFusionAnswer({
           historyMemo,
           prompt: promptText,
           signal: fusionSignal,
         });
+        const parsedFusionAnswer = parseNativeFusionMarkdown(rawFusionAnswer);
+        const finalAnswer = parsedFusionAnswer.content || rawFusionAnswer;
 
         if (clientAborted) {
           throw new Error("FUSION_ABORTED");
@@ -488,7 +491,8 @@ export async function POST(req) {
         const finalMessage = buildFusionFinalMessage({
           modelMessageId: resolvedModelMessageId,
           content: finalAnswer,
-          experts: [],
+          experts: parsedFusionAnswer.experts,
+          analysis: parsedFusionAnswer.analysis,
           citations: finalCitations,
         });
 
@@ -506,6 +510,12 @@ export async function POST(req) {
         finalMessagePersisted = true;
         writePermitTime = persistedConversation.updatedAt?.getTime?.() ?? Date.now();
 
+        if (parsedFusionAnswer.experts.length > 0) {
+          streamHelpers.sendFusionExperts(parsedFusionAnswer.experts);
+        }
+        if (parsedFusionAnswer.analysis) {
+          streamHelpers.sendFusionAnalysisResult(parsedFusionAnswer.analysis);
+        }
         streamHelpers.sendFusionResult(finalMessage.content);
         streamHelpers.sendCitations(finalMessage.citations);
         resultState = buildFusionResultState({

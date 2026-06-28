@@ -16,11 +16,14 @@ import {
   requestZenMuxChatCompletionResponse,
 } from "@/lib/server/zenmux/openai";
 
+export { parseNativeFusionMarkdown } from "@/lib/shared/fusionNativeMarkdown";
+
 const EXPERT_MAX_OUTPUT_TOKENS = 64000;
 const FUSION_ANALYSIS_MAX_OUTPUT_TOKENS = 32768;
 const FUSION_RESULT_MAX_OUTPUT_TOKENS = 32768;
 const TRIAGE_MAX_OUTPUT_TOKENS = 1200;
 const MAX_RAW_MARKDOWN_CHARS = 20000;
+const MAX_NATIVE_FUSION_RESPONSE_CHARS = 120000;
 const MAX_FINDING_TEXT_CHARS = 1000;
 const HISTORY_USER_SUMMARY_CHARS = 500;
 const HISTORY_MODEL_SUMMARY_CHARS = 1200;
@@ -633,7 +636,7 @@ export async function runFusionAnswer({ historyMemo, prompt, signal }) {
     signal,
   });
 
-  const normalized = normalizeString(text, MAX_RAW_MARKDOWN_CHARS);
+  const normalized = normalizeString(text, MAX_NATIVE_FUSION_RESPONSE_CHARS);
   if (!normalized) {
     throw new Error(`${FUSION_SYNTHESIS_LABEL} 未返回有效正式回复`);
   }

@@ -21,6 +21,7 @@ import Markdown from "../common/Markdown";
 import { Citations } from "./MessageListHelpers";
 import { ModelGlyph } from "../common/ModelVisuals";
 import { FUSION_EXPERTS, FUSION_SYNTHESIS_LABEL, FUSION_SYNTHESIS_MODEL } from "@/lib/shared/models";
+import { parseNativeFusionMarkdown } from "@/lib/shared/fusionNativeMarkdown";
 
 const ANALYSIS_SECTIONS = [
   { key: "agreement", title: "共识点", emptyText: "暂未形成明确共识。", icon: CheckCircle2 },
@@ -266,6 +267,14 @@ function ExpertCard({ expert, open, onToggle }) {
 
 function AnalysisGroup({ section, items, open, onToggle }) {
   const Icon = section.icon || Scale;
+  const previewText = items.length > 0
+    ? items
+      .map((item) => (typeof item?.text === "string" ? item.text.trim() : ""))
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 180)
+    : section.emptyText;
+
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
       <button
@@ -278,6 +287,10 @@ function AnalysisGroup({ section, items, open, onToggle }) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-[17px] font-medium text-zinc-900 dark:text-zinc-100">{section.title}</div>
+          <div className="mt-1 max-h-12 overflow-hidden text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+            {previewText}
+            {previewText.length >= 180 ? "..." : ""}
+          </div>
         </div>
         <span className="text-sm font-medium text-zinc-400 dark:text-zinc-500">{items.length}</span>
         {open ? <ChevronUp className="h-4 w-4 text-zinc-300 dark:text-zinc-600" /> : <ChevronDown className="h-4 w-4 text-zinc-300 dark:text-zinc-600" />}
@@ -325,12 +338,13 @@ function AnalysisGroup({ section, items, open, onToggle }) {
   );
 }
 
-function FusedModelStack() {
+function FusedModelStack({ experts }) {
+  const sourceExperts = Array.isArray(experts) && experts.length > 0 ? experts : FUSION_EXPERTS;
   return (
     <span className="flex -space-x-1.5">
-      {FUSION_EXPERTS.map((expert) => (
+      {sourceExperts.map((expert, index) => (
         <span
-          key={expert.key}
+          key={expert.key || expert.modelId || `${expert.label}-${index}`}
           className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white bg-white dark:border-zinc-900 dark:bg-zinc-950"
         >
           <ModelGlyph model={expert.modelId} size={12} />
@@ -340,7 +354,7 @@ function FusedModelStack() {
   );
 }
 
-function ResultCard({ content, analysis }) {
+function ResultCard({ content, analysis, fusionExperts }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef(null);
@@ -376,7 +390,7 @@ function ResultCard({ content, analysis }) {
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <span className="text-[17px] font-semibold text-zinc-900 dark:text-zinc-100">{FUSION_SYNTHESIS_LABEL}</span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 dark:border-zinc-700 dark:bg-zinc-950">
-            <FusedModelStack />
+            <FusedModelStack experts={fusionExperts} />
             <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Fused</span>
           </span>
         </div>
@@ -448,21 +462,30 @@ export default function FusionMessage({
   fusionResultState,
 }) {
   const [openExpertKey, setOpenExpertKey] = useState(null);
-  const [openAnalysisKeys, setOpenAnalysisKeys] = useState(() => new Set(ANALYSIS_SECTIONS.map((section) => section.key)));
+  const [openAnalysisKeys, setOpenAnalysisKeys] = useState(() => new Set());
+  const parsedNativeFusion = useMemo(() => {
+    const hasStructuredData = (Array.isArray(fusionExperts) && fusionExperts.length > 0) || Boolean(fusionAnalysis);
+    if (hasStructuredData || typeof content !== "string" || !/panel responses/i.test(content)) return null;
+    const parsed = parseNativeFusionMarkdown(content);
+    return (parsed.experts.length > 0 || parsed.analysis) ? parsed : null;
+  }, [content, fusionExperts, fusionAnalysis]);
+  const displayContent = parsedNativeFusion?.content || content;
+  const displayFusionExperts = parsedNativeFusion?.experts || fusionExperts;
+  const displayFusionAnalysis = parsedNativeFusion?.analysis || fusionAnalysis;
 
   const expertCards = useMemo(
-    () => buildExpertCards(fusionExperts, fusionExpertStates),
-    [fusionExperts, fusionExpertStates]
+    () => buildExpertCards(displayFusionExperts, fusionExpertStates),
+    [displayFusionExperts, fusionExpertStates]
   );
 
   const hasSourceStage = expertCards.length > 0 || (Array.isArray(fusionExpertStates) && fusionExpertStates.length > 0);
-  const hasAnalysisStage = Boolean(fusionAnalysis) || Boolean(fusionAnalysisState);
+  const hasAnalysisStage = Boolean(displayFusionAnalysis) || Boolean(fusionAnalysisState);
   const isDirectResultOnly = !hasSourceStage && !hasAnalysisStage;
   const sourceReady = expertCards.length > 0 && expertCards.every((expert) => TERMINAL_EXPERT_STATUSES.has(expert.status));
   const sourceError = expertCards.find((expert) => expert.status === "error") || null;
-  const analysisReady = Boolean(fusionAnalysis);
+  const analysisReady = Boolean(displayFusionAnalysis);
   const analysisError = fusionAnalysisState?.status === "error" ? fusionAnalysisState?.message || "分析失败" : "";
-  const resultReady = typeof content === "string" && content.trim().length > 0;
+  const resultReady = typeof displayContent === "string" && displayContent.trim().length > 0;
   const resultError = fusionResultState?.status === "error" ? fusionResultState?.message || "结果生成失败" : "";
 
   const toggleAnalysisKey = (key) => {
@@ -479,7 +502,7 @@ export default function FusionMessage({
       <div className="w-full space-y-4">
         <StepHeader title="正式回复" />
         {resultReady ? (
-          <ResultCard content={content} analysis={fusionAnalysis} />
+          <ResultCard content={displayContent} analysis={displayFusionAnalysis} fusionExperts={displayFusionExperts} />
         ) : (
           <StepState
             status={resultError ? "error" : "loading"}
@@ -519,7 +542,7 @@ export default function FusionMessage({
           {analysisReady ? (
             <div className="space-y-3">
               {ANALYSIS_SECTIONS.map((section) => {
-                const items = Array.isArray(fusionAnalysis?.[section.key]) ? fusionAnalysis[section.key] : [];
+                const items = Array.isArray(displayFusionAnalysis?.[section.key]) ? displayFusionAnalysis[section.key] : [];
                 return (
                   <AnalysisGroup
                     key={section.key}
@@ -544,7 +567,7 @@ export default function FusionMessage({
         <div className="space-y-3">
           <StepHeader step="步骤 3/3" title="正式回复" />
           {resultReady ? (
-            <ResultCard content={content} analysis={fusionAnalysis} />
+            <ResultCard content={displayContent} analysis={displayFusionAnalysis} fusionExperts={displayFusionExperts} />
           ) : (
             <StepState
               status={resultError ? "error" : "loading"}
