@@ -28,7 +28,7 @@
 <table>
 <tr>
 <td align="center" width="150"><img src="https://img.shields.io/badge/-GPT--5.5-412991?style=for-the-badge&logo=openai&logoColor=white" alt="GPT-5.5"/><br/><sub><b>OpenAI</b></sub></td>
-<td align="center" width="150"><img src="https://img.shields.io/badge/-Claude%20Sonnet%205-D97757?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude"/><br/><sub><b>Anthropic</b></sub></td>
+<td align="center" width="150"><img src="https://img.shields.io/badge/-Claude%20Opus%204.8-D97757?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude"/><br/><sub><b>Anthropic</b></sub></td>
 <td align="center" width="150"><img src="https://img.shields.io/badge/-Gemini%203.5%20Flash-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Gemini"/><br/><sub><b>Google</b></sub></td>
 <td align="center" width="150"><img src="https://img.shields.io/badge/-Doubao%20Seed%202.1-FF6A00?style=for-the-badge&logoColor=white" alt="Doubao"/><br/><sub><b>ByteDance</b></sub></td>
 </tr>
@@ -69,7 +69,7 @@ Access 4 direct chat models plus Fusion Mode through a unified interface. Switch
 |:---:|:---:|:---:|:---:|:---:|:---:|
 | **Fusion** | OpenRouter | — | Text | — | — |
 | **GPT 5.5** | OpenAI | 256K | Text, Image, File | ✅ | ✅ |
-| **Claude Sonnet 5** | Anthropic | 200K | Text, Image, File | ✅ | ✅ |
+| **Claude Opus 4.8** | Anthropic | 200K | Text, Image, File | ✅ | ✅ |
 | **Gemini 3.5 Flash** | Google | 1M | Text, Image, File | ✅ | ✅ |
 | **Doubao Seed 2.1 Pro** | ByteDance | 128K | Text, Image, File | ✅ | ✅ |
 
@@ -95,7 +95,7 @@ The crown jewel of Vectaix AI. Inspired by the deliberative processes of real-wo
                           ▼            ▼            ▼
                    ┌────────────┐┌────────────┐┌────────────┐
                    │    GPT     ││   Claude   ││   Gemini   │
-                   │    5.5     ││  Sonnet 5  ││ 3.5 Flash  │
+                   │    5.5     ││  Opus 4.8  ││ 3.5 Flash  │
                    │  (Expert)  ││  (Expert)  ││  (Expert)  │
                    └─────┬──────┘└─────┬──────┘└─────┬──────┘
                          │             │             │
@@ -116,7 +116,7 @@ The crown jewel of Vectaix AI. Inspired by the deliberative processes of real-wo
 
 **How it works:**
 
-1. **Parallel Generation** — Your query is simultaneously sent to GPT 5.5, Claude Sonnet 5, and Gemini 3.5 Flash
+1. **Parallel Generation** — Your query is simultaneously sent to GPT 5.5, Claude Opus 4.8, and Gemini 3.5 Flash
 2. **Independent Reasoning** — Each expert reasons independently with its own strengths and knowledge
 3. **Structured Synthesis** — OpenRouter Fusion analyzes all responses, identifying:
    - ✅ **Agreement** — Points where all experts converge

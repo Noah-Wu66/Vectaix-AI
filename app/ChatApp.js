@@ -14,7 +14,7 @@ import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
 import {
   getModelConfig,
   DEFAULT_MODEL,
-  resolveUsableModelId,
+  normalizeModelId,
 } from "@/lib/shared/models";
 import { useToast } from "./components/common/ToastProvider";
 import AuthModal from "./components/modals/AuthModal";
@@ -365,7 +365,7 @@ export default function ChatApp() {
         });
         setCurrentConversationId(id);
 
-        const targetModel = resolveUsableModelId(conversation.model, model);
+        const targetModel = normalizeModelId(conversation.model);
 
         if (targetModel !== model) {
           setModel(targetModel);
@@ -533,7 +533,7 @@ export default function ChatApp() {
       setCurrentConversationId(duplicatedConversation._id);
       setMessages(Array.isArray(duplicatedConversation.messages) ? duplicatedConversation.messages : []);
 
-      const duplicatedModelId = resolveUsableModelId(duplicatedConversation.model, model);
+      const duplicatedModelId = normalizeModelId(duplicatedConversation.model);
       if (getModelConfig(duplicatedModelId)?.id) {
         setModel(duplicatedModelId);
         lastTextModelRef.current = duplicatedModelId;
