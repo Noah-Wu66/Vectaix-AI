@@ -32,7 +32,6 @@ export default function Composer({
   model,
   modelReady,
   onModelChange,
-  messages,
   webSearch,
   setWebSearch,
   chatSystemPrompt,
@@ -44,7 +43,6 @@ export default function Composer({
   onSend,
   onStop,
   prefill,
-  attachmentRequest,
 }) {
   const toast = useToast();
   const [input, setInput] = useState("");
@@ -53,7 +51,6 @@ export default function Composer({
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const mountedRef = useRef(true);
-  const handledAttachmentRequestNonceRef = useRef(null);
   const {
     supportsImages,
     supportsDocuments,
@@ -116,49 +113,6 @@ export default function Composer({
       el.style.overflowY = sh > 160 ? "auto" : "hidden";
     }
   }, [prefill?.nonce]);
-
-  useEffect(() => {
-    const nonce = attachmentRequest?.nonce;
-    if (!nonce || handledAttachmentRequestNonceRef.current === nonce) return;
-    handledAttachmentRequestNonceRef.current = nonce;
-
-    if (!supportsFilePicker || !supportsImages) {
-      toast.warning("当前模型不支持图片附件");
-      return;
-    }
-
-    if (selectedAttachments.length >= MAX_CHAT_ATTACHMENTS) {
-      toast.warning(`一次最多添加 ${MAX_CHAT_ATTACHMENTS} 个文件`);
-      return;
-    }
-
-    const url = typeof attachmentRequest.url === "string" ? attachmentRequest.url : "";
-    const mimeType = typeof attachmentRequest.mimeType === "string" ? attachmentRequest.mimeType : "";
-    if (!url || !mimeType) {
-      toast.error("图片信息不完整，无法加入附件");
-      return;
-    }
-
-    const extension = mimeType === "image/jpeg"
-      ? "jpg"
-      : (mimeType === "image/webp" ? "webp" : "png");
-    setSelectedAttachments((prev) => [
-      ...prev,
-      {
-        id: `message-image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        file: null,
-        preview: url,
-        blobUrl: url,
-        uploadStatus: "ready",
-        name: attachmentRequest.name || `生成图片.${extension}`,
-        size: Number(attachmentRequest.size) || 0,
-        mimeType,
-        extension,
-        category: "image",
-      },
-    ].slice(0, MAX_CHAT_ATTACHMENTS));
-    toast.success("已添加到输入框附件");
-  }, [attachmentRequest, selectedAttachments.length, supportsFilePicker, supportsImages, toast]);
 
   useEffect(() => {
     if (!supportsFilePicker) {

@@ -4,10 +4,8 @@ import {
   injectCurrentTimeSystemReminder,
 } from "@/app/api/chat/utils";
 import {
-  FUSION_EXPERTS,
   FUSION_SYNTHESIS_LABEL,
   FUSION_SYNTHESIS_MODEL,
-  getFusionExpertDisplayLabel,
 } from "@/lib/shared/models";
 import {
   OPENROUTER_WEB_SEARCH_TOOL,
@@ -18,8 +16,6 @@ import {
 
 export { parseNativeFusionMarkdown } from "@/lib/shared/fusionNativeMarkdown";
 
-const EXPERT_MAX_OUTPUT_TOKENS = 64000;
-const FUSION_ANALYSIS_MAX_OUTPUT_TOKENS = 32768;
 const FUSION_RESULT_MAX_OUTPUT_TOKENS = 32768;
 const TRIAGE_MAX_OUTPUT_TOKENS = 1200;
 const MAX_RAW_MARKDOWN_CHARS = 20000;
@@ -27,25 +23,12 @@ const MAX_NATIVE_FUSION_RESPONSE_CHARS = 120000;
 const MAX_FINDING_TEXT_CHARS = 1000;
 const HISTORY_USER_SUMMARY_CHARS = 500;
 const HISTORY_MODEL_SUMMARY_CHARS = 1200;
-const FUSION_ANALYSIS_GROUP_KEYS = ["agreement", "keyDifferences", "partialCoverage", "uniqueInsights", "blindSpots"];
-const FUSION_ANALYSIS_MODEL_NAMES = new Set(["GPT", "Claude", "Gemini"]);
-const FUSION_ANALYSIS_SECTION_LABELS = {
-  agreement: "共识点",
-  keyDifferences: "关键分歧",
-  partialCoverage: "覆盖不全",
-  uniqueInsights: "独特洞察",
-  blindSpots: "盲点",
-};
 const FUSION_TRIAGE_GREETING_PATTERNS = [
   /^(你好|您好|嗨|哈喽|hi|hello|hey|在吗|早上好|中午好|下午好|晚上好)[\s!,.，。！？~]*$/i,
   /^(谢谢|谢了|多谢|辛苦了|明白了|收到|好的|好的呢|ok|okay)[\s!,.，。！？~]*$/i,
 ];
 const FUSION_TRIAGE_COMPLEX_HINT_PATTERN =
   /(代码|编程|程序|脚本|报错|bug|错误|调试|分析|比较|对比|区别|优缺点|推荐|方案|策划|步骤|计划|原因|为什么|如何|怎么做|实现|设计|架构|优化|总结|复盘|写一篇|写个|生成|创作|文案|提示词|工作流|营销|研究|评估|审核|审查|review|debug|code)/i;
-
-const FUSION_EXPERT_CONFIGS = FUSION_EXPERTS;
-
-export { FUSION_EXPERT_CONFIGS };
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -178,27 +161,6 @@ function buildFusionTurnPrompt({ historyMemo, prompt }) {
   return sections.join("\n\n");
 }
 
-export function buildFusionExpertState(expert, patch = {}) {
-  return {
-    key: expert.key,
-    modelId: expert.modelId,
-    label: expert.label,
-    status: typeof patch.status === "string" ? patch.status : "pending",
-    phase: typeof patch.phase === "string" ? patch.phase : "pending",
-    message: typeof patch.message === "string" ? patch.message : "",
-  };
-}
-
-export function buildFusionAnalysisState(patch = {}) {
-  return {
-    modelId: FUSION_SYNTHESIS_MODEL,
-    label: "分析",
-    status: typeof patch.status === "string" ? patch.status : "pending",
-    phase: typeof patch.phase === "string" ? patch.phase : "pending",
-    message: typeof patch.message === "string" ? patch.message : "",
-  };
-}
-
 export function buildFusionResultState(patch = {}) {
   return {
     modelId: FUSION_SYNTHESIS_MODEL,
@@ -207,42 +169,6 @@ export function buildFusionResultState(patch = {}) {
     phase: typeof patch.phase === "string" ? patch.phase : "pending",
     message: typeof patch.message === "string" ? patch.message : "",
   };
-}
-
-function normalizeFusionAnalysisModels(models) {
-  if (!Array.isArray(models)) return [];
-  return Array.from(new Set(
-    models
-      .filter((model) => typeof model === "string")
-      .map((model) => model.trim())
-      .map((model) => {
-        if (/gpt|chatgpt/i.test(model)) return "GPT";
-        if (/claude/i.test(model)) return "Claude";
-        if (/gemini/i.test(model)) return "Gemini";
-        return model;
-      })
-      .filter((model) => FUSION_ANALYSIS_MODEL_NAMES.has(model))
-  ));
-}
-
-function normalizeFusionAnalysisPayload(value) {
-  if (!isPlainObject(value)) {
-    throw new Error("Fusion 分析结果不是有效 JSON 对象");
-  }
-
-  const result = {};
-  for (const key of FUSION_ANALYSIS_GROUP_KEYS) {
-    const rawItems = Array.isArray(value[key]) ? value[key] : [];
-    result[key] = rawItems
-      .filter((item) => isPlainObject(item))
-      .map((item) => ({
-        text: normalizeString(item.text, 2000),
-        models: normalizeFusionAnalysisModels(item.models),
-      }))
-      .filter((item) => item.text);
-  }
-
-  return result;
 }
 
 function extractJsonBlock(text) {
@@ -313,66 +239,6 @@ function buildStoredUserParts(prompt, imagePayloads) {
   return parts;
 }
 
-function buildExpertUserContent({ prompt, imagePayloads }) {
-  const content = [{ type: "text", text: prompt }];
-  for (const image of imagePayloads) {
-    content.push({
-      type: "image_url",
-      image_url: { url: image.dataUrl || image.url },
-    });
-  }
-  return content.length === 1 ? prompt : content;
-}
-
-async function buildExpertSystemPrompt(expert) {
-  return injectCurrentTimeSystemReminder(
-    `你是 Fusion 专家面板中的「${getFusionExpertDisplayLabel(expert)}」。请独立、完整地回答用户问题。
-输出 Markdown 格式。直接给出你的分析和结论，不要提及其他 AI 模型或 Fusion 机制。`
-  );
-}
-
-async function buildFusionAnalysisSystemPrompt() {
-  const [firstExpertLabel = "GPT", secondExpertLabel = "Claude", thirdExpertLabel = "Gemini"] =
-    FUSION_EXPERT_CONFIGS.map((expert) => getFusionExpertDisplayLabel(expert));
-  return injectCurrentTimeSystemReminder(`你是 Fusion 的对比分析器。你会收到用户问题、三位专家的完整原始回答。你的任务是把三位专家的观点差异整理成结构化 JSON，供后续正式回复使用。
-
-重要输入边界：
-- 你可能还会收到"历史对话纪要"。它只是此前 Fusion 已得出的背景结论，不代表这些内容在本轮已经被重新核验。
-- 你看到的是用户文字问题，不直接看到用户上传的原始图片或其他原始多模态内容。
-- 如果专家回答里涉及图片、图表、截图、文件等内容，你只能依据专家已经写出的描述、结论进行汇总，不能假装自己也看过原始材料。
-
-必须严格遵守：
-1. 你必须只输出 JSON，对象顶层只能包含这 5 个键：agreement、keyDifferences、partialCoverage、uniqueInsights、blindSpots
-2. 这 5 个键的值都必须是数组。数组项必须是对象，且只能包含 text（字符串）和 models（字符串数组）
-3. models 里只允许出现这 3 个短名：${firstExpertLabel}、${secondExpertLabel}、${thirdExpertLabel}
-4. agreement：写明确共识。只有在某位专家明确表达过这一点时，才把该专家写进 models
-5. keyDifferences：写真正影响结论的关键分歧
-6. partialCoverage：写只有部分专家覆盖到，或覆盖明显不完整的重要信息
-7. uniqueInsights：写某个或某两个专家提供的独特价值信息
-8. blindSpots：写三位专家整体遗漏掉、但会影响用户判断的重要空白
-9. 所有 text 都必须基于专家回答，不能脑补，不能虚构
-10. 如果某组没有内容，返回空数组，不要写占位文案
-11. 不要输出 Markdown，不要输出代码块，不要输出解释文字`);
-}
-
-async function buildFusionFinalAnswerSystemPrompt() {
-  return injectCurrentTimeSystemReminder(`你是 Fusion 的最终正式回复模型。你会收到用户问题、结构化对比分析、三位专家的完整原始回答。你的任务是直接面向用户给出正式回复。
-
-重要输入边界：
-- 你可能还会收到"历史对话纪要"。它只是此前 Fusion 已得出的背景结论，不代表这些内容在本轮已经被重新核验。
-- 你看到的是用户文字问题，不直接看到用户上传的原始图片或其他原始多模态内容。
-- 你的正式回复必须建立在专家已经明确说过的观点、理由、证据之上，不能凭空增加新事实、新证据。
-
-必须严格遵守：
-1. 输出必须是 Markdown
-2. 第一行必须且只能是一个 H1 标题
-3. H1 下面直接开始正文，不要再输出任何其他标题
-4. 正文必须先直接回答用户当前问题，明确给出结论、建议、判断或做法
-5. 你可以整合三位专家的共识、分歧、独特洞察和盲点，但不要把回答写成模型对比报告
-6. 当专家意见不一致时，你要替用户做整合判断，给出更稳妥的理解或分情况建议
-7. 不要泄露思维链，不要输出裸链接`);
-}
-
 async function buildFusionSystemPrompt() {
   return injectCurrentTimeSystemReminder(`你是 Fusion。请直接面向用户给出高质量正式回复。
 
@@ -411,113 +277,6 @@ async function requestSynthesisText({
     text,
     citations: enableWebSearch ? getChatCompletionAnnotations(response) : [],
   };
-}
-
-function normalizeExpertOutput(rawText, expert) {
-  const rawMarkdown = normalizeString(rawText, MAX_RAW_MARKDOWN_CHARS);
-  if (!rawMarkdown) {
-    throw new Error(`${expert.label} 未返回有效内容`);
-  }
-  return {
-    modelId: expert.modelId,
-    label: expert.label,
-    rawMarkdown,
-    citations: [],
-  };
-}
-
-export async function runFusionExpert({
-  prompt,
-  historyMemo,
-  imagePayloads,
-  expert,
-  clientAborted,
-  updateStatus,
-  onDone,
-  signal,
-}) {
-  try {
-    const startedAt = Date.now();
-    const finalPrompt = buildFusionTurnPrompt({ historyMemo, prompt });
-    throwIfAborted(signal);
-    if (clientAborted()) throw new Error("FUSION_ABORTED");
-
-    updateStatus?.({
-      status: "running",
-      phase: "thinking",
-      message: "思考中",
-    });
-
-    const system = await buildExpertSystemPrompt(expert);
-    const userContent = buildExpertUserContent({
-      prompt: finalPrompt,
-      imagePayloads: Array.isArray(imagePayloads) ? imagePayloads : [],
-    });
-
-    const response = await requestZenMuxChatCompletionResponse({
-      model: expert.modelId,
-      system,
-      messages: [{ role: "user", content: userContent }],
-      maxTokens: EXPERT_MAX_OUTPUT_TOKENS,
-      reasoningEffort: expert.thinkingLevel,
-      signal,
-    });
-
-    const rawText = getChatCompletionOutputText(response);
-    const normalized = {
-      ...normalizeExpertOutput(rawText, expert),
-      durationMs: Math.max(0, Date.now() - startedAt),
-    };
-    onDone?.(normalized);
-    updateStatus?.({
-      status: "done",
-      phase: "done",
-      message: "已完成回答",
-    });
-    return normalized;
-  } catch (error) {
-    if (error?.message !== "FUSION_ABORTED") {
-      updateStatus?.({
-        status: "error",
-        phase: "error",
-        message: error?.message || "执行失败",
-      });
-    }
-    throw error;
-  }
-}
-
-function buildFusionSourcePayload({ historyMemo, prompt, experts }) {
-  const sections = [
-    ...(historyMemo ? ["# 历史对话纪要", historyMemo] : []),
-    `# 用户问题\n${prompt}`,
-    "# 专家原始回答",
-  ];
-
-  for (const expert of experts) {
-    sections.push(`## ${expert.label}`, expert.rawMarkdown);
-  }
-
-  return sections.join("\n\n");
-}
-
-function buildFusionAnalysisDigest(analysis) {
-  const lines = ["# 对比分析结果"];
-  for (const key of FUSION_ANALYSIS_GROUP_KEYS) {
-    lines.push(`## ${FUSION_ANALYSIS_SECTION_LABELS[key]}`);
-    const items = Array.isArray(analysis?.[key]) ? analysis[key] : [];
-    if (items.length === 0) {
-      lines.push("无");
-      continue;
-    }
-    for (const item of items) {
-      const models = Array.isArray(item?.models) && item.models.length > 0
-        ? `（${item.models.join(" / ")}）`
-        : "";
-      lines.push(`- ${item.text}${models}`);
-    }
-  }
-  return lines.join("\n");
 }
 
 export async function runFusionTriage({ prompt, hasImages, signal }) {
@@ -577,54 +336,6 @@ export async function runFusionTriage({ prompt, hasImages, signal }) {
   }
 }
 
-export async function runFusionAnalysis({ historyMemo, prompt, experts, signal }) {
-  const instructions = await buildFusionAnalysisSystemPrompt();
-  const { text } = await requestSynthesisText({
-    instructions,
-    payloadText: buildFusionSourcePayload({ historyMemo, prompt, experts }),
-    maxTokens: FUSION_ANALYSIS_MAX_OUTPUT_TOKENS,
-    reasoningEffort: "high",
-    signal,
-  });
-
-  const jsonText = extractJsonBlock(text);
-  if (!jsonText) {
-    throw new Error(`${FUSION_SYNTHESIS_LABEL} 未返回有效的分析 JSON`);
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(jsonText);
-  } catch {
-    throw new Error(`${FUSION_SYNTHESIS_LABEL} 返回的分析 JSON 无法解析`);
-  }
-
-  return normalizeFusionAnalysisPayload(parsed);
-}
-
-export async function runFusionFinalAnswer({ historyMemo, prompt, experts, analysis, signal }) {
-  const instructions = await buildFusionFinalAnswerSystemPrompt();
-  const { text } = await requestSynthesisText({
-    instructions,
-    payloadText: [
-      buildFusionSourcePayload({ historyMemo, prompt, experts }),
-      buildFusionAnalysisDigest(analysis),
-    ].join("\n\n"),
-    maxTokens: FUSION_RESULT_MAX_OUTPUT_TOKENS,
-    reasoningEffort: "high",
-    signal,
-  });
-
-  const normalized = normalizeString(text, MAX_RAW_MARKDOWN_CHARS);
-  if (!normalized) {
-    throw new Error(`${FUSION_SYNTHESIS_LABEL} 未返回有效正式回复`);
-  }
-  if (!/^#\s+.+/m.test(normalized)) {
-    throw new Error(`${FUSION_SYNTHESIS_LABEL} 返回的正式回复缺少 H1 标题`);
-  }
-  return normalized;
-}
-
 export async function runFusionAnswer({ historyMemo, prompt, signal }) {
   const instructions = await buildFusionSystemPrompt();
   const { text, citations } = await requestSynthesisText({
@@ -644,26 +355,6 @@ export async function runFusionAnswer({ historyMemo, prompt, signal }) {
 }
 
 export async function buildFusionUserInput({ prompt, images }) {
-  const imagePayloads = await loadImagePayloads(images);
-  return {
-    prompt,
-    imagePayloads,
-    userParts: buildStoredUserParts(prompt, imagePayloads),
-  };
-}
-
-export async function buildFusionUserInputFromMessage(message) {
-  const parts = getStoredPartsFromMessage(message) || [];
-  if (parts.some((part) => part?.fileData?.url)) {
-    throw new Error("Fusion 当前只支持文字输入");
-  }
-  const prompt = extractTextFromStoredParts(parts);
-  const images = parts
-    .filter((part) => typeof part?.inlineData?.url === "string" && part.inlineData.url)
-    .map((part) => ({
-      url: part.inlineData.url,
-      mimeType: part.inlineData.mimeType,
-    }));
   const imagePayloads = await loadImagePayloads(images);
   return {
     prompt,

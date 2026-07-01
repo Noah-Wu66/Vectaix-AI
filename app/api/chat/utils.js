@@ -149,7 +149,7 @@ export async function fetchImageAsBase64(url) {
     return fetchBlobAsBase64(url, { resourceLabel: "image" });
 }
 
-export async function fetchBlobAsBase64(url, { resourceLabel = "file" } = {}) {
+async function fetchBlobAsBase64(url, { resourceLabel = "file" } = {}) {
     if (typeof url !== "string" || !url.trim()) {
         throw new Error(`Invalid ${resourceLabel} url`);
     }
@@ -264,7 +264,7 @@ export function getStoredPartsFromMessage(msg, { includeThoughtSignature = false
     return fallbackParts.length > 0 ? fallbackParts : null;
 }
 
-export function sanitizeStoredMessage(msg) {
+function sanitizeStoredMessage(msg) {
     if (!msg || typeof msg !== 'object') return null;
     if (msg.role !== 'user' && msg.role !== 'model') return null;
     const normalizedParts = getStoredPartsFromMessage(msg);
@@ -284,28 +284,6 @@ export function sanitizeStoredMessage(msg) {
     if (msg.providerState && typeof msg.providerState === 'object') out.providerState = msg.providerState;
     out.parts = normalizedParts;
     return out;
-}
-
-export function sanitizeStoredMessages(messages) {
-    if (!Array.isArray(messages)) return [];
-    return messages.map(sanitizeStoredMessage).filter(Boolean);
-}
-
-export function buildContextSafeHistoryMessages(messages) {
-    if (!Array.isArray(messages)) return [];
-    return messages
-        .map((message) => {
-            if (!message || typeof message !== 'object') return null;
-            if (message.role !== 'user' && message.role !== 'model') return null;
-            const parts = getStoredPartsFromMessage(message);
-            if (!parts || parts.length === 0) return null;
-            return {
-                role: message.role,
-                content: typeof message.content === 'string' ? message.content : '',
-                parts,
-            };
-        })
-        .filter(Boolean);
 }
 
 export function sanitizeStoredMessagesStrict(messages) {

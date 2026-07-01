@@ -14,9 +14,7 @@ import {
     normalizeMimeType,
 } from '@/lib/shared/attachments';
 import {
-    DEFAULT_CHAT_RUNTIME_MODE,
     getModelAttachmentSupport,
-    normalizeChatRuntimeMode,
 } from '@/lib/shared/models';
 
 const UPLOAD_RATE_LIMIT = { limit: 30, windowMs: 10 * 60 * 1000 };
@@ -63,7 +61,6 @@ export async function POST(request) {
                 let originalName = pathname;
                 let extension = getFileExtension(pathname);
                 let model = '';
-                let mode = DEFAULT_CHAT_RUNTIME_MODE;
                 if (typeof clientPayload === 'string' && clientPayload) {
                     try {
                         const parsed = JSON.parse(clientPayload);
@@ -76,7 +73,6 @@ export async function POST(request) {
                         if (typeof parsed?.model === 'string') {
                             model = parsed.model.trim();
                         }
-                        mode = normalizeChatRuntimeMode(parsed?.mode);
                     } catch {
                         // ignore invalid payload
                     }
@@ -105,7 +101,7 @@ export async function POST(request) {
                         supportsDocuments,
                         supportsVideo,
                         supportsAudio,
-                    } = getModelAttachmentSupport(model, mode);
+                    } = getModelAttachmentSupport(model);
                     const inputType = getAttachmentInputType(category);
                     const isSupported = (
                         (inputType === 'image' && supportsImages)

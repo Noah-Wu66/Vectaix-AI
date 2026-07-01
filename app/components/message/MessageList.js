@@ -18,7 +18,6 @@ import ImageLightbox from "../modals/ImageLightbox";
 import ConfirmModal from "../modals/ConfirmModal";
 import { useToast } from "../common/ToastProvider";
 import { exportMessageContent } from "@/lib/client/messageExport";
-import { toBlobDownloadUrl } from "@/lib/shared/blobUrls";
 import { getMessageImageSrc, isKeepableImageSrc } from "@/lib/shared/messageImage";
 import {
   AttachmentCard,
@@ -40,10 +39,6 @@ import {
 } from "@/lib/shared/models";
 import {
   STARTER_PROMPTS,
-  buildImageDownloadName,
-  containsMarkdownTable,
-  copyImageToClipboard,
-  getFirstImagePart,
   isPendingRunText,
   normalizeFallbackToolTimeline,
 } from "./messageListUtils";
@@ -61,11 +56,9 @@ export default function MessageList({
   editingImage,
   fontSizeClass,
   model,
-  modelReady = true,
   onEditingContentChange,
   onEditingImageSelect,
   onEditingImageRemove,
-  onEditingImageKeep,
   onCancelEdit,
   onSubmitEdit,
   onCopy,
@@ -73,7 +66,6 @@ export default function MessageList({
   onDeleteUserMessage,
   onRegenerateModelMessage,
   onStartEdit,
-  onUseImageAsAttachment,
   userAvatar,
   userNickname,
   onSendStarterPrompt,
@@ -92,7 +84,6 @@ export default function MessageList({
   const toast = useToast();
   const hasWaitingFirstChunk = messages.some((message) => message?.isWaitingFirstChunk);
   const hasStreamingContent = messages.some((message) => (message?.isStreaming && !message?.isWaitingFirstChunk) || message?.isSearching);
-  const hasActiveConversationRun = messages.some((message) => message?.isStreaming === true);
 
   useEffect(() => {
     prevMessagesRef.current = messages;
@@ -243,29 +234,6 @@ export default function MessageList({
     }
   };
 
-  const handleCopyImage = async (part) => {
-    try {
-      await copyImageToClipboard(part);
-      toast.success("已复制图片");
-    } catch (error) {
-      toast.error(error?.message || "复制图片失败");
-    }
-  };
-
-  const handleUseImageAsAttachment = (part) => {
-    const url = part?.inlineData?.url;
-    const mimeType = part?.inlineData?.mimeType;
-    if (!url || !mimeType) {
-      toast.error("图片信息不完整，无法加入附件");
-      return;
-    }
-    onUseImageAsAttachment?.({
-      url,
-      mimeType,
-      name: buildImageDownloadName(part),
-    });
-  };
-
   return (
     <div
       ref={listRef}
@@ -341,10 +309,6 @@ export default function MessageList({
             part?.inlineData?.url || part?.fileData?.name || (typeof part?.text === "string" && part.text.trim().length > 0)
           );
           const hasVisibleContent = typeof msg.content === "string" && msg.content.trim().length > 0 && !isPendingRunText(msg.content);
-          const hasTableContent = (
-            (hasVisibleContent && containsMarkdownTable(msg.content))
-            || (hasParts && displayParts.some((part) => containsMarkdownTable(part?.text)))
-          );
           const hasBodyOutput =
             hasVisibleContent
             || (hasParts && displayParts.some((part) => part && typeof part.text === "string" && part.text.trim().length > 0));
@@ -353,14 +317,10 @@ export default function MessageList({
             : fallbackThinkingTimeline;
           const hasThinkingTimeline = Array.isArray(resolvedThinkingTimeline)
             && resolvedThinkingTimeline.some((step) => step?.kind === "search" || step?.kind === "reader" || step?.kind === "sandbox" || step?.kind === "thought" || step?.kind === "upload" || step?.kind === "parse" || step?.kind === "tool" || step?.kind === "planner" || step?.kind === "writer" || step?.kind === "image_gen");
-          const hasFusionExpertStates = Array.isArray(msg.fusionExpertStates) && msg.fusionExpertStates.length > 0;
           const hasFusionAnalysis = msg.fusionAnalysis && typeof msg.fusionAnalysis === "object";
-          const hasFusionAnalysisState = msg.fusionAnalysisState && typeof msg.fusionAnalysisState === "object";
           const hasFusionResultState = msg.fusionResultState && typeof msg.fusionResultState === "object";
           const shouldRenderFusionMessage = isFusionConversation && msg.role === "model" && (
-            hasFusionExpertStates
-            || hasFusionAnalysis
-            || hasFusionAnalysisState
+            hasFusionAnalysis
             || hasFusionResultState
             || Array.isArray(msg.fusionExperts)
             || hasVisibleContent
@@ -370,11 +330,9 @@ export default function MessageList({
           const hasArtifacts = Array.isArray(msg.artifacts) && msg.artifacts.length > 0;
           const shouldRenderToolCards = msg.role === "model" && hasToolRuns && !hasThinkingTimeline && msg.tools.some((t) => t?.id);
           const shouldRenderBubble = !shouldRenderFusionMessage && (hasParts || hasVisibleContent || shouldRenderToolCards || (msg.role === "model" && hasArtifacts));
-          const imageGenPart = null;
-          const imageGenDownloadUrl = null;
           const canRegenerateMessage = !isFusionConversation && msg.role === "model" && messages[i - 1]?.role === "user";
 
-          if (msg.role === "model" && !msg.thought && !hasVisibleContent && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasFusionExpertStates && !hasFusionAnalysis && !hasFusionAnalysisState && !hasFusionResultState && !hasToolRuns && !hasArtifacts && msg.isWaitingFirstChunk) {
+          if (msg.role === "model" && !msg.thought && !hasVisibleContent && !hasParts && !msg.isSearching && !msg.searchError && !hasThinkingTimeline && !hasFusionAnalysis && !hasFusionResultState && !hasToolRuns && !hasArtifacts && msg.isWaitingFirstChunk) {
             return null;
           }
 
@@ -385,7 +343,7 @@ export default function MessageList({
               animate={{ opacity: 1, y: 0 }}
               className={`flex flex-col gap-3 ${msg.role === "user" ? "items-end" : "items-start"} max-w-4xl mx-auto w-full group`}
             >
-              {msg.role === "model" && !shouldRenderFusionMessage && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasFusionExpertStates || hasFusionAnalysis || hasFusionAnalysisState || hasFusionResultState || hasToolRuns || hasArtifacts) && (
+              {msg.role === "model" && !shouldRenderFusionMessage && (msg.thought || hasVisibleContent || (msg.isStreaming && !msg.isWaitingFirstChunk) || hasParts || msg.isSearching || msg.searchError || hasThinkingTimeline || hasFusionAnalysis || hasFusionResultState || hasToolRuns || hasArtifacts) && (
                 <div className="flex items-center gap-2 pl-1">
                   <AIAvatar model={model} size={24} animate={msg.isStreaming} />
                   <span className="text-[11px] text-zinc-400 font-bold tracking-wider">
@@ -413,9 +371,7 @@ export default function MessageList({
                   <FusionMessage
                     content={typeof msg.content === "string" ? msg.content : ""}
                     fusionExperts={msg.fusionExperts}
-                    fusionExpertStates={msg.fusionExpertStates}
                     fusionAnalysis={msg.fusionAnalysis}
-                    fusionAnalysisState={msg.fusionAnalysisState}
                     fusionResultState={msg.fusionResultState}
                   />
                 ) : null}
@@ -547,16 +503,7 @@ export default function MessageList({
 
                     {!msg.isStreaming && (
                       <div className={`flex flex-wrap gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                        {imageGenDownloadUrl ? (
-                          <a
-                            href={imageGenDownloadUrl}
-                            download={buildImageDownloadName(imageGenPart)}
-                            className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"
-                            title="下载图片"
-                          >
-                            <Download size={14} />
-                          </a>
-                        ) : msg.role === "model" && (hasParts || hasVisibleContent) && (
+                        {msg.role === "model" && (hasParts || hasVisibleContent) && (
                           <div className="relative" ref={openExportMenuIndex === i ? exportMenuRef : null}>
                             <button onClick={() => setOpenExportMenuIndex(prev => prev === i ? null : i)} className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg">
                               <Download size={14} />
@@ -572,15 +519,6 @@ export default function MessageList({
                             </AnimatePresence>
                           </div>
                         )}
-                        {imageGenPart ? (
-                          <button
-                            onClick={() => handleUseImageAsAttachment(imageGenPart)}
-                            className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"
-                            title="作为附件使用"
-                          >
-                            <Paperclip size={14} />
-                          </button>
-                        ) : null}
                         {canRegenerateMessage ? (
                           <button
                             onClick={() => onRegenerateModelMessage?.(i)}
@@ -591,9 +529,9 @@ export default function MessageList({
                           </button>
                         ) : null}
                         <button
-                          onClick={() => imageGenPart ? handleCopyImage(imageGenPart) : onCopy(buildCopyText(msg))}
+                          onClick={() => onCopy(buildCopyText(msg))}
                           className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/5 rounded-lg"
-                          title={imageGenPart ? "复制图片" : "复制内容"}
+                          title="复制内容"
                         >
                           <Copy size={14} />
                         </button>

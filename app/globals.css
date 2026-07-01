@@ -13,7 +13,6 @@
   --border-color: #e4e4e7;
   --border-light: #f4f4f5;
   --primary: #2563eb;
-  --primary-hover: #1d4ed8;
   --radius: 16px;
   --radius-sm: 8px;
   --font-sans: 'Inter', system-ui, sans-serif;
@@ -393,7 +392,6 @@ h1, h2, h3, h4, h5, h6 {
   --border-color: #3f3f46;
   --border-light: #27272a;
   --primary: #3b82f6;
-  --primary-hover: #60a5fa;
   --glass-bg: rgba(9, 9, 11, 0.8);
   --glass-border: rgba(63, 63, 70, 0.5);
   background-color: var(--bg-primary);

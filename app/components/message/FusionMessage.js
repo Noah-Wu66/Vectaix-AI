@@ -40,7 +40,6 @@ const FUSION_ANALYSIS_EXPORT_LABELS = {
 };
 
 const EXPERT_ORDER = FUSION_EXPERTS.map((expert) => expert.label);
-const TERMINAL_EXPERT_STATUSES = new Set(["done", "skipped", "error"]);
 
 function formatDuration(durationMs) {
   if (!Number.isFinite(durationMs) || durationMs < 0) return "";
@@ -126,37 +125,29 @@ function triggerTextDownload(text, filename) {
   URL.revokeObjectURL(url);
 }
 
-function buildExpertCards(fusionExperts, fusionExpertStates) {
+function buildExpertCards(fusionExperts) {
   const expertMap = new Map(
     (Array.isArray(fusionExperts) ? fusionExperts : [])
       .filter((expert) => expert && typeof expert === "object" && typeof expert.label === "string")
       .map((expert) => [expert.label, expert])
   );
 
-  const stateMap = new Map(
-    (Array.isArray(fusionExpertStates) ? fusionExpertStates : [])
-      .filter((expert) => expert && typeof expert === "object" && typeof expert.label === "string")
-      .map((expert) => [expert.label, expert])
-  );
-
   const labels = Array.from(new Set([
     ...EXPERT_ORDER,
-    ...stateMap.keys(),
     ...expertMap.keys(),
-  ])).filter((label) => stateMap.has(label) || expertMap.has(label));
+  ])).filter((label) => expertMap.has(label));
 
   return labels.map((label) => {
     const expert = expertMap.get(label) || null;
-    const state = stateMap.get(label) || null;
     return {
-      key: state?.key || expert?.modelId || label,
+      key: expert?.modelId || label,
       label,
-      modelId: expert?.modelId || state?.modelId || "",
+      modelId: expert?.modelId || "",
       content: typeof expert?.content === "string" ? expert.content : "",
       citations: Array.isArray(expert?.citations) ? expert.citations : [],
       durationMs: Number.isFinite(expert?.durationMs) ? expert.durationMs : null,
-      status: typeof state?.status === "string" ? state.status : "done",
-      message: typeof state?.message === "string" ? state.message : "",
+      status: "done",
+      message: "",
     };
   });
 }
@@ -456,9 +447,7 @@ function ResultCard({ content, analysis, fusionExperts }) {
 export default function FusionMessage({
   content,
   fusionExperts,
-  fusionExpertStates,
   fusionAnalysis,
-  fusionAnalysisState,
   fusionResultState,
 }) {
   const [openExpertKey, setOpenExpertKey] = useState(null);
@@ -474,17 +463,15 @@ export default function FusionMessage({
   const displayFusionAnalysis = parsedNativeFusion?.analysis || fusionAnalysis;
 
   const expertCards = useMemo(
-    () => buildExpertCards(displayFusionExperts, fusionExpertStates),
-    [displayFusionExperts, fusionExpertStates]
+    () => buildExpertCards(displayFusionExperts),
+    [displayFusionExperts]
   );
 
-  const hasSourceStage = expertCards.length > 0 || (Array.isArray(fusionExpertStates) && fusionExpertStates.length > 0);
-  const hasAnalysisStage = Boolean(displayFusionAnalysis) || Boolean(fusionAnalysisState);
+  const hasSourceStage = expertCards.length > 0;
+  const hasAnalysisStage = Boolean(displayFusionAnalysis);
   const isDirectResultOnly = !hasSourceStage && !hasAnalysisStage;
-  const sourceReady = expertCards.length > 0 && expertCards.every((expert) => TERMINAL_EXPERT_STATUSES.has(expert.status));
-  const sourceError = expertCards.find((expert) => expert.status === "error") || null;
+  const sourceReady = expertCards.length > 0;
   const analysisReady = Boolean(displayFusionAnalysis);
-  const analysisError = fusionAnalysisState?.status === "error" ? fusionAnalysisState?.message || "分析失败" : "";
   const resultReady = typeof displayContent === "string" && displayContent.trim().length > 0;
   const resultError = fusionResultState?.status === "error" ? fusionResultState?.message || "结果生成失败" : "";
 
@@ -529,14 +516,11 @@ export default function FusionMessage({
             ))}
           </div>
         ) : (
-          <StepState
-            status={sourceError ? "error" : "loading"}
-            text={sourceError ? sourceError.message || "来源阶段执行失败" : "正在等待三位专家完成..."}
-          />
+          <StepState text="正在等待三位专家完成..." />
         )}
       </div>
 
-      {(sourceReady || analysisReady || fusionAnalysisState) ? (
+      {(sourceReady || analysisReady) ? (
         <div className="space-y-3">
           <StepHeader step="步骤 2/3" title="对比分析" />
           {analysisReady ? (
@@ -555,10 +539,7 @@ export default function FusionMessage({
               })}
             </div>
           ) : (
-            <StepState
-              status={analysisError ? "error" : "loading"}
-              text={analysisError || fusionAnalysisState?.message || "正在汇总三位专家的异同点..."}
-            />
+            <StepState text="正在汇总三位专家的异同点..." />
           )}
         </div>
       ) : null}

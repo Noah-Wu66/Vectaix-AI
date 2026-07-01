@@ -12,7 +12,6 @@ import { useChatScroll } from "@/lib/client/hooks/useChatScroll";
 import { useUserSettings } from "@/lib/client/hooks/useUserSettings";
 import { normalizeWebSearchSettings } from "@/lib/shared/webSearch";
 import {
-  CHAT_RUNTIME_MODE_CHAT,
   getModelConfig,
   DEFAULT_MODEL,
   resolveUsableModelId,
@@ -38,7 +37,6 @@ export default function ChatApp() {
     model,
     isSettingsReady,
     setModel,
-    setChatMode,
     thinkingLevels,
     historyLimit,
     maxTokens,
@@ -70,7 +68,6 @@ export default function ChatApp() {
   const [editingImageAction, setEditingImageAction] = useState("keep");
   const [editingImage, setEditingImage] = useState(null);
   const [composerPrefill, setComposerPrefill] = useState({ text: "", nonce: 0 });
-  const [composerAttachmentRequest, setComposerAttachmentRequest] = useState(null);
   const [serverSettingsReady, setServerSettingsReady] = useState(false);
 
   const chatAbortRef = useRef(null);
@@ -194,7 +191,6 @@ export default function ChatApp() {
     const settings = rawSettings && typeof rawSettings === "object"
       ? rawSettings
       : {};
-    setChatMode(CHAT_RUNTIME_MODE_CHAT);
     setWebSearch(normalizeWebSearchSettings(settings.webSearch, { defaultEnabled: true }));
   };
 
@@ -255,13 +251,6 @@ export default function ChatApp() {
     }
   };
 
-  const handleUseImageAsAttachment = (image) => {
-    setComposerAttachmentRequest({
-      ...image,
-      nonce: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    });
-  };
-
   const actions = createChatAppActions({
     toast,
     messages,
@@ -314,14 +303,12 @@ export default function ChatApp() {
 
   const {
     startNewChat,
-    requestModeChange,
     requestModelChange,
   } = useChatModeController({
     loading,
     messages,
     model,
     setModel,
-    setChatMode,
     currentConversationId,
     setCurrentConversationId,
     setMessages,
@@ -616,7 +603,6 @@ export default function ChatApp() {
           onEditingContentChange={setEditingContent}
           onEditingImageSelect={actions.onEditingImageSelect}
           onEditingImageRemove={actions.onEditingImageRemove}
-          onEditingImageKeep={actions.onEditingImageKeep}
           onCancelEdit={actions.cancelEdit}
           onSubmitEdit={actions.submitEditAndRegenerate}
           onCopy={actions.copyMessage}
@@ -624,7 +610,6 @@ export default function ChatApp() {
           onDeleteUserMessage={actions.deleteUserMessage}
           onRegenerateModelMessage={actions.regenerateModelMessage}
           onStartEdit={actions.startEdit}
-          onUseImageAsAttachment={handleUseImageAsAttachment}
           userAvatar={avatar}
           onAvatarChange={setAvatar}
           composerProps={{
@@ -634,8 +619,6 @@ export default function ChatApp() {
             model,
             modelReady: isSettingsReady,
             onModelChange: requestModelChange,
-            onModeChange: requestModeChange,
-            messages,
             historyLimit,
             webSearch,
             setWebSearch: (v) => {
@@ -651,7 +634,6 @@ export default function ChatApp() {
             onSend: actions.handleSendFromComposer,
             onStop: actions.stopStreaming,
             prefill: composerPrefill,
-            attachmentRequest: composerAttachmentRequest,
           }}
         />
       )}

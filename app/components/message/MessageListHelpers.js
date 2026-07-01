@@ -156,36 +156,6 @@ export function buildCopyText(msg) {
   return normalizeCopiedText(cleaned);
 }
 
-function stripMarkdown(text) {
-  if (typeof text !== "string" || !text) return "";
-  return text
-    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?|```$/g, "").trim())
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/__([^_]+)__/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/_([^_]+)_/g, "$1")
-    .replace(/~~([^~]+)~~/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-    .replace(/^>\s?/gm, "")
-    .replace(/^[\*\-+]\s+/gm, "")
-    .replace(/^\d+\.\s+/gm, "")
-    .replace(/^[-*_]{3,}$/gm, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-export function buildPlainText(msg) {
-  if (!msg) return "";
-  const fusionText = buildFusionExportText(msg);
-  if (fusionText) return normalizeCopiedText(stripMarkdown(fusionText));
-  const raw = getMessageText(msg);
-  const cleaned = msg.role === "model" ? stripThinkingBlocks(raw) : raw;
-  return normalizeCopiedText(stripMarkdown(cleaned));
-}
-
 export function isSelectionFullyInsideElement(el) {
   const sel = window.getSelection?.();
   if (!sel || sel.rangeCount === 0) return false;

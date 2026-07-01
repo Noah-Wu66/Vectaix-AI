@@ -50,7 +50,6 @@ export default function ChatLayout({
   onEditingContentChange,
   onEditingImageSelect,
   onEditingImageRemove,
-  onEditingImageKeep,
   onCancelEdit,
   onSubmitEdit,
   onCopy,
@@ -58,7 +57,6 @@ export default function ChatLayout({
   onDeleteUserMessage,
   onRegenerateModelMessage,
   onStartEdit,
-  onUseImageAsAttachment,
   composerProps,
   userAvatar,
   onAvatarChange,
@@ -80,8 +78,6 @@ export default function ChatLayout({
         <ChatHeader
           onToggleSidebar={onToggleSidebar}
           onStartNewChat={onStartNewChat}
-          model={composerProps?.model}
-          onModeChange={composerProps?.onModeChange}
           modelReady={isSettingsReady}
         />
         <main className="flex-1 flex flex-col min-h-0 relative">
@@ -97,11 +93,9 @@ export default function ChatLayout({
             editingImage={editingImage}
             fontSizeClass={fontSizeClass}
             model={composerProps?.model}
-            modelReady={isSettingsReady}
             onEditingContentChange={onEditingContentChange}
             onEditingImageSelect={onEditingImageSelect}
             onEditingImageRemove={onEditingImageRemove}
-            onEditingImageKeep={onEditingImageKeep}
             onCancelEdit={onCancelEdit}
             onSubmitEdit={onSubmitEdit}
             onCopy={onCopy}
@@ -109,7 +103,6 @@ export default function ChatLayout({
             onDeleteUserMessage={onDeleteUserMessage}
             onRegenerateModelMessage={onRegenerateModelMessage}
             onStartEdit={onStartEdit}
-            onUseImageAsAttachment={onUseImageAsAttachment}
             userAvatar={userAvatar}
             userNickname={nickname}
           />
